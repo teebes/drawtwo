@@ -1,0 +1,5 @@
+services:
+  db:
+    ports: []  # Remove port mapping to avoid conflicts in CI
+  backend:
+    ports: []  # Remove port mapping since we don't need external access in CI
