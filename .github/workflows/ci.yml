@@ -62,6 +62,7 @@ jobs:
         cd backend
         python manage.py check --deploy
       env:
+        DJANGO_SETTINGS_MODULE: config.settings.base
         SECRET_KEY: test-secret-key-for-ci
         DEBUG: False
         DB_NAME: drawtwo_test
@@ -75,6 +76,7 @@ jobs:
         cd backend
         python manage.py migrate
       env:
+        DJANGO_SETTINGS_MODULE: config.settings.base
         SECRET_KEY: test-secret-key-for-ci
         DEBUG: False
         DB_NAME: drawtwo_test
@@ -88,8 +90,14 @@ jobs:
         cd backend
         python manage.py test
       env:
+        DJANGO_SETTINGS_MODULE: config.settings.base
         SECRET_KEY: test-secret-key-for-ci
         DEBUG: False
+        DB_NAME: drawtwo_test
+        DB_USER: postgres
+        DB_PASSWORD: postgres
+        DB_HOST: localhost
+        DB_PORT: 5432
 
     - name: Test Docker build
       run: |
