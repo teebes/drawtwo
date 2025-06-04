@@ -4,7 +4,7 @@ A Django-based backend for a card game, built with PostgreSQL and Docker.
 
 ## Features
 
-- Django 4.2 with Django REST Framework
+- Django 5.1 with Django REST Framework
 - PostgreSQL database
 - Docker & Docker Compose for easy development
 - Environment-based configuration
@@ -29,14 +29,20 @@ A Django-based backend for a card game, built with PostgreSQL and Docker.
 │   ├── urls.py              # Main URL configuration
 │   └── wsgi.py              # WSGI configuration
 ├── Dockerfile               # Docker configuration for backend
+├── docker-entrypoint.sh     # Docker entrypoint script
 ├── manage.py                # Django management script
 └── requirements.txt         # Python dependencies
-.env.example                 # Example environment variables
-.gitignore                   # Git ignore file
-docker-compose.yml           # Docker Compose configuration
-LICENSE                      # Project license
-Makefile                     # Common development commands
-README.md                    # This file
+
+Root files:
+├── .env.example            # Environment variables template
+├── .gitignore             # Git ignore patterns
+├── .vscode/               # VS Code configuration
+├── docker-compose.yml     # Docker Compose orchestration
+├── LICENSE                # MIT License
+├── Makefile              # Development commands
+├── README.md             # This file
+├── requirements-dev.txt  # Development dependencies
+└── venv/                 # Local virtual environment (gitignored)
 ```
 
 ## Quick Start
@@ -45,6 +51,7 @@ README.md                    # This file
 
 - Docker
 - Docker Compose
+- Python 3.10+ (for local development environment)
 
 ### Setup
 
@@ -53,32 +60,70 @@ README.md                    # This file
    cd /path/to/drawtwo
    ```
 
-2. **Create environment file:**
+2. **Set up local development environment (for IDE support):**
+   ```bash
+   # Create and activate virtual environment
+   python3 -m venv venv
+   source venv/bin/activate  # On macOS/Linux
+   # venv\Scripts\activate   # On Windows
+
+   # Install development dependencies
+   pip install -r requirements-dev.txt
+   ```
+
+3. **Create environment file:**
    ```bash
    cp .env.example .env
    ```
    Edit `.env` with your preferred settings.
 
-3. **Build and start the services:**
+4. **Build and start the services:**
    ```bash
    make build
    make up
    ```
 
-4. **Run migrations:**
+5. **Run migrations:**
    ```bash
    make migrate
    ```
 
-5. **Create a superuser (optional):**
+6. **Create a superuser (optional):**
    ```bash
    make createsuperuser
    ```
 
-6. **Access the application:**
+7. **Access the application:**
    - Backend API: http://localhost:8000
    - Health check: http://localhost:8000/api/health/
    - Admin interface: http://localhost:8000/admin/
+
+## IDE Setup
+
+### VS Code/Cursor Setup
+
+1. **Install Python extension** if not already installed
+2. **Select Python interpreter:**
+   - Press `Cmd+Shift+P` (macOS) or `Ctrl+Shift+P` (Windows/Linux)
+   - Type "Python: Select Interpreter"
+   - Choose `./venv/bin/python`
+
+The project includes VS Code settings (`.vscode/settings.json`) that will:
+- Use the local virtual environment
+- Enable Django support
+- Configure code formatting with Black
+- Enable linting with Flake8
+
+### Why Local Virtual Environment?
+
+Even though the app runs in Docker, we maintain a local virtual environment because:
+- ✅ **IDE Support**: Full IntelliSense, autocomplete, and error detection
+- ✅ **Code Navigation**: Jump to definitions, find references
+- ✅ **Debugging**: Better debugging experience
+- ✅ **Linting**: Real-time code quality checks
+- ✅ **No Performance Impact**: Your app still runs in Docker
+
+The local environment is only for development tooling - your actual application runs in the Docker containers.
 
 ## Development Commands
 
@@ -137,6 +182,31 @@ The project uses PostgreSQL with the following default configuration:
 - Password: `postgres`
 - Host: `db` (Docker service name)
 - Port: `5432`
+
+## Code Quality
+
+The project includes several code quality tools:
+
+```bash
+# Format code with Black
+source venv/bin/activate
+black backend/
+
+# Check code style with Flake8
+flake8 backend/
+
+# Sort imports with isort
+isort backend/
+```
+
+## What's New in Django 5.1
+
+This project uses Django 5.1, which includes several great new features:
+- **{% querystring %} template tag** - Easier URL parameter manipulation
+- **PostgreSQL Connection Pools** - Better database performance
+- **LoginRequiredMiddleware** - Easier authentication enforcement
+- **Improved admin interface** - Better accessibility and UX
+- **Enhanced security** - Stronger password hashing defaults
 
 ## Production Deployment
 

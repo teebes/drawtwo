@@ -4,17 +4,20 @@ djangorestframework==3.15.2
 django-cors-headers==4.6.0
 django-extensions==3.2.3
 
-# Database
-psycopg2-binary==2.9.9
-
 # Environment variables
 python-dotenv==1.0.1
 
 # Development tools
 ipython==8.30.0
 
-# Production server
-gunicorn==23.0.0
-
 # Security
 cryptography==44.0.0
+
+# Code quality tools for development
+black==24.10.0
+flake8==7.1.1
+isort==5.13.2
+
+# For Django stubs (better type hints)
+django-stubs==5.1.0
+djangorestframework-stubs==3.15.1

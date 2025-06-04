@@ -61,6 +61,13 @@ coverage.xml
 *.cover
 .hypothesis/
 
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+.env/
+
 # Docker
 .dockerignore
 
@@ -73,3 +80,8 @@ yarn-error.log*
 # Build files
 dist/
 build/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
