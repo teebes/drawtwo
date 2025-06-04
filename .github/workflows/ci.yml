@@ -104,8 +104,8 @@ jobs:
         # Just test that the Docker image builds successfully
         docker build -t drawtwo-backend ./backend
 
-        # Verify the image exists and Python works
-        docker run --rm drawtwo-backend python --version
+        # Verify the image exists and Python works (bypass entrypoint)
+        docker run --rm --entrypoint="" drawtwo-backend python --version
 
   security:
     runs-on: ubuntu-latest
