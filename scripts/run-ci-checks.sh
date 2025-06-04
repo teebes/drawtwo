@@ -35,6 +35,7 @@ export SECRET_KEY="test-secret-key-for-ci"
 export DEBUG="False"
 export DB_ENGINE="django.db.backends.sqlite3"
 export DB_NAME=":memory:"
+export DJANGO_SETTINGS_MODULE="config.settings.development"
 python manage.py check --deploy
 cd ..
 echo "✅ Django system checks: PASSED"

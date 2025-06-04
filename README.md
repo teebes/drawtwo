@@ -157,23 +157,22 @@ git push -u origin main
 
 ### Local Testing
 
-Test the same checks that CI runs:
+Before pushing to GitHub, you can run the same CI checks locally to catch issues early:
+
 ```bash
-# Code quality (what CI checks)
-source venv/bin/activate
-black --check backend/
-isort --check-only backend/
-flake8 backend/
+# Quick code quality checks
+make lint              # Black, isort, flake8 checks
+make format            # Auto-format code with Black + isort
 
-# Run tests (what CI runs)
-make test
-# or: docker-compose exec backend python manage.py test
+# Full CI pipeline locally
+make ci-check          # Runs everything CI does
 
-# Security checks (what CI runs)
-pip install safety bandit
-safety check -r requirements-dev.txt
-bandit -r backend/ -x backend/*/tests/
+# Individual checks
+make test              # Django tests only
+docker-compose build   # Docker build test only
 ```
+
+For detailed local testing instructions, see **[docs/local-ci-testing.md](docs/local-ci-testing.md)**.
 
 ## IDE Setup
 
