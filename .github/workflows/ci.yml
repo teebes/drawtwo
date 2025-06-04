@@ -98,8 +98,8 @@ jobs:
 
     - name: Test Docker build
       run: |
-        docker-compose build
-        docker-compose run --rm backend python manage.py check
+        docker compose build
+        docker compose run --rm backend python manage.py check
       env:
         SECRET_KEY: test-secret-key-for-ci
         DEBUG: False
