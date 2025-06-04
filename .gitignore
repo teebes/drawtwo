@@ -85,3 +85,6 @@ build/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+# Security and testing reports
+bandit-report.json
