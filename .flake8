@@ -1,0 +1,22 @@
+[flake8]
+max-line-length = 88
+exclude =
+    venv,
+    .venv,
+    migrations,
+    __pycache__,
+    .git,
+    .tox,
+    .eggs,
+    *.egg,
+    build,
+    dist
+
+# Ignore common Django patterns
+ignore =
+    # Star imports are common in Django settings
+    F403,F405,
+    # Line break before binary operator (conflicts with Black)
+    W503,
+    # Line break after binary operator (Black compatibility)
+    W504

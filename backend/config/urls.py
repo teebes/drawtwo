@@ -1,19 +1,22 @@
 """
 URL configuration for drawtwo project.
 """
-from django.contrib import admin
-from django.urls import path, include
+
 from django.conf import settings
 from django.conf.urls.static import static
+from django.contrib import admin
 from django.http import JsonResponse
+from django.urls import path
+
 
 def health_check(request):
     """Simple health check endpoint"""
-    return JsonResponse({'status': 'healthy'})
+    return JsonResponse({"status": "healthy"})
+
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('api/health/', health_check, name='health_check'),
+    path("admin/", admin.site.urls),
+    path("api/health/", health_check, name="health_check"),
     # Add your app URLs here
     # path('api/users/', include('apps.users.urls')),
     # path('api/cards/', include('apps.cards.urls')),

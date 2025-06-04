@@ -1,0 +1,58 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production # This creates a deployment environment in GitHub
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-dev.txt
+
+    - name: Run final tests
+      run: |
+        cd backend
+        python manage.py test
+      env:
+        SECRET_KEY: ${{ secrets.SECRET_KEY }}
+        DEBUG: False
+        DB_NAME: drawtwo_test
+        DB_USER: postgres
+        DB_PASSWORD: postgres
+        DB_HOST: localhost
+        DB_PORT: 5432
+
+    - name: Build Docker image
+      run: |
+        docker-compose build
+
+    # Add your deployment steps here
+    # Examples:
+    # - name: Deploy to AWS/GCP/Azure
+    # - name: Deploy to Heroku
+    # - name: Deploy to DigitalOcean
+    # - name: Push to container registry
+
+    - name: Deployment placeholder
+      run: |
+        echo "🚀 Ready for deployment!"
+        echo "Add your deployment commands here when you're ready"
+        echo "Common options:"
+        echo "  - Deploy to cloud providers (AWS, GCP, Azure)"
+        echo "  - Deploy to PaaS (Heroku, Railway, Render)"
+        echo "  - Deploy to VPS (DigitalOcean, Linode)"
+        echo "  - Push to container registry (Docker Hub, GitHub Packages)"

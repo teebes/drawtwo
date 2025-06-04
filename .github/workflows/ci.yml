@@ -1,0 +1,135 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: drawtwo_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-dev.txt
+
+    - name: Run code quality checks
+      run: |
+        # Check code formatting with Black
+        black --check backend/
+
+        # Check import sorting with isort
+        isort --check-only backend/
+
+        # Run linting with flake8
+        flake8 backend/
+
+    - name: Run Django system checks
+      run: |
+        cd backend
+        python manage.py check --deploy
+      env:
+        SECRET_KEY: test-secret-key-for-ci
+        DEBUG: False
+        DB_NAME: drawtwo_test
+        DB_USER: postgres
+        DB_PASSWORD: postgres
+        DB_HOST: localhost
+        DB_PORT: 5432
+
+    - name: Run migrations
+      run: |
+        cd backend
+        python manage.py migrate
+      env:
+        SECRET_KEY: test-secret-key-for-ci
+        DEBUG: False
+        DB_NAME: drawtwo_test
+        DB_USER: postgres
+        DB_PASSWORD: postgres
+        DB_HOST: localhost
+        DB_PORT: 5432
+
+    - name: Run tests
+      run: |
+        cd backend
+        python manage.py test
+      env:
+        SECRET_KEY: test-secret-key-for-ci
+        DEBUG: False
+        DB_NAME: drawtwo_test
+        DB_USER: postgres
+        DB_PASSWORD: postgres
+        DB_HOST: localhost
+        DB_PORT: 5432
+
+    - name: Test Docker build
+      run: |
+        docker-compose build
+        docker-compose run --rm backend python manage.py check
+      env:
+        SECRET_KEY: test-secret-key-for-ci
+        DEBUG: False
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install safety bandit
+
+    - name: Check for security vulnerabilities
+      run: |
+        # Check for known security vulnerabilities in dependencies
+        safety check -r requirements-dev.txt
+
+        # Run static security analysis
+        bandit -r backend/ -x backend/*/tests/ -f json -o bandit-report.json || true
+
+    - name: Upload security report
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-report
+        path: bandit-report.json

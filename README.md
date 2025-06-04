@@ -13,6 +13,7 @@ A Django-based backend for a card game, built with PostgreSQL and Docker.
 - Health check endpoint
 - Comprehensive logging
 - Security best practices
+- **GitHub Actions CI/CD** - Automated testing and deployment
 
 ## Project Structure
 
@@ -36,6 +37,7 @@ A Django-based backend for a card game, built with PostgreSQL and Docker.
 Root files:
 ├── .env.example            # Environment variables template
 ├── .gitignore             # Git ignore patterns
+├── .github/workflows/     # GitHub Actions CI/CD
 ├── .vscode/               # VS Code configuration
 ├── docker-compose.yml     # Docker Compose orchestration
 ├── LICENSE                # MIT License
@@ -97,6 +99,81 @@ Root files:
    - Backend API: http://localhost:8000
    - Health check: http://localhost:8000/api/health/
    - Admin interface: http://localhost:8000/admin/
+
+## GitHub Actions CI/CD
+
+This project includes automated testing and deployment workflows using GitHub Actions.
+
+### What's Included
+
+**CI Pipeline** (`.github/workflows/ci.yml`):
+- ✅ **Code Quality**: Black formatting, isort imports, flake8 linting
+- ✅ **Django Tests**: Full test suite with PostgreSQL
+- ✅ **Security Scans**: Dependency vulnerability checks with Safety + Bandit
+- ✅ **Docker Build**: Ensures containers build correctly
+- ✅ **System Checks**: Django deployment checks
+
+**Deploy Pipeline** (`.github/workflows/deploy.yml`):
+- ✅ **Production Tests**: Final test run before deployment
+- ✅ **Docker Build**: Production-ready container builds
+- ✅ **Deployment Ready**: Template for your preferred hosting provider
+
+### How It Works
+
+1. **On Pull Requests**: CI runs all tests and checks
+2. **On Push to Main**: CI runs + deployment workflow triggers
+3. **Manual Trigger**: Deploy workflow can be run manually from GitHub UI
+
+### GitHub Actions Pricing
+
+- **FREE**: 2,000 minutes/month for private repos, unlimited for public repos
+- **GitHub Pro**: 3,000 minutes/month for private repos
+- Most Django projects use ~10-50 minutes per workflow run
+
+### Setting Up CI/CD
+
+**For existing GitHub repo:**
+1. Push the `.github/workflows/` files to your repo
+2. GitHub automatically detects and runs the workflows
+3. Check the "Actions" tab in your GitHub repo
+
+**For new GitHub repo:**
+```bash
+# Initialize git (if not already done)
+git init
+git add .
+git commit -m "Add Django 5.1 project with CI/CD"
+
+# Add GitHub remote and push
+git branch -M main
+git remote add origin https://github.com/yourusername/drawtwo.git
+git push -u origin main
+```
+
+**Adding Deployment Secrets:**
+1. Go to your GitHub repo → Settings → Secrets and variables → Actions
+2. Add secrets like `SECRET_KEY` for production deployment
+3. Update the deploy workflow with your hosting provider commands
+
+### Local Testing
+
+Test the same checks that CI runs:
+```bash
+# Code quality (what CI checks)
+source venv/bin/activate
+black --check backend/
+isort --check-only backend/
+flake8 backend/
+
+# Run tests (what CI runs)
+make test
+# or: docker-compose exec backend python manage.py test
+
+# Security checks (what CI runs)
+pip install safety bandit
+safety check -r requirements-dev.txt
+bandit -r backend/ -x backend/*/tests/
+```
 
 ## IDE Setup
 
