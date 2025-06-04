@@ -101,8 +101,19 @@ jobs:
 
     - name: Test Docker build
       run: |
-        docker compose -f docker-compose.yml -f docker-compose.ci.yml build
-        docker compose -f docker-compose.yml -f docker-compose.ci.yml run --rm backend python manage.py check
+        # Build the Docker image to ensure Dockerfile is valid
+        docker build -t drawtwo-backend ./backend
+
+        # Test that the Django app can start (without running servers)
+        docker run --rm \
+          -e SECRET_KEY=test-secret-key-for-ci \
+          -e DEBUG=False \
+          -e DB_NAME=drawtwo_test \
+          -e DB_USER=postgres \
+          -e DB_PASSWORD=postgres \
+          -e DB_HOST=host.docker.internal \
+          -e DB_PORT=5432 \
+          drawtwo-backend python manage.py check
       env:
         SECRET_KEY: test-secret-key-for-ci
         DEBUG: False
