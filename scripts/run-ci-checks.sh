@@ -53,7 +53,7 @@ echo ""
 
 echo "7️⃣ Security checks..."
 echo "  - Checking for vulnerable dependencies..."
-safety check -r requirements-dev.txt --short-report || echo "⚠️  Safety check found issues (review manually)"
+safety scan --json -r requirements-dev.txt || echo "⚠️  Safety scan found issues (review manually)"
 
 echo "  - Running security analysis..."
 bandit -r backend/ -x backend/*/tests/ -f json -o bandit-report.json --quiet || echo "⚠️  Bandit found issues (check bandit-report.json)"
