@@ -19,6 +19,9 @@ black==24.10.0
 flake8==7.1.1
 isort==5.13.2
 
+# Security scanning
+pip-audit==2.9.0
+
 # For Django stubs (better type hints)
 django-stubs==5.1.0
 djangorestframework-stubs==3.15.1

@@ -90,11 +90,6 @@ jobs:
       env:
         SECRET_KEY: test-secret-key-for-ci
         DEBUG: False
-        DB_NAME: drawtwo_test
-        DB_USER: postgres
-        DB_PASSWORD: postgres
-        DB_HOST: localhost
-        DB_PORT: 5432
 
     - name: Test Docker build
       run: |
@@ -117,12 +112,12 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install safety bandit
+        pip install bandit pip-audit
 
     - name: Check for security vulnerabilities
       run: |
         # Check for known security vulnerabilities in dependencies
-        safety scan --json -r requirements-dev.txt || true
+        pip-audit -r requirements-dev.txt --output-format=json || true
 
         # Run static security analysis
         bandit -r backend/ -x backend/*/tests/ -f json -o bandit-report.json || true
