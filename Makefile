@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs shell migrate makemigrations collectstatic createsuperuser test clean
+.PHONY: help build up down restart logs shell migrate makemigrations collectstatic createsuperuser test clean ci-check lint format
 
 # Default target
 help:
@@ -18,6 +18,11 @@ help:
 	@echo "  createsuperuser - Create Django superuser"
 	@echo "  test           - Run tests"
 	@echo "  clean          - Remove containers and volumes"
+	@echo ""
+	@echo "CI/Code Quality:"
+	@echo "  ci-check       - Run full CI pipeline locally"
+	@echo "  lint           - Run code quality checks only"
+	@echo "  format         - Auto-format code (Black + isort)"
 
 # Docker commands
 build:
@@ -63,6 +68,23 @@ createsuperuser:
 
 test:
 	docker-compose exec backend python manage.py test
+
+# CI/Code Quality
+ci-check:
+	./scripts/run-ci-checks.sh
+
+lint:
+	@echo "Running code quality checks..."
+	black --check backend/
+	isort --check-only backend/
+	flake8 backend/
+	@echo "✅ All linting checks passed!"
+
+format:
+	@echo "Auto-formatting code..."
+	black backend/
+	isort backend/
+	@echo "✅ Code formatted!"
 
 # Cleanup
 clean:

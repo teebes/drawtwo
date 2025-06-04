@@ -1,5 +1,5 @@
-from django.test import TestCase
 from django.contrib.auth.models import User
+from django.test import TestCase
 
 
 class HealthCheckTestCase(TestCase):
@@ -22,9 +22,7 @@ class BasicDjangoTestCase(TestCase):
     def test_user_creation(self):
         """Test that we can create users."""
         user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123"
+            username="testuser", email="test@example.com", password="testpass123"
         )
         self.assertEqual(user.username, "testuser")
         self.assertEqual(user.email, "test@example.com")
