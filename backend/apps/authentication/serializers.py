@@ -1,31 +1,37 @@
-from rest_framework import serializers
-from dj_rest_auth.registration.serializers import RegisterSerializer
-from django.contrib.auth import get_user_model
-from allauth.account.models import EmailAddress
-from django.core.exceptions import ValidationError as DjangoValidationError
-from dj_rest_auth.serializers import LoginSerializer
+from allauth.account import app_settings as allauth_settings
 from allauth.account.adapter import get_adapter
 from allauth.account.utils import setup_user_email
-from allauth.account import app_settings as allauth_settings
+from dj_rest_auth.registration.serializers import RegisterSerializer
+from django.contrib.auth import get_user_model
+from rest_framework import serializers
 
 User = get_user_model()
 
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for user details."""
+
     full_name = serializers.ReadOnlyField()
 
     class Meta:
         model = User
         fields = (
-            'id', 'email', 'first_name', 'last_name', 'full_name',
-            'avatar', 'is_email_verified', 'created_at', 'updated_at'
+            "id",
+            "email",
+            "first_name",
+            "last_name",
+            "full_name",
+            "avatar",
+            "is_email_verified",
+            "created_at",
+            "updated_at",
         )
-        read_only_fields = ('id', 'created_at', 'updated_at', 'is_email_verified')
+        read_only_fields = ("id", "created_at", "updated_at", "is_email_verified")
 
 
 class CustomRegisterSerializer(RegisterSerializer):
     """Custom registration serializer for passwordless email signup."""
+
     username = None  # Remove username field
     password1 = None  # Remove password fields for passwordless
     password2 = None
@@ -49,9 +55,9 @@ class CustomRegisterSerializer(RegisterSerializer):
 
     def get_cleaned_data(self):
         return {
-            'email': self.validated_data.get('email', ''),
-            'first_name': self.validated_data.get('first_name', ''),
-            'last_name': self.validated_data.get('last_name', ''),
+            "email": self.validated_data.get("email", ""),
+            "first_name": self.validated_data.get("first_name", ""),
+            "last_name": self.validated_data.get("last_name", ""),
         }
 
     def save(self, request):
@@ -60,9 +66,9 @@ class CustomRegisterSerializer(RegisterSerializer):
         user = adapter.new_user(request)
         self.cleaned_data = self.get_cleaned_data()
 
-        user.email = self.cleaned_data.get('email')
-        user.first_name = self.cleaned_data.get('first_name')
-        user.last_name = self.cleaned_data.get('last_name')
+        user.email = self.cleaned_data.get("email")
+        user.first_name = self.cleaned_data.get("first_name")
+        user.last_name = self.cleaned_data.get("last_name")
 
         # Don't set a password for passwordless users
         user.set_unusable_password()
@@ -74,6 +80,7 @@ class CustomRegisterSerializer(RegisterSerializer):
 
 class PasswordlessLoginSerializer(serializers.Serializer):
     """Serializer for passwordless login via email."""
+
     email = serializers.EmailField(required=True)
 
     def validate_email(self, email):
@@ -87,6 +94,7 @@ class PasswordlessLoginSerializer(serializers.Serializer):
 
 class EmailVerificationSerializer(serializers.Serializer):
     """Serializer for email verification."""
+
     key = serializers.CharField(required=True)
 
 
@@ -94,4 +102,5 @@ class SocialLoginSerializer(serializers.Serializer):
     """
     Serializer for social login tokens.
     """
+
     access_token = serializers.CharField(required=True)

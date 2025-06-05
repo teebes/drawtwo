@@ -2,7 +2,9 @@
 Production settings for drawtwo project.
 """
 
-from .base import *
+import os  # noqa: F401
+
+from .base import *  # noqa: F401,F403
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False

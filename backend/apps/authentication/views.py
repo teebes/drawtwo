@@ -1,24 +1,20 @@
-from django.shortcuts import render
-from rest_framework import status, permissions
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from django.contrib.auth import get_user_model
-from django.core.mail import send_mail
-from django.conf import settings
-from django.utils import timezone
-from allauth.account.models import EmailConfirmation, EmailAddress
-from allauth.account.utils import send_email_confirmation
+from allauth.account.models import EmailAddress, EmailConfirmation
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 from dj_rest_auth.registration.views import SocialLoginView
-from dj_rest_auth.views import LoginView
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.core.mail import send_mail
+from django.utils import timezone
+from rest_framework import permissions, status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from .serializers import (
-    UserSerializer,
-    PasswordlessLoginSerializer,
     EmailVerificationSerializer,
-    SocialLoginSerializer
+    PasswordlessLoginSerializer,
+    UserSerializer,
 )
 
 User = get_user_model()
@@ -26,6 +22,7 @@ User = get_user_model()
 
 class GoogleLogin(SocialLoginView):
     """Google OAuth2 login view."""
+
     adapter_class = GoogleOAuth2Adapter
     callback_url = "http://localhost:5173/auth/callback/google"  # Frontend callback URL
     client_class = OAuth2Client
@@ -33,12 +30,13 @@ class GoogleLogin(SocialLoginView):
 
 class PasswordlessLoginView(APIView):
     """Send passwordless login email to user."""
+
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
         serializer = PasswordlessLoginSerializer(data=request.data)
         if serializer.is_valid():
-            email = serializer.validated_data['email']
+            email = serializer.validated_data["email"]
             try:
                 user = User.objects.get(email=email)
 
@@ -46,7 +44,7 @@ class PasswordlessLoginView(APIView):
                 email_address, created = EmailAddress.objects.get_or_create(
                     user=user,
                     email=user.email,
-                    defaults={'verified': True, 'primary': True}
+                    defaults={"verified": True, "primary": True},
                 )
 
                 # Create confirmation object
@@ -55,41 +53,52 @@ class PasswordlessLoginView(APIView):
                 confirmation.save()
 
                 # Create custom login link for frontend
-                frontend_url = f"http://localhost:3000/auth/email-confirm/{confirmation.key}"
+                frontend_url = (
+                    f"http://localhost:3000/auth/email-confirm/" f"{confirmation.key}"
+                )
 
                 # Send email with console backend for development
-                from django.core.mail import send_mail
                 send_mail(
-                    subject='DrawTwo - Login Link',
-                    message=f'Click this link to log in: {frontend_url}',
+                    subject="DrawTwo - Login Link",
+                    message=f"Click this link to log in: {frontend_url}",
                     from_email=settings.DEFAULT_FROM_EMAIL,
                     recipient_list=[email],
                     fail_silently=False,
                 )
 
-                return Response({
-                    'message': 'Login link sent to your email address.',
-                    'email': email
-                }, status=status.HTTP_200_OK)
+                return Response(
+                    {
+                        "message": "Login link sent to your email address.",
+                        "email": email,
+                    },
+                    status=status.HTTP_200_OK,
+                )
 
             except User.DoesNotExist:
                 # Don't reveal if email doesn't exist for security
-                return Response({
-                    'message': 'If an account with this email exists, a login link has been sent.',
-                    'email': email
-                }, status=status.HTTP_200_OK)
+                return Response(
+                    {
+                        "message": (
+                            "If an account with this email exists, "
+                            "a login link has been sent."
+                        ),
+                        "email": email,
+                    },
+                    status=status.HTTP_200_OK,
+                )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class EmailConfirmationView(APIView):
     """Confirm email and log user in."""
+
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
         serializer = EmailVerificationSerializer(data=request.data)
         if serializer.is_valid():
-            key = serializer.validated_data['key']
+            key = serializer.validated_data["key"]
 
             try:
                 confirmation = EmailConfirmation.objects.get(key=key)
@@ -102,29 +111,36 @@ class EmailConfirmationView(APIView):
 
                     # Generate JWT tokens
                     from rest_framework_simplejwt.tokens import RefreshToken
+
                     refresh = RefreshToken.for_user(user)
 
-                    return Response({
-                        'message': 'Email confirmed successfully.',
-                        'user': UserSerializer(user).data,
-                        'access': str(refresh.access_token),
-                        'refresh': str(refresh),
-                    }, status=status.HTTP_200_OK)
+                    return Response(
+                        {
+                            "message": "Email confirmed successfully.",
+                            "user": UserSerializer(user).data,
+                            "access": str(refresh.access_token),
+                            "refresh": str(refresh),
+                        },
+                        status=status.HTTP_200_OK,
+                    )
                 else:
-                    return Response({
-                        'error': 'Invalid or expired confirmation link.'
-                    }, status=status.HTTP_400_BAD_REQUEST)
+                    return Response(
+                        {"error": "Invalid or expired confirmation link."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
             except EmailConfirmation.DoesNotExist:
-                return Response({
-                    'error': 'Invalid confirmation link.'
-                }, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": "Invalid confirmation link."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserProfileView(APIView):
     """Get and update user profile."""
+
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
@@ -141,33 +157,40 @@ class UserProfileView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def protected_test_view(request):
     """Test view to verify authentication is working."""
-    return Response({
-        'message': 'Authentication is working!',
-        'user': {
-            'id': request.user.id,
-            'email': request.user.email,
-            'full_name': request.user.full_name,
+    return Response(
+        {
+            "message": "Authentication is working!",
+            "user": {
+                "id": request.user.id,
+                "email": request.user.email,
+                "full_name": request.user.full_name,
+            },
         }
-    })
+    )
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([permissions.AllowAny])
 def register_view(request):
     """Register a new user and send email verification."""
-    from dj_rest_auth.registration.serializers import RegisterSerializer
     from .serializers import CustomRegisterSerializer
 
     serializer = CustomRegisterSerializer(data=request.data)
     if serializer.is_valid():
         user = serializer.save(request)
-        return Response({
-            'message': 'Registration successful. Please check your email to verify your account.',
-            'user': UserSerializer(user).data
-        }, status=status.HTTP_201_CREATED)
+        return Response(
+            {
+                "message": (
+                    "Registration successful. Please check your email to "
+                    "verify your account."
+                ),
+                "user": UserSerializer(user).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
