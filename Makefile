@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs shell migrate makemigrations collectstatic createsuperuser test clean ci-check ci-check-docker lint lint-docker format format-docker
+.PHONY: help build up down restart logs shell migrate makemigrations collectstatic createsuperuser test clean ci-check ci-check-docker lint lint-docker format format-docker cleanup-emails cleanup-emails-dry
 
 # Default target
 help:
@@ -39,6 +39,8 @@ help:
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean          - Remove containers and volumes"
+	@echo "  cleanup-emails-dry - Show old email confirmations that would be deleted"
+	@echo "  cleanup-emails - Delete old email confirmations (7+ days old)"
 
 # Full Stack Development
 dev:
@@ -139,3 +141,9 @@ format-docker:
 clean:
 	docker-compose down -v
 	docker system prune -f
+
+cleanup-emails-dry:
+	docker-compose run --rm backend python manage.py cleanup_email_confirmations --dry-run
+
+cleanup-emails:
+	docker-compose run --rm backend python manage.py cleanup_email_confirmations

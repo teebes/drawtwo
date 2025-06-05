@@ -148,10 +148,14 @@ export const useAuthStore = defineStore('auth', {
       try {
         // Call logout endpoint if authenticated
         if (this.isAuthenticated) {
-          await axios.post('/auth/auth/logout/')
+          // Create a custom axios instance to avoid the interceptor
+          const logoutAxios = axios.create()
+          logoutAxios.defaults.headers.common['Authorization'] = `Bearer ${this.accessToken}`
+          await logoutAxios.post('/auth/auth/logout/')
         }
       } catch (error) {
         console.error('Logout API call failed:', error)
+        // Don't worry if logout fails - clear local auth anyway
       } finally {
         this.clearAuth()
         this.loading = false

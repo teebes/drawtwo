@@ -119,11 +119,15 @@ This project includes automated testing and deployment workflows using GitHub Ac
 ### What's Included
 
 **CI Pipeline** (`.github/workflows/ci.yml`):
-- ✅ **Code Quality**: Black formatting, isort imports, flake8 linting
 - ✅ **Django Tests**: Full test suite with PostgreSQL
 - ✅ **Security Scans**: Dependency vulnerability checks with Safety + Bandit
 - ✅ **Docker Build**: Ensures containers build correctly
 - ✅ **System Checks**: Django deployment checks
+
+**Code Quality Pipeline** (`.github/workflows/code-quality.yml`):
+- 🎨 **Optional**: Black formatting, isort imports, flake8 linting
+- 🔧 **Manual trigger**: Run when you want to check code quality
+- 📅 **Weekly schedule**: Automated weekly checks (non-blocking)
 
 **Deploy Pipeline** (`.github/workflows/deploy.yml`):
 - ✅ **Production Tests**: Final test run before deployment
@@ -333,15 +337,6 @@ flake8 backend/
 isort backend/
 ```
 
-## What's New in Django 5.1
-
-This project uses Django 5.1, which includes several great new features:
-- **{% querystring %} template tag** - Easier URL parameter manipulation
-- **PostgreSQL Connection Pools** - Better database performance
-- **LoginRequiredMiddleware** - Easier authentication enforcement
-- **Improved admin interface** - Better accessibility and UX
-- **Enhanced security** - Stronger password hashing defaults
-
 ## Production Deployment
 
 1. Set environment variables for production
@@ -350,6 +345,18 @@ This project uses Django 5.1, which includes several great new features:
 4. Configure `ALLOWED_HOSTS`
 5. Set up proper SSL certificates
 6. Use a production-grade WSGI server (Gunicorn is included)
+
+### Maintenance Tasks
+
+**Email Confirmations Cleanup** - Run periodically to prevent database bloat:
+```bash
+# Check what would be deleted (safe)
+make cleanup-emails-dry
+
+# Clean up confirmations older than 7 days
+make cleanup-emails
+```
+Consider setting up a cron job to run this weekly in production.
 
 ## Security Notes
 

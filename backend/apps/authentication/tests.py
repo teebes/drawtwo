@@ -1,4 +1,15 @@
-# Create your tests here.
+"""
+Tests for the authentication app.
+
+This comprehensive test suite covers:
+- User model functionality (creation, uniqueness, properties)
+- API endpoints (registration, login, validation, protected access)
+- Email confirmation flow (including edge cases and error conditions)
+- Profile management (get/update profile, username conflicts)
+- Integration tests (complete user journey from signup to authenticated access)
+
+Total tests: 29 (5 model tests + 24 API/integration tests)
+"""
 
 from unittest.mock import patch
 
@@ -220,6 +231,79 @@ class AuthenticationAPITestCase(APITestCase):
         data = {"key": "invalid-key-12345"}
         response = self.client.post(self.email_confirm_url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_email_confirmation_missing_key(self):
+        """Test email confirmation with missing key parameter."""
+        data = {}
+        response = self.client.post(self.email_confirm_url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("key", response.data)
+
+    def test_email_confirmation_empty_key(self):
+        """Test email confirmation with empty key."""
+        data = {"key": ""}
+        response = self.client.post(self.email_confirm_url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_email_confirmation_null_key(self):
+        """Test email confirmation with null key."""
+        data = {"key": None}
+        response = self.client.post(self.email_confirm_url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_email_confirmation_key_with_newlines(self):
+        """Test email confirmation with key containing newlines (should fail)."""
+        # This tests the bug we just fixed where keys can get corrupted with newlines
+        data = {"key": "somekey\nwithbreaks"}
+        response = self.client.post(self.email_confirm_url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        # Should return EmailConfirmation.DoesNotExist error
+        self.assertIn("error", response.data)
+
+    def test_email_confirmation_wrong_method(self):
+        """Test email confirmation with wrong HTTP method."""
+        data = {"key": "some-key"}
+        response = self.client.get(self.email_confirm_url, data)
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_email_confirmation_debug_flow(self):
+        """Test email confirmation with detailed debugging to match frontend scenario."""
+        # Register a user first
+        register_data = {"email": "debug@example.com"}
+        response = self.client.post(self.register_url, register_data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Send passwordless login email
+        login_data = {"email": "debug@example.com"}
+        response = self.client.post(
+            self.passwordless_login_url, login_data, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Get the confirmation object and key
+        email_address = EmailAddress.objects.get(email="debug@example.com")
+        confirmation = EmailConfirmation.objects.filter(
+            email_address=email_address
+        ).first()
+        self.assertIsNotNone(confirmation)
+
+        # Print debug info (will be visible when running with -v 2)
+        print(f"Debug - Confirmation key: {confirmation.key}")
+        print(f"Debug - Key length: {len(confirmation.key)}")
+        print(f"Debug - Key type: {type(confirmation.key)}")
+
+        # Try the exact same request as frontend
+        confirm_data = {"key": confirmation.key}
+        print(f"Debug - Request data: {confirm_data}")
+
+        response = self.client.post(self.email_confirm_url, confirm_data, format="json")
+        print(f"Debug - Response status: {response.status_code}")
+        print(f"Debug - Response data: {response.data}")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+        self.assertIn("user", response.data)
 
     def test_api_serializer_validation(self):
         """Test API input validation."""

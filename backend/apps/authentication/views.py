@@ -44,8 +44,14 @@ class PasswordlessLoginView(APIView):
                 email_address, created = EmailAddress.objects.get_or_create(
                     user=user,
                     email=user.email,
-                    defaults={"verified": True, "primary": True},
+                    defaults={"verified": False, "primary": True},
                 )
+
+                # For passwordless login, we need to reset verification status
+                # so the confirmation can work properly
+                if not created and email_address.verified:
+                    email_address.verified = False
+                    email_address.save()
 
                 # Create confirmation object
                 confirmation = EmailConfirmation.create(email_address)

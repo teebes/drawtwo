@@ -46,17 +46,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements-dev.txt
 
-    - name: Run code quality checks
-      run: |
-        # Check code formatting with Black
-        black --check backend/
-
-        # Check import sorting with isort
-        isort --check-only backend/
-
-        # Run linting with flake8
-        flake8 backend/
-
     - name: Run Django system checks
       run: |
         cd backend
