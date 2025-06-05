@@ -3,11 +3,17 @@
 # Default target
 help:
 	@echo "Available commands:"
-	@echo "  build          - Build the Docker containers"
-	@echo "  up             - Start the services"
-	@echo "  down           - Stop the services"
-	@echo "  restart        - Restart the services"
+	@echo ""
+	@echo "Full Stack:"
+	@echo "  dev            - Start the full development stack (backend + frontend)"
+	@echo "  build          - Build all Docker containers"
+	@echo "  up             - Start all services"
+	@echo "  down           - Stop all services"
+	@echo "  restart        - Restart all services"
 	@echo "  logs           - View logs from all services"
+	@echo ""
+	@echo "Backend Only:"
+	@echo "  backend-dev    - Start only backend services (db + backend)"
 	@echo "  logs-backend   - View logs from backend service"
 	@echo "  logs-db        - View logs from database service"
 	@echo "  shell          - Access Django shell"
@@ -16,13 +22,24 @@ help:
 	@echo "  makemigrations - Create Django migrations"
 	@echo "  collectstatic  - Collect static files"
 	@echo "  createsuperuser - Create Django superuser"
-	@echo "  test           - Run tests"
-	@echo "  clean          - Remove containers and volumes"
+	@echo "  test           - Run backend tests"
+	@echo ""
+	@echo "Frontend Only:"
+	@echo "  frontend-dev   - Start only frontend development server"
+	@echo "  frontend-build - Build frontend for production"
+	@echo "  frontend-logs  - View logs from frontend service"
 	@echo ""
 	@echo "CI/Code Quality:"
 	@echo "  ci-check       - Run full CI pipeline locally"
 	@echo "  lint           - Run code quality checks only"
 	@echo "  format         - Auto-format code (Black + isort)"
+	@echo ""
+	@echo "Cleanup:"
+	@echo "  clean          - Remove containers and volumes"
+
+# Full Stack Development
+dev:
+	docker-compose up
 
 # Docker commands
 build:
@@ -46,6 +63,20 @@ logs-backend:
 
 logs-db:
 	docker-compose logs -f db
+
+logs-frontend:
+	docker-compose logs -f frontend
+
+# Backend Only Development
+backend-dev:
+	docker-compose up db backend
+
+# Frontend Only Development
+frontend-dev:
+	docker-compose up frontend
+
+frontend-build:
+	docker-compose exec frontend npm run build
 
 # Django commands
 shell:

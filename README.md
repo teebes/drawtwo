@@ -1,9 +1,10 @@
-# DrawTwo - Card Game Backend
+# DrawTwo - Full Stack Card Game
 
-A Django-based backend for a card game, built with PostgreSQL and Docker.
+A full-stack collaborative drawing application with a Django backend and Vue.js frontend.
 
 ## Features
 
+### Backend
 - Django 5.1 with Django REST Framework
 - PostgreSQL database
 - Docker & Docker Compose for easy development
@@ -15,36 +16,46 @@ A Django-based backend for a card game, built with PostgreSQL and Docker.
 - Security best practices
 - **GitHub Actions CI/CD** - Automated testing and deployment
 
+### Frontend
+- Vue 3 with Composition API
+- Vite for fast development and building
+- Modern, responsive UI
+- API integration with backend
+- Hot module replacement for development
+- Production-ready builds
+
+### Full Stack
+- Unified development commands
+- Independent or combined service execution
+- Docker Compose orchestration
+- Frontend/backend communication via API proxy
+
 ## Project Structure
 
 ```
-/backend
-├── apps/                     # Django apps will go here
-├── config/
-│   ├── settings/
-│   │   ├── __init__.py
-│   │   ├── base.py          # Base settings
-│   │   ├── development.py   # Development settings
-│   │   └── production.py    # Production settings
-│   ├── asgi.py              # ASGI configuration
-│   ├── urls.py              # Main URL configuration
-│   └── wsgi.py              # WSGI configuration
-├── Dockerfile               # Docker configuration for backend
-├── docker-entrypoint.sh     # Docker entrypoint script
-├── manage.py                # Django management script
-└── requirements.txt         # Python dependencies
-
-Root files:
-├── .env.example            # Environment variables template
-├── .gitignore             # Git ignore patterns
-├── .github/workflows/     # GitHub Actions CI/CD
-├── .vscode/               # VS Code configuration
-├── docker-compose.yml     # Docker Compose orchestration
-├── LICENSE                # MIT License
-├── Makefile              # Development commands
-├── README.md             # This file
-├── requirements-dev.txt  # Development dependencies
-└── venv/                 # Local virtual environment (gitignored)
+├── backend/                  # Django backend
+│   ├── apps/                # Django apps
+│   ├── config/              # Django configuration
+│   │   ├── settings/        # Environment-specific settings
+│   │   ├── urls.py          # Main URL configuration
+│   │   └── ...
+│   ├── Dockerfile           # Backend Docker configuration
+│   ├── manage.py            # Django management script
+│   └── requirements.txt     # Python dependencies
+├── frontend/                # Vue.js frontend
+│   ├── src/                 # Source code
+│   │   ├── components/      # Reusable Vue components
+│   │   ├── views/           # Page components
+│   │   ├── App.vue          # Root component
+│   │   └── main.js          # Application entry point
+│   ├── Dockerfile           # Frontend Docker configuration
+│   ├── package.json         # Node.js dependencies
+│   ├── vite.config.js       # Vite configuration
+│   └── README.md            # Frontend documentation
+├── docker-compose.yml       # Full stack orchestration
+├── Makefile                 # Development commands
+├── .github/workflows/       # GitHub Actions CI/CD
+└── README.md                # This file
 ```
 
 ## Quick Start
@@ -96,6 +107,7 @@ Root files:
    ```
 
 7. **Access the application:**
+   - Frontend: http://localhost:3000
    - Backend API: http://localhost:8000
    - Health check: http://localhost:8000/api/health/
    - Admin interface: http://localhost:8000/admin/
@@ -205,13 +217,20 @@ The local environment is only for development tooling - your actual application 
 
 Use the Makefile for common development tasks:
 
+### Full Stack Development
 ```bash
-make help              # Show available commands
-make build             # Build Docker containers
-make up                # Start services
-make down              # Stop services
-make restart           # Restart services
-make logs              # View all logs
+make help              # Show all available commands
+make dev               # Start full stack (frontend + backend + db)
+make build             # Build all Docker containers
+make up                # Start all services
+make down              # Stop all services
+make restart           # Restart all services
+make logs              # View logs from all services
+```
+
+### Backend Only
+```bash
+make backend-dev       # Start only backend services (db + backend)
 make logs-backend      # View backend logs
 make logs-db           # View database logs
 make shell             # Access Django shell
@@ -220,9 +239,48 @@ make migrate           # Run migrations
 make makemigrations    # Create migrations
 make collectstatic     # Collect static files
 make createsuperuser   # Create superuser
-make test              # Run tests
+make test              # Run backend tests
+```
+
+### Frontend Only
+```bash
+make frontend-dev      # Start only frontend development server
+make frontend-build    # Build frontend for production
+make logs-frontend     # View frontend logs
+```
+
+### Cleanup
+```bash
 make clean             # Remove containers and volumes
 ```
+
+## Independent Development
+
+You can also run the frontend and backend independently:
+
+### Backend Only
+```bash
+cd backend
+# Set up virtual environment and install dependencies
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Start database with Docker
+docker-compose up db
+
+# Run Django development server
+python manage.py runserver
+```
+
+### Frontend Only
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+**Note:** When running independently, make sure the backend is available at `http://localhost:8000` for the frontend to work properly.
 
 ## Environment Variables
 
