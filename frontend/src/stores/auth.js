@@ -1,0 +1,259 @@
+import { defineStore } from 'pinia'
+import axios from 'axios'
+
+const API_BASE_URL = 'http://localhost:8000/api'
+
+// Configure axios defaults
+axios.defaults.baseURL = API_BASE_URL
+axios.defaults.withCredentials = true
+
+export const useAuthStore = defineStore('auth', {
+  state: () => ({
+    user: null,
+    accessToken: null,
+    refreshToken: null,
+    isAuthenticated: false,
+    loading: false,
+    error: null
+  }),
+
+  actions: {
+    // Initialize authentication state from localStorage
+    initAuth() {
+      const accessToken = localStorage.getItem('accessToken')
+      const refreshToken = localStorage.getItem('refreshToken')
+      const userData = localStorage.getItem('userData')
+
+      if (accessToken && refreshToken && userData) {
+        this.accessToken = accessToken
+        this.refreshToken = refreshToken
+        this.user = JSON.parse(userData)
+        this.isAuthenticated = true
+
+        // Set axios authorization header
+        axios.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
+      }
+    },
+
+    // Store tokens and user data
+    setAuthData(accessToken, refreshToken, user) {
+      this.accessToken = accessToken
+      this.refreshToken = refreshToken
+      this.user = user
+      this.isAuthenticated = true
+
+      // Store in localStorage
+      localStorage.setItem('accessToken', accessToken)
+      localStorage.setItem('refreshToken', refreshToken)
+      localStorage.setItem('userData', JSON.stringify(user))
+
+      // Set axios authorization header
+      axios.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
+    },
+
+    // Clear authentication data
+    clearAuth() {
+      this.user = null
+      this.accessToken = null
+      this.refreshToken = null
+      this.isAuthenticated = false
+
+      // Clear localStorage
+      localStorage.removeItem('accessToken')
+      localStorage.removeItem('refreshToken')
+      localStorage.removeItem('userData')
+
+      // Clear axios authorization header
+      delete axios.defaults.headers.common['Authorization']
+    },
+
+    // Register a new user (passwordless)
+    async register(userData) {
+      this.loading = true
+      this.error = null
+
+      try {
+        const response = await axios.post('/auth/register/', userData)
+        this.loading = false
+        return { success: true, data: response.data }
+      } catch (error) {
+        this.loading = false
+        this.error = error.response?.data || { message: 'Registration failed' }
+        return { success: false, error: this.error }
+      }
+    },
+
+    // Send passwordless login email
+    async sendLoginEmail(email) {
+      this.loading = true
+      this.error = null
+
+      try {
+        const response = await axios.post('/auth/passwordless-login/', { email })
+        this.loading = false
+        return { success: true, data: response.data }
+      } catch (error) {
+        this.loading = false
+        this.error = error.response?.data || { message: 'Login email failed' }
+        return { success: false, error: this.error }
+      }
+    },
+
+    // Confirm email and login
+    async confirmEmail(key) {
+      this.loading = true
+      this.error = null
+
+      try {
+        const response = await axios.post('/auth/email-confirm/', { key })
+
+        if (response.data.access && response.data.refresh && response.data.user) {
+          this.setAuthData(response.data.access, response.data.refresh, response.data.user)
+        }
+
+        this.loading = false
+        return { success: true, data: response.data }
+      } catch (error) {
+        this.loading = false
+        this.error = error.response?.data || { message: 'Email confirmation failed' }
+        return { success: false, error: this.error }
+      }
+    },
+
+    // Google OAuth login
+    async googleLogin(accessToken) {
+      this.loading = true
+      this.error = null
+
+      try {
+        const response = await axios.post('/auth/google/', { access_token: accessToken })
+
+        if (response.data.access_token && response.data.refresh_token && response.data.user) {
+          this.setAuthData(response.data.access_token, response.data.refresh_token, response.data.user)
+        }
+
+        this.loading = false
+        return { success: true, data: response.data }
+      } catch (error) {
+        this.loading = false
+        this.error = error.response?.data || { message: 'Google login failed' }
+        return { success: false, error: this.error }
+      }
+    },
+
+    // Logout
+    async logout() {
+      this.loading = true
+
+      try {
+        // Call logout endpoint if authenticated
+        if (this.isAuthenticated) {
+          await axios.post('/auth/auth/logout/')
+        }
+      } catch (error) {
+        console.error('Logout API call failed:', error)
+      } finally {
+        this.clearAuth()
+        this.loading = false
+      }
+    },
+
+    // Refresh access token
+    async refreshAccessToken() {
+      if (!this.refreshToken) {
+        this.clearAuth()
+        return false
+      }
+
+      try {
+        const response = await axios.post('/auth/token/refresh/', {
+          refresh: this.refreshToken
+        })
+
+        this.accessToken = response.data.access
+        localStorage.setItem('accessToken', response.data.access)
+        axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.access}`
+
+        return true
+      } catch (error) {
+        console.error('Token refresh failed:', error)
+        this.clearAuth()
+        return false
+      }
+    },
+
+    // Get current user profile
+    async getCurrentUser() {
+      if (!this.isAuthenticated) return null
+
+      try {
+        const response = await axios.get('/auth/profile/')
+        this.user = response.data
+        localStorage.setItem('userData', JSON.stringify(response.data))
+        return response.data
+      } catch (error) {
+        console.error('Get current user failed:', error)
+        // If unauthorized, try to refresh token
+        if (error.response?.status === 401) {
+          const refreshed = await this.refreshAccessToken()
+          if (refreshed) {
+            // Retry the request
+            try {
+              const response = await axios.get('/auth/profile/')
+              this.user = response.data
+              localStorage.setItem('userData', JSON.stringify(response.data))
+              return response.data
+            } catch (retryError) {
+              console.error('Retry get current user failed:', retryError)
+              this.clearAuth()
+            }
+          }
+        }
+        return null
+      }
+    },
+
+    // Test protected endpoint
+    async testProtectedEndpoint() {
+      try {
+        const response = await axios.get('/auth/test/')
+        return { success: true, data: response.data }
+      } catch (error) {
+        // If unauthorized, try to refresh token
+        if (error.response?.status === 401) {
+          const refreshed = await this.refreshAccessToken()
+          if (refreshed) {
+            // Retry the request
+            try {
+              const response = await axios.get('/auth/test/')
+              return { success: true, data: response.data }
+            } catch (retryError) {
+              return { success: false, error: retryError.response?.data || { message: 'Test failed' } }
+            }
+          }
+        }
+        return { success: false, error: error.response?.data || { message: 'Test failed' } }
+      }
+    }
+  }
+})
+
+// Setup axios interceptor for automatic token refresh
+axios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const authStore = useAuthStore()
+
+    if (error.response?.status === 401 && authStore.refreshToken) {
+      const refreshed = await authStore.refreshAccessToken()
+      if (refreshed) {
+        // Retry the original request
+        const originalRequest = error.config
+        originalRequest.headers['Authorization'] = `Bearer ${authStore.accessToken}`
+        return axios.request(originalRequest)
+      }
+    }
+
+    return Promise.reject(error)
+  }
+)
