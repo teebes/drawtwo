@@ -11,16 +11,15 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for user details."""
 
-    full_name = serializers.ReadOnlyField()
+    display_name = serializers.ReadOnlyField()
 
     class Meta:
         model = User
         fields = (
             "id",
             "email",
-            "first_name",
-            "last_name",
-            "full_name",
+            "username",
+            "display_name",
             "avatar",
             "is_email_verified",
             "created_at",
@@ -32,13 +31,15 @@ class UserSerializer(serializers.ModelSerializer):
 class CustomRegisterSerializer(RegisterSerializer):
     """Custom registration serializer for passwordless email signup."""
 
-    username = None  # Remove username field
+    # Remove inherited fields we don't want
+    username = None
     password1 = None  # Remove password fields for passwordless
     password2 = None
 
     email = serializers.EmailField(required=True)
-    first_name = serializers.CharField(max_length=30, required=False, allow_blank=True)
-    last_name = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    username = serializers.CharField(
+        max_length=150, required=False, allow_blank=True, allow_null=True
+    )
 
     def validate_email(self, email):
         email = get_adapter().clean_email(email)
@@ -49,6 +50,15 @@ class CustomRegisterSerializer(RegisterSerializer):
                 )
         return email
 
+    def validate_username(self, username):
+        """Validate that username is unique if provided."""
+        if username:
+            if User.objects.filter(username__iexact=username).exists():
+                raise serializers.ValidationError(
+                    "A user with this username already exists."
+                )
+        return username
+
     def validate(self, data):
         # Skip password validation since we're passwordless
         return data
@@ -56,8 +66,7 @@ class CustomRegisterSerializer(RegisterSerializer):
     def get_cleaned_data(self):
         return {
             "email": self.validated_data.get("email", ""),
-            "first_name": self.validated_data.get("first_name", ""),
-            "last_name": self.validated_data.get("last_name", ""),
+            "username": self.validated_data.get("username", "") or None,
         }
 
     def save(self, request):
@@ -67,8 +76,7 @@ class CustomRegisterSerializer(RegisterSerializer):
         self.cleaned_data = self.get_cleaned_data()
 
         user.email = self.cleaned_data.get("email")
-        user.first_name = self.cleaned_data.get("first_name")
-        user.last_name = self.cleaned_data.get("last_name")
+        user.username = self.cleaned_data.get("username")
 
         # Don't set a password for passwordless users
         user.set_unusable_password()

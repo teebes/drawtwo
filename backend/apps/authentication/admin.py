@@ -11,8 +11,8 @@ class UserAdmin(BaseUserAdmin):
 
     list_display = (
         "email",
-        "first_name",
-        "last_name",
+        "username",
+        "display_name",
         "is_email_verified",
         "is_staff",
         "is_active",
@@ -25,12 +25,12 @@ class UserAdmin(BaseUserAdmin):
         "is_email_verified",
         "created_at",
     )
-    search_fields = ("email", "first_name", "last_name")
+    search_fields = ("email", "username")
     ordering = ("-created_at",)
 
     fieldsets = (
         (None, {"fields": ("email", "password")}),
-        ("Personal info", {"fields": ("first_name", "last_name", "avatar")}),
+        ("Personal info", {"fields": ("username", "avatar")}),
         (
             "Permissions",
             {
@@ -59,8 +59,7 @@ class UserAdmin(BaseUserAdmin):
                     "email",
                     "password1",
                     "password2",
-                    "first_name",
-                    "last_name",
+                    "username",
                 ),
             },
         ),

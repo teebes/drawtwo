@@ -36,11 +36,23 @@ class User(AbstractUser):
     """
 
     email = models.EmailField(unique=True)
-    username = None  # Remove username field
+
+    # Optional username for multiplayer features
+    username = models.CharField(
+        max_length=150,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text=(
+            "Optional username for multiplayer features. " "Must be unique if provided."
+        ),
+    )
+
+    # Remove first_name and last_name inherited from AbstractUser
+    first_name = None
+    last_name = None
 
     # User profile fields
-    first_name = models.CharField(max_length=150, blank=True)
-    last_name = models.CharField(max_length=150, blank=True)
     avatar = models.URLField(blank=True, null=True)  # For social auth profile pictures
 
     # Timestamps
@@ -63,9 +75,9 @@ class User(AbstractUser):
         verbose_name_plural = "Users"
 
     def __str__(self):
-        return self.email
+        return self.username or self.email
 
     @property
-    def full_name(self):
-        """Returns the user's full name."""
-        return f"{self.first_name} {self.last_name}".strip() or self.email
+    def display_name(self):
+        """Returns the user's display name."""
+        return self.username or self.email

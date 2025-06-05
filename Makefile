@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs shell migrate makemigrations collectstatic createsuperuser test clean ci-check lint format
+.PHONY: help build up down restart logs shell migrate makemigrations collectstatic createsuperuser test clean ci-check ci-check-docker lint lint-docker format format-docker
 
 # Default target
 help:
@@ -31,8 +31,11 @@ help:
 	@echo ""
 	@echo "CI/Code Quality:"
 	@echo "  ci-check       - Run full CI pipeline locally"
+	@echo "  ci-check-docker - Run CI checks in Docker container"
 	@echo "  lint           - Run code quality checks only"
+	@echo "  lint-docker    - Run code quality checks in Docker"
 	@echo "  format         - Auto-format code (Black + isort)"
+	@echo "  format-docker  - Auto-format code in Docker"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean          - Remove containers and volumes"
@@ -104,6 +107,11 @@ test:
 ci-check:
 	./scripts/run-ci-checks.sh
 
+ci-check-docker:
+	@echo "Running CI checks in Docker..."
+	docker-compose run --rm backend sh -c "black --check . && isort --check-only . && flake8 . --max-line-length=88 --extend-ignore=E203,W503 --exclude=migrations"
+	@echo "✅ All Docker CI checks passed!"
+
 lint:
 	@echo "Running code quality checks..."
 	black --check backend/
@@ -111,11 +119,21 @@ lint:
 	flake8 backend/
 	@echo "✅ All linting checks passed!"
 
+lint-docker:
+	@echo "Running code quality checks in Docker..."
+	docker-compose run --rm backend sh -c "black --check . && isort --check-only . && flake8 . --max-line-length=88 --extend-ignore=E203,W503 --exclude=migrations"
+	@echo "✅ All Docker linting checks passed!"
+
 format:
 	@echo "Auto-formatting code..."
 	black backend/
 	isort backend/
 	@echo "✅ Code formatted!"
+
+format-docker:
+	@echo "Auto-formatting code in Docker..."
+	docker-compose run --rm backend sh -c "black . && isort ."
+	@echo "✅ Code formatted in Docker!"
 
 # Cleanup
 clean:

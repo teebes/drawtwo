@@ -25,25 +25,18 @@
           </div>
 
           <div class="form-group" v-if="isSignUp">
-            <label for="firstName">First Name (Optional)</label>
+            <label for="username">Username (Optional)</label>
             <input
-              id="firstName"
-              v-model="firstName"
+              id="username"
+              v-model="username"
               type="text"
-              placeholder="Enter your first name"
+              placeholder="Choose a username for multiplayer"
               :disabled="authStore.loading"
+              maxlength="150"
             />
-          </div>
-
-          <div class="form-group" v-if="isSignUp">
-            <label for="lastName">Last Name (Optional)</label>
-            <input
-              id="lastName"
-              v-model="lastName"
-              type="text"
-              placeholder="Enter your last name"
-              :disabled="authStore.loading"
-            />
+            <small class="form-help">
+              Optional - you can add this later for multiplayer features
+            </small>
           </div>
 
           <button
@@ -101,8 +94,7 @@ export default {
     const authStore = useAuthStore()
 
     const email = ref('')
-    const firstName = ref('')
-    const lastName = ref('')
+    const username = ref('')
     const isSignUp = ref(false)
     const message = ref('')
     const messageType = ref('info')
@@ -126,8 +118,7 @@ export default {
           // Registration
           const userData = {
             email: email.value,
-            first_name: firstName.value,
-            last_name: lastName.value
+            username: username.value || undefined
           }
 
           const result = await authStore.register(userData)
@@ -165,8 +156,7 @@ export default {
 
     return {
       email,
-      firstName,
-      lastName,
+      username,
       isSignUp,
       message,
       messageType,
@@ -276,6 +266,13 @@ export default {
 .form-group input:disabled {
   background-color: #f7fafc;
   color: #a0aec0;
+}
+
+.form-help {
+  display: block;
+  margin-top: 0.25rem;
+  color: #718096;
+  font-size: 0.75rem;
 }
 
 .btn {

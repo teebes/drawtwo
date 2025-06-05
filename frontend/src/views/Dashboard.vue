@@ -5,7 +5,7 @@
         <h1>DrawTwo Dashboard</h1>
         <div class="user-info">
           <span v-if="authStore.user">
-            Welcome, {{ authStore.user.full_name || authStore.user.email }}!
+            Welcome, {{ authStore.user.display_name }}!
           </span>
           <button @click="handleLogout" class="btn btn-secondary">
             Logout
@@ -23,8 +23,8 @@
             <div class="info-item">
               <strong>Email:</strong> {{ authStore.user.email }}
             </div>
-            <div class="info-item" v-if="authStore.user.first_name">
-              <strong>Name:</strong> {{ authStore.user.first_name }} {{ authStore.user.last_name }}
+            <div class="info-item" v-if="authStore.user.username">
+              <strong>Username:</strong> {{ authStore.user.username }}
             </div>
             <div class="info-item">
               <strong>Verified:</strong>

@@ -13,7 +13,7 @@
           <h2>Email Confirmed!</h2>
           <p>Your email has been successfully verified and you are now logged in.</p>
           <div class="user-info" v-if="authStore.user">
-            <p>Welcome, <strong>{{ authStore.user.full_name || authStore.user.email }}</strong>!</p>
+            <p>Welcome, <strong>{{ authStore.user.display_name }}</strong>!</p>
           </div>
           <div class="actions">
             <router-link to="/dashboard" class="btn btn-primary">

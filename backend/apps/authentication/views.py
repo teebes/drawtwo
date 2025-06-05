@@ -167,7 +167,7 @@ def protected_test_view(request):
             "user": {
                 "id": request.user.id,
                 "email": request.user.email,
-                "full_name": request.user.full_name,
+                "display_name": request.user.display_name,
             },
         }
     )

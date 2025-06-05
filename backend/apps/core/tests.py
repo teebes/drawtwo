@@ -23,13 +23,18 @@ class BasicDjangoTestCase(TestCase):
 
     def test_user_creation(self):
         """Test that we can create users."""
-        user = User.objects.create_user(
-            email="test@example.com", first_name="Test", last_name="User"
-        )
+        user = User.objects.create_user(email="test@example.com", username="testuser")
         self.assertEqual(user.email, "test@example.com")
-        self.assertEqual(user.first_name, "Test")
-        self.assertEqual(user.last_name, "User")
-        self.assertEqual(user.full_name, "Test User")
+        self.assertEqual(user.username, "testuser")
+        self.assertEqual(user.display_name, "testuser")
+        self.assertFalse(user.is_email_verified)
+
+    def test_user_creation_without_username(self):
+        """Test that we can create users without username."""
+        user = User.objects.create_user(email="test2@example.com")
+        self.assertEqual(user.email, "test2@example.com")
+        self.assertIsNone(user.username)
+        self.assertEqual(user.display_name, "test2@example.com")
         self.assertFalse(user.is_email_verified)
 
     def test_admin_accessible(self):
