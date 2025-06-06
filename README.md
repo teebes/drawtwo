@@ -1,6 +1,6 @@
 # DrawTwo - Full Stack Card Game
 
-A full-stack collaborative drawing application with a Django backend and Vue.js frontend.
+A full-stack card game application with a Django backend and Vue.js frontend.
 
 ## Features
 
@@ -29,34 +29,6 @@ A full-stack collaborative drawing application with a Django backend and Vue.js 
 - Independent or combined service execution
 - Docker Compose orchestration
 - Frontend/backend communication via API proxy
-
-## Project Structure
-
-```
-├── backend/                  # Django backend
-│   ├── apps/                # Django apps
-│   ├── config/              # Django configuration
-│   │   ├── settings/        # Environment-specific settings
-│   │   ├── urls.py          # Main URL configuration
-│   │   └── ...
-│   ├── Dockerfile           # Backend Docker configuration
-│   ├── manage.py            # Django management script
-│   └── requirements.txt     # Python dependencies
-├── frontend/                # Vue.js frontend
-│   ├── src/                 # Source code
-│   │   ├── components/      # Reusable Vue components
-│   │   ├── views/           # Page components
-│   │   ├── App.vue          # Root component
-│   │   └── main.js          # Application entry point
-│   ├── Dockerfile           # Frontend Docker configuration
-│   ├── package.json         # Node.js dependencies
-│   ├── vite.config.js       # Vite configuration
-│   └── README.md            # Frontend documentation
-├── docker-compose.yml       # Full stack orchestration
-├── Makefile                 # Development commands
-├── .github/workflows/       # GitHub Actions CI/CD
-└── README.md                # This file
-```
 
 ## Quick Start
 
