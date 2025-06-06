@@ -60,6 +60,10 @@ from django.db import models
 from django.utils import timezone
 
 
+def list_to_choices(lst):
+    return [(i, i.capitalize()) for i in lst]
+
+
 class TimestampedModel(models.Model):
     """
     Abstract base model that provides created_at and updated_at fields.
