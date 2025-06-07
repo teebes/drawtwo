@@ -4,6 +4,7 @@ import Home from '../views/Home.vue'
 import Login from '../views/Login.vue'
 import Dashboard from '../views/Dashboard.vue'
 import EmailConfirm from '../views/EmailConfirm.vue'
+import DesignReference from '../views/DesignReference.vue'
 
 const routes = [
   {
@@ -28,6 +29,12 @@ const routes = [
     path: '/auth/email-confirm/:key',
     name: 'EmailConfirm',
     component: EmailConfirm,
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/design-reference',
+    name: 'DesignReference',
+    component: DesignReference,
     meta: { requiresAuth: false }
   }
 ]
