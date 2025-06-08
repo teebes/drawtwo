@@ -42,6 +42,9 @@ class Title(TimestampedModel):
             ),
         ]
 
+    def __str__(self):
+        return f"{self.slug} v{self.version}"
+
 
 class TemplateBase(TimestampedModel):
     title = models.ForeignKey(Title, on_delete=models.PROTECT)

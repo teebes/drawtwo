@@ -1,266 +1,169 @@
 <template>
   <div class="email-confirm">
-    <div class="confirm-container">
-      <div class="confirm-card">
-        <div v-if="loading" class="loading-state">
-          <div class="spinner"></div>
-          <h2>Confirming your email...</h2>
-          <p>Please wait while we verify your email address.</p>
+    <div class="mx-auto flex min-h-screen w-full items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
+      <div class="w-full max-w-md space-y-8">
+        <!-- Header -->
+        <div class="text-center">
+          <router-link to="/" class="inline-flex items-center">
+            <h1 class="font-display text-3xl font-bold text-white">
+              DrawTwo
+            </h1>
+            <img
+              src="/drawtwo_logo.png"
+              alt="DrawTwo Logo"
+              class="ml-3 h-10 w-10 rounded-lg object-contain"
+            />
+          </router-link>
         </div>
 
-        <div v-else-if="success" class="success-state">
-          <div class="success-icon">✅</div>
-          <h2>Email Confirmed!</h2>
-          <p>Your email has been successfully verified and you are now logged in.</p>
-          <div class="user-info" v-if="authStore.user">
-            <p>Welcome, <strong>{{ authStore.user.display_name }}</strong>!</p>
+        <!-- Main Card -->
+        <div class="rounded-2xl bg-white p-8 shadow-xl dark:bg-gray-900">
+          <!-- Loading State -->
+          <div v-if="loading" class="text-center">
+            <div class="mx-auto mb-6 h-16 w-16">
+              <svg class="h-16 w-16 animate-spin text-primary-600" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </div>
+            <h2 class="mb-2 font-display text-2xl font-bold text-gray-900 dark:text-white">
+              Confirming your email...
+            </h2>
+            <p class="text-gray-600 dark:text-gray-400">
+              Please wait while we verify your email address.
+            </p>
           </div>
-          <div class="actions">
-            <router-link to="/dashboard" class="btn btn-primary">
-              Go to Dashboard
-            </router-link>
-          </div>
-        </div>
 
-        <div v-else class="error-state">
-          <div class="error-icon">❌</div>
-          <h2>Confirmation Failed</h2>
-          <p>{{ errorMessage }}</p>
-          <div class="actions">
-            <router-link to="/login" class="btn btn-primary">
-              Back to Login
-            </router-link>
-            <router-link to="/" class="btn btn-secondary">
-              Go Home
-            </router-link>
+          <!-- Success State -->
+          <div v-else-if="success" class="text-center">
+            <div class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+              <svg class="h-8 w-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+            </div>
+            <h2 class="mb-2 font-display text-2xl font-bold text-gray-900 dark:text-white">
+              Email Confirmed!
+            </h2>
+            <p class="mb-6 text-gray-600 dark:text-gray-400">
+              Your email has been successfully verified and you are now logged in.
+            </p>
+            <div v-if="authStore.user" class="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
+              <p class="font-medium text-green-800 dark:text-green-200">
+                Welcome, <strong>{{ authStore.user.display_name }}</strong>!
+              </p>
+            </div>
+            <div class="mt-6">
+              <router-link
+                to="/lobby"
+                class="inline-flex w-full items-center justify-center rounded-lg bg-primary-600 px-4 py-3 text-sm font-medium text-white shadow-sm transition-all hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+              >
+                Enter the Lobby
+                <svg class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+              </router-link>
+            </div>
           </div>
-        </div>
 
-        <div class="footer">
-          <p>
-            Having trouble?
-            <router-link to="/login" class="link">Contact support</router-link>
-          </p>
+          <!-- Error State -->
+          <div v-else class="text-center">
+            <div class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+              <svg class="h-8 w-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </div>
+            <h2 class="mb-2 font-display text-2xl font-bold text-gray-900 dark:text-white">
+              Confirmation Failed
+            </h2>
+            <p class="mb-6 text-gray-600 dark:text-gray-400">
+              {{ errorMessage }}
+            </p>
+            <div class="space-y-3">
+              <router-link
+                to="/login"
+                class="inline-flex w-full items-center justify-center rounded-lg bg-primary-600 px-4 py-3 text-sm font-medium text-white shadow-sm transition-all hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+              >
+                Back to Login
+              </router-link>
+              <router-link
+                to="/"
+                class="inline-flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition-all hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:focus:ring-offset-gray-900"
+              >
+                Go Home
+              </router-link>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="mt-8 border-t border-gray-200 pt-6 text-center dark:border-gray-700">
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+              Having trouble?
+              <router-link to="/login" class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300">
+                Contact support
+              </router-link>
+            </p>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </template>
 
-<script>
+<script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
 
-export default {
-  name: 'EmailConfirm',
-  setup() {
-    const route = useRoute()
-    const router = useRouter()
-    const authStore = useAuthStore()
+const route = useRoute()
+const router = useRouter()
+const authStore = useAuthStore()
 
-    const loading = ref(true)
-    const success = ref(false)
-    const errorMessage = ref('')
+const loading = ref(true)
+const success = ref(false)
+const errorMessage = ref('')
 
-    const confirmEmail = async () => {
-      const key = route.params.key
+const confirmEmail = async () => {
+  const key = route.params.key
 
-      if (!key) {
-        loading.value = false
-        errorMessage.value = 'Invalid confirmation link. The confirmation key is missing.'
-        return
-      }
+  if (!key) {
+    loading.value = false
+    errorMessage.value = 'Invalid confirmation link. The confirmation key is missing.'
+    return
+  }
 
-      try {
-        const result = await authStore.confirmEmail(key)
+  try {
+    const result = await authStore.confirmEmail(key)
 
-        if (result.success) {
-          success.value = true
-          // Redirect to dashboard after a short delay
-          setTimeout(() => {
-            router.push('/dashboard')
-          }, 3000)
-        } else {
-          errorMessage.value = result.error?.error || result.error?.message || 'Email confirmation failed. The link may be invalid or expired.'
-        }
-      } catch (error) {
-        console.error('Email confirmation error:', error)
-        errorMessage.value = 'An unexpected error occurred. Please try again later.'
-      } finally {
-        loading.value = false
-      }
+    if (result.success) {
+      success.value = true
+      // Redirect to lobby after a short delay
+      setTimeout(() => {
+        router.push('/lobby')
+      }, 3000)
+    } else {
+      errorMessage.value = result.error?.error || result.error?.message || 'Email confirmation failed. The link may be invalid or expired.'
     }
-
-    onMounted(() => {
-      confirmEmail()
-    })
-
-    return {
-      loading,
-      success,
-      errorMessage,
-      authStore
-    }
+  } catch (error) {
+    console.error('Email confirmation error:', error)
+    errorMessage.value = 'An unexpected error occurred. Please try again later.'
+  } finally {
+    loading.value = false
   }
 }
+
+onMounted(() => {
+  confirmEmail()
+})
 </script>
 
 <style scoped>
 .email-confirm {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-}
-
-.confirm-container {
-  width: 100%;
-  max-width: 500px;
-}
-
-.confirm-card {
-  background: white;
-  border-radius: 12px;
-  padding: 3rem;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-  text-align: center;
-}
-
-.loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #e2e8f0;
-  border-top: 4px solid #4299e1;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.success-state,
-.error-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-
-.success-icon,
-.error-icon {
-  font-size: 4rem;
-  margin-bottom: 1rem;
-}
-
-h2 {
-  margin: 0;
-  color: #2d3748;
-  font-size: 1.75rem;
-}
-
-p {
-  margin: 0;
-  color: #718096;
-  line-height: 1.6;
-}
-
-.user-info {
-  background: #f0fff4;
-  border: 1px solid #9ae6b4;
-  border-radius: 6px;
-  padding: 1rem;
-  margin: 1rem 0;
-}
-
-.user-info p {
-  margin: 0;
-  color: #22543d;
-}
-
-.actions {
-  display: flex;
-  gap: 1rem;
-  margin-top: 2rem;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  text-decoration: none;
-  min-width: 120px;
-}
-
-.btn-primary {
-  background: #4299e1;
-  color: white;
-}
-
-.btn-primary:hover {
-  background: #3182ce;
-}
-
-.btn-secondary {
-  background: #718096;
-  color: white;
-}
-
-.btn-secondary:hover {
-  background: #4a5568;
-}
-
-.footer {
-  margin-top: 2rem;
-  padding-top: 1rem;
-  border-top: 1px solid #e2e8f0;
-}
-
-.footer p {
-  font-size: 0.875rem;
-  color: #a0aec0;
-}
-
-.link {
-  color: #4299e1;
-  text-decoration: none;
-}
-
-.link:hover {
-  text-decoration: underline;
-}
-
-@media (max-width: 640px) {
-  .confirm-card {
-    padding: 2rem;
-  }
-
-  .actions {
-    flex-direction: column;
-  }
-
-  .btn {
-    width: 100%;
-  }
+  background: linear-gradient(135deg,
+    theme('colors.primary.600') 0%,
+    theme('colors.primary.700') 25%,
+    theme('colors.secondary.600') 75%,
+    theme('colors.secondary.700') 100%
+  );
 }
 </style>

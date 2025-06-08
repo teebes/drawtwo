@@ -1,28 +1,6 @@
 <template>
   <div class="home">
-    <header class="relative border-b border-gray-200 bg-white/80 backdrop-blur-sm dark:border-gray-700 dark:bg-gray-900/80">
-      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div class="flex h-16 items-center justify-between">
-          <div class="flex items-center">
-            <h1 class="font-display text-2xl font-bold text-gray-900 dark:text-white">
-              DrawTwo
-            </h1>
-            <span class="ml-2 rounded-full bg-primary-100 px-2 py-1 text-xs font-medium text-primary-800 dark:bg-primary-900 dark:text-primary-200">
-              TCG
-            </span>
-          </div>
-          <nav class="flex items-center space-x-4">
-            <ThemeToggle />
-            <router-link
-              to="/login"
-              class="inline-flex items-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
-            >
-              Login / Sign Up
-            </router-link>
-          </nav>
-        </div>
-      </div>
-    </header>
+    <AppHeader />
 
     <main class="relative">
       <!-- Hero Section -->
@@ -128,7 +106,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import ThemeToggle from '../components/ThemeToggle.vue'
+import AppHeader from '../components/AppHeader.vue'
 
 const backendOnline = ref(false)
 const loading = ref(false)
