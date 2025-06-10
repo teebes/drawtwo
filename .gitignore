@@ -30,6 +30,15 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
+# Development data (don't commit personal dev datasets)
+backend/dev_data/
+!backend/dev_data/README.md
+!backend/dev_data/.gitkeep
+
+# But keep the management command structure
+!backend/apps/*/management/
+!backend/apps/*/management/commands/
+
 # IDEs
 .vscode/
 .idea/
