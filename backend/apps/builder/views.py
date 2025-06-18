@@ -1,6 +1,6 @@
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import get_user_model
@@ -8,6 +8,9 @@ from django.contrib.auth import get_user_model
 # Import your models and serializers when you create them
 # from .models import Project, Canvas, Layer
 # from .serializers import ProjectSerializer, CanvasSerializer, LayerSerializer
+
+from .models import Title
+from .serializers import TitleSerializer
 
 User = get_user_model()
 
@@ -65,3 +68,10 @@ User = get_user_model()
 #         'private_projects': user_projects.filter(is_public=False).count(),
 #     }
 #     return Response(stats)
+
+@api_view(['GET'])
+def title_by_slug(request, slug):
+    """Get the latest version of a title by its slug."""
+    title = get_object_or_404(Title, slug=slug, is_latest=True)
+    serializer = TitleSerializer(title)
+    return Response(serializer.data)

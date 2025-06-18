@@ -8,6 +8,7 @@ import DesignReference from '../views/DesignReference.vue'
 import Lobby from '../views/Lobby.vue'
 import Template from '../views/Template.vue'
 import Profile from '../views/Profile.vue'
+import Title from '../views/Title.vue'
 
 const routes = [
   {
@@ -56,6 +57,12 @@ const routes = [
     path: '/template',
     name: 'Template',
     component: Template,
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/:slug',
+    name: 'Title',
+    component: Title,
     meta: { requiresAuth: false }
   }
 ]

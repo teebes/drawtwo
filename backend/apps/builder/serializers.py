@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from .models import Title
 
 # Import your models when you create them
 # from .models import Project, Canvas, Layer
@@ -63,3 +64,14 @@ User = get_user_model()
 #
 #     class Meta(ProjectSerializer.Meta):
 #         fields = ProjectSerializer.Meta.fields + ['canvases']
+
+class TitleSerializer(serializers.ModelSerializer):
+    """Serializer for Title model."""
+    author_username = serializers.CharField(source='author.username', read_only=True)
+
+    class Meta:
+        model = Title
+        fields = ['id', 'slug', 'version', 'is_latest', 'name', 'description',
+                 'author', 'author_username', 'status', 'published_at',
+                 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']

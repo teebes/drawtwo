@@ -1,0 +1,3 @@
+You MUST run all commands inside Docker, not on host.
+You MUST create all frontend views using Typescript rather than Javascript
+When desining frontend screens, refer to frontend/src/views/DesignReference.vue for style guidelines.

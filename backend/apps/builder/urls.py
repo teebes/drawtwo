@@ -11,6 +11,9 @@ urlpatterns = [
     # Include router URLs
     path('', include(router.urls)),
 
+    # Title endpoints
+    path('titles/<slug:slug>/', views.title_by_slug, name='title-by-slug'),
+
     # Add custom URL patterns here as needed
     # Example:
     # path('projects/', views.ProjectListView.as_view(), name='project-list'),

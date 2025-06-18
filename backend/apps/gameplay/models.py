@@ -23,8 +23,8 @@ class Game(TimestampedModel):
         ),
         default=GAME_STATUS_INIT,
     )
-    side_a = models.ForeignKey(Deck, on_delete=models.PROTECT)
-    side_b = models.ForeignKey(Deck, on_delete=models.PROTECT)
+    side_a = models.ForeignKey(Deck, on_delete=models.PROTECT, related_name='games_as_side_a')
+    side_b = models.ForeignKey(Deck, on_delete=models.PROTECT, related_name='games_as_side_b')
 
     state = models.JSONField(default=dict)
 
@@ -49,7 +49,7 @@ class Game(TimestampedModel):
     """
 
     winner = models.ForeignKey(Deck, on_delete=models.PROTECT,
-                               blank=True, null=True)
+                               blank=True, null=True, related_name='games_won')
 
     def __str__(self):
         return f"{self.side_a.name} vs {self.side_b.name}"
