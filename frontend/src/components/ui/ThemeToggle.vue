@@ -20,7 +20,7 @@
 
 <script setup>
 import { Sun, Moon } from 'lucide-vue-next'
-import { useThemeStore } from '../stores/theme.js'
+import { useThemeStore } from '../../stores/theme.js'
 
 const themeStore = useThemeStore()
 </script>
