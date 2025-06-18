@@ -7,6 +7,7 @@ A full-stack card game application with a Django backend and Vue.js frontend.
 ### Backend
 - Django 5.1 with Django REST Framework
 - PostgreSQL database
+- **Celery Task Queue** with Redis broker for asynchronous processing
 - Docker & Docker Compose for easy development
 - Environment-based configuration
 - Separate settings for development and production
@@ -37,6 +38,7 @@ A full-stack card game application with a Django backend and Vue.js frontend.
 - Docker
 - Docker Compose
 - Python 3.10+ (for local development environment)
+- Redis (automatically started with Docker Compose)
 
 ### Setup
 
@@ -83,6 +85,8 @@ A full-stack card game application with a Django backend and Vue.js frontend.
    - Backend API: http://localhost:8000
    - Health check: http://localhost:8000/api/health/
    - Admin interface: http://localhost:8000/admin/
+   - Redis: localhost:6379 (for external access)
+   - Celery Flower (monitoring): http://localhost:5555 (run `make celery-flower`)
 
 ## GitHub Actions CI/CD
 
@@ -218,6 +222,15 @@ make createsuperuser   # Create superuser
 make test              # Run backend tests
 ```
 
+### Celery Task Queue
+```bash
+make celery-dev        # Start backend with Celery (db + backend + redis + celery)
+make logs-celery       # View Celery worker logs
+make logs-redis        # View Redis logs
+make celery-shell      # Access Celery worker container bash
+make celery-flower     # Start Celery Flower monitoring
+```
+
 ### Frontend Only
 ```bash
 make frontend-dev      # Start only frontend development server
@@ -266,6 +279,8 @@ Key environment variables (see `.env.example` for full list):
 - `DEBUG`: Enable/disable debug mode
 - `DB_NAME`, `DB_USER`, `DB_PASSWORD`: Database configuration
 - `ALLOWED_HOSTS`: Allowed hosts for production
+- `CELERY_BROKER_URL`: Redis URL for Celery message broker (default: redis://localhost:6379/0)
+- `CELERY_RESULT_BACKEND`: Redis URL for Celery result backend (default: redis://localhost:6379/0)
 
 ## API Endpoints
 
@@ -292,6 +307,60 @@ The project uses PostgreSQL with the following default configuration:
 - Password: `postgres`
 - Host: `db` (Docker service name)
 - Port: `5432`
+
+## Celery Task Queue
+
+The project includes Celery for handling asynchronous tasks and background jobs.
+
+### Architecture
+- **Message Broker**: Redis (localhost:6379)
+- **Result Backend**: Redis + Django Database
+- **Worker**: Processes background tasks
+- **Beat**: Schedules periodic tasks
+- **Flower**: Optional monitoring interface
+
+### Available Tasks
+The project includes example tasks in `backend/apps/core/tasks.py`:
+- `send_email_task` - Asynchronous email sending with retries
+- `cleanup_old_data` - Periodic cleanup task
+- `process_background_job` - Generic background processing
+
+### Using Tasks in Your Code
+```python
+from apps.core.tasks import send_email_task, process_background_job
+
+# Queue a task asynchronously
+send_email_task.delay(
+    subject="Welcome!",
+    message="Thanks for signing up",
+    recipient_list=["user@example.com"]
+)
+
+# Process background job
+result = process_background_job.delay({"id": "job_123", "data": "some_data"})
+```
+
+### Creating New Tasks
+Create tasks in any app's `tasks.py` file:
+```python
+from celery import shared_task
+
+@shared_task
+def your_custom_task(param1, param2):
+    # Your task logic here
+    return "Task completed"
+```
+
+### Monitoring Tasks
+- **Logs**: Use `make logs-celery` to view worker logs
+- **Flower**: Use `make celery-flower` to start the monitoring interface
+- **Django Admin**: Periodic tasks can be managed through Django admin
+
+### Production Considerations
+- Configure Redis with persistence and clustering for production
+- Set up proper monitoring and alerting for failed tasks
+- Use separate queues for different task types if needed
+- Consider using `CELERY_TASK_ROUTES` for task routing
 
 ## Code Quality
 

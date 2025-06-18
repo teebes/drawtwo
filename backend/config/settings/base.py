@@ -41,6 +41,9 @@ THIRD_PARTY_APPS = [
     "allauth.socialaccount",
     "allauth.socialaccount.providers.google",
     "dj_rest_auth.registration",
+    # Celery
+    "django_celery_beat",
+    "django_celery_results",
 ]
 
 LOCAL_APPS = [
@@ -48,6 +51,7 @@ LOCAL_APPS = [
     "apps.authentication",
     "apps.builder",
     "apps.collection",
+    "apps.gameplay",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -226,3 +230,36 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+# Celery Configuration
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
+
+# Celery task serialization
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_ACCEPT_CONTENT = ['json']
+
+# Timezone configuration
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = True
+
+# Task routing
+CELERY_TASK_ROUTES = {
+    # Example: route specific tasks to specific queues
+    # 'apps.core.tasks.*': {'queue': 'default'},
+}
+
+# Task result expiry
+CELERY_RESULT_EXPIRES = 3600  # 1 hour
+
+# Worker configuration
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
+
+# Beat scheduler configuration (for periodic tasks)
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# Store task results in Django database
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_CACHE_BACKEND = 'django-cache'

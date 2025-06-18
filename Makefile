@@ -1,11 +1,11 @@
-.PHONY: help build up down restart logs shell migrate makemigrations collectstatic createsuperuser test clean ci-check ci-check-docker lint lint-docker format format-docker cleanup-emails cleanup-emails-dry
+.PHONY: help build up down restart logs shell migrate makemigrations collectstatic createsuperuser test clean ci-check ci-check-docker lint lint-docker format format-docker cleanup-emails cleanup-emails-dry celery-dev logs-celery logs-redis
 
 # Default target
 help:
 	@echo "Available commands:"
 	@echo ""
 	@echo "Full Stack:"
-	@echo "  dev            - Start the full development stack (backend + frontend)"
+	@echo "  dev            - Start the full development stack (backend + frontend + celery)"
 	@echo "  build          - Build all Docker containers"
 	@echo "  up             - Start all services"
 	@echo "  down           - Stop all services"
@@ -23,6 +23,13 @@ help:
 	@echo "  collectstatic  - Collect static files"
 	@echo "  createsuperuser - Create Django superuser"
 	@echo "  test           - Run backend tests"
+	@echo ""
+	@echo "Celery Task Queue:"
+	@echo "  celery-dev     - Start backend services with Celery (db + backend + redis + celery)"
+	@echo "  logs-celery    - View Celery worker logs"
+	@echo "  logs-redis     - View Redis logs"
+	@echo "  celery-shell   - Access Celery worker container bash"
+	@echo "  celery-flower  - Start Celery Flower monitoring (visit http://localhost:5555)"
 	@echo ""
 	@echo "Frontend Only:"
 	@echo "  frontend-dev   - Start only frontend development server"
@@ -75,6 +82,24 @@ logs-frontend:
 # Backend Only Development
 backend-dev:
 	docker-compose up db backend
+
+# Celery Development
+celery-dev:
+	docker-compose up db redis backend celery-worker celery-beat
+
+logs-celery:
+	docker-compose logs -f celery-worker celery-beat
+
+logs-redis:
+	docker-compose logs -f redis
+
+celery-shell:
+	docker-compose exec celery-worker bash
+
+celery-flower:
+	@echo "Starting Celery Flower monitoring..."
+	@echo "Access Flower at: http://localhost:5555"
+	docker-compose exec celery-worker celery -A config flower --port=5555 --broker=redis://redis:6379/0
 
 # Frontend Only Development
 frontend-dev:

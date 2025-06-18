@@ -32,3 +32,12 @@ django-ses==4.1.0
 
 # HTTP requests (required by django-allauth)
 requests==2.32.3
+
+# Pydantic schemas
+pydantic==2.11.7
+
+# Task queue
+celery==5.3.6
+redis==5.0.1
+django-celery-beat==2.8.1
+django-celery-results==2.5.1
