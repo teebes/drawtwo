@@ -73,7 +73,7 @@ class Command(BaseCommand):
 
         except Exception as e:
             self.stdout.write(
-                self.style.ERROR(f'Error loading dev data: {str(e)}')
+                self.style.ERROR(f'❌ Error loading dev data: {str(e)}')
             )
             raise
 
@@ -197,7 +197,7 @@ class Command(BaseCommand):
     def load_builder_data(self):
         from apps.builder.models import (
             Title, HeroTemplate, CardTemplate,
-            Faction, Trait, CardTraitArgument)
+            Faction, Trait, CardTrait)
 
         self.stdout.write('Loading builder data...')
 
@@ -280,7 +280,7 @@ class Command(BaseCommand):
                             )
                             item_data['faction'] = faction
                         except Faction.DoesNotExist:
-                            self.stdout.write(f'  Warning: Faction {faction_slug} not found for card {item_data.get("slug", "unknown")}')
+                            self.stdout.write(f'  ❌ Warning: Faction {faction_slug} not found for card {item_data.get("slug", "unknown")}')
                             # Continue without faction
 
                     card_template, created = CardTemplate.objects.get_or_create(
@@ -326,9 +326,8 @@ class Command(BaseCommand):
                     item_data.pop('model')
                     title_id = item_data.pop('title_id')
 
-                    # Extract optional argument and extra_data
-                    argument = item_data.pop('argument', None)
-                    extra_data = item_data.pop('extra_data', {})
+                    # Extract trait_data (unified data field)
+                    trait_data = item_data.pop('trait_data', {})
 
                     trait = Trait.objects.get(
                         title_id=title_id,
@@ -340,29 +339,25 @@ class Command(BaseCommand):
                         slug=item_data['card_template'],
                     )
 
-                    if card_template.traits.filter(slug=trait.slug).exists():
-                        self.stdout.write(f'  Trait already exists: {trait.name}')
-                    else:
-                        card_template.traits.add(trait)
-                        created_count += 1
+                    # Check if CardTrait relationship already exists
+                    card_trait, created = CardTrait.objects.get_or_create(
+                        card=card_template,
+                        trait=trait,
+                        defaults={'data': trait_data}
+                    )
 
-                        # If argument or extra_data is provided, create CardTraitArgument
-                        if argument is not None or extra_data:
-                            CardTraitArgument.objects.get_or_create(
-                                card=card_template,
-                                trait=trait,
-                                defaults={
-                                    'argument': argument or 1,  # Default to 1 if None but extra_data exists
-                                    'extra_data': extra_data
-                                }
-                            )
-                            self.stdout.write(f'  Added trait: {trait.name} to card template: {card_template.name} with argument: {argument}, extra_data: {extra_data}')
+                    if created:
+                        created_count += 1
+                        if trait_data:
+                            self.stdout.write(f'  Added trait: {trait.name} to card template: {card_template.name} with data: {trait_data}')
                         else:
                             self.stdout.write(f'  Added trait: {trait.name} to card template: {card_template.name}')
+                    else:
+                        self.stdout.write(f'  Trait relationship already exists: {trait.name} on {card_template.name}')
                 else:
                     self.stdout.write(f'  Skipping unknown model: {item.get("model", "unknown")}')
             except Exception as e:
-                self.stdout.write(f'  Error processing item: {str(e)}')
+                self.stdout.write(f'  ❌ Error processing item: {str(e)}')
 
         self.stdout.write(
             self.style.SUCCESS(f'Loaded {created_count} new builder items')
@@ -374,7 +369,7 @@ class Command(BaseCommand):
 
         if not os.path.exists(dev_data_path):
             self.stdout.write(
-                self.style.WARNING(f'Dev data file not found: {dev_data_path}')
+                self.style.WARNING(f'❌ Dev data file not found: {dev_data_path}')
             )
             return []
 
@@ -401,11 +396,11 @@ class Command(BaseCommand):
 
         except (json.JSONDecodeError, yaml.YAMLError) as e:
             self.stdout.write(
-                self.style.ERROR(f'Error parsing {filename}: {str(e)}')
+                self.style.ERROR(f'❌ Error parsing {filename}: {str(e)}')
             )
             return []
         except (IOError, ValueError) as e:
             self.stdout.write(
-                self.style.ERROR(f'Error reading {filename}: {str(e)}')
+                self.style.ERROR(f'❌ Error reading {filename}: {str(e)}')
             )
             return []

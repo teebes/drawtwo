@@ -39,7 +39,7 @@
               class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
             >
               {{ trait.name }}
-              <span v-if="trait.argument" class="ml-1 font-bold">{{ trait.argument }}</span>
+              <span v-if="getTraitValue(trait)" class="ml-1 font-bold">{{ getTraitValue(trait) }}</span>
             </span>
           </div>
         </div>
@@ -89,4 +89,19 @@ const costBgClass = computed(() => {
   }
   return costMap[props.card.card_type]
 })
+
+const getTraitValue = (trait: Card['traits'][0]) => {
+  // Check for common value patterns in the data object
+  if (trait.data.value !== undefined) {
+    return trait.data.value
+  }
+  if (trait.data.armor !== undefined) {
+    return trait.data.armor
+  }
+  if (trait.data.amount !== undefined) {
+    return trait.data.amount
+  }
+  // Return null if no displayable value found
+  return null
+}
 </script>

@@ -96,24 +96,28 @@ class Trait(TimestampedModel):
         ]
 
 
-class CardTraitArgument(TimestampedModel):
-    """Separate model for traits that need arguments - only used when necessary"""
+class CardTrait(TimestampedModel):
+    """Intermediary table for card-trait assignments with optional data"""
     card = models.ForeignKey('CardTemplate', on_delete=models.CASCADE)
     trait = models.ForeignKey(Trait, on_delete=models.CASCADE)
 
-    # The argument/value for this trait instance (e.g., 3 for "armor 3")
-    argument = models.PositiveSmallIntegerField(default=1)
-
-    # Additional trait-specific data if needed
-    extra_data = models.JSONField(default=dict, blank=True)
+    # Unified data storage for all trait-specific information
+    # Examples: {"value": 3} for armor, {"targets": 2} for cleave, {} for simple traits
+    data = models.JSONField(default=dict, blank=True)
 
     class Meta:
         unique_together = ['card', 'trait']
-        verbose_name = "Card Trait Argument"
-        verbose_name_plural = "Card Trait Arguments"
+        indexes = [
+            models.Index(fields=['card'], name='cardtrait_card_idx'),
+            models.Index(fields=['trait'], name='cardtrait_trait_idx'),
+        ]
+        verbose_name = "Card Trait"
+        verbose_name_plural = "Card Traits"
 
     def __str__(self):
-        return f"{self.card.name}: {self.trait.name} {self.argument}"
+        if self.data:
+            return f"{self.card.name}: {self.trait.name} {self.data}"
+        return f"{self.card.name}: {self.trait.name}"
 
 
 class Faction(TimestampedModel):
@@ -180,8 +184,7 @@ class CardTemplate(TemplateBase):
     spec = models.JSONField(default=dict, blank=True)
 
     tags = models.ManyToManyField(Tag, blank=True)
-    traits = models.ManyToManyField(Trait, blank=True)
-    # Note: trait arguments are handled separately via CardTraitArgument model
+    traits = models.ManyToManyField(Trait, through='CardTrait', blank=True)
     faction = models.ForeignKey(Faction, on_delete=models.PROTECT,
                                 null=True, blank=True)
 
@@ -194,35 +197,38 @@ class CardTemplate(TemplateBase):
             models.Index(fields=['title', 'is_latest', 'cost', 'card_type', 'attack', 'health', 'name'], name='card_full_sort_idx'),
         ]
 
-    def add_trait_with_argument(self, trait, argument):
-        """Add a trait with an argument value"""
-        self.traits.add(trait)
-        CardTraitArgument.objects.get_or_create(
+    def add_trait(self, trait, data=None):
+        """Add a trait with optional data"""
+        if data is None:
+            data = {}
+        CardTrait.objects.get_or_create(
             card=self,
             trait=trait,
-            defaults={'argument': argument}
+            defaults={'data': data}
         )
 
-    def get_trait_argument(self, trait):
-        """Get the argument value for a trait, or None if no argument"""
+    def add_trait_with_value(self, trait, value):
+        """Add a trait with a simple value (convenience method for backwards compatibility)"""
+        self.add_trait(trait, {'value': value})
+
+    def get_trait_data(self, trait):
+        """Get the data dict for a trait, or empty dict if no data"""
         try:
-            return self.cardtraitargument_set.get(trait=trait).argument
-        except CardTraitArgument.DoesNotExist:
-            return None
+            return self.cardtrait_set.get(trait=trait).data
+        except CardTrait.DoesNotExist:
+            return {}
 
-    def get_all_traits_with_arguments(self):
-        """Get all traits as a list of (trait, argument) tuples"""
-        result = []
-        trait_arguments = {
-            ta.trait_id: ta.argument
-            for ta in self.cardtraitargument_set.select_related('trait')
-        }
+    def get_trait_value(self, trait):
+        """Get the 'value' from trait data, or None if not present (convenience method)"""
+        data = self.get_trait_data(trait)
+        return data.get('value')
 
-        for trait in self.traits.all():
-            argument = trait_arguments.get(trait.id)
-            result.append((trait, argument))
-
-        return result
+    def get_all_traits_with_data(self):
+        """Get all traits as a list of (trait, data) tuples"""
+        return [
+            (card_trait.trait, card_trait.data)
+            for card_trait in self.cardtrait_set.select_related('trait')
+        ]
 
 
 """

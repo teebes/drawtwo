@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Title, Tag, Trait, Faction, HeroTemplate, CardTemplate, CardTraitArgument
+from .models import Title, Tag, Trait, Faction, HeroTemplate, CardTemplate, CardTrait
 
 
 @admin.register(Title)
@@ -117,19 +117,19 @@ class FactionAdmin(admin.ModelAdmin):
     )
 
 
-class CardTraitArgumentInline(admin.TabularInline):
-    model = CardTraitArgument
+class CardTraitInline(admin.TabularInline):
+    model = CardTrait
     extra = 0
-    fields = ('trait', 'argument', 'extra_data')
+    fields = ('trait', 'data')
     readonly_fields = ('created_at', 'updated_at')
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('trait')
 
 
-@admin.register(CardTraitArgument)
-class CardTraitArgumentAdmin(admin.ModelAdmin):
-    list_display = ('card', 'trait', 'argument', 'created_at')
+@admin.register(CardTrait)
+class CardTraitAdmin(admin.ModelAdmin):
+    list_display = ('card', 'trait', 'get_data_summary', 'created_at')
     list_filter = ('trait', 'created_at', 'card__title')
     search_fields = ('card__name', 'trait__name', 'card__slug', 'trait__slug')
     readonly_fields = ('created_at', 'updated_at')
@@ -139,14 +139,25 @@ class CardTraitArgumentAdmin(admin.ModelAdmin):
         ('Relationship', {
             'fields': ('card', 'trait')
         }),
-        ('Argument Configuration', {
-            'fields': ('argument', 'extra_data')
+        ('Trait Data', {
+            'fields': ('data',),
+            'description': 'JSON data for trait-specific configuration (e.g., {"value": 3} for armor)'
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         }),
     )
+
+    def get_data_summary(self, obj):
+        """Show a summary of the trait data in list view"""
+        if not obj.data:
+            return "—"
+        # Show common patterns nicely
+        if 'value' in obj.data and len(obj.data) == 1:
+            return f"value: {obj.data['value']}"
+        return str(obj.data)
+    get_data_summary.short_description = 'Data'
 
 
 @admin.register(CardTemplate)
@@ -156,8 +167,8 @@ class CardTemplateAdmin(admin.ModelAdmin):
     search_fields = ('slug', 'name', 'description', 'title__slug', 'title__name')
     readonly_fields = ('created_at', 'updated_at')
     ordering = ('-created_at',)
-    filter_horizontal = ('tags', 'traits')
-    inlines = [CardTraitArgumentInline]
+    filter_horizontal = ('tags',)
+    inlines = [CardTraitInline]
 
     fieldsets = (
         ('Basic Information', {
@@ -174,8 +185,8 @@ class CardTemplateAdmin(admin.ModelAdmin):
             'description': 'Attack and Health are only applicable to minion cards'
         }),
         ('Classification', {
-            'fields': ('tags', 'traits'),
-            'description': 'Note: Trait arguments are configured in the "Card trait arguments" section below'
+            'fields': ('tags',),
+            'description': 'Note: Traits with data are configured in the "Card traits" section below'
         }),
         ('Advanced Configuration', {
             'fields': ('spec',),
@@ -191,6 +202,5 @@ class CardTemplateAdmin(admin.ModelAdmin):
         form = super().get_form(request, obj, **kwargs)
         # Add help text for card type field
         form.base_fields['card_type'].help_text = "Spells don't require attack/health values"
-        if 'traits' in form.base_fields:
-            form.base_fields['traits'].help_text = "Select basic traits. Use 'Card trait arguments' section below for traits that need values (e.g., armor 3)"
+        # Note: traits field is handled via inline due to through model
         return form

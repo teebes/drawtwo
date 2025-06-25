@@ -6,8 +6,7 @@ from pydantic import BaseModel
 class Trait(BaseModel):
     slug: str
     name: str
-    argument: Optional[int] = None
-    extra_data: dict = {}
+    data: dict = {}
 
 
 class Card(BaseModel):

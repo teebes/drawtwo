@@ -39,31 +39,21 @@ def title_cards(request, slug):
              .filter(title=title, is_latest=True)
              .select_related('title', 'faction')  # Avoid N+1 on title and faction
              .prefetch_related(
-                 'traits',  # Prefetch traits
-                 'cardtraitargument_set__trait'  # Prefetch trait arguments
+                 'cardtrait_set__trait'  # Prefetch card traits with trait data
              )
              .order_by('cost', 'card_type', 'attack', 'health', 'name'))  # Order by cost, then type (minions before spells), then stats, then name
 
     # Transform to Card schema format
     card_data = []
     for card in cards:
-        # Build traits list with arguments
+        # Build traits list with data
         traits_list = []
 
-        # Get trait arguments efficiently
-        trait_arguments = {
-            ta.trait_id: {'argument': ta.argument, 'extra_data': ta.extra_data}
-            for ta in card.cardtraitargument_set.all()
-        }
-
-        for trait in card.traits.all().order_by('name'):
-            argument_info = trait_arguments.get(trait.id, {})
-
+        for card_trait in card.cardtrait_set.all().order_by('trait__name'):
             trait_obj = Trait(
-                slug=trait.slug,
-                name=trait.name,
-                argument=argument_info.get('argument'),
-                extra_data=argument_info.get('extra_data', {})
+                slug=card_trait.trait.slug,
+                name=card_trait.trait.name,
+                data=card_trait.data
             )
             traits_list.append(trait_obj)
 

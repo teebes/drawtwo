@@ -53,7 +53,7 @@
           <section
             v-for="[factionName, factionCards] in factionCardGroups"
             :key="factionName"
-            class="space-y-6"
+            class="space-y-6 mt-8"
           >
             <h2 class="font-display text-2xl font-bold text-gray-900 dark:text-white capitalize">
               {{ factionName }} Cards

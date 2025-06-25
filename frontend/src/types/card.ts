@@ -1,8 +1,7 @@
 export interface Trait {
   slug: string
   name: string
-  argument: number | null
-  extra_data: Record<string, any>
+  data: Record<string, any>
 }
 
 export interface Card {

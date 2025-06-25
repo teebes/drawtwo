@@ -11,9 +11,12 @@ class Event(BaseModel):
 
 
 class CardInPlay(BaseModel):
-    template_id: str
-    atk: int
-    hp: int
+    card_id: int # Interal card ID for that game
+    template_id: str # ID of the card template
+    attack: int
+    health: int
+    cost: int
+    traits: List[str]
 
 
 class GameState(BaseModel):
@@ -23,7 +26,11 @@ class GameState(BaseModel):
     event_queue: List[Event] = Field(
         default_factory=lambda: [Event(type="start_turn", player="side_a")]
     )
-    board: Dict[str, List[CardInPlay]] = Field(
+    # Centralized storage of all cards in the game by their unique ID
+    cards: Dict[int, CardInPlay] = Field(default_factory=dict)
+
+    # All zones now consistently store lists of card IDs that reference the cards dict
+    board: Dict[str, List[int]] = Field(
         default_factory=lambda: {
             "side_a": [],
             "side_b": [],
@@ -35,7 +42,7 @@ class GameState(BaseModel):
             "side_b": [],
         }
     )
-    deck: Dict[str, List[int]] = Field(
+    decks: Dict[str, List[int]] = Field(
         default_factory=lambda: {
             "side_a": [],
             "side_b": [],
