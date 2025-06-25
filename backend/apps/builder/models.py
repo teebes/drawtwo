@@ -46,6 +46,83 @@ class Title(TimestampedModel):
         return f"{self.slug} v{self.version}"
 
 
+class Tag(TimestampedModel):
+    title = models.ForeignKey(Title, on_delete=models.PROTECT)
+    slug = models.SlugField()
+    name = models.CharField(max_length=40)
+    description = models.TextField(blank=True)
+
+
+class Trait(TimestampedModel):
+    title = models.ForeignKey(Title, on_delete=models.PROTECT)
+
+    # Predefined trait types as constants
+    TRAIT_ARMOR = "armor"
+    TRAIT_BATTLECRY = "battlecry"
+    TRAIT_CHARGE = "charge"
+    TRAIT_CLEAVE = "cleave"
+    TRAIT_DEATHRATTLE = "deathrattle"
+    TRAIT_INSPIRE = "inspire"
+    TRAIT_LIFESTEAL = "lifesteal"
+    TRAIT_RANGED = "ranged"
+    TRAIT_TAUNT = "taunt"
+    TRAIT_UNIQUE = "unique"
+
+    slug = models.SlugField(
+        choices=list_to_choices([
+            TRAIT_ARMOR,
+            TRAIT_BATTLECRY,
+            TRAIT_CHARGE,
+            TRAIT_CLEAVE,
+            TRAIT_DEATHRATTLE,
+            TRAIT_INSPIRE,
+            TRAIT_LIFESTEAL,
+            TRAIT_RANGED,
+            TRAIT_TAUNT,
+            TRAIT_UNIQUE,
+        ])
+    )
+    name = models.CharField(max_length=40)
+    description = models.TextField(blank=True)
+
+    # Whether this trait type accepts arguments (e.g., armor value)
+    accepts_arguments = models.BooleanField(default=False)
+    # Description of what the argument represents
+    argument_description = models.CharField(max_length=100, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['name'], name='trait_name_idx'),
+        ]
+
+
+class CardTraitArgument(TimestampedModel):
+    """Separate model for traits that need arguments - only used when necessary"""
+    card = models.ForeignKey('CardTemplate', on_delete=models.CASCADE)
+    trait = models.ForeignKey(Trait, on_delete=models.CASCADE)
+
+    # The argument/value for this trait instance (e.g., 3 for "armor 3")
+    argument = models.PositiveSmallIntegerField(default=1)
+
+    # Additional trait-specific data if needed
+    extra_data = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        unique_together = ['card', 'trait']
+        verbose_name = "Card Trait Argument"
+        verbose_name_plural = "Card Trait Arguments"
+
+    def __str__(self):
+        return f"{self.card.name}: {self.trait.name} {self.argument}"
+
+
+class Faction(TimestampedModel):
+    title = models.ForeignKey(Title, on_delete=models.PROTECT)
+    slug = models.SlugField()
+    name = models.CharField(max_length=40)
+    description = models.TextField(blank=True)
+
+
 class TemplateBase(TimestampedModel):
     title = models.ForeignKey(Title, on_delete=models.PROTECT)
     slug  = models.SlugField()
@@ -80,6 +157,9 @@ class HeroTemplate(TemplateBase):
 
     spec = models.JSONField(default=dict, blank=True)
 
+    faction = models.ForeignKey(Faction, on_delete=models.PROTECT,
+                                null=True, blank=True)
+
 
 class CardTemplate(TemplateBase):
     CARD_TYPE_MINION = "minion"
@@ -90,8 +170,8 @@ class CardTemplate(TemplateBase):
             CARD_TYPE_MINION,
             CARD_TYPE_SPELL]),
         default=CARD_TYPE_MINION,
-        db_index=True,
     )
+
 
     cost = models.PositiveSmallIntegerField()
     attack = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -99,6 +179,50 @@ class CardTemplate(TemplateBase):
 
     spec = models.JSONField(default=dict, blank=True)
 
+    tags = models.ManyToManyField(Tag, blank=True)
+    traits = models.ManyToManyField(Trait, blank=True)
+    # Note: trait arguments are handled separately via CardTraitArgument model
+    faction = models.ForeignKey(Faction, on_delete=models.PROTECT,
+                                null=True, blank=True)
+
+    class Meta(TemplateBase.Meta):
+        # All indices for CardTemplate organized in one place
+        indexes = TemplateBase.Meta.indexes + [
+            # Composite index for efficient filtering and ordering
+            # Covers: WHERE title=X AND is_latest=Y ORDER BY cost, card_type, attack, health, name
+            # Handles: cost grouping -> minions before spells -> attack/health ordering -> name tie-breaker
+            models.Index(fields=['title', 'is_latest', 'cost', 'card_type', 'attack', 'health', 'name'], name='card_full_sort_idx'),
+        ]
+
+    def add_trait_with_argument(self, trait, argument):
+        """Add a trait with an argument value"""
+        self.traits.add(trait)
+        CardTraitArgument.objects.get_or_create(
+            card=self,
+            trait=trait,
+            defaults={'argument': argument}
+        )
+
+    def get_trait_argument(self, trait):
+        """Get the argument value for a trait, or None if no argument"""
+        try:
+            return self.cardtraitargument_set.get(trait=trait).argument
+        except CardTraitArgument.DoesNotExist:
+            return None
+
+    def get_all_traits_with_arguments(self):
+        """Get all traits as a list of (trait, argument) tuples"""
+        result = []
+        trait_arguments = {
+            ta.trait_id: ta.argument
+            for ta in self.cardtraitargument_set.select_related('trait')
+        }
+
+        for trait in self.traits.all():
+            argument = trait_arguments.get(trait.id)
+            result.append((trait, argument))
+
+        return result
 
 
 """

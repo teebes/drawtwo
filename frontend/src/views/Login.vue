@@ -1,5 +1,5 @@
 <template>
-  <div class="login">
+  <div class="gradient-primary-to-secondary-diagonal min-h-screen">
     <div class="mx-auto flex min-h-screen w-full items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
       <div class="w-full max-w-md space-y-8">
         <!-- Header -->
@@ -207,7 +207,7 @@ const handleGoogleLogin = () => {
 </script>
 
 <style scoped>
-.login {
+/* .login {
   min-height: 100vh;
   background: linear-gradient(135deg,
     theme('colors.primary.600') 0%,
@@ -215,5 +215,5 @@ const handleGoogleLogin = () => {
     theme('colors.secondary.600') 75%,
     theme('colors.secondary.700') 100%
   );
-}
+} */
 </style>

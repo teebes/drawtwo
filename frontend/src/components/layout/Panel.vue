@@ -1,6 +1,7 @@
 <template>
   <div :class="[
-    'rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800',
+    'rounded-xl p-6 shadow-sm',
+    variantClass,
     paddingClass,
     customClass
   ]">
@@ -15,11 +16,13 @@ import { computed } from 'vue'
 interface Props {
   title?: string
   padding?: 'sm' | 'md' | 'lg' | 'xl'
+  variant?: 'default' | 'error' | 'success'
   customClass?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  padding: 'md'
+  padding: 'md',
+  variant: 'default'
 })
 
 const paddingClass = computed(() => {
@@ -30,6 +33,15 @@ const paddingClass = computed(() => {
     xl: 'p-10'
   }
   return paddingMap[props.padding]
+})
+
+const variantClass = computed(() => {
+  const variantMap = {
+    default: 'bg-white dark:bg-gray-800',
+    error: 'bg-red-500/20 border border-red-400/30',
+    success: 'bg-green-500/20 border border-green-400/30'
+  }
+  return variantMap[props.variant]
 })
 
 const titleClass = 'mb-4 text-lg font-semibold text-gray-900 dark:text-white'

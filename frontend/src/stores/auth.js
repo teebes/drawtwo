@@ -1,11 +1,5 @@
 import { defineStore } from 'pinia'
-import axios from 'axios'
-
-const API_BASE_URL = 'http://localhost:8000/api'
-
-// Configure axios defaults
-axios.defaults.baseURL = API_BASE_URL
-axios.defaults.withCredentials = true
+import axios from '../config/api.js'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -241,23 +235,3 @@ export const useAuthStore = defineStore('auth', {
     }
   }
 })
-
-// Setup axios interceptor for automatic token refresh
-axios.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const authStore = useAuthStore()
-
-    if (error.response?.status === 401 && authStore.refreshToken) {
-      const refreshed = await authStore.refreshAccessToken()
-      if (refreshed) {
-        // Retry the original request
-        const originalRequest = error.config
-        originalRequest.headers['Authorization'] = `Bearer ${authStore.accessToken}`
-        return axios.request(originalRequest)
-      }
-    }
-
-    return Promise.reject(error)
-  }
-)

@@ -1,5 +1,6 @@
 import os
 import json
+import yaml
 from django.core.management.base import BaseCommand, CommandError
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -194,22 +195,46 @@ class Command(BaseCommand):
         )
 
     def load_builder_data(self):
-        from apps.builder.models import Title, HeroTemplate, CardTemplate
+        from apps.builder.models import (
+            Title, HeroTemplate, CardTemplate,
+            Faction, Trait, CardTraitArgument)
 
         self.stdout.write('Loading builder data...')
 
-        builder_data_list = self.load_from_file('builder_data.json')
+        # Try to load from YAML first, then JSON as fallback
+        builder_data_list = (
+            self.load_from_file('builder_data.yaml') or
+            self.load_from_file('builder_data.yml') or
+            self.load_from_file('builder_data.json')
+        )
 
         if not builder_data_list:
             self.stdout.write(
-                self.style.WARNING('No builder data found or file could not be read')
+                self.style.WARNING('No builder data found (tried .yaml, .yml, and .json formats)')
             )
             return
 
         created_count = 0
         for item in builder_data_list:
             try:
-                if item['model'] == 'builder.title':
+                if item['model'] == 'auth.user':
+                    item_data = item.copy()
+                    item_data.pop('model')
+                    password = item_data.pop('password')
+
+                    user, created = User.objects.get_or_create(
+                        email=item_data['email'],
+                        defaults=item_data)
+                    if created:
+                        if password:
+                            user.set_password(password)
+                            user.save()
+                        created_count += 1
+                        self.stdout.write(f'  Created user: {user.email}')
+                    else:
+                        self.stdout.write(f'  User already exists: {user.email}')
+
+                elif item['model'] == 'builder.title':
                     item_data = item.copy()
                     item_data.pop('model')
 
@@ -241,8 +266,22 @@ class Command(BaseCommand):
                         self.stdout.write(f'  Hero template already exists: {hero_template.name}')
 
                 elif item['model'] == 'builder.cardtemplate':
+                    print('CARD TEMPLATE')
                     item_data = item.copy()
                     item_data.pop('model')
+
+                    # Handle faction field - convert faction slug to Faction object
+                    faction_slug = item_data.pop('faction', None)
+                    if faction_slug:
+                        try:
+                            faction = Faction.objects.get(
+                                title_id=item_data['title_id'],
+                                slug=faction_slug
+                            )
+                            item_data['faction'] = faction
+                        except Faction.DoesNotExist:
+                            self.stdout.write(f'  Warning: Faction {faction_slug} not found for card {item_data.get("slug", "unknown")}')
+                            # Continue without faction
 
                     card_template, created = CardTemplate.objects.get_or_create(
                         title_id=item_data['title_id'],
@@ -255,6 +294,71 @@ class Command(BaseCommand):
                         self.stdout.write(f'  Created card template: {card_template.name}')
                     else:
                         self.stdout.write(f'  Card template already exists: {card_template.name}')
+                elif item['model'] == 'builder.faction':
+                    item_data = item.copy()
+                    item_data.pop('model')
+
+                    faction, created = Faction.objects.get_or_create(
+                        title_id=item_data['title_id'],
+                        slug=item_data['slug'],
+                        defaults=item_data)
+                    if created:
+                        created_count += 1
+                        self.stdout.write(f'  Created faction: {faction.name}')
+                    else:
+                        self.stdout.write(f'  Faction already exists: {faction.name}')
+
+                elif item['model'] == 'builder.trait':
+                    item_data = item.copy()
+                    item_data.pop('model')
+
+                    trait, created = Trait.objects.get_or_create(
+                        title_id=item_data['title_id'],
+                        slug=item_data['slug'],
+                        defaults=item_data)
+                    if created:
+                        created_count += 1
+                        self.stdout.write(f'  Created trait: {trait.name}')
+                    else:
+                        self.stdout.write(f'  Trait already exists: {trait.name}')
+                elif item['model'] == 'builder.cardtemplate_trait':
+                    item_data = item.copy()
+                    item_data.pop('model')
+                    title_id = item_data.pop('title_id')
+
+                    # Extract optional argument and extra_data
+                    argument = item_data.pop('argument', None)
+                    extra_data = item_data.pop('extra_data', {})
+
+                    trait = Trait.objects.get(
+                        title_id=title_id,
+                        slug=item_data['trait'],
+                    )
+
+                    card_template = CardTemplate.objects.get(
+                        title_id=title_id,
+                        slug=item_data['card_template'],
+                    )
+
+                    if card_template.traits.filter(slug=trait.slug).exists():
+                        self.stdout.write(f'  Trait already exists: {trait.name}')
+                    else:
+                        card_template.traits.add(trait)
+                        created_count += 1
+
+                        # If argument or extra_data is provided, create CardTraitArgument
+                        if argument is not None or extra_data:
+                            CardTraitArgument.objects.get_or_create(
+                                card=card_template,
+                                trait=trait,
+                                defaults={
+                                    'argument': argument or 1,  # Default to 1 if None but extra_data exists
+                                    'extra_data': extra_data
+                                }
+                            )
+                            self.stdout.write(f'  Added trait: {trait.name} to card template: {card_template.name} with argument: {argument}, extra_data: {extra_data}')
+                        else:
+                            self.stdout.write(f'  Added trait: {trait.name} to card template: {card_template.name}')
                 else:
                     self.stdout.write(f'  Skipping unknown model: {item.get("model", "unknown")}')
             except Exception as e:
@@ -265,7 +369,7 @@ class Command(BaseCommand):
         )
 
     def load_from_file(self, filename):
-        """Helper method to load data from JSON files in dev_data directory"""
+        """Helper method to load data from JSON or YAML files in dev_data directory"""
         dev_data_path = os.path.join(settings.BASE_DIR, 'dev_data', filename)
 
         if not os.path.exists(dev_data_path):
@@ -276,8 +380,31 @@ class Command(BaseCommand):
 
         try:
             with open(dev_data_path, 'r') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError) as e:
+                # Determine file format based on extension
+                _, ext = os.path.splitext(filename.lower())
+
+                if ext in ['.yaml', '.yml']:
+                    return yaml.safe_load(f) or []
+                elif ext == '.json':
+                    return json.load(f)
+                else:
+                    # Try to parse as JSON first, then YAML
+                    content = f.read()
+                    f.seek(0)
+                    try:
+                        return json.loads(content)
+                    except json.JSONDecodeError:
+                        try:
+                            return yaml.safe_load(content) or []
+                        except yaml.YAMLError:
+                            raise ValueError(f"Could not parse {filename} as JSON or YAML")
+
+        except (json.JSONDecodeError, yaml.YAMLError) as e:
+            self.stdout.write(
+                self.style.ERROR(f'Error parsing {filename}: {str(e)}')
+            )
+            return []
+        except (IOError, ValueError) as e:
             self.stdout.write(
                 self.style.ERROR(f'Error reading {filename}: {str(e)}')
             )

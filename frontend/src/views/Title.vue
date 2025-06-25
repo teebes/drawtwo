@@ -2,155 +2,111 @@
   <div class="title-page">
     <AppHeader />
 
-    <main class="flex-1">
-      <!-- Title Hero Section -->
-      <section class="bg-gradient-to-br from-primary-600 via-primary-700 to-secondary-700 py-16">
-        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <!-- Loading state -->
-          <div v-if="loading" class="text-center">
-            <div class="animate-spin rounded-full h-16 w-16 border-4 border-white/20 border-t-white mx-auto"></div>
-            <p class="mt-4 text-xl text-primary-100">Loading title...</p>
-          </div>
+    <div v-if="!loading && !error && title">
+      <section class="bg-gradient-to-br from-primary-600 via-primary-700 to-secondary-700 py-16 text-center">
+        <h1 class="font-display text-4xl font-bold">{{ title.name }}</h1>
+      </section>
 
-          <!-- Error state -->
-          <div v-else-if="error" class="text-center">
-            <div class="mx-auto max-w-md rounded-xl bg-red-500/20 border border-red-400/30 p-8 backdrop-blur-sm">
-              <h2 class="font-display text-2xl font-bold text-white mb-4">Title Not Found</h2>
-              <p class="text-red-100">{{ error }}</p>
-              <router-link
-                to="/"
-                class="mt-6 inline-flex items-center rounded-lg bg-white/20 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm transition-all hover:bg-white/30"
+      <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8 mt-8">
+
+        <Panel v-if="title.description" title="Description">{{ title.description }}</Panel>
+
+        <div class="flex justify-center">
+          <router-link
+            :to="{ name: 'TitleCards', params: { slug: title.slug } }"
+            class="inline-flex items-center rounded-lg bg-primary-600 px-6 py-3 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
+          >
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+            </svg>
+            View Full Collection
+          </router-link>
+        </div>
+
+        <div class="grid gap-8 sm:grid-cols-2">
+          <Panel title="Decks">
+            <div v-if="decks.length > 0" class="space-y-3">
+              <div
+                v-for="deck in decks"
+                :key="deck.id"
+                class="flex items-center justify-between rounded-lg bg-gray-50 p-3 hover:bg-gray-100 transition-colors dark:bg-gray-800 dark:hover:bg-gray-700"
               >
-                Return Home
+                <div class="flex items-center space-x-3">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-100 text-sm font-bold text-primary-600">
+                    {{ deck.hero.name.charAt(0) }}
+                  </div>
+                  <div>
+                    <router-link
+                      :to="{ name: 'DeckDetail', params: { id: deck.id } }"
+                      class="font-medium text-gray-900 hover:text-primary-600 dark:text-white"
+                    >
+                      {{ deck.name }}
+                    </router-link>
+                    <div class="text-sm text-gray-600">
+                      {{ deck.hero.name }} • {{ deck.card_count }} cards
+                    </div>
+                  </div>
+                </div>
+                <div class="text-sm text-gray-500">
+                  {{ formatDate(deck.updated_at) }}
+                </div>
+              </div>
+
+              <div class="pt-2 border-t border-gray-200 dark:border-gray-700">
+                <router-link
+                  :to="{ name: 'DeckDetail', params: { id: 'new' } }"
+                  class="flex items-center justify-center w-full rounded-lg border-2 border-dashed border-gray-300 p-3 text-sm font-medium text-gray-600 hover:border-primary-400 hover:text-primary-600 transition-colors"
+                >
+                  <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                  </svg>
+                  Create New Deck
+                </router-link>
+              </div>
+            </div>
+
+            <div v-else class="text-center py-8">
+              <p class="text-gray-600 mb-4">You don't have any decks for this title yet.</p>
+              <router-link
+                :to="{ name: 'DeckDetail', params: { id: 'new' } }"
+                class="inline-flex items-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+              >
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg>
+                Create Your First Deck
               </router-link>
             </div>
-          </div>
 
-          <!-- Title content -->
-          <div v-else-if="title" class="text-center">
-            <h1 class="font-display text-4xl font-bold text-white sm:text-5xl lg:text-6xl">
-              {{ title.name }}
-            </h1>
-            <p class="mt-4 text-xl text-primary-100">
-              Created by {{ title.author_username || "Anonymous" }}
-            </p>
+            <div v-if="decksLoading" class="text-center py-4">
+              <p class="text-gray-600">Loading decks...</p>
+            </div>
+          </Panel>
 
-            <div class="mt-6 flex justify-center space-x-4">
-              <span
-                class="inline-flex items-center rounded-full px-4 py-2 text-sm font-medium backdrop-blur-sm"
-                :class="{
-                  'bg-green-500/20 text-green-100': title.status === 'published',
-                  'bg-yellow-500/20 text-yellow-100': title.status === 'draft',
-                  'bg-gray-500/20 text-gray-100': title.status === 'archived'
-                }"
+          <Panel title="Games">
+            <div class="text-center py-8">
+              <p class="text-gray-600 mb-4">Game functionality coming soon!</p>
+              <button
+                disabled
+                class="inline-flex items-center rounded-lg bg-gray-300 px-4 py-2 text-sm font-medium text-gray-500 cursor-not-allowed"
               >
-                <div
-                  class="mr-2 h-2 w-2 rounded-full"
-                  :class="{
-                    'bg-green-400': title.status === 'published',
-                    'bg-yellow-400': title.status === 'draft',
-                    'bg-gray-400': title.status === 'archived'
-                  }"
-                ></div>
-                {{ title.status.charAt(0).toUpperCase() + title.status.slice(1) }}
-              </span>
-              <span class="inline-flex items-center rounded-full bg-white/20 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm">
-                Version {{ title.version }}
-              </span>
+                Start Game
+              </button>
             </div>
-          </div>
+          </Panel>
         </div>
-      </section>
+      </main>
+    </div>
 
-      <!-- Title Details Section -->
-      <section v-if="title && !loading && !error" class="py-16 bg-gray-50 dark:bg-gray-800">
-        <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-          <!-- Description Card -->
-          <div v-if="title.description" class="mb-12">
-            <div class="rounded-xl bg-white p-8 shadow-sm dark:bg-gray-900">
-              <h2 class="mb-4 font-display text-2xl font-bold text-gray-900 dark:text-white">
-                Description
-              </h2>
-              <div class="prose prose-gray max-w-none dark:prose-invert">
-                <p class="text-gray-700 dark:text-gray-300 leading-relaxed">
-                  {{ title.description }}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Game Details Grid -->
-          <div class="grid gap-8 md:grid-cols-2">
-            <!-- Metadata Card -->
-            <div class="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-900">
-              <h3 class="mb-4 font-display text-xl font-semibold text-gray-900 dark:text-white">
-                Game Details
-              </h3>
-              <dl class="space-y-3">
-                <div class="flex justify-between">
-                  <dt class="text-sm font-medium text-gray-600 dark:text-gray-400">Author</dt>
-                  <dd class="text-sm text-gray-900 dark:text-white font-medium">{{ title.author_username }}</dd>
-                </div>
-                <div class="flex justify-between">
-                  <dt class="text-sm font-medium text-gray-600 dark:text-gray-400">Version</dt>
-                  <dd class="text-sm text-gray-900 dark:text-white font-medium">{{ title.version }}</dd>
-                </div>
-                <div class="flex justify-between">
-                  <dt class="text-sm font-medium text-gray-600 dark:text-gray-400">Status</dt>
-                  <dd>
-                    <span
-                      class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
-                      :class="{
-                        'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': title.status === 'published',
-                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': title.status === 'draft',
-                        'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200': title.status === 'archived'
-                      }"
-                    >
-                      {{ title.status.charAt(0).toUpperCase() + title.status.slice(1) }}
-                    </span>
-                  </dd>
-                </div>
-                <div v-if="title.published_at" class="flex justify-between">
-                  <dt class="text-sm font-medium text-gray-600 dark:text-gray-400">Published</dt>
-                  <dd class="text-sm text-gray-900 dark:text-white font-medium">{{ formatDate(title.published_at) }}</dd>
-                </div>
-                <div class="flex justify-between">
-                  <dt class="text-sm font-medium text-gray-600 dark:text-gray-400">Created</dt>
-                  <dd class="text-sm text-gray-900 dark:text-white font-medium">{{ formatDate(title.created_at) }}</dd>
-                </div>
-              </dl>
-            </div>
-
-            <!-- Actions Card -->
-            <div class="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-900">
-              <h3 class="mb-4 font-display text-xl font-semibold text-gray-900 dark:text-white">
-                Get Started
-              </h3>
-              <div class="space-y-4">
-                <p class="text-sm text-gray-600 dark:text-gray-400">
-                  Ready to experience {{ title.name }}? Jump into the action or explore the game world.
-                </p>
-                <div class="space-y-3">
-                  <button class="w-full rounded-lg bg-gradient-to-r from-primary-600 to-secondary-600 px-6 py-3 text-sm font-medium text-white shadow-sm transition-all hover:from-primary-700 hover:to-secondary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2">
-                    Play Now
-                  </button>
-                  <button class="w-full rounded-lg border border-gray-300 bg-white px-6 py-3 text-sm font-medium text-gray-700 shadow-sm transition-all hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
-                    View Cards
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-    </main>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import axios from '../config/api.js'
 import AppHeader from '../components/AppHeader.vue'
+import Panel from '../components/layout/Panel.vue'
 
 interface TitleData {
   id: number
@@ -167,29 +123,58 @@ interface TitleData {
   updated_at: string
 }
 
+interface DeckData {
+  id: number
+  name: string
+  description: string
+  hero: {
+    id: number
+    name: string
+    slug: string
+  }
+  card_count: number
+  created_at: string
+  updated_at: string
+}
+
 const route = useRoute()
 const title = ref<TitleData | null>(null)
+const decks = ref<DeckData[]>([])
 const loading = ref<boolean>(true)
+const decksLoading = ref<boolean>(false)
 const error = ref<string | null>(null)
 
 const fetchTitle = async (): Promise<void> => {
   try {
     const slug = route.params.slug as string
-    const response = await fetch(`/api/builder/titles/${slug}/`)
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        throw new Error('Title not found')
-      }
-      throw new Error('Failed to load title')
-    }
-
-    title.value = await response.json()
+    const response = await axios.get(`/builder/titles/${slug}/`)
+    title.value = response.data
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'An unknown error occurred'
+    if (err.response?.status === 404) {
+      error.value = 'Title not found'
+    } else {
+      error.value = err.response?.data?.message || err.message || 'Failed to load title'
+    }
     console.error('Error fetching title:', err)
   } finally {
     loading.value = false
+  }
+}
+
+const fetchDecks = async (): Promise<void> => {
+  if (!title.value) return
+
+  try {
+    decksLoading.value = true
+    const slug = route.params.slug as string
+    const response = await axios.get(`/collection/titles/${slug}/decks/`)
+    decks.value = response.data.decks || []
+  } catch (err) {
+    console.error('Error fetching decks:', err)
+    // Don't show error for decks if title loaded successfully
+    // Just log it and show empty state
+  } finally {
+    decksLoading.value = false
   }
 }
 
@@ -201,8 +186,11 @@ const formatDate = (dateString: string): string => {
   })
 }
 
-onMounted(() => {
-  fetchTitle()
+onMounted(async () => {
+  await fetchTitle()
+  if (title.value) {
+    await fetchDecks()
+  }
 })
 </script>
 

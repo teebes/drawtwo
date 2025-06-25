@@ -44,6 +44,10 @@ help:
 	@echo "  format         - Auto-format code (Black + isort)"
 	@echo "  format-docker  - Auto-format code in Docker"
 	@echo ""
+	@echo "Database:"
+	@echo "  reset-db       - Reset database to fresh state (with 5s warning)"
+	@echo "  reset-db-with-superuser - Reset database and create superuser"
+	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean          - Remove containers and volumes"
 	@echo "  cleanup-emails-dry - Show old email confirmations that would be deleted"
@@ -161,6 +165,45 @@ format-docker:
 	@echo "Auto-formatting code in Docker..."
 	docker-compose run --rm backend sh -c "black . && isort ."
 	@echo "✅ Code formatted in Docker!"
+
+# Database Reset
+reset-db:
+	@echo "⚠️  WARNING: This will DELETE ALL DATABASE DATA!"
+	@echo "Press Ctrl+C within 5 seconds to cancel..."
+	@sleep 5
+	@echo "Stopping services..."
+	docker-compose down
+	@echo "Removing database volume..."
+	docker volume rm drawtwo_postgres_data 2>/dev/null || true
+	@echo "Starting database..."
+	docker-compose up -d db
+	@echo "Waiting for database to be ready..."
+	@sleep 5
+	@echo "Running migrations..."
+	docker-compose run --rm backend python manage.py migrate
+	@echo "✅ Database reset complete!"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  make createsuperuser  - Create admin user"
+	@echo "  make dev              - Start full development stack"
+
+reset-db-with-superuser:
+	@echo "⚠️  WARNING: This will DELETE ALL DATABASE DATA!"
+	@echo "Press Ctrl+C within 5 seconds to cancel..."
+	@sleep 5
+	@echo "Stopping services..."
+	docker-compose down
+	@echo "Removing database volume..."
+	docker volume rm drawtwo_postgres_data 2>/dev/null || true
+	@echo "Starting database..."
+	docker-compose up -d db
+	@echo "Waiting for database to be ready..."
+	@sleep 5
+	@echo "Running migrations..."
+	docker-compose run --rm backend python manage.py migrate
+	@echo "Creating superuser..."
+	docker-compose run --rm backend python manage.py createsuperuser
+	@echo "✅ Database reset complete with superuser!"
 
 # Cleanup
 clean:

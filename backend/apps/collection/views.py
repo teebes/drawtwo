@@ -1,3 +1,97 @@
 from django.shortcuts import render
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
+from django.db.models import Count
 
-# Create your views here.
+from apps.builder.models import Title
+from .models import Deck
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def deck_list_by_title(request, title_slug):
+    """
+    List all decks for a specific title, filtered by the current user.
+    Decks are ordered by updated_at (most recent first).
+    """
+    # Get the title (latest version) or return 404
+    title = get_object_or_404(Title, slug=title_slug, is_latest=True)
+
+    # Get decks for this title, filtering by user and ordering by updated_at
+    decks = Deck.objects.filter(
+        user=request.user,
+        hero__title=title
+    ).select_related('hero').annotate(
+        card_count=Count('deckcard')
+    ).order_by('-updated_at')
+
+    # Serialize the deck data
+    deck_data = []
+    for deck in decks:
+        deck_data.append({
+            'id': deck.id,
+            'name': deck.name,
+            'description': deck.description,
+            'hero': {
+                'id': deck.hero.id,
+                'name': deck.hero.name,
+                'slug': deck.hero.slug,
+            },
+            'card_count': deck.card_count,
+            'created_at': deck.created_at.isoformat(),
+            'updated_at': deck.updated_at.isoformat(),
+        })
+
+    return Response({
+        'title': {
+            'id': title.id,
+            'slug': title.slug,
+            'name': title.name,
+        },
+        'decks': deck_data,
+        'count': len(deck_data)
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def deck_detail(request, deck_id):
+    """
+    Get details for a specific deck.
+    """
+    deck = get_object_or_404(Deck, id=deck_id, user=request.user)
+
+    # Get deck cards with counts
+    deck_cards = deck.deckcard_set.select_related('card').order_by('card__name')
+
+    card_data = []
+    for deck_card in deck_cards:
+        card_data.append({
+            'id': deck_card.card.id,
+            'name': deck_card.card.name,
+            'slug': deck_card.card.slug,
+            'cost': deck_card.card.cost,
+            'card_type': deck_card.card.card_type,
+            'attack': deck_card.card.attack,
+            'health': deck_card.card.health,
+            'count': deck_card.count,
+        })
+
+    return Response({
+        'id': deck.id,
+        'name': deck.name,
+        'description': deck.description,
+        'hero': {
+            'id': deck.hero.id,
+            'name': deck.hero.name,
+            'slug': deck.hero.slug,
+            'health': deck.hero.health,
+        },
+        'cards': card_data,
+        'total_cards': sum(card['count'] for card in card_data),
+        'created_at': deck.created_at.isoformat(),
+        'updated_at': deck.updated_at.isoformat(),
+    })
