@@ -11,6 +11,7 @@ import Profile from '../views/Profile.vue'
 import Title from '../views/Title.vue'
 import TitleCards from '../views/TitleCards.vue'
 import DeckDetail from '../views/DeckDetail.vue'
+import GameBoard from '../views/GameBoard.vue'
 
 const routes = [
   {
@@ -66,6 +67,12 @@ const routes = [
     name: 'DeckDetail',
     component: DeckDetail,
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/games/:game_id',
+    name: 'GameBoard',
+    component: GameBoard,
+    meta: { requiresAuth: true, hideHeader: true }
   },
   {
     path: '/:slug/cards',

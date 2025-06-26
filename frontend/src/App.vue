@@ -1,14 +1,22 @@
 <template>
   <div id="app" class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+    <AppHeader v-if="!shouldHideHeader" />
     <router-view />
   </div>
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useThemeStore } from './stores/theme.js'
+import AppHeader from './components/AppHeader.vue'
 
+const route = useRoute()
 const themeStore = useThemeStore()
+
+const shouldHideHeader = computed(() => {
+  return route.meta?.hideHeader === true
+})
 
 onMounted(() => {
   themeStore.initTheme()

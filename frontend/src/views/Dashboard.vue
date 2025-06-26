@@ -1,7 +1,5 @@
 <template>
   <div class="dashboard">
-    <AppHeader />
-
     <main class="flex-1">
       <!-- Dashboard Header -->
       <section class="bg-gradient-to-br from-primary-600 via-primary-700 to-secondary-700 py-12">
@@ -143,8 +141,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth.js'
-import AppHeader from '../components/AppHeader.vue'
-
 const authStore = useAuthStore()
 
 const testing = ref(false)

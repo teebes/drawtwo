@@ -1,7 +1,5 @@
 <template>
   <div class="design-reference min-h-screen bg-gray-50 dark:bg-gray-900">
-    <AppHeader />
-
     <div class="py-8">
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <!-- Header -->
@@ -213,7 +211,6 @@
 </template>
 
 <script setup>
-import AppHeader from '../components/AppHeader.vue'
 import Section from '../components/layout/Section.vue'
 import Panel from '../components/layout/Panel.vue'
 import ColorSwatch from '../components/design/ColorSwatch.vue'

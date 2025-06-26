@@ -1,7 +1,5 @@
 <template>
   <div class="profile">
-    <AppHeader />
-
     <main class="flex-1">
       <!-- Profile Header -->
       <section class="bg-gradient-to-br from-primary-600 via-primary-700 to-secondary-700 py-12">
@@ -137,7 +135,6 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
-import AppHeader from '../components/AppHeader.vue'
 import ThemeToggle from '../components/ui/ThemeToggle.vue'
 
 const router = useRouter()

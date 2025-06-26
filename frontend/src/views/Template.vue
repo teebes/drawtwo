@@ -1,7 +1,5 @@
 <template>
   <div class="template-page">
-    <AppHeader />
-
     <main class="flex-1">
       <!-- Content goes here -->
       <section class="py-16">
@@ -21,7 +19,6 @@
 </template>
 
 <script setup>
-import AppHeader from '../components/AppHeader.vue'
 </script>
 
 <style scoped>

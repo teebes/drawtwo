@@ -1,7 +1,5 @@
 <template>
   <div class="lobby">
-    <AppHeader />
-
     <main class="flex-1">
       <!-- Welcome Section -->
       <section class="bg-gradient-to-br from-primary-600 via-primary-700 to-secondary-700 py-12">
@@ -162,7 +160,6 @@
 </template>
 
 <script setup>
-import AppHeader from '../components/AppHeader.vue'
 </script>
 
 <style scoped>

@@ -1,6 +1,5 @@
 <template>
   <div class="title-cards-page min-h-screen bg-gray-50 dark:bg-gray-900">
-    <AppHeader />
 
     <div v-if="!loading && !error && title">
       <!-- Hero Section -->
@@ -94,7 +93,6 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from '../config/api.js'
-import AppHeader from '../components/AppHeader.vue'
 import CollectionCard from '../components/game/CollectionCard.vue'
 import type { Card } from '../types/card'
 

@@ -1,6 +1,5 @@
 <template>
   <div class="deck-detail-page">
-    <AppHeader />
 
     <div v-if="!loading && !error && deck">
       <section class="bg-gradient-to-br from-primary-600 via-primary-700 to-secondary-700 py-16 text-center">
@@ -87,7 +86,6 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from '../config/api.js'
-import AppHeader from '../components/AppHeader.vue'
 import Panel from '../components/layout/Panel.vue'
 
 interface DeckCard {

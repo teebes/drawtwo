@@ -1,7 +1,5 @@
 <template>
   <div class="home">
-    <AppHeader />
-
     <main class="relative">
       <!-- Hero Section -->
       <section class="relative overflow-hidden bg-gradient-to-br from-primary-900 via-purple-900 to-secondary-900 py-20 lg:py-32">
@@ -106,7 +104,6 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import AppHeader from '../components/AppHeader.vue'
 
 const backendOnline = ref(false)
 const loading = ref(false)
