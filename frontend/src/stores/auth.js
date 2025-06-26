@@ -164,7 +164,12 @@ export const useAuthStore = defineStore('auth', {
       }
 
       try {
-        const response = await axios.post('/auth/token/refresh/', {
+        // Use a clean axios instance to avoid interceptor loops
+        const refreshAxios = axios.create({
+          baseURL: axios.defaults.baseURL
+        })
+
+        const response = await refreshAxios.post('/auth/token/refresh/', {
           refresh: this.refreshToken
         })
 

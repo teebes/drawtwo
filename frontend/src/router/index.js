@@ -10,7 +10,6 @@ import Template from '../views/Template.vue'
 import Profile from '../views/Profile.vue'
 import Title from '../views/Title.vue'
 import TitleCards from '../views/TitleCards.vue'
-import OldTitle from '../views/OldTitle.vue'
 import DeckDetail from '../views/DeckDetail.vue'
 
 const routes = [
@@ -60,12 +59,6 @@ const routes = [
     path: '/template',
     name: 'Template',
     component: Template,
-    meta: { requiresAuth: false }
-  },
-  {
-    path: '/old/:slug',
-    name: 'OldTitle',
-    component: OldTitle,
     meta: { requiresAuth: false }
   },
   {
