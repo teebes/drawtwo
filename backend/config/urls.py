@@ -13,6 +13,7 @@ urlpatterns = [
     path("api/auth/", include("apps.authentication.urls")),
     path("api/builder/", include("apps.builder.urls")),
     path("api/collection/", include("apps.collection.urls")),
+    path("api/gameplay/", include("apps.gameplay.urls")),
 ]
 
 # Serve media files in development

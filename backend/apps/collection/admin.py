@@ -43,38 +43,38 @@ class OwnedHeroAdmin(admin.ModelAdmin):
 class DeckCardInline(admin.TabularInline):
     model = DeckCard
     extra = 0
-    readonly_fields = ('created_at', 'updated_at')
+    fields = ['card', 'count']
 
 
 @admin.register(Deck)
 class DeckAdmin(admin.ModelAdmin):
-    list_display = ('name', 'user', 'hero', 'card_count', 'created_at')
-    list_filter = ('created_at', 'hero__title__status')
-    search_fields = ('name', 'description', 'user__email', 'hero__name')
-    readonly_fields = ('created_at', 'updated_at')
-    ordering = ('-created_at',)
+    list_display = ['name', 'get_owner_type', 'owner_name', 'hero', 'get_card_count', 'created_at']
+    list_filter = ['hero', 'created_at', 'user', 'ai_player']
+    search_fields = ['name', 'user__email', 'ai_player__name', 'hero__name']
+    readonly_fields = ['created_at', 'updated_at', 'owner_name', 'is_ai_deck']
     inlines = [DeckCardInline]
 
     fieldsets = (
-        ('Basic Information', {
-            'fields': ('user', 'name', 'description')
+        ('Ownership', {
+            'fields': ('user', 'ai_player'),
+            'description': 'Choose either a user OR an AI player as the deck owner'
         }),
-        ('Deck Configuration', {
-            'fields': ('hero',)
+        ('Deck Info', {
+            'fields': ('name', 'description', 'hero')
         }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at'),
+        ('Info', {
+            'fields': ('owner_name', 'is_ai_deck', 'created_at', 'updated_at'),
             'classes': ('collapse',)
         }),
     )
 
-    def card_count(self, obj):
-        """Show total number of cards in the deck"""
-        from django.db.models import Sum
-        return obj.deckcard_set.aggregate(
-            total=Sum('count')
-        )['total'] or 0
-    card_count.short_description = 'Total Cards'
+    def get_owner_type(self, obj):
+        return "👤 Human" if obj.user else "🤖 AI"
+    get_owner_type.short_description = "Owner Type"
+
+    def get_card_count(self, obj):
+        return obj.cards.count()
+    get_card_count.short_description = "Cards"
 
 
 @admin.register(DeckCard)

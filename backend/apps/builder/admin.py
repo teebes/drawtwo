@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Title, Tag, Trait, Faction, HeroTemplate, CardTemplate, CardTrait
+from .models import Title, Tag, Trait, Faction, HeroTemplate, CardTemplate, CardTrait, AIPlayer
 
 
 @admin.register(Title)
@@ -204,3 +204,25 @@ class CardTemplateAdmin(admin.ModelAdmin):
         form.base_fields['card_type'].help_text = "Spells don't require attack/health values"
         # Note: traits field is handled via inline due to through model
         return form
+
+
+@admin.register(AIPlayer)
+class AIPlayerAdmin(admin.ModelAdmin):
+    list_display = ['name', 'difficulty', 'hero', 'created_at']
+    list_filter = ['difficulty', 'hero', 'created_at']
+    search_fields = ['name', 'hero__name']
+    readonly_fields = ['created_at', 'updated_at']
+
+    fieldsets = (
+        ('Basic Info', {
+            'fields': ('name', 'difficulty', 'hero')
+        }),
+        ('AI Strategy', {
+            'fields': ('strategy_config',),
+            'description': 'AI behavior parameters'
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )

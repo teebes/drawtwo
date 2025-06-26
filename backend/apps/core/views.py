@@ -5,7 +5,7 @@ from rest_framework.response import Response
 
 from apps.builder.models import Title, CardTemplate
 from apps.builder.serializers import TitleSerializer
-from .schemas import Card, Trait
+from .serializers import serialize_cards_with_traits
 
 def health_check(request):
     """Simple health check endpoint"""
@@ -34,42 +34,12 @@ def title_cards(request, slug):
     # Get the title (latest version) or return 404
     title = get_object_or_404(Title, slug=slug, is_latest=True)
 
-    # Build an efficient query with prefetching
-    cards = (CardTemplate.objects
-             .filter(title=title, is_latest=True)
-             .select_related('title', 'faction')  # Avoid N+1 on title and faction
-             .prefetch_related(
-                 'cardtrait_set__trait'  # Prefetch card traits with trait data
-             )
-             .order_by('cost', 'card_type', 'attack', 'health', 'name'))  # Order by cost, then type (minions before spells), then stats, then name
+    # Build the queryset with filtering and ordering
+    cards_queryset = (CardTemplate.objects
+                     .filter(title=title, is_latest=True)
+                     .order_by('cost', 'card_type', 'attack', 'health', 'name'))
 
-    # Transform to Card schema format
-    card_data = []
-    for card in cards:
-        # Build traits list with data
-        traits_list = []
-
-        for card_trait in card.cardtrait_set.all().order_by('trait__name'):
-            trait_obj = Trait(
-                slug=card_trait.trait.slug,
-                name=card_trait.trait.name,
-                data=card_trait.data
-            )
-            traits_list.append(trait_obj)
-
-        # Create Card schema object
-        card_obj = Card(
-            slug=card.slug,
-            name=card.name,
-            description=card.description,
-            card_type=card.card_type,
-            cost=card.cost,
-            attack=card.attack or 0,  # Handle null values for spells
-            health=card.health or 0,  # Handle null values for spells
-            traits=traits_list,
-            faction=card.faction.slug if card.faction else None
-        )
-
-        card_data.append(card_obj.model_dump())
+    # Use the helper function to serialize with efficient prefetching
+    card_data = serialize_cards_with_traits(cards_queryset)
 
     return Response(card_data)

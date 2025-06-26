@@ -10,14 +10,26 @@ class Event(BaseModel):
     player: Literal['side_a', 'side_b']
 
 
+class Trait(BaseModel):
+    slug: str
+    name: str
+    data: dict = {}
+
+
 class CardInPlay(BaseModel):
     card_id: int # Interal card ID for that game
-    template_id: str # ID of the card template
+    template_slug: str # ID of the card template
     attack: int
     health: int
     cost: int
-    traits: List[str]
+    traits: List[Trait]
 
+
+class HeroInPlay(BaseModel):
+    hero_id: int # Internal hero ID for that game
+    template_slug: str # ID of the hero template
+    health: int
+    name: str
 
 class GameState(BaseModel):
     turn: int = 1
@@ -29,7 +41,8 @@ class GameState(BaseModel):
     # Centralized storage of all cards in the game by their unique ID
     cards: Dict[int, CardInPlay] = Field(default_factory=dict)
 
-    # All zones now consistently store lists of card IDs that reference the cards dict
+    heroes: Dict[str, HeroInPlay]
+
     board: Dict[str, List[int]] = Field(
         default_factory=lambda: {
             "side_a": [],
@@ -48,3 +61,5 @@ class GameState(BaseModel):
             "side_b": [],
         }
     )
+
+    winner: Literal['side_a', 'side_b', 'none'] = 'none'

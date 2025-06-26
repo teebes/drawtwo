@@ -5,12 +5,6 @@ from apps.core.models import TimestampedModel, list_to_choices
 
 
 class Game(TimestampedModel):
-    TURN_PHASE_START = 'start'
-    TURN_PHASE_REFRSH = 'refresh'
-    TURN_PHASE_DRAW = 'draw'
-    TURN_PHASE_MAIN = 'main'
-    TURN_PHASE_COMBAT = 'combat'
-    TURN_PHASE_END = 'end'
 
     GAME_STATUS_INIT = 'init'
     GAME_STATUS_IN_PROGRESS = 'in_progress'
@@ -28,28 +22,31 @@ class Game(TimestampedModel):
 
     state = models.JSONField(default=dict)
 
-    """
-    current_turn = models.ForeignKey(Deck, on_delete=models.PROTECT,
-                                     blank=True, null=True)
-    turn_counter = models.SmallIntegerField(default=0)
-
-    phase = models.CharField(
-        max_length=10,
-        choices=list_to_choices(
-            [
-                TURN_PHASE_START,
-                TURN_PHASE_REFRSH,
-                TURN_PHASE_DRAW,
-                TURN_PHASE_MAIN,
-                TURN_PHASE_COMBAT,
-                TURN_PHASE_END]
-        ),
-        default=TURN_PHASE_START,
-    )
-    """
-
     winner = models.ForeignKey(Deck, on_delete=models.PROTECT,
                                blank=True, null=True, related_name='games_won')
+
+    @property
+    def is_vs_ai(self):
+        """Returns True if this is a player vs AI game"""
+        return self.side_a.is_ai_deck or self.side_b.is_ai_deck
+
+    @property
+    def human_deck(self):
+        """Returns the human player's deck (assumes only one AI)"""
+        if self.side_a.is_ai_deck:
+            return self.side_b
+        elif self.side_b.is_ai_deck:
+            return self.side_a
+        return None  # Both human
+
+    @property
+    def ai_deck(self):
+        """Returns the AI player's deck (assumes only one AI)"""
+        if self.side_a.is_ai_deck:
+            return self.side_a
+        elif self.side_b.is_ai_deck:
+            return self.side_b
+        return None  # No AI
 
     def __str__(self):
         return f"{self.side_a.name} vs {self.side_b.name}"

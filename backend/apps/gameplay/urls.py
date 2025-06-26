@@ -1,0 +1,16 @@
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+
+from . import views
+
+# Create a router for ViewSets (if needed later)
+router = DefaultRouter()
+
+# URL patterns for the collection app
+urlpatterns = [
+    # Include router URLs
+    path('', include(router.urls)),
+
+    # Game endpoints
+    path('games/<int:game_id>/', views.game_detail, name='game-detail'),
+]

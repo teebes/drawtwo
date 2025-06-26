@@ -231,6 +231,45 @@ class CardTemplate(TemplateBase):
         ]
 
 
+class AIPlayer(TimestampedModel):
+    """Represents an AI opponent with predefined characteristics"""
+
+    AI_DIFFICULTY_EASY = 'easy'
+    AI_DIFFICULTY_MEDIUM = 'medium'
+    AI_DIFFICULTY_HARD = 'hard'
+    AI_DIFFICULTY_EXPERT = 'expert'
+
+    name = models.CharField(max_length=100)  # e.g., "Aggressive AI", "Control AI"
+    difficulty = models.CharField(
+        max_length=20,
+        choices=[
+            (AI_DIFFICULTY_EASY, 'Easy'),
+            (AI_DIFFICULTY_MEDIUM, 'Medium'),
+            (AI_DIFFICULTY_HARD, 'Hard'),
+            (AI_DIFFICULTY_EXPERT, 'Expert'),
+        ],
+        default=AI_DIFFICULTY_MEDIUM,
+    )
+    hero = models.ForeignKey(HeroTemplate, on_delete=models.PROTECT)
+
+    # AI behavior settings
+    strategy_config = models.JSONField(
+        default=dict,
+        help_text="AI strategy parameters like aggression, card priorities, etc."
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name", "difficulty"],
+                name="ai_player_u_name_difficulty",
+            ),
+        ]
+
+    def __str__(self):
+        return f"🤖 {self.name} ({self.get_difficulty_display()})"
+
+
 """
 Prototype 'bump version' transactional code:
 

@@ -1,3 +1,4 @@
 You MUST run all commands inside Docker, not on host.
 You MUST create all frontend views using Typescript rather than Javascript
 When desining frontend screens, refer to frontend/src/views/DesignReference.vue for style guidelines.
+When I ask questions, don't automatically agree with my premises, or assume that my initial approach is correct. Think from first principles and push back if you think there's a better way.

@@ -48,8 +48,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      redis:
-        condition: service_healthy
+      #redis:
+      #  condition: service_healthy
     command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 
   celery-worker:
