@@ -89,6 +89,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import axios from '../config/api.js'
 import type { GameState } from '../types/game'
 import GameHero from '../components/game/GameHero.vue'
 import BoardCard from '../components/game/BoardCard.vue'
@@ -106,13 +107,9 @@ const cardNameMap = ref<Record<string, string>>({})
 const fetchGameState = async () => {
   try {
     const gameId = route.params.game_id
-    const response = await fetch(`/api/gameplay/games/${gameId}/`)
+    const response = await axios.get(`/gameplay/games/${gameId}/`)
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch game: ${response.statusText}`)
-    }
-
-    const data = await response.json()
+    const data = response.data
     gameState.value = data
 
     // Build card name mapping from the game state
