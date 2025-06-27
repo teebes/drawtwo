@@ -13,4 +13,5 @@ urlpatterns = [
 
     # Game endpoints
     path('games/<int:game_id>/', views.game_detail, name='game-detail'),
+    path('games/', views.current_games, name='current-games'),
 ]

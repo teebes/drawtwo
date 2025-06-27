@@ -31,6 +31,7 @@ class HeroInPlay(BaseModel):
     health: int
     name: str
 
+
 class GameState(BaseModel):
     turn: int = 1
     active: Literal["side_a", "side_b"] = "side_a"
@@ -61,5 +62,20 @@ class GameState(BaseModel):
             "side_b": [],
         }
     )
+    mana_used: Dict[str, int] = Field(
+        default_factory=lambda: {
+            "side_a": 0,
+            "side_b": 0,
+        }
+    )
 
     winner: Literal['side_a', 'side_b', 'none'] = 'none'
+
+
+class GameSummary(BaseModel):
+    id: int
+    name: str
+
+
+class GameList(BaseModel):
+    games: List[GameSummary]
