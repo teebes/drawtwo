@@ -1,5 +1,6 @@
 <template>
-  <div class="h-screen overflow-hidden bg-gradient-to-b from-emerald-900 via-green-800 to-emerald-900 flex flex-col">
+  <div
+    class="h-screen overflow-hidden bg-gradient-to-b from-emerald-900 via-green-800 to-emerald-900 flex flex-col">
     <!-- Loading State -->
     <div v-if="loading" class="flex-1 flex items-center justify-center">
       <div class="text-white text-xl">Loading game...</div>
@@ -11,35 +12,41 @@
     </div>
 
     <!-- Game Board -->
-    <div v-else-if="gameState" class="flex-1 flex flex-col justify-between min-h-0">
+    <div v-else-if="gameState" class="flex-1 flex flex-col justify-between min-h-0 max-w-7xl mx-auto w-full">
       <!-- Side B (Top) -->
-      <div class="flex-none">
-        <!-- Side B Hero (flush to top) -->
-        <div class="px-4 pt-2">
-          <GameHero :hero="gameState.heroes.side_b" />
+      <div class="flex-none px-4 pt-2">
+        <div class="grid grid-cols-3 gap-4 items-center">
+          <!-- Left: Hand Cards -->
+          <div class="flex justify-start">
+            <HandCards :hand-cards="gameState.hands.side_b" />
+          </div>
+
+          <!-- Middle: Hero -->
+          <div class="flex justify-center">
+            <GameHero :hero="gameState.heroes.side_b" />
+          </div>
+
+          <!-- Right: Mana + Deck -->
+          <div class="flex justify-end space-x-2">
+            <ManaIndicator
+              :mana-pool="gameState.mana_pool.side_b"
+              :mana-used="gameState.mana_used.side_b"
+            />
+            <DeckIndicator :card-count="gameState.decks.side_b.length" />
+          </div>
         </div>
 
         <!-- Side B Board (cards) -->
-        <div class="px-4 pt-3 pb-2">
+        <div class="pt-3 pb-2">
           <div class="flex justify-center">
             <div class="flex space-x-2 max-w-full overflow-x-auto">
-              <BoardCard
-                v-for="cardId in gameState.board.side_b.slice(0, maxCardsPerSide)"
-                :key="cardId"
-                :card="gameState.cards[cardId]"
-                :name="getCardName(cardId)"
-                :card-type="getCardType(cardId)"
-              />
+              <BoardCard v-for="cardId in gameState.board.side_b.slice(0, maxCardsPerSide)" :key="cardId"
+                :card="gameState.cards[cardId]" :name="getCardName(cardId)" :card-type="getCardType(cardId)" />
               <div v-if="gameState.board.side_b.length === 0" class="text-gray-400 text-sm py-4">
                 No cards on board
               </div>
             </div>
           </div>
-        </div>
-
-        <!-- Side B Deck Indicator (upper-right) -->
-        <div class="absolute top-4 right-4">
-          <DeckIndicator :card-count="gameState.hands.side_b.length" />
         </div>
       </div>
 
@@ -53,23 +60,13 @@
       </div>
 
       <!-- Side A (Bottom) -->
-      <div class="flex-none">
-        <!-- Side A Deck Indicator (lower-right) -->
-        <div class="absolute bottom-4 right-4">
-          <DeckIndicator :card-count="gameState.hands.side_a.length" />
-        </div>
-
+      <div class="flex-none px-4 pb-2">
         <!-- Side A Board (cards) -->
-        <div class="px-4 pt-2 pb-3">
+        <div class="pt-2 pb-3">
           <div class="flex justify-center">
             <div class="flex space-x-2 max-w-full overflow-x-auto">
-              <BoardCard
-                v-for="cardId in gameState.board.side_a.slice(0, maxCardsPerSide)"
-                :key="cardId"
-                :card="gameState.cards[cardId]"
-                :name="getCardName(cardId)"
-                :card-type="getCardType(cardId)"
-              />
+              <BoardCard v-for="cardId in gameState.board.side_a.slice(0, maxCardsPerSide)" :key="cardId"
+                :card="gameState.cards[cardId]" :name="getCardName(cardId)" :card-type="getCardType(cardId)" />
               <div v-if="gameState.board.side_a.length === 0" class="text-gray-400 text-sm py-4">
                 No cards on board
               </div>
@@ -77,9 +74,25 @@
           </div>
         </div>
 
-        <!-- Side A Hero (flush to bottom) -->
-        <div class="px-4 pb-2">
-          <GameHero :hero="gameState.heroes.side_a" />
+        <div class="grid grid-cols-3 gap-4 items-center">
+          <!-- Left: Hand Cards -->
+          <div class="flex justify-start">
+            <HandCards :hand-cards="gameState.hands.side_a" />
+          </div>
+
+          <!-- Middle: Hero -->
+          <div class="flex justify-center">
+            <GameHero :hero="gameState.heroes.side_a" />
+          </div>
+
+          <!-- Right: Mana + Deck -->
+          <div class="flex justify-end space-x-2">
+            <ManaIndicator
+              :mana-pool="gameState.mana_pool.side_a"
+              :mana-used="gameState.mana_used.side_a"
+            />
+            <DeckIndicator :card-count="gameState.decks.side_a.length" />
+          </div>
         </div>
       </div>
     </div>
@@ -94,6 +107,8 @@ import type { GameState } from '../types/game'
 import GameHero from '../components/game/GameHero.vue'
 import BoardCard from '../components/game/BoardCard.vue'
 import DeckIndicator from '../components/game/DeckIndicator.vue'
+import ManaIndicator from '../components/game/ManaIndicator.vue'
+import HandCards from '../components/game/HandCards.vue'
 
 const route = useRoute()
 const gameState = ref<GameState | null>(null)

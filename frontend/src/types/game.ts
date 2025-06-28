@@ -39,5 +39,7 @@ export interface GameState {
   board: Record<string, number[]>
   hands: Record<string, number[]>
   decks: Record<string, number[]>
+  mana_pool: Record<string, number>
+  mana_used: Record<string, number>
   winner: Winner
 }

@@ -13,8 +13,7 @@
 
     <!-- Health -->
     <div class="flex items-center space-x-2">
-      <span class="text-sm font-medium text-gray-700 dark:text-gray-300">❤️</span>
-      <span class="font-bold text-lg text-red-600 dark:text-red-400">
+      <span class="font-bold text-lg text-red-600 dark:text-red-400 ml-4">
         {{ hero.health }}
       </span>
     </div>
