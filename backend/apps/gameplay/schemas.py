@@ -8,6 +8,11 @@ Phase = Literal['start', 'refresh', 'draw', 'main', 'combat', 'end']
 class Event(BaseModel):
     type: str
     player: Literal['side_a', 'side_b']
+    data: dict = {}
+
+
+class DrawEvent(Event):
+    type: str = "draw_card"
 
 
 class Trait(BaseModel):
@@ -22,7 +27,7 @@ class CardInPlay(BaseModel):
     attack: int
     health: int
     cost: int
-    traits: List[Trait]
+    traits: List[Trait] = Field(default_factory=list)
 
 
 class HeroInPlay(BaseModel):
@@ -62,6 +67,12 @@ class GameState(BaseModel):
             "side_b": [],
         }
     )
+    mana_pool: Dict[str, int] = Field(
+        default_factory=lambda: {
+            "side_a": 0,
+            "side_b": 0,
+        }
+    )
     mana_used: Dict[str, int] = Field(
         default_factory=lambda: {
             "side_a": 0,
@@ -79,3 +90,13 @@ class GameSummary(BaseModel):
 
 class GameList(BaseModel):
     games: List[GameSummary]
+
+
+class GameUpdate(BaseModel):
+    type: str
+    side: Literal['side_a', 'side_b']
+    data: dict
+
+
+class GameUpdates(BaseModel):
+    updates: List[GameUpdate]

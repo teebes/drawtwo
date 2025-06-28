@@ -1,9 +1,15 @@
 import random
 
 from django.db import transaction
+from typing import List
 
 from .models import Game
-from .schemas import GameState, CardInPlay, HeroInPlay
+from .schemas import (
+    CardInPlay,
+    GameState,
+    GameUpdate,
+    HeroInPlay,
+    Event)
 from .tasks import process_player_action
 from apps.core.serializers import serialize_cards_with_traits
 
@@ -95,3 +101,57 @@ class GameService:
     @staticmethod
     def submit_action(game_id: int, action: dict):
         process_player_action.delay(game_id, action)
+
+    def __init__(self, game: Game) -> None:
+        self.game = game
+        self.game_state = GameState.model_validate(game.state)
+
+    def queue_events(self, events: List[Event]) -> None:
+        for event in events:
+            self.game_state.event_queue.append(event)
+        self.game.state = self.game_state.model_dump()
+        self.game.save()
+
+    def process_events(self) -> List[GameUpdate]:
+        events = self.game_state.event_queue
+        changes = []
+        for event in events:
+            if event.type == "draw_card":
+                changes.extend(self.draw_card(self.game_state, event.player))
+            else:
+                raise ValueError(f"Invalid event: {event.type}")
+
+        self.game_state.event_queue = []
+        self.game.state = self.game_state.model_dump()
+        self.game.save()
+
+        return changes
+
+
+    @staticmethod
+    def draw_card(game_state: GameState, side: str) -> List[GameUpdate]:
+        try:
+            deck = game_state.decks[side]
+        except KeyError:
+            raise ValueError(f"Invalid side: {side}")
+
+        if not deck:
+            raise ValueError(f"No cards left in deck for {side}")
+
+        # Remove the card from the deck
+        card_id = deck.pop(0)
+
+        # Add the card to the hand
+        game_state.hands[side].append(card_id)
+
+        return [
+            GameUpdate(
+                type="draw_card",
+                side=side,
+                data={
+                    "card": game_state.cards[card_id].model_dump(),
+                },
+            )
+        ]
+
+    # play_card
