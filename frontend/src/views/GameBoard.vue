@@ -27,7 +27,7 @@
         <div class="grid grid-cols-3 gap-4 items-center">
           <!-- Left: Hand Cards -->
           <div class="flex justify-start">
-            <HandCards :hand-cards="gameState.hands.side_b" />
+            <HandCards :hand-cards="gameState.hands.side_b" :cards="gameState.cards" />
           </div>
 
           <!-- Middle: Hero -->
@@ -86,7 +86,7 @@
         <div class="grid grid-cols-3 gap-4 items-center">
           <!-- Left: Hand Cards -->
           <div class="flex justify-start">
-            <HandCards :hand-cards="gameState.hands.side_a" />
+            <HandCards :hand-cards="gameState.hands.side_a" :cards="gameState.cards" />
           </div>
 
           <!-- Middle: Hero -->
