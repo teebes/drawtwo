@@ -37,6 +37,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_HOST=db
       - DB_PORT=5432
+      - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     volumes:
@@ -48,51 +49,52 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      #redis:
-      #  condition: service_healthy
-    command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
-
-  celery-worker:
-    build: ./backend
-    environment:
-      - DJANGO_SETTINGS_MODULE=config.settings.development
-      - SECRET_KEY=${SECRET_KEY:-django-insecure-dev-key}
-      - DB_NAME=${DB_NAME:-drawtwo}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-postgres}
-      - DB_HOST=db
-      - DB_PORT=5432
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    volumes:
-      - ./backend:/app
-    depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
-    command: ["celery", "-A", "config", "worker", "--loglevel=info"]
+    #command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+    command: ["daphne", "-b", "0.0.0.0", "-p", "8000", "config.asgi:application"]
 
-  celery-beat:
-    build: ./backend
-    environment:
-      - DJANGO_SETTINGS_MODULE=config.settings.development
-      - SECRET_KEY=${SECRET_KEY:-django-insecure-dev-key}
-      - DB_NAME=${DB_NAME:-drawtwo}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-postgres}
-      - DB_HOST=db
-      - DB_PORT=5432
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    volumes:
-      - ./backend:/app
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: ["celery", "-A", "config", "beat", "--loglevel=info", "--scheduler", "django_celery_beat.schedulers:DatabaseScheduler"]
+  # celery-worker:
+  #   build: ./backend
+  #   environment:
+  #     - DJANGO_SETTINGS_MODULE=config.settings.development
+  #     - SECRET_KEY=${SECRET_KEY:-django-insecure-dev-key}
+  #     - DB_NAME=${DB_NAME:-drawtwo}
+  #     - DB_USER=${DB_USER:-postgres}
+  #     - DB_PASSWORD=${DB_PASSWORD:-postgres}
+  #     - DB_HOST=db
+  #     - DB_PORT=5432
+  #     - CELERY_BROKER_URL=redis://redis:6379/0
+  #     - CELERY_RESULT_BACKEND=redis://redis:6379/0
+  #   volumes:
+  #     - ./backend:/app
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   command: ["celery", "-A", "config", "worker", "--loglevel=info"]
+
+  # celery-beat:
+  #   build: ./backend
+  #   environment:
+  #     - DJANGO_SETTINGS_MODULE=config.settings.development
+  #     - SECRET_KEY=${SECRET_KEY:-django-insecure-dev-key}
+  #     - DB_NAME=${DB_NAME:-drawtwo}
+  #     - DB_USER=${DB_USER:-postgres}
+  #     - DB_PASSWORD=${DB_PASSWORD:-postgres}
+  #     - DB_HOST=db
+  #     - DB_PORT=5432
+  #     - CELERY_BROKER_URL=redis://redis:6379/0
+  #     - CELERY_RESULT_BACKEND=redis://redis:6379/0
+  #   volumes:
+  #     - ./backend:/app
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   command: ["celery", "-A", "config", "beat", "--loglevel=info", "--scheduler", "django_celery_beat.schedulers:DatabaseScheduler"]
 
   frontend:
     build: ./frontend

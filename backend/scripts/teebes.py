@@ -39,6 +39,29 @@ def main():
     """
     from apps.builder.models import CardTemplate, AIPlayer, HeroTemplate
     from apps.collection.models import Deck, DeckCard
+    from apps.gameplay.models import Game
+    from apps.gameplay.schemas import DrawEvent
+    from apps.gameplay.services import GameService
+
+    events = [
+        DrawEvent(player='side_a'),
+        DrawEvent(player='side_b'),
+        DrawEvent(player='side_a'),
+        DrawEvent(player='side_b'),
+        DrawEvent(player='side_a'),
+        DrawEvent(player='side_b'),
+    ]
+
+    game = Game.objects.get(pk=2)
+    game_service = GameService(game)
+
+    changes = game_service.process_events()
+
+    print(changes)
+
+    #print(game_service.game_state.event_queue)
+
+    return
 
     leonidas = HeroTemplate.objects.get(pk=1)
     pausania = HeroTemplate.objects.get(pk=3)

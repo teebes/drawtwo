@@ -13,6 +13,15 @@
 
     <!-- Game Board -->
     <div v-else-if="gameState" class="flex-1 flex flex-col justify-between min-h-0 max-w-7xl mx-auto w-full">
+      <!-- WebSocket Connection Status -->
+      <div v-if="wsStatus !== 'connected'" class="absolute top-2 right-2 text-sm px-2 py-1 rounded"
+        :class="{
+          'bg-yellow-600 text-white': wsStatus === 'connecting',
+          'bg-red-600 text-white': wsStatus === 'disconnected'
+        }">
+        {{ wsStatus === 'connecting' ? 'Connecting...' : 'Disconnected' }}
+      </div>
+
       <!-- Side B (Top) -->
       <div class="flex-none px-4 pt-2">
         <div class="grid grid-cols-3 gap-4 items-center">
@@ -100,7 +109,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from '../config/api.js'
 import type { GameState } from '../types/game'
@@ -116,8 +125,19 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const maxCardsPerSide = ref(6)
 
+// WebSocket related
+const socket = ref<WebSocket | null>(null)
+const wsStatus = ref<'disconnected' | 'connecting' | 'connected'>('disconnected')
+
+const viewer = ref<'side_a' | 'side_b' | null>(null)
+
+// Track sent actions to prevent infinite loops
+const sentActions = ref<Set<string>>(new Set())
+
 // Card name mapping - in a real app this would come from a card template API
 const cardNameMap = ref<Record<string, string>>({})
+
+const sent = ref(false);
 
 const fetchGameState = async () => {
   try {
@@ -125,6 +145,7 @@ const fetchGameState = async () => {
     const response = await axios.get(`/gameplay/games/${gameId}/`)
 
     const data = response.data
+    viewer.value = data.viewer
     gameState.value = data
 
     // Build card name mapping from the game state
@@ -141,20 +162,182 @@ const fetchGameState = async () => {
   }
 }
 
-const getCardName = (cardId: number): string => {
+const connectWebSocket = () => {
+  const gameId = route.params.game_id
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+  // Match the API configuration pattern
+  const wsUrl = `${protocol}://localhost:8000/ws/game/${gameId}/`
+
+  wsStatus.value = 'connecting'
+
+  // WebSocket will automatically include cookies for authentication
+  socket.value = new WebSocket(wsUrl)
+
+  socket.value.onopen = () => {
+    console.log('WebSocket connected')
+    wsStatus.value = 'connected'
+  }
+
+  socket.value.onmessage = (event) => {
+    const data = JSON.parse(event.data)
+    handleWebSocketMessage(data)
+  }
+
+  socket.value.onerror = (error) => {
+    console.error('WebSocket error:', error)
+  }
+
+  socket.value.onclose = () => {
+    console.log('WebSocket disconnected')
+    wsStatus.value = 'disconnected'
+    // Attempt to reconnect after 3 seconds
+    return;
+    setTimeout(() => {
+      if (wsStatus.value === 'disconnected') {
+        connectWebSocket()
+      }
+    }, 3000)
+  }
+}
+
+const handleWebSocketMessage = (data: any) => {
+  console.log('WebSocket message:', data)
+
+  if (data.type !== "game_updates") {
+    console.log("not a game update, skipping message.");
+    return;
+  }
+
+  if (sent.value) {
+    console.log("already sent, skipping");
+    return;
+  }
+
+  console.log("game updates!")
+
+  gameState.value = data.state;
+
+  console.log("viewer:", viewer.value)
+  console.log("side:", data.state.active)
+
+  // If we are the viewer and the game is in a start ready state,
+  // start the first phase transition to draw.
+  if (data.state.active === viewer.value) {
+    if (data.state.phase === "start") {
+      sent.value = true;
+      sendWebSocketMessage({
+        type: "phase_transition",
+        phase: "refresh",
+      })
+    } else if (data.state.phase === "refresh") {
+      sent.value = true;
+      sendWebSocketMessage({
+        type: "phase_transition",
+        phase: "draw",
+      })
+    } else if (data.state.phase === "draw") {
+      sent.value = true;
+      sendWebSocketMessage({
+        type: "phase_transition",
+        phase: "main",
+      })
+    }
+  }
+  return;
+
+  if (data.type === 'game_state' || data.type === 'game_update') {
+    const newState = data.state || data.update?.state
+    if (newState) {
+      gameState.value = newState
+
+      // Update card name mapping
+      Object.values(newState.cards).forEach((card: any) => {
+        cardNameMap.value[card.template_slug] = card.template_slug.replace(/_/g, ' ')
+          .replace(/\b\w/g, l => l.toUpperCase())
+      })
+
+      // Handle specific update types
+      if (data.update?.type === 'draw_card') {
+        console.log('Card drawn!')
+        // You could add visual effects or notifications here
+      }
+    }
+  }
+}
+
+const sendWebSocketMessage = (message: any) => {
+  if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+    socket.value.send(JSON.stringify(message))
+  }
+}
+
+// Watch for side_a start phase and trigger phase transition
+watch(() => gameState.value, (newState, oldState) => {
+  return;
+
+  // Handle null states
+  if (!newState) {
+    console.log('New state is null');
+    return;
+  }
+
+  // Note: getStateDifferences function would need to be implemented if this watch logic is needed
+  // For now, this watch is disabled with the early return above
+
+  console.log('State changed');
+
+  // Example of how to handle phase transitions based on state changes:
+  /*
+  if (newState && newState.active === 'side_a' && newState.phase === 'start') {
+    // Create a unique key for this action
+    const actionKey = `phase_transition_${newState.active}_${newState.phase}_to_draw_turn_${newState.turn}`
+
+    // Only send if we haven't already sent this action
+    if (!sentActions.value.has(actionKey)) {
+      console.log('Side A is in start phase, transitioning to draw phase')
+      sentActions.value.add(actionKey)
+
+      sendWebSocketMessage({
+        type: 'action',
+        action: {
+          type: 'phase_transition',
+          phase: 'draw'
+        }
+      })
+    }
+  }
+
+  // Clear old action keys when turn changes to prevent memory leak
+  if (oldState && newState && oldState.turn !== newState.turn) {
+    sentActions.value.clear()
+  }
+  */
+}, { deep: true })
+
+const getCardName = (cardId: string): string => {
   const card = gameState.value?.cards[cardId]
   if (!card) return 'Unknown Card'
   return cardNameMap.value[card.template_slug] || card.template_slug
 }
 
-const getCardType = (cardId: number): 'minion' | 'spell' => {
+const getCardType = (cardId: string): 'minion' | 'spell' => {
   const card = gameState.value?.cards[cardId]
   // For now, assume all cards with attack/health are minions
   return (card?.attack !== undefined && card?.health !== undefined) ? 'minion' : 'spell'
 }
 
 onMounted(() => {
-  fetchGameState()
+  fetchGameState().then(() => {
+    if (!error.value) {
+      connectWebSocket()
+    }
+  })
+})
+
+onUnmounted(() => {
+  if (socket.value) {
+    socket.value.close()
+  }
 })
 </script>
 

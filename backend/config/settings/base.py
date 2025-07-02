@@ -44,6 +44,8 @@ THIRD_PARTY_APPS = [
     # Celery
     "django_celery_beat",
     "django_celery_results",
+    # WebSocket support
+    "channels",
 ]
 
 LOCAL_APPS = [
@@ -88,6 +90,17 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
+
+# Django Channels configuration
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [(os.environ.get("REDIS_HOST", "localhost"), 6379)],
+            "prefix": "drawtwo:ws:",
+        },
+    },
+}
 
 # Database
 DATABASES = {

@@ -45,3 +45,18 @@ LOGGING = {
 
 # CORS settings for development
 CORS_ALLOW_ALL_ORIGINS = True
+
+# Redis host configuration for Docker
+import os
+REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
+
+# Update CHANNEL_LAYERS for development
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [(REDIS_HOST, 6379)],
+            "prefix": "drawtwo:ws:",
+        },
+    },
+}

@@ -34,11 +34,11 @@ export interface GameState {
   active: Side
   phase: Phase
   event_queue: Event[]
-  cards: Record<number, CardInPlay>
+  cards: Record<string, CardInPlay>
   heroes: Record<string, HeroInPlay>
-  board: Record<string, number[]>
-  hands: Record<string, number[]>
-  decks: Record<string, number[]>
+  board: Record<string, string[]>
+  hands: Record<string, string[]>
+  decks: Record<string, string[]>
   mana_pool: Record<string, number>
   mana_used: Record<string, number>
   winner: Winner

@@ -5,11 +5,18 @@ from typing import List
 
 from .models import Game
 from .schemas import (
+    Action,
     CardInPlay,
+    DrawEvent,
+    DrawUpdate,
+    Event,
     GameState,
     GameUpdate,
+    ManaUpdate,
     HeroInPlay,
-    Event)
+    PHASE_ORDER,
+    PhaseTransitionAction,
+    RefreshEvent)
 from .tasks import process_player_action
 from apps.core.serializers import serialize_cards_with_traits
 
@@ -38,7 +45,7 @@ class GameService:
 
         for card in cards_a:
             card_id += 1
-            cards_in_play[card_id] = CardInPlay(
+            cards_in_play[str(card_id)] = CardInPlay(
                 card_id=card_id,
                 template_slug=card["slug"],
                 attack=card["attack"],
@@ -46,11 +53,11 @@ class GameService:
                 cost=card["cost"],
                 traits=card["traits"],
             )
-            decks['side_a'].append(card_id)
+            decks['side_a'].append(str(card_id))
 
         for card in cards_b:
             card_id += 1
-            cards_in_play[card_id] = CardInPlay(
+            cards_in_play[str(card_id)] = CardInPlay(
                 card_id=card_id,
                 template_slug=card["slug"],
                 attack=card["attack"],
@@ -58,7 +65,7 @@ class GameService:
                 cost=card["cost"],
                 traits=card["traits"],
             )
-            decks['side_b'].append(card_id)
+            decks['side_b'].append(str(card_id))
 
         # shuffle both decks
         random.shuffle(decks['side_a'])
@@ -100,11 +107,48 @@ class GameService:
 
     @staticmethod
     def submit_action(game_id: int, action: dict):
-        process_player_action.delay(game_id, action)
+        try:
+            game = Game.objects.get(id=game_id)
+        except Game.DoesNotExist:
+            raise ValueError(f"Game with id {game_id} does not exist")
+
+        updates = []
+
+        service = GameService(game)
+        if action['type'] == 'phase_transition':
+            updates = service.process_phase_transition(
+                PhaseTransitionAction.model_validate(action))
+        else:
+            raise ValueError(f"Invalid action: {action['type']}")
+
+        return {
+            "updates": [update.model_dump() for update in updates],
+            "state": game.state,
+        }
 
     def __init__(self, game: Game) -> None:
         self.game = game
         self.game_state = GameState.model_validate(game.state)
+
+    def process_phase_transition(self, action: PhaseTransitionAction) -> None:
+        current_phase = self.game_state.phase
+        target_phase = action.phase
+        # See whether the transition is allowed based on the phase order, target phase
+        # and current phase.
+        if target_phase not in PHASE_ORDER:
+            raise ValueError(f"Invalid phase: {target_phase}")
+        if PHASE_ORDER.index(target_phase) != PHASE_ORDER.index(current_phase) + 1:
+            raise ValueError(
+                f"Invalid phase transition: {current_phase} -> {target_phase}")
+
+        if target_phase == "refresh":
+            self.queue_events([RefreshEvent(player=self.game_state.active)])
+        elif target_phase == "draw":
+            self.queue_events([DrawEvent(player=self.game_state.active)])
+
+        self.game_state.phase = target_phase
+
+        return self.process_events()
 
     def queue_events(self, events: List[Event]) -> None:
         for event in events:
@@ -116,8 +160,13 @@ class GameService:
         events = self.game_state.event_queue
         changes = []
         for event in events:
+
             if event.type == "draw_card":
                 changes.extend(self.draw_card(self.game_state, event.player))
+
+            elif event.type == "refresh":
+                changes.extend(self.refresh(self.game_state, event.player))
+
             else:
                 raise ValueError(f"Invalid event: {event.type}")
 
@@ -127,6 +176,20 @@ class GameService:
 
         return changes
 
+    @staticmethod
+    def refresh(game_state: GameState, side: str) -> List[GameUpdate]:
+        game_state.mana_used[side] = 0
+        game_state.mana_pool[side] = game_state.turn
+        return [
+            ManaUpdate(
+                type="mana",
+                side=side,
+                data={
+                    "mana_pool": game_state.mana_pool[side],
+                    "mana_used": game_state.mana_used[side],
+                },
+            )
+        ]
 
     @staticmethod
     def draw_card(game_state: GameState, side: str) -> List[GameUpdate]:
@@ -145,7 +208,7 @@ class GameService:
         game_state.hands[side].append(card_id)
 
         return [
-            GameUpdate(
+            DrawUpdate(
                 type="draw_card",
                 side=side,
                 data={

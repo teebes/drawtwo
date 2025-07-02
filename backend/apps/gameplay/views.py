@@ -12,7 +12,17 @@ from .schemas import GameState, GameSummary, GameList
 @permission_classes([IsAuthenticated])
 def game_detail(request, game_id):
     game = get_object_or_404(Game, id=game_id)
-    return Response(GameState.model_validate(game.state).model_dump())
+
+    game_data = GameState.model_validate(game.state).model_dump()
+
+    # In addition to the game data, we also have to return who the viewing user
+    # is.
+    if game.side_a.user == request.user:
+        game_data['viewer'] = 'side_a'
+    else:
+        game_data['viewer'] = 'side_b'
+
+    return Response(game_data)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

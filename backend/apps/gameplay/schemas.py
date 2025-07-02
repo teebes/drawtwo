@@ -2,7 +2,18 @@ from typing import Literal, List, Dict
 from pydantic import BaseModel, Field
 
 
+PHASE_ORDER = ['start', 'refresh', 'draw', 'main', 'end']
+
 Phase = Literal['start', 'refresh', 'draw', 'main', 'combat', 'end']
+
+
+class Action(BaseModel):
+    type: str
+
+
+class PhaseTransitionAction(Action):
+    type: str = "phase_transition"
+    phase: Phase
 
 
 class Event(BaseModel):
@@ -10,6 +21,9 @@ class Event(BaseModel):
     player: Literal['side_a', 'side_b']
     data: dict = {}
 
+
+class RefreshEvent(Event):
+    type: str = "refresh"
 
 class DrawEvent(Event):
     type: str = "draw_card"
@@ -45,23 +59,23 @@ class GameState(BaseModel):
         default_factory=lambda: [Event(type="start_turn", player="side_a")]
     )
     # Centralized storage of all cards in the game by their unique ID
-    cards: Dict[int, CardInPlay] = Field(default_factory=dict)
+    cards: Dict[str, CardInPlay] = Field(default_factory=dict)
 
     heroes: Dict[str, HeroInPlay]
 
-    board: Dict[str, List[int]] = Field(
+    board: Dict[str, List[str]] = Field(
         default_factory=lambda: {
             "side_a": [],
             "side_b": [],
         }
     )
-    hands: Dict[str, List[int]] = Field(
+    hands: Dict[str, List[str]] = Field(
         default_factory=lambda: {
             "side_a": [],
             "side_b": [],
         }
     )
-    decks: Dict[str, List[int]] = Field(
+    decks: Dict[str, List[str]] = Field(
         default_factory=lambda: {
             "side_a": [],
             "side_b": [],
@@ -98,5 +112,15 @@ class GameUpdate(BaseModel):
     data: dict
 
 
+class DrawUpdate(GameUpdate):
+    type: str = "draw"
+
+
+class ManaUpdate(GameUpdate):
+    type: str = "mana"
+
+
 class GameUpdates(BaseModel):
+    type: str = "game_updates"
     updates: List[GameUpdate]
+    state: GameState
