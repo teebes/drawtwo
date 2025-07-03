@@ -2,7 +2,13 @@
   <div class="flex items-center">
     <div class="flex space-x-1 max-w-full overflow-x-auto">
       <div v-for="cardId in handCards.slice(0, maxCards)" :key="cardId"
-        class="flex-shrink-0 w-16 h-20 bg-gradient-to-b from-amber-400 to-amber-600 rounded border border-amber-300/50 shadow-sm flex flex-col p-1">
+        @click="handleCardClick(cardId)"
+        :class="[
+          'flex-shrink-0 w-16 h-20 bg-gradient-to-b from-amber-400 to-amber-600 rounded shadow-sm flex flex-col p-1 transition-all duration-200',
+          isPlayable(cardId) ? 'border-2 border-blue-500 cursor-pointer' : 'border border-amber-300/50',
+          selectedCard === cardId ? '-translate-y-6' : '',
+          isPlayable(cardId) && selectedCard !== cardId ? 'hover:-translate-y-1' : ''
+        ]">
 
         <!-- Cost (top-left corner) -->
         <div class="flex justify-between items-start">
@@ -40,17 +46,28 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import type { CardInPlay } from '../../types/game'
 
 interface Props {
   handCards: string[]
   cards: Record<string, CardInPlay>
+  manaPool: number
+  manaUsed: number
+  isMainPhase: boolean
   maxCards?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
   maxCards: 4
 })
+
+const emit = defineEmits<{
+  'card-selected': [cardId: string | null]
+}>()
+
+// Track selected card locally
+const selectedCard = ref<string | null>(null)
 
 // Extract maxCards with default value to avoid undefined issues
 const maxCards = props.maxCards ?? 4
@@ -67,6 +84,30 @@ const getCardName = (cardId: string): string => {
   return card.template_slug
     .replace(/_/g, ' ')
     .replace(/\b\w/g, l => l.toUpperCase())
+}
+
+const isPlayable = (cardId: string): boolean => {
+  if (!props.isMainPhase) return false
+
+  const card = getCard(cardId)
+  if (!card) return false
+
+  // Check if we have enough mana to play this card
+  const availableMana = props.manaPool - props.manaUsed
+  return card.cost <= availableMana
+}
+
+const handleCardClick = (cardId: string) => {
+  if (!isPlayable(cardId)) return
+
+  // Toggle selection
+  if (selectedCard.value === cardId) {
+    selectedCard.value = null
+    emit('card-selected', null)
+  } else {
+    selectedCard.value = cardId
+    emit('card-selected', cardId)
+  }
 }
 </script>
 

@@ -26,8 +26,15 @@
       <div class="flex-none px-4 pt-2">
         <div class="grid grid-cols-3 gap-4 items-center">
           <!-- Left: Hand Cards -->
-          <div class="flex justify-start">
-            <HandCards :hand-cards="gameState.hands.side_b" :cards="gameState.cards" />
+          <div class="flex justify-start pt-6">
+            <HandCards
+              :hand-cards="gameState.hands.side_b"
+              :cards="gameState.cards"
+              :mana-pool="gameState.mana_pool.side_b"
+              :mana-used="gameState.mana_used.side_b"
+              :is-main-phase="false"
+              @card-selected="handleCardSelection"
+            />
           </div>
 
           <!-- Middle: Hero -->
@@ -85,9 +92,17 @@
 
         <div class="grid grid-cols-3 gap-4 items-center">
           <!-- Left: Hand Cards -->
-          <div class="flex justify-start">
-            <HandCards :hand-cards="gameState.hands.side_a" :cards="gameState.cards" />
+          <div class="flex justify-start pt-6">
+            <HandCards
+              :hand-cards="gameState.hands.side_a"
+              :cards="gameState.cards"
+              :mana-pool="gameState.mana_pool.side_a"
+              :mana-used="gameState.mana_used.side_a"
+              :is-main-phase="gameState.phase === 'main' && gameState.active === 'side_a' && viewer === 'side_a'"
+              @card-selected="handleCardSelection"
+            />
           </div>
+
 
           <!-- Middle: Hero -->
           <div class="flex justify-center">
@@ -124,6 +139,9 @@ const gameState = ref<GameState | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 const maxCardsPerSide = ref(6)
+
+// Track selected card
+const selectedCard = ref<string | null>(null)
 
 // WebSocket related
 const socket = ref<WebSocket | null>(null)
@@ -324,6 +342,11 @@ const getCardType = (cardId: string): 'minion' | 'spell' => {
   const card = gameState.value?.cards[cardId]
   // For now, assume all cards with attack/health are minions
   return (card?.attack !== undefined && card?.health !== undefined) ? 'minion' : 'spell'
+}
+
+const handleCardSelection = (cardId: string | null) => {
+  selectedCard.value = cardId
+  console.log('Card selected:', cardId)
 }
 
 onMounted(() => {
