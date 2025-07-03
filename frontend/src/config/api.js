@@ -10,7 +10,20 @@ axios.defaults.baseURL = API_BASE_URL
 // Setup axios interceptor for automatic token refresh
 // Note: This will be initialized after the auth store is available
 let authStore = null
-let isRefreshing = false // Circuit breaker to prevent multiple simultaneous refresh attempts
+let isRefreshing = false
+let failedQueue = []
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error)
+    } else {
+      prom.resolve(token)
+    }
+  })
+
+  failedQueue = []
+}
 
 export const initializeAuthInterceptor = (store) => {
   authStore = store
@@ -23,18 +36,14 @@ export const initializeAuthInterceptor = (store) => {
       // Don't try to refresh for these conditions:
       // 1. Not a 401 error
       // 2. No refresh token available
-      // 3. Already tried refreshing this request
-      // 4. Request is to the refresh endpoint itself (prevent infinite loop!)
-      // 5. Already in the middle of refreshing
+      // 3. Request is to the refresh endpoint itself (prevent infinite loop!)
       if (
         error.response?.status !== 401 ||
         !authStore?.refreshToken ||
-        originalRequest._retry ||
-        originalRequest.url?.includes('/auth/token/refresh/') ||
-        isRefreshing
+        originalRequest.url?.includes('/auth/token/refresh/')
       ) {
-        // If it's a 401 and we can't/won't refresh, clear auth and redirect
-        if (error.response?.status === 401 && authStore) {
+        // If it's a 401 and we can't refresh, clear auth and redirect
+        if (error.response?.status === 401 && authStore && !originalRequest.url?.includes('/auth/token/refresh/')) {
           authStore.clearAuth()
           // Redirect to login (avoid redirecting if already on login page)
           if (window.location.pathname !== '/login') {
@@ -44,6 +53,24 @@ export const initializeAuthInterceptor = (store) => {
         return Promise.reject(error)
       }
 
+      // If we've already retried this request, don't retry again
+      if (originalRequest._retry) {
+        return Promise.reject(error)
+      }
+
+      // If token refresh is already in progress, queue this request
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject })
+        }).then(token => {
+          originalRequest._retry = true
+          originalRequest.headers['Authorization'] = `Bearer ${token}`
+          return axios.request(originalRequest)
+        }).catch(err => {
+          return Promise.reject(err)
+        })
+      }
+
       // Mark this request as already attempted
       originalRequest._retry = true
       isRefreshing = true
@@ -51,19 +78,22 @@ export const initializeAuthInterceptor = (store) => {
       try {
         const refreshed = await authStore.refreshAccessToken()
         if (refreshed) {
+          processQueue(null, authStore.accessToken)
           // Update the authorization header for the original request
           originalRequest.headers['Authorization'] = `Bearer ${authStore.accessToken}`
           // Retry the original request
           return axios.request(originalRequest)
         } else {
+          processQueue(new Error('Token refresh failed'), null)
           // Refresh failed, clear auth and redirect
           authStore.clearAuth()
           if (window.location.pathname !== '/login') {
             window.location.href = '/login'
-      }
-      return Promise.reject(error)
+          }
+          return Promise.reject(error)
         }
       } catch (refreshError) {
+        processQueue(refreshError, null)
         // Refresh failed, clear auth and redirect
         authStore.clearAuth()
         if (window.location.pathname !== '/login') {

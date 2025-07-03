@@ -169,9 +169,9 @@ REST_FRAMEWORK = {
 # JWT Settings
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": False,
     "ALGORITHM": "HS256",
     "SIGNING_KEY": SECRET_KEY,
     "VERIFYING_KEY": None,
@@ -223,11 +223,11 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@drawtwo.com")
 # dj-rest-auth settings
 REST_AUTH = {
     "USE_JWT": True,
-    "JWT_AUTH_COOKIE": "auth",
-    "JWT_AUTH_REFRESH_COOKIE": "refresh",
+    "JWT_AUTH_COOKIE": None,  # Disable cookie-based JWT
+    "JWT_AUTH_REFRESH_COOKIE": None,  # Disable cookie-based refresh
     "JWT_AUTH_SECURE": False,  # Set to True in production with HTTPS
-    "JWT_AUTH_HTTPONLY": True,
-    "JWT_AUTH_SAMESITE": "Lax",
+    "JWT_AUTH_HTTPONLY": False,  # Not using cookies
+    "JWT_AUTH_SAMESITE": None,  # Not using cookies
     "USER_DETAILS_SERIALIZER": "apps.authentication.serializers.UserSerializer",
     "PASSWORD_RESET_CONFIRM_URL": "auth/password/reset/confirm/{uid}/{token}/",
     "REGISTER_SERIALIZER": "apps.authentication.serializers.CustomRegisterSerializer",

@@ -173,9 +173,16 @@ export const useAuthStore = defineStore('auth', {
           refresh: this.refreshToken
         })
 
+        // Update access token
         this.accessToken = response.data.access
         localStorage.setItem('accessToken', response.data.access)
         axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.access}`
+
+        // Update refresh token if a new one is provided (token rotation)
+        if (response.data.refresh) {
+          this.refreshToken = response.data.refresh
+          localStorage.setItem('refreshToken', response.data.refresh)
+        }
 
         return true
       } catch (error) {
