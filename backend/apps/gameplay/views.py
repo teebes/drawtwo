@@ -22,6 +22,8 @@ def game_detail(request, game_id):
     else:
         game_data['viewer'] = 'side_b'
 
+    game_data['is_vs_ai'] = game.is_vs_ai
+
     return Response(game_data)
 
 @api_view(['GET'])

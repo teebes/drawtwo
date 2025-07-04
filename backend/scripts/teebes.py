@@ -43,21 +43,36 @@ def main():
     from apps.gameplay.schemas import DrawEvent
     from apps.gameplay.services import GameService
 
-    events = [
-        DrawEvent(player='side_a'),
-        DrawEvent(player='side_b'),
-        DrawEvent(player='side_a'),
-        DrawEvent(player='side_b'),
-        DrawEvent(player='side_a'),
-        DrawEvent(player='side_b'),
-    ]
 
     game = Game.objects.get(pk=2)
-    game_service = GameService(game)
 
-    changes = game_service.process_events()
+    # reset game
+    state = game.state
 
-    print(changes)
+    state['phase'] = "start"
+    state['turn'] = 1
+    state['active'] = "side_a"
+    state['board']['side_a'] = []
+    state['board']['side_b'] = []
+
+    for i in ["1", "2", "3", "4", "5", "6"]:
+        try:
+            state['decks']['side_a'].remove(i)
+        except ValueError:
+            pass
+
+    for i in ["1", "2", "3", "4", "5", "6"]:
+        try:
+            state['decks']['side_b'].remove(i)
+        except ValueError:
+            pass
+
+    state['hands']['side_a'] = ["1", "3", "5"]
+    state['hands']['side_b'] = ["2", "4", "6"]
+
+    game.state = state
+    game.save()
+
 
     #print(game_service.game_state.event_queue)
 

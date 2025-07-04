@@ -67,11 +67,21 @@
       </div>
 
       <!-- Center Battle Area -->
-      <div class="flex-1 flex items-center justify-center min-h-0" @click.stop>
+      <div class="flex-1 flex items-center justify-center min-h-0 relative" @click.stop>
         <div class="text-center text-white/60">
           <div class="text-lg font-bold">Turn {{ gameState.turn }}</div>
           <div class="text-sm">{{ gameState.phase }} phase</div>
           <div class="text-sm">{{ gameState.active === 'side_a' ? 'Your' : 'Opponent' }} turn</div>
+        </div>
+
+        <!-- End Turn Button -->
+        <div v-if="gameState.phase === 'main' && gameState.active === viewer"
+             class="absolute right-4 top-1/2 transform -translate-y-1/2">
+          <button
+            @click="handleEndTurn"
+            class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors duration-200 shadow-lg">
+            End Turn
+          </button>
         </div>
       </div>
 
@@ -181,6 +191,7 @@ const socket = ref<WebSocket | null>(null)
 const wsStatus = ref<'disconnected' | 'connecting' | 'connected'>('disconnected')
 
 const viewer = ref<'side_a' | 'side_b' | null>(null)
+const isVsAi = ref(false)
 
 // Track sent actions to prevent infinite loops
 const sentActions = ref<Set<string>>(new Set())
@@ -197,7 +208,8 @@ const fetchGameState = async () => {
 
     const data = response.data
     viewer.value = data.viewer
-    gameState.value = data
+    gameState.value = data.state;
+    isVsAi.value = data.is_vs_ai;
 
     // Build card name mapping from the game state
     // In practice, you'd fetch card templates separately
@@ -410,6 +422,16 @@ const handleGameAreaClick = (event: Event) => {
   if (selectedCard.value && event.target === event.currentTarget) {
     selectedCard.value = null
   }
+}
+
+const handleEndTurn = () => {
+  console.log('Ending turn')
+
+  // Send websocket message to end turn (transition to start phase)
+  sendWebSocketMessage({
+    type: 'phase_transition',
+    phase: 'start'
+  })
 }
 
 onMounted(() => {

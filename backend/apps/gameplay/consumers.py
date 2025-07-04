@@ -128,7 +128,11 @@ class GameConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def process_game_action(self, action):
 
-        return GameService.submit_action(self.game_id, action)
+        return GameService.submit_action(
+            game_id=self.game_id,
+            action=action,
+            user_id=self.scope["user"].id,
+        )
 
         game = Game.objects.get(id=self.game_id)
 

@@ -43,4 +43,5 @@ export interface GameState {
   mana_pool: Record<string, number>
   mana_used: Record<string, number>
   winner: Winner
+  is_vs_ai: boolean
 }

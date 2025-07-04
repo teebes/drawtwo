@@ -2,7 +2,7 @@ from typing import Literal, List, Dict, Union, Annotated
 from pydantic import BaseModel, Field, Discriminator
 
 
-PHASE_ORDER = ['start', 'refresh', 'draw', 'main', 'end']
+PHASE_ORDER = ['start', 'refresh', 'draw', 'main',]
 
 Phase = Literal['start', 'refresh', 'draw', 'main', 'combat', 'end']
 
@@ -41,6 +41,10 @@ class PlayEvent(Event):
     side: Literal['side_a', 'side_b']
     card_id: str
     position: int
+
+
+class NewTurnEvent(Event):
+    type: Literal["end_turn"] = "new_turn"
 
 
 class StartTurnEvent(Event):
@@ -131,7 +135,7 @@ class GameList(BaseModel):
 class GameUpdate(BaseModel):
     type: Literal["game_update"] = "game_update"
     side: Literal['side_a', 'side_b']
-    data: dict
+    data: dict = {}
 
 
 class DrawUpdate(GameUpdate):
@@ -146,6 +150,10 @@ class PlayUpdate(GameUpdate):
     type: Literal["play"] = "play"
     card_id: str
     position: int
+
+
+class NewTurnUpdate(GameUpdate):
+    type: Literal["end_turn"] = "new_turn"
 
 
 UpdateType = Annotated[

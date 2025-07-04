@@ -10,6 +10,8 @@ from .schemas import (
     CardInPlay,
     DrawEvent,
     DrawUpdate,
+    NewTurnEvent,
+    NewTurnUpdate,
     Event,
     EventType,
     GameState,
@@ -113,7 +115,7 @@ class GameService:
         return game
 
     @staticmethod
-    def submit_action(game_id: int, action: dict):
+    def submit_action(game_id: int, action: dict, user_id: int):
         try:
             game = Game.objects.get(id=game_id)
         except Game.DoesNotExist:
@@ -146,7 +148,8 @@ class GameService:
         # and current phase.
         if target_phase not in PHASE_ORDER:
             raise ValueError(f"Invalid phase: {target_phase}")
-        if PHASE_ORDER.index(target_phase) != PHASE_ORDER.index(current_phase) + 1:
+        if ((PHASE_ORDER.index(target_phase) != PHASE_ORDER.index(current_phase) + 1)
+            and not (current_phase == "main" and target_phase == "start")):
             raise ValueError(
                 f"Invalid phase transition: {current_phase} -> {target_phase}")
 
@@ -154,6 +157,8 @@ class GameService:
             self.queue_events([RefreshEvent(side=self.game_state.active)])
         elif target_phase == "draw":
             self.queue_events([DrawEvent(side=self.game_state.active)])
+        elif target_phase == "start":
+            self.queue_events([NewTurnEvent(side=self.game_state.active)])
 
         self.game_state.phase = target_phase
 
@@ -193,6 +198,12 @@ class GameService:
                     side=event.side,
                     card_id=event.card_id,
                     position=event.position))
+
+            elif event.type == "new_turn":
+                changes.extend(self.new_turn(
+                    game_state=self.game_state,
+                    side=event.side
+                ))
 
             else:
                 raise ValueError(f"Invalid event: {event.type}")
@@ -238,7 +249,7 @@ class GameService:
 
         return [
             DrawUpdate(
-                type="draw_card",
+                type="draw",
                 side=side,
                 data={
                     "card": game_state.cards[card_id].model_dump(),
@@ -260,3 +271,12 @@ class GameService:
                 data={},
             )
         ]
+
+    @staticmethod
+    def new_turn(game_state: GameState, side: str) -> List[UpdateType]:
+        if game_state.active == "side_b":
+            game_state.active = "side_a"
+            game_state.turn += 1
+        else:
+            game_state.active = "side_b"
+        return [NewTurnUpdate(side=side)]
