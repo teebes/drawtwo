@@ -12,7 +12,7 @@
     </div>
 
     <!-- Game Board -->
-    <div v-else-if="gameState" class="flex-1 flex flex-col justify-between min-h-0 max-w-7xl mx-auto w-full">
+    <div v-else-if="gameState" class="flex-1 flex flex-col justify-between min-h-0 max-w-7xl mx-auto w-full" @click="handleGameAreaClick">
       <!-- WebSocket Connection Status -->
       <div v-if="wsStatus !== 'connected'" class="absolute top-2 right-2 text-sm px-2 py-1 rounded"
         :class="{
@@ -26,7 +26,7 @@
       <div class="flex-none px-4 pt-2">
         <div class="grid grid-cols-3 gap-4 items-center">
           <!-- Left: Hand Cards -->
-          <div class="flex justify-start pt-6">
+          <div class="flex justify-start" @click.stop>
             <HandCards
               :hand-cards="gameState.hands.side_b"
               :cards="gameState.cards"
@@ -38,12 +38,12 @@
           </div>
 
           <!-- Middle: Hero -->
-          <div class="flex justify-center">
+          <div class="flex justify-center" @click.stop>
             <GameHero :hero="gameState.heroes.side_b" />
           </div>
 
           <!-- Right: Mana + Deck -->
-          <div class="flex justify-end space-x-2">
+          <div class="flex justify-end space-x-2" @click.stop>
             <ManaIndicator
               :mana-pool="gameState.mana_pool.side_b"
               :mana-used="gameState.mana_used.side_b"
@@ -53,7 +53,7 @@
         </div>
 
         <!-- Side B Board (cards) -->
-        <div class="pt-3 pb-2">
+        <div class="pt-3 pb-2" @click.stop>
           <div class="flex justify-center">
             <div class="flex space-x-2 max-w-full overflow-x-auto">
               <BoardCard v-for="cardId in gameState.board.side_b.slice(0, maxCardsPerSide)" :key="cardId"
@@ -67,7 +67,7 @@
       </div>
 
       <!-- Center Battle Area -->
-      <div class="flex-1 flex items-center justify-center min-h-0">
+      <div class="flex-1 flex items-center justify-center min-h-0" @click.stop>
         <div class="text-center text-white/60">
           <div class="text-lg font-bold">Turn {{ gameState.turn }}</div>
           <div class="text-sm">{{ gameState.phase }} phase</div>
@@ -78,21 +78,53 @@
       <!-- Side A (Bottom) -->
       <div class="flex-none px-4 pb-2">
         <!-- Side A Board (cards) -->
-        <div class="pt-2 pb-3">
+        <div class="pt-2 pb-3" @click="handleBoardClick">
           <div class="flex justify-center">
             <div class="flex space-x-2 max-w-full overflow-x-auto">
-              <BoardCard v-for="cardId in gameState.board.side_a.slice(0, maxCardsPerSide)" :key="cardId"
-                :card="gameState.cards[cardId]" :name="getCardName(cardId)" :card-type="getCardType(cardId)" />
-              <div v-if="gameState.board.side_a.length === 0" class="text-gray-400 text-sm py-4">
-                No cards on board
-              </div>
+              <!-- Show placement zones when card is selected and it's our side -->
+              <template v-if="selectedCard && viewer === 'side_a'">
+                <!-- Place at beginning if there are cards -->
+                <PlacementZone v-if="gameState.board.side_a.length > 0"
+                  :position="0"
+                  @placement-clicked="handleCardPlacement"
+                />
+
+                <!-- Interleave cards with placement zones -->
+                <template v-for="(cardId, index) in gameState.board.side_a.slice(0, maxCardsPerSide)" :key="`card-${cardId}`">
+                  <BoardCard
+                    :card="gameState.cards[cardId]"
+                    :name="getCardName(cardId)"
+                    :card-type="getCardType(cardId)"
+                    @click.stop
+                  />
+                  <PlacementZone
+                    :position="index + 1"
+                    @placement-clicked="handleCardPlacement"
+                  />
+                </template>
+
+                <!-- Place in center if no cards -->
+                <PlacementZone v-if="gameState.board.side_a.length === 0"
+                  :position="0"
+                  @placement-clicked="handleCardPlacement"
+                />
+              </template>
+
+              <!-- Normal view when no card selected -->
+              <template v-else>
+                <BoardCard v-for="cardId in gameState.board.side_a.slice(0, maxCardsPerSide)" :key="cardId"
+                  :card="gameState.cards[cardId]" :name="getCardName(cardId)" :card-type="getCardType(cardId)" />
+                <div v-if="gameState.board.side_a.length === 0" class="text-gray-400 text-sm py-4">
+                  No cards on board
+                </div>
+              </template>
             </div>
           </div>
         </div>
 
         <div class="grid grid-cols-3 gap-4 items-center">
           <!-- Left: Hand Cards -->
-          <div class="flex justify-start pt-6">
+          <div class="flex justify-start" @click.stop>
             <HandCards
               :hand-cards="gameState.hands.side_a"
               :cards="gameState.cards"
@@ -105,12 +137,12 @@
 
 
           <!-- Middle: Hero -->
-          <div class="flex justify-center">
+          <div class="flex justify-center" @click.stop>
             <GameHero :hero="gameState.heroes.side_a" />
           </div>
 
           <!-- Right: Mana + Deck -->
-          <div class="flex justify-end space-x-2">
+          <div class="flex justify-end space-x-2" @click.stop>
             <ManaIndicator
               :mana-pool="gameState.mana_pool.side_a"
               :mana-used="gameState.mana_used.side_a"
@@ -133,6 +165,7 @@ import BoardCard from '../components/game/BoardCard.vue'
 import DeckIndicator from '../components/game/DeckIndicator.vue'
 import ManaIndicator from '../components/game/ManaIndicator.vue'
 import HandCards from '../components/game/HandCards.vue'
+import PlacementZone from '../components/game/PlacementZone.vue'
 
 const route = useRoute()
 const gameState = ref<GameState | null>(null)
@@ -347,6 +380,36 @@ const getCardType = (cardId: string): 'minion' | 'spell' => {
 const handleCardSelection = (cardId: string | null) => {
   selectedCard.value = cardId
   console.log('Card selected:', cardId)
+}
+
+const handleCardPlacement = (position: number) => {
+  if (!selectedCard.value || viewer.value !== 'side_a') return
+
+  console.log('Playing card', selectedCard.value, 'at position', position)
+
+  // Send websocket message to play the card
+  sendWebSocketMessage({
+    type: 'play',
+    card_id: selectedCard.value,
+    position: position
+  })
+
+  // Clear selection
+  selectedCard.value = null
+}
+
+const handleBoardClick = (event: Event) => {
+  // If clicking outside of a placement zone, deselect the card
+  if (selectedCard.value && event.target === event.currentTarget) {
+    selectedCard.value = null
+  }
+}
+
+const handleGameAreaClick = (event: Event) => {
+  // Deselect card when clicking in empty areas (but let child components handle their own clicks)
+  if (selectedCard.value && event.target === event.currentTarget) {
+    selectedCard.value = null
+  }
 }
 
 onMounted(() => {

@@ -20,6 +20,7 @@ export interface CardInPlay {
   health: number
   cost: number
   traits: Trait[]
+  exhausted: boolean
 }
 
 export interface HeroInPlay {

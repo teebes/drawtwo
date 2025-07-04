@@ -1,3 +1,4 @@
+from os import SCHED_IDLE
 import random
 
 from django.db import transaction
@@ -10,13 +11,19 @@ from .schemas import (
     DrawEvent,
     DrawUpdate,
     Event,
+    EventType,
     GameState,
     GameUpdate,
     ManaUpdate,
     HeroInPlay,
     PHASE_ORDER,
     PhaseTransitionAction,
-    RefreshEvent)
+    PlayAction,
+    PlayEvent,
+    PlayUpdate,
+    RefreshEvent,
+    StartTurnEvent,
+    UpdateType)
 from .tasks import process_player_action
 from apps.core.serializers import serialize_cards_with_traits
 
@@ -118,6 +125,8 @@ class GameService:
         if action['type'] == 'phase_transition':
             updates = service.process_phase_transition(
                 PhaseTransitionAction.model_validate(action))
+        elif action['type'] == 'play':
+            updates = service.process_action(PlayAction.model_validate(action))
         else:
             raise ValueError(f"Invalid action: {action['type']}")
 
@@ -130,7 +139,7 @@ class GameService:
         self.game = game
         self.game_state = GameState.model_validate(game.state)
 
-    def process_phase_transition(self, action: PhaseTransitionAction) -> None:
+    def process_phase_transition(self, action: PhaseTransitionAction) -> List[UpdateType]:
         current_phase = self.game_state.phase
         target_phase = action.phase
         # See whether the transition is allowed based on the phase order, target phase
@@ -142,30 +151,48 @@ class GameService:
                 f"Invalid phase transition: {current_phase} -> {target_phase}")
 
         if target_phase == "refresh":
-            self.queue_events([RefreshEvent(player=self.game_state.active)])
+            self.queue_events([RefreshEvent(side=self.game_state.active)])
         elif target_phase == "draw":
-            self.queue_events([DrawEvent(player=self.game_state.active)])
+            self.queue_events([DrawEvent(side=self.game_state.active)])
 
         self.game_state.phase = target_phase
 
         return self.process_events()
 
-    def queue_events(self, events: List[Event]) -> None:
+    def process_action(self, action: PlayAction) -> List[UpdateType]:
+        if action.type == "play":
+            self.queue_events([PlayEvent(
+                side=self.game_state.active,
+                card_id=action.card_id,
+                position=action.position)])
+        else:
+            raise ValueError(f"Invalid action: {action.type}")
+
+        return self.process_events()
+
+    def queue_events(self, events: List[EventType]) -> None:
         for event in events:
             self.game_state.event_queue.append(event)
         self.game.state = self.game_state.model_dump()
         self.game.save()
 
-    def process_events(self) -> List[GameUpdate]:
+    def process_events(self) -> List[UpdateType]:
         events = self.game_state.event_queue
         changes = []
         for event in events:
 
             if event.type == "draw_card":
-                changes.extend(self.draw_card(self.game_state, event.player))
+                changes.extend(self.draw_card(self.game_state, event.side))
 
             elif event.type == "refresh":
-                changes.extend(self.refresh(self.game_state, event.player))
+                changes.extend(self.refresh(self.game_state, event.side))
+
+            elif event.type == "play":
+                changes.extend(self.play_card(
+                    game_state=self.game_state,
+                    side=event.side,
+                    card_id=event.card_id,
+                    position=event.position))
 
             else:
                 raise ValueError(f"Invalid event: {event.type}")
@@ -177,9 +204,11 @@ class GameService:
         return changes
 
     @staticmethod
-    def refresh(game_state: GameState, side: str) -> List[GameUpdate]:
+    def refresh(game_state: GameState, side: str) -> List[UpdateType]:
         game_state.mana_used[side] = 0
         game_state.mana_pool[side] = game_state.turn
+        for card_on_board in game_state.board[side]:
+            game_state.cards[card_on_board].exhausted = False
         return [
             ManaUpdate(
                 type="mana",
@@ -192,7 +221,7 @@ class GameService:
         ]
 
     @staticmethod
-    def draw_card(game_state: GameState, side: str) -> List[GameUpdate]:
+    def draw_card(game_state: GameState, side: str) -> List[UpdateType]:
         try:
             deck = game_state.decks[side]
         except KeyError:
@@ -217,4 +246,17 @@ class GameService:
             )
         ]
 
-    # play_card
+    @staticmethod
+    def play_card(game_state: GameState, side: str, card_id: str, position: int):
+        game_state.hands[side].remove(card_id)
+        game_state.board[side].insert(position, card_id)
+        game_state.mana_used[side] += game_state.cards[card_id].cost
+        return [
+            PlayUpdate(
+                type="play",
+                side=side,
+                card_id=card_id,
+                position=position,
+                data={},
+            )
+        ]

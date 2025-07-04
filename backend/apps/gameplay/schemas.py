@@ -1,5 +1,5 @@
-from typing import Literal, List, Dict
-from pydantic import BaseModel, Field
+from typing import Literal, List, Dict, Union, Annotated
+from pydantic import BaseModel, Field, Discriminator
 
 
 PHASE_ORDER = ['start', 'refresh', 'draw', 'main', 'end']
@@ -16,17 +16,35 @@ class PhaseTransitionAction(Action):
     phase: Phase
 
 
+class PlayAction(Action):
+    type: str = "play"
+    card_id: str
+    position: int
+
+
 class Event(BaseModel):
-    type: str
-    player: Literal['side_a', 'side_b']
+    type: Literal["event"] = "event"
+    side: Literal['side_a', 'side_b']
     data: dict = {}
 
 
 class RefreshEvent(Event):
-    type: str = "refresh"
+    type: Literal["refresh"] = "refresh"
+
 
 class DrawEvent(Event):
-    type: str = "draw_card"
+    type: Literal["draw_card"] = "draw_card"
+
+
+class PlayEvent(Event):
+    type: Literal["play"] = "play"
+    side: Literal['side_a', 'side_b']
+    card_id: str
+    position: int
+
+
+class StartTurnEvent(Event):
+    type: Literal["start_turn"] = "start_turn"
 
 
 class Trait(BaseModel):
@@ -42,6 +60,7 @@ class CardInPlay(BaseModel):
     health: int
     cost: int
     traits: List[Trait] = Field(default_factory=list)
+    exhausted: bool = True
 
 
 class HeroInPlay(BaseModel):
@@ -51,13 +70,16 @@ class HeroInPlay(BaseModel):
     name: str
 
 
+EventType = Annotated[
+    Union[RefreshEvent, DrawEvent, PlayEvent, StartTurnEvent, Event],
+    Discriminator('type')
+]
+
 class GameState(BaseModel):
     turn: int = 1
     active: Literal["side_a", "side_b"] = "side_a"
     phase: Phase = "start"
-    event_queue: List[Event] = Field(
-        default_factory=lambda: [Event(type="start_turn", player="side_a")]
-    )
+    event_queue: List[EventType] = Field(default_factory=list)
     # Centralized storage of all cards in the game by their unique ID
     cards: Dict[str, CardInPlay] = Field(default_factory=dict)
 
@@ -107,20 +129,32 @@ class GameList(BaseModel):
 
 
 class GameUpdate(BaseModel):
-    type: str
+    type: Literal["game_update"] = "game_update"
     side: Literal['side_a', 'side_b']
     data: dict
 
 
 class DrawUpdate(GameUpdate):
-    type: str = "draw"
+    type: Literal["draw"] = "draw"
 
 
 class ManaUpdate(GameUpdate):
-    type: str = "mana"
+    type: Literal["mana"] = "mana"
+
+
+class PlayUpdate(GameUpdate):
+    type: Literal["play"] = "play"
+    card_id: str
+    position: int
+
+
+UpdateType = Annotated[
+    Union[DrawUpdate, ManaUpdate, PlayUpdate, GameUpdate],
+    Discriminator('type')
+]
 
 
 class GameUpdates(BaseModel):
-    type: str = "game_updates"
-    updates: List[GameUpdate]
+    type: Literal["game_updates"] = "game_updates"
+    updates: List[UpdateType]
     state: GameState

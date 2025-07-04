@@ -92,6 +92,9 @@ const isPlayable = (cardId: string): boolean => {
   const card = getCard(cardId)
   if (!card) return false
 
+  // Cards in hand shouldn't be exhausted, but check just in case
+  if (card.exhausted) return false
+
   // Check if we have enough mana to play this card
   const availableMana = props.manaPool - props.manaUsed
   return card.cost <= availableMana
