@@ -52,6 +52,12 @@ def main():
     state['phase'] = "start"
     state['turn'] = 1
     state['active'] = "side_a"
+
+    for card_id in state['board']['side_a']:
+        state['decks']['side_a'].append(card_id)
+    for card_id in state['board']['side_b']:
+        state['decks']['side_b'].append(card_id)
+
     state['board']['side_a'] = []
     state['board']['side_b'] = []
 

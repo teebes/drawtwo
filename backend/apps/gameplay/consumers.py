@@ -131,7 +131,6 @@ class GameConsumer(AsyncWebsocketConsumer):
         return GameService.submit_action(
             game_id=self.game_id,
             action=action,
-            user_id=self.scope["user"].id,
         )
 
         game = Game.objects.get(id=self.game_id)

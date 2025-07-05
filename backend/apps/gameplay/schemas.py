@@ -58,7 +58,7 @@ class Trait(BaseModel):
 
 
 class CardInPlay(BaseModel):
-    card_id: int # Interal card ID for that game
+    card_id: str # Interal card ID for that game
     template_slug: str # ID of the card template
     attack: int
     health: int

@@ -271,10 +271,10 @@ const handleWebSocketMessage = (data: any) => {
     return;
   }
 
-  if (sent.value) {
-    console.log("already sent, skipping");
-    return;
-  }
+  // if (sent.value) {
+  //   console.log("already sent, skipping");
+  //   return;
+  // }
 
   console.log("game updates!")
 

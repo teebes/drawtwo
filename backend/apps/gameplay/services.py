@@ -26,7 +26,7 @@ from .schemas import (
     RefreshEvent,
     StartTurnEvent,
     UpdateType)
-from .tasks import process_player_action
+from .tasks import process_ai_action
 from apps.core.serializers import serialize_cards_with_traits
 
 
@@ -115,7 +115,7 @@ class GameService:
         return game
 
     @staticmethod
-    def submit_action(game_id: int, action: dict, user_id: int):
+    def submit_action(game_id: int, action: dict):
         try:
             game = Game.objects.get(id=game_id)
         except Game.DoesNotExist:
@@ -132,9 +132,15 @@ class GameService:
         else:
             raise ValueError(f"Invalid action: {action['type']}")
 
+        if (service.game.state['phase'] == "start"
+            and
+            getattr(service.game, service.game.state['active']).is_ai_deck):
+            # Queue AI process
+            process_ai_action.delay(game_id)
+
         return {
             "updates": [update.model_dump() for update in updates],
-            "state": game.state,
+            "state": service.game.state,
         }
 
     def __init__(self, game: Game) -> None:
