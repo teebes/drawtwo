@@ -1,32 +1,20 @@
-from os import SCHED_IDLE
 import random
 
 from django.db import transaction
-from typing import List
+from pydantic import TypeAdapter
 
 from .models import Game
 from .schemas import (
-    Action,
     CardInPlay,
-    DrawEvent,
-    DrawUpdate,
-    NewTurnEvent,
-    NewTurnUpdate,
-    Event,
-    EventType,
+    EndTurnAction,
+    EndTurnEvent,
+    GameAction,
     GameState,
-    GameUpdate,
-    ManaUpdate,
     HeroInPlay,
-    PHASE_ORDER,
-    PhaseTransitionAction,
-    PlayAction,
-    PlayEvent,
-    PlayUpdate,
-    RefreshEvent,
-    StartTurnEvent,
-    UpdateType)
-from .tasks import process_ai_action
+    PlayCardAction,
+    PlayCardEvent)
+
+from .tasks import advance_game
 from apps.core.serializers import serialize_cards_with_traits
 
 
@@ -55,7 +43,7 @@ class GameService:
         for card in cards_a:
             card_id += 1
             cards_in_play[str(card_id)] = CardInPlay(
-                card_id=card_id,
+                card_id=str(card_id),
                 template_slug=card["slug"],
                 attack=card["attack"],
                 health=card["health"],
@@ -67,7 +55,7 @@ class GameService:
         for card in cards_b:
             card_id += 1
             cards_in_play[str(card_id)] = CardInPlay(
-                card_id=card_id,
+                card_id=str(card_id),
                 template_slug=card["slug"],
                 attack=card["attack"],
                 health=card["health"],
@@ -121,31 +109,70 @@ class GameService:
         except Game.DoesNotExist:
             raise ValueError(f"Game with id {game_id} does not exist")
 
-        updates = []
+        game_state = GameState.model_validate(game.state)
 
-        service = GameService(game)
-        if action['type'] == 'phase_transition':
-            updates = service.process_phase_transition(
-                PhaseTransitionAction.model_validate(action))
-        elif action['type'] == 'play':
-            updates = service.process_action(PlayAction.model_validate(action))
+        if game_state.phase != "main": return
+
+        #game_action = GameAction.model_validate(action)
+        game_action = TypeAdapter(GameAction).validate_python(action)
+
+        if isinstance(game_action, PlayCardAction):
+            game_state.event_queue.append(PlayCardEvent(
+                side=game_state.active,
+                card_id=game_action.card_id,
+                position=game_action.position,
+            ))
+        elif isinstance(game_action, EndTurnAction):
+            game_state.event_queue.append(EndTurnEvent(
+                side=game_state.active,
+            ))
         else:
-            raise ValueError(f"Invalid action: {action['type']}")
+            raise ValueError(f"Invalid action: {game_action}")
 
-        if (service.game.state['phase'] == "start"
-            and
-            getattr(service.game, service.game.state['active']).is_ai_deck):
-            # Queue AI process
-            process_ai_action.delay(game_id)
+        game.state = game_state.model_dump()
+        game.save(update_fields=["state"])
+        advance_game.apply_async(args=[game_id], countdown=2)
 
-        return {
-            "updates": [update.model_dump() for update in updates],
-            "state": service.game.state,
-        }
-
+    """
     def __init__(self, game: Game) -> None:
         self.game = game
         self.game_state = GameState.model_validate(game.state)
+
+    def process_action(self, action: GameAction) -> List[UpdateType]:
+        if action.type == "play_card":
+            return self.play_card(
+                game_state=self.game_state,
+                side=action.side,
+                card_id=action.card_id,
+                position=action.position)
+
+
+        return []
+
+    def determine_ai_action(self) -> GameAction | None:
+        return None
+
+    def has_move(self):
+        # Returns True if the currently active side has a valid move
+        # - could be playing a card from the hand to the board
+        # - could be attacking with a card
+        active_side = self.game_state.active
+        mana_pool = self.game_state.mana_pool[active_side]
+        mana_used = self.game_state.mana_used[active_side]
+        mana_available = mana_pool - mana_used
+        if mana_available <= 0:
+            return False
+
+        cards_in_hand = [
+            self.game_state.cards[card_id]
+            for card_id in self.game_state.hands[active_side]
+        ]
+        for card in cards_in_hand:
+            if card.cost <= mana_available:
+                return True
+
+        return False
+
 
     def process_phase_transition(self, action: PhaseTransitionAction) -> List[UpdateType]:
         current_phase = self.game_state.phase
@@ -170,7 +197,7 @@ class GameService:
 
         return self.process_events()
 
-    def process_action(self, action: PlayAction) -> List[UpdateType]:
+    def _process_action(self, action: PlayAction) -> List[UpdateType]:
         if action.type == "play":
             self.queue_events([PlayEvent(
                 side=self.game_state.active,
@@ -219,6 +246,8 @@ class GameService:
         self.game.save()
 
         return changes
+
+    # Engine components below?
 
     @staticmethod
     def refresh(game_state: GameState, side: str) -> List[UpdateType]:
@@ -286,3 +315,4 @@ class GameService:
         else:
             game_state.active = "side_b"
         return [NewTurnUpdate(side=side)]
+        """

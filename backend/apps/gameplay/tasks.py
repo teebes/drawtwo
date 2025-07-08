@@ -1,10 +1,72 @@
 from celery import shared_task
-from django.db import transaction
+from django.db import transaction, DatabaseError
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
 from .models import Game
-from .schemas import GameState, GameUpdates
+from .schemas import (
+    GameState,
+    PlayCardEvent,
+    ResolvedEvent,
+    EndTurnEvent)
+
+ADVANCE_GAME_DELAY = 2
+
+@shared_task
+def advance_game(game_id: int):
+    from .engine import resolve_event, determine_ai_move
+    from .services import GameService
+
+    with transaction.atomic():
+        try:
+            game = (Game.objects
+                        .select_for_update(nowait=True)
+                        .get(id=game_id))
+        except DatabaseError:
+            print('DB Lock, skipping')
+            return
+
+        game_state = GameState.model_validate(game.state)
+
+        print("Advancing game at state %s for %s " % (
+            game_state.phase, game_state.active))
+
+        if len(game_state.event_queue) > 0:
+            print('Event queue, resolving')
+
+            resolved_event: ResolvedEvent = resolve_event(state=game_state)
+            new_state = resolved_event.state
+            game.state = new_state.model_dump()
+            game.save(update_fields=["state"])
+
+            _send_game_updates_to_clients(
+                game.id,
+                new_state.model_dump(),
+                [ update.model_dump() for update in resolved_event.updates ])
+            advance_game.apply_async(args=[game_id], countdown=ADVANCE_GAME_DELAY)
+            return
+
+        if game_state.phase != "main":
+            return
+
+        active_side = game_state.active
+        active_deck = getattr(game, active_side)
+        if not active_deck.is_ai_deck:
+            return
+
+        # If we're here, we're in the main phase and it's an AI's turn.
+        # Determine which move the AI is making next.
+        event = determine_ai_move(game_state)
+        game_state.event_queue.append(event)
+        game.state = game_state.model_dump()
+        game.save(update_fields=["state"])
+
+        _send_game_updates_to_clients(
+            game.id,
+            game_state.model_dump(),
+            [])
+        advance_game.apply_async(args=[game_id], countdown=ADVANCE_GAME_DELAY)
+
 
 @shared_task
 def process_player_action(game_id: int, action: dict):

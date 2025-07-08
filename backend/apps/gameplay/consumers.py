@@ -3,7 +3,6 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
 from .models import Game
-from .engine import apply_action
 from .schemas import GameState, GameUpdates
 from .services import GameService
 
@@ -63,14 +62,14 @@ class GameConsumer(AsyncWebsocketConsumer):
 
         result = await self.process_game_action(data)
 
-        await self.channel_layer.group_send(
-            self.game_group_name,
-            {
-                'type': 'game_updates',
-                'updates': result['updates'],
-                'state': result['state']
-            }
-        )
+        # await self.channel_layer.group_send(
+        #     self.game_group_name,
+        #     {
+        #         'type': 'game_updates',
+        #         'updates': result['updates'],
+        #         'state': result['state']
+        #     }
+        # )
 
         return
 

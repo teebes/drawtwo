@@ -266,6 +266,9 @@ const connectWebSocket = () => {
 const handleWebSocketMessage = (data: any) => {
   console.log('WebSocket message:', data)
 
+  gameState.value = data.state;
+  return;
+
   if (data.type !== "game_updates") {
     console.log("not a game update, skipping message.");
     return;
@@ -278,7 +281,7 @@ const handleWebSocketMessage = (data: any) => {
 
   console.log("game updates!")
 
-  gameState.value = data.state;
+
 
   console.log("viewer:", viewer.value)
   console.log("side:", data.state.active)
@@ -401,7 +404,7 @@ const handleCardPlacement = (position: number) => {
 
   // Send websocket message to play the card
   sendWebSocketMessage({
-    type: 'play',
+    type: 'play_card_action',
     card_id: selectedCard.value,
     position: position
   })
@@ -429,8 +432,7 @@ const handleEndTurn = () => {
 
   // Send websocket message to end turn (transition to start phase)
   sendWebSocketMessage({
-    type: 'phase_transition',
-    phase: 'start'
+    type: 'end_turn_action',
   })
 }
 

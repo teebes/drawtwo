@@ -7,48 +7,75 @@ PHASE_ORDER = ['start', 'refresh', 'draw', 'main',]
 Phase = Literal['start', 'refresh', 'draw', 'main', 'combat', 'end']
 
 
-class Action(BaseModel):
+class ActionBase(BaseModel):
     type: str
 
 
-class PhaseTransitionAction(Action):
-    type: str = "phase_transition"
-    phase: Phase
-
-
-class PlayAction(Action):
-    type: str = "play"
+class PlayCardAction(ActionBase):
+    type: Literal["play_card_action"] = "play_card_action"
     card_id: str
     position: int
 
 
-class Event(BaseModel):
-    type: Literal["event"] = "event"
+class UseCardAction(ActionBase):
+    type: Literal["use_card_action"] = "use_card_action"
+    card_id: str
+
+
+class EndTurnAction(ActionBase):
+    type: Literal["end_turn_action"] = "end_turn_action"
+
+
+GameAction = Annotated[
+    Union[PlayCardAction, UseCardAction, EndTurnAction],
+    Discriminator('type')]
+
+
+# ==== Events ====
+
+class EventBase(BaseModel):
+    type: str
     side: Literal['side_a', 'side_b']
-    data: dict = {}
 
 
-class RefreshEvent(Event):
-    type: Literal["refresh"] = "refresh"
+class RefreshPhaseEvent(EventBase):
+    type: Literal["refresh_phase_event"] = "refresh_phase_event"
 
 
-class DrawEvent(Event):
-    type: Literal["draw_card"] = "draw_card"
+class DrawPhaseEvent(EventBase):
+    type: Literal["draw_phase_event"] = "draw_phase_event"
 
 
-class PlayEvent(Event):
-    type: Literal["play"] = "play"
-    side: Literal['side_a', 'side_b']
+class MainPhaseEvent(EventBase):
+    type: Literal["main_phase_event"] = "main_phase_event"
+
+
+class EndTurnEvent(EventBase):
+    type: Literal["end_turn_event"] = "end_turn_event"
+
+
+class PlayCardEvent(EventBase):
+    type: Literal["play_card_event"] = "play_card_event"
     card_id: str
     position: int
 
 
-class NewTurnEvent(Event):
+class NewTurnEvent(EventBase):
     type: Literal["end_turn"] = "new_turn"
 
 
-class StartTurnEvent(Event):
-    type: Literal["start_turn"] = "start_turn"
+GameEvent = Annotated[
+    Union[
+        RefreshPhaseEvent,
+        DrawPhaseEvent,
+        MainPhaseEvent,
+        EndTurnEvent,
+        PlayCardEvent],
+    Discriminator('type')
+]
+
+
+# ==== Game State ====
 
 
 class Trait(BaseModel):
@@ -74,16 +101,11 @@ class HeroInPlay(BaseModel):
     name: str
 
 
-EventType = Annotated[
-    Union[RefreshEvent, DrawEvent, PlayEvent, StartTurnEvent, Event],
-    Discriminator('type')
-]
-
 class GameState(BaseModel):
     turn: int = 1
     active: Literal["side_a", "side_b"] = "side_a"
     phase: Phase = "start"
-    event_queue: List[EventType] = Field(default_factory=list)
+    event_queue: List[GameEvent] = Field(default_factory=list)
     # Centralized storage of all cards in the game by their unique ID
     cards: Dict[str, CardInPlay] = Field(default_factory=dict)
 
@@ -132,37 +154,55 @@ class GameList(BaseModel):
     games: List[GameSummary]
 
 
-class GameUpdate(BaseModel):
+# ==== Updates ====
+
+
+class UpdateBase(BaseModel):
     type: Literal["game_update"] = "game_update"
     side: Literal['side_a', 'side_b']
-    data: dict = {}
 
 
-class DrawUpdate(GameUpdate):
-    type: Literal["draw"] = "draw"
+class RefreshPhaseUpdate(UpdateBase):
+    type: Literal["refresh_phase_update"] = "refresh_phase_update"
 
 
-class ManaUpdate(GameUpdate):
-    type: Literal["mana"] = "mana"
+class DrawPhaseUpdate(UpdateBase):
+    type: Literal["draw_phase_update"] = "draw_phase_update"
 
 
-class PlayUpdate(GameUpdate):
-    type: Literal["play"] = "play"
+class MainPhaseUpdate(UpdateBase):
+    type: Literal["main_phase_update"] = "main_phase_update"
+
+
+class EndTurnUpdate(UpdateBase):
+    type: Literal["end_turn_update"] = "end_turn_update"
+
+
+class PlayCardUpdate(UpdateBase):
+    type: Literal["play_card_update"] = "play_card_update"
     card_id: str
     position: int
 
 
-class NewTurnUpdate(GameUpdate):
-    type: Literal["end_turn"] = "new_turn"
-
-
-UpdateType = Annotated[
-    Union[DrawUpdate, ManaUpdate, PlayUpdate, GameUpdate],
+GameUpdate = Annotated[
+    Union[
+        DrawPhaseUpdate,
+        EndTurnUpdate,
+        MainPhaseUpdate,
+        RefreshPhaseUpdate,
+        PlayCardUpdate,
+        ],
     Discriminator('type')
 ]
 
 
 class GameUpdates(BaseModel):
     type: Literal["game_updates"] = "game_updates"
-    updates: List[UpdateType]
+    updates: List[GameUpdate]
     state: GameState
+
+
+class ResolvedEvent(BaseModel):
+    state: GameState
+    updates: list[GameUpdate]
+    events: list[GameEvent]

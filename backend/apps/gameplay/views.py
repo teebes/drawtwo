@@ -50,3 +50,16 @@ def current_games(request):
             ))
 
     return Response(GameList(games=game_summaries).model_dump())
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def advance_game(request, game_id):
+    game = get_object_or_404(Game, id=game_id)
+
+    if ((game.side_a.user == request.user or game.side_b.user == request.user)
+         and game.state['phase'] == 'main'):
+        # If an actual player is in a 'main' phase, we can't advance anything
+        # because the user has to take an action (either play something, attack
+        # something, or end their turn).
+        return Response(status=400)

@@ -37,16 +37,112 @@ def main():
 
     This template includes several common patterns you can use or remove as needed.
     """
+    import random
     from apps.builder.models import CardTemplate, AIPlayer, HeroTemplate
     from apps.collection.models import Deck, DeckCard
     from apps.gameplay.models import Game
-    from apps.gameplay.schemas import DrawEvent
+    from apps.gameplay.schemas import (
+        CardInPlay,
+        EndTurnAction,
+        EndTurnEvent,
+        GameAction,
+        GameState,
+        HeroInPlay,
+        PlayCardAction,
+        PlayCardEvent,
+        RefreshPhaseEvent)
     from apps.gameplay.services import GameService
+    from apps.gameplay.tasks import advance_game
+    from apps.core.serializers import serialize_cards_with_traits
 
+    human_deck = Deck.objects.get(pk=1)
+    ai_deck = Deck.objects.get(pk=2)
+
+    cards_a = serialize_cards_with_traits(human_deck.cards.all())
+    cards_b = serialize_cards_with_traits(ai_deck.cards.all())
+
+    card_id = 0
+    cards_in_play = {}
+    decks = {'side_a': [], 'side_b': []}
+
+    for card in cards_a:
+        card_id += 1
+        cards_in_play[str(card_id)] = CardInPlay(
+            card_id=str(card_id),
+            template_slug=card["slug"],
+            attack=card["attack"],
+            health=card["health"],
+            cost=card["cost"],
+            traits=card["traits"],
+        )
+        decks['side_a'].append(str(card_id))
+
+    for card in cards_b:
+        card_id += 1
+        cards_in_play[str(card_id)] = CardInPlay(
+            card_id=str(card_id),
+            template_slug=card["slug"],
+            attack=card["attack"],
+            health=card["health"],
+            cost=card["cost"],
+            traits=card["traits"],
+        )
+        decks['side_b'].append(str(card_id))
+
+    # shuffle both decks
+    random.shuffle(decks['side_a'])
+    random.shuffle(decks['side_b'])
+
+    heroes = {
+        'side_a': HeroInPlay(
+            hero_id=human_deck.hero.id,
+            template_slug=human_deck.hero.slug,
+            health=human_deck.hero.health,
+            name=human_deck.hero.name,
+        ),
+        'side_b': HeroInPlay(
+            hero_id=ai_deck.hero.id,
+            template_slug=ai_deck.hero.slug,
+            health=ai_deck.hero.health,
+            name=ai_deck.hero.name,
+        ),
+    }
+
+    hand_a = [
+        decks['side_a'].pop(0),
+        decks['side_a'].pop(0),
+        decks['side_a'].pop(0),
+    ]
+    hand_b = [
+        decks['side_b'].pop(0),
+        decks['side_b'].pop(0),
+        decks['side_b'].pop(0),
+    ]
+
+
+    game_state = GameState(
+        turn=1,
+        active='side_a',
+        phase='start',
+        event_queue=[],
+        cards=cards_in_play,
+        heroes=heroes,
+        decks=decks,
+        hands={
+            'side_a': hand_a,
+            'side_b': hand_b,
+        }
+    )
+
+    game_state.event_queue.append(RefreshPhaseEvent(side='side_a'))
 
     game = Game.objects.get(pk=2)
+    game.state = game_state.model_dump()
+    game.save()
 
-    # reset game
+    advance_game.apply_async(args=[game.id])
+
+    return
     state = game.state
 
     state['phase'] = "start"
