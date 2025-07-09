@@ -4,11 +4,18 @@
     'bg-white dark:bg-gray-800',
     cardTypeClass,
     exhaustedClass,
-    'min-w-16 max-w-20'
-  ]">
+    'min-w-16 max-w-20',
+    {
+      'ring-2 ring-blue-500 ring-offset-2': isSelected,
+      'ring-2 ring-red-500 ring-offset-2 animate-pulse': isTargetable,
+      'scale-110 z-10': isAttacker
+    }
+  ]"
+  @click="handleClick"
+  :data-card-id="card.card_id">
     <!-- Exhausted Indicator -->
-    <div v-if="card.exhausted" class="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center">
-      <span class="text-white text-xs font-bold">⚡</span>
+    <div v-if="card.exhausted" class="absolute -top-1 -right-1 w-4 h-4 bg-gray-600 rounded-full flex items-center justify-center">
+      <span class="text-white text-xs font-bold">z</span>
     </div>
 
     <!-- Card Name -->
@@ -36,9 +43,17 @@ interface Props {
   card: CardInPlay
   name: string
   cardType: 'minion' | 'spell'
+  isCanAttack?: boolean
+  isSelected?: boolean
+  isTargetable?: boolean
+  isAttacker?: boolean
 }
 
 const props = defineProps<Props>()
+
+const emit = defineEmits<{
+  'card-clicked': [cardId: string]
+}>()
 
 const cardTypeClass = computed(() => {
   return props.cardType === 'minion'
@@ -47,13 +62,20 @@ const cardTypeClass = computed(() => {
 })
 
 const exhaustedClass = computed(() => {
-  if (props.card.exhausted) {
-    return 'opacity-50 grayscale cursor-not-allowed pointer-events-none'
-  } else {
+  if (props.card.exhausted && !props.isCanAttack) {
+    return 'opacity-50 grayscale'
+  } else if (props.isCanAttack || props.isTargetable) {
     return 'hover:scale-105 cursor-pointer'
   }
+  return ''
 })
 
 const attack = computed(() => props.card.attack)
 const health = computed(() => props.card.health)
+
+const handleClick = () => {
+  if (props.isCanAttack || props.isTargetable) {
+    emit('card-clicked', String(props.card.card_id))
+  }
+}
 </script>

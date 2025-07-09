@@ -12,7 +12,10 @@ from .schemas import (
     GameState,
     HeroInPlay,
     PlayCardAction,
-    PlayCardEvent)
+    PlayCardEvent,
+    UseCardAction,
+    UseCardEvent,
+)
 
 from .tasks import advance_game
 from apps.core.serializers import serialize_cards_with_traits
@@ -43,6 +46,7 @@ class GameService:
         for card in cards_a:
             card_id += 1
             cards_in_play[str(card_id)] = CardInPlay(
+                card_type=card["card_type"],
                 card_id=str(card_id),
                 template_slug=card["slug"],
                 attack=card["attack"],
@@ -126,12 +130,20 @@ class GameService:
             game_state.event_queue.append(EndTurnEvent(
                 side=game_state.active,
             ))
+        elif isinstance(game_action, UseCardAction):
+            game_state.event_queue.append(UseCardEvent(
+                side=game_state.active,
+                card_id=game_action.card_id,
+                target_type=game_action.target_type,
+                target_id=game_action.target_id,
+            ))
+
         else:
             raise ValueError(f"Invalid action: {game_action}")
 
         game.state = game_state.model_dump()
         game.save(update_fields=["state"])
-        advance_game.apply_async(args=[game_id], countdown=2)
+        advance_game.apply_async(args=[game_id])
 
     """
     def __init__(self, game: Game) -> None:

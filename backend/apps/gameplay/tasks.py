@@ -5,10 +5,9 @@ from asgiref.sync import async_to_sync
 
 from .models import Game
 from .schemas import (
+    GameOverUpdate,
     GameState,
-    PlayCardEvent,
-    ResolvedEvent,
-    EndTurnEvent)
+    ResolvedEvent,)
 
 ADVANCE_GAME_DELAY = 2
 
@@ -26,6 +25,9 @@ def advance_game(game_id: int):
             print('DB Lock, skipping')
             return
 
+        if game.status == Game.GAME_STATUS_ENDED:
+            return
+
         game_state = GameState.model_validate(game.state)
 
         print("Advancing game at state %s for %s " % (
@@ -36,6 +38,13 @@ def advance_game(game_id: int):
 
             resolved_event: ResolvedEvent = resolve_event(state=game_state)
             new_state = resolved_event.state
+
+            if GameOverUpdate in resolved_event.updates:
+                game.status = Game.GAME_STATUS_ENDED
+                game.winner = resolved_event.updates[0].winner
+                game.save(update_fields=["status", "winner"])
+                new_state.event_queue = []
+
             game.state = new_state.model_dump()
             game.save(update_fields=["state"])
 

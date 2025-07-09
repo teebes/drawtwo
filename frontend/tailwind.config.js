@@ -66,6 +66,7 @@ export default {
         'card-flip': 'cardFlip 0.6s ease-in-out',
         'card-draw': 'cardDraw 0.8s ease-out',
         'mana-pulse': 'manaPulse 2s ease-in-out infinite',
+        'attack': 'attack 0.6s ease-out',
       },
       keyframes: {
         cardFlip: {
@@ -81,6 +82,11 @@ export default {
         manaPulse: {
           '0%, 100%': { transform: 'scale(1)', opacity: '1' },
           '50%': { transform: 'scale(1.05)', opacity: '0.8' },
+        },
+        attack: {
+          '0%': { strokeDasharray: '1000', strokeDashoffset: '1000', opacity: '0' },
+          '50%': { strokeDashoffset: '0', opacity: '1' },
+          '100%': { strokeDashoffset: '0', opacity: '0' },
         },
       },
       backdropBlur: {

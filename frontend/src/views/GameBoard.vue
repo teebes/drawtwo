@@ -13,6 +13,45 @@
 
     <!-- Game Board -->
     <div v-else-if="gameState" class="flex-1 flex flex-col justify-between min-h-0 max-w-7xl mx-auto w-full" @click="handleGameAreaClick">
+      <!-- Game Over Overlay -->
+      <div v-if="gameOver.isGameOver" class="absolute inset-0 bg-black/75 flex items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl p-8 max-w-md mx-4 text-center shadow-2xl">
+          <div class="mb-6">
+            <div class="text-6xl mb-4">
+              {{ gameOver.winner === viewer ? '🎉' : '💀' }}
+            </div>
+            <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+              {{ gameOver.winner === viewer ? 'Victory!' : 'Defeat!' }}
+            </h2>
+            <p class="text-lg text-gray-600 dark:text-gray-400">
+              {{ gameOver.winner === 'side_a' ? 'Side A' : 'Side B' }} wins the game!
+            </p>
+          </div>
+
+          <div class="space-y-3">
+            <button
+              @click="$router.push('/lobby')"
+              class="w-full px-4 py-3 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors"
+            >
+              Return to Lobby
+            </button>
+            <button
+              @click="reloadPage"
+              class="w-full px-4 py-3 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors"
+            >
+              Play Again
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Attack Animation Overlay -->
+      <AttackOverlay
+        v-if="attackAnimation.active"
+        :from-element="attackAnimation.fromElement"
+        :to-element="attackAnimation.toElement"
+      />
+
       <!-- WebSocket Connection Status -->
       <div v-if="wsStatus !== 'connected'" class="absolute top-2 right-2 text-sm px-2 py-1 rounded"
         :class="{
@@ -39,7 +78,11 @@
 
           <!-- Middle: Hero -->
           <div class="flex justify-center" @click.stop>
-            <GameHero :hero="gameState.heroes.side_b" />
+            <GameHero
+              :hero="gameState.heroes.side_b"
+              :is-targetable="isSelectingTarget && viewer === 'side_a' && !gameOver.isGameOver"
+              @hero-clicked="handleHeroTarget"
+            />
           </div>
 
           <!-- Right: Mana + Deck -->
@@ -56,8 +99,15 @@
         <div class="pt-3 pb-2" @click.stop>
           <div class="flex justify-center">
             <div class="flex space-x-2 max-w-full overflow-x-auto">
-              <BoardCard v-for="cardId in gameState.board.side_b.slice(0, maxCardsPerSide)" :key="cardId"
-                :card="gameState.cards[cardId]" :name="getCardName(cardId)" :card-type="getCardType(cardId)" />
+              <BoardCard
+                v-for="cardId in gameState.board.side_b.slice(0, maxCardsPerSide)"
+                :key="cardId"
+                :card="gameState.cards[cardId]"
+                :name="getCardName(cardId)"
+                :card-type="getCardType(cardId)"
+                :is-targetable="isSelectingTarget && viewer === 'side_a' && !gameOver.isGameOver"
+                @card-clicked="handleCardTarget"
+              />
               <div v-if="gameState.board.side_b.length === 0" class="text-gray-400 text-sm py-4">
                 No cards on board
               </div>
@@ -72,10 +122,21 @@
           <div class="text-lg font-bold">Turn {{ gameState.turn }}</div>
           <div class="text-sm">{{ gameState.phase }} phase</div>
           <div class="text-sm">{{ gameState.active === 'side_a' ? 'Your' : 'Opponent' }} turn</div>
+
+          <!-- Target Selection Prompt -->
+          <div v-if="isSelectingTarget" class="mt-4 bg-black/50 rounded-lg p-3">
+            <div class="text-white font-bold">Select a target to attack</div>
+            <button
+              @click="cancelAttack"
+              class="mt-2 px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
 
         <!-- End Turn Button -->
-        <div v-if="gameState.phase === 'main' && gameState.active === viewer"
+        <div v-if="gameState.phase === 'main' && gameState.active === viewer && !isSelectingTarget && !gameOver.isGameOver"
              class="absolute right-4 top-1/2 transform -translate-y-1/2">
           <button
             @click="handleEndTurn"
@@ -92,7 +153,7 @@
           <div class="flex justify-center">
             <div class="flex space-x-2 max-w-full overflow-x-auto">
               <!-- Show placement zones when card is selected and it's our side -->
-              <template v-if="selectedCard && viewer === 'side_a'">
+              <template v-if="selectedCard && viewer === 'side_a' && !attackingCard && !gameOver.isGameOver">
                 <!-- Place at beginning if there are cards -->
                 <PlacementZone v-if="gameState.board.side_a.length > 0"
                   :position="0"
@@ -120,10 +181,19 @@
                 />
               </template>
 
-              <!-- Normal view when no card selected -->
+              <!-- Normal view when no card selected or when attacking -->
               <template v-else>
-                <BoardCard v-for="cardId in gameState.board.side_a.slice(0, maxCardsPerSide)" :key="cardId"
-                  :card="gameState.cards[cardId]" :name="getCardName(cardId)" :card-type="getCardType(cardId)" />
+                <BoardCard
+                  v-for="cardId in gameState.board.side_a.slice(0, maxCardsPerSide)"
+                  :key="cardId"
+                  :card="gameState.cards[cardId]"
+                  :name="getCardName(cardId)"
+                  :card-type="getCardType(cardId)"
+                  :is-can-attack="canCardAttack(cardId)"
+                  :is-selected="attackingCard === cardId"
+                  :is-attacker="attackingCard === cardId"
+                  @card-clicked="handlePlayerCardClick"
+                />
                 <div v-if="gameState.board.side_a.length === 0" class="text-gray-400 text-sm py-4">
                   No cards on board
                 </div>
@@ -140,7 +210,7 @@
               :cards="gameState.cards"
               :mana-pool="gameState.mana_pool.side_a"
               :mana-used="gameState.mana_used.side_a"
-              :is-main-phase="gameState.phase === 'main' && gameState.active === 'side_a' && viewer === 'side_a'"
+              :is-main-phase="gameState.phase === 'main' && gameState.active === 'side_a' && viewer === 'side_a' && !isSelectingTarget && !gameOver.isGameOver"
               @card-selected="handleCardSelection"
             />
           </div>
@@ -166,7 +236,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from '../config/api.js'
 import type { GameState } from '../types/game'
@@ -176,6 +246,7 @@ import DeckIndicator from '../components/game/DeckIndicator.vue'
 import ManaIndicator from '../components/game/ManaIndicator.vue'
 import HandCards from '../components/game/HandCards.vue'
 import PlacementZone from '../components/game/PlacementZone.vue'
+import AttackOverlay from '../components/game/AttackOverlay.vue'
 
 const route = useRoute()
 const gameState = ref<GameState | null>(null)
@@ -185,6 +256,29 @@ const maxCardsPerSide = ref(6)
 
 // Track selected card
 const selectedCard = ref<string | null>(null)
+
+// Track attacking card
+const attackingCard = ref<string | null>(null)
+
+// Game over state
+const gameOver = ref<{
+  isGameOver: boolean
+  winner: 'side_a' | 'side_b' | null
+}>({
+  isGameOver: false,
+  winner: null
+})
+
+// Attack animation state
+const attackAnimation = ref<{
+  active: boolean
+  fromElement: HTMLElement | null
+  toElement: HTMLElement | null
+}>({
+  active: false,
+  fromElement: null,
+  toElement: null
+})
 
 // WebSocket related
 const socket = ref<WebSocket | null>(null)
@@ -266,7 +360,40 @@ const connectWebSocket = () => {
 const handleWebSocketMessage = (data: any) => {
   console.log('WebSocket message:', data)
 
-  gameState.value = data.state;
+  // Update the game state
+  if (data.state) {
+    gameState.value = data.state
+
+    // Check if the game is over based on the state's winner field
+    if (data.state.winner && data.state.winner !== 'none' && !gameOver.value.isGameOver) {
+      gameOver.value = {
+        isGameOver: true,
+        winner: data.state.winner
+      }
+      console.log(`Game over detected from state! Winner: ${data.state.winner}`)
+      // Cancel any ongoing actions
+      selectedCard.value = null
+      attackingCard.value = null
+    }
+  }
+
+  // Process any updates that came with the message
+  if (data.updates && Array.isArray(data.updates)) {
+    for (const update of data.updates) {
+      if (update.type === 'game_over_update') {
+        gameOver.value = {
+          isGameOver: true,
+          winner: update.winner
+        }
+        console.log(`Game over! Winner: ${update.winner}`)
+        // Cancel any ongoing actions
+        selectedCard.value = null
+        attackingCard.value = null
+        break
+      }
+    }
+  }
+
   return;
 
   if (data.type !== "game_updates") {
@@ -393,11 +520,15 @@ const getCardType = (cardId: string): 'minion' | 'spell' => {
 }
 
 const handleCardSelection = (cardId: string | null) => {
+  if (gameOver.value.isGameOver) return
   selectedCard.value = cardId
+  // Cancel any ongoing attack when selecting a card from hand
+  attackingCard.value = null
   console.log('Card selected:', cardId)
 }
 
 const handleCardPlacement = (position: number) => {
+  if (gameOver.value.isGameOver) return
   if (!selectedCard.value || viewer.value !== 'side_a') return
 
   console.log('Playing card', selectedCard.value, 'at position', position)
@@ -425,15 +556,144 @@ const handleGameAreaClick = (event: Event) => {
   if (selectedCard.value && event.target === event.currentTarget) {
     selectedCard.value = null
   }
+  // Also cancel any ongoing attack
+  if (attackingCard.value && event.target === event.currentTarget) {
+    attackingCard.value = null
+  }
 }
 
 const handleEndTurn = () => {
+  if (gameOver.value.isGameOver) return
   console.log('Ending turn')
 
   // Send websocket message to end turn (transition to start phase)
   sendWebSocketMessage({
     type: 'end_turn_action',
   })
+}
+
+// Computed properties
+const isSelectingTarget = computed(() => attackingCard.value !== null && !gameOver.value.isGameOver)
+
+const canCardAttack = (cardId: string): boolean => {
+  if (gameOver.value.isGameOver) return false
+  if (!gameState.value || viewer.value !== 'side_a') return false
+  if (gameState.value.phase !== 'main') return false
+  if (gameState.value.active !== 'side_a') return false
+
+  const card = gameState.value.cards[cardId]
+  return card && !card.exhausted
+}
+
+// Methods for handling attacks
+const handlePlayerCardClick = (cardId: string) => {
+  if (gameOver.value.isGameOver) return
+  if (!canCardAttack(cardId)) return
+
+  // If we're already selecting this card, cancel the selection
+  if (attackingCard.value === cardId) {
+    cancelAttack()
+    return
+  }
+
+  // Set this card as the attacker
+  attackingCard.value = cardId
+}
+
+const handleCardTarget = async (targetCardId: string) => {
+  if (gameOver.value.isGameOver) return
+  if (!attackingCard.value || !gameState.value) return
+
+  // Optimistically set the card as exhausted
+  const attackerCard = gameState.value.cards[attackingCard.value]
+  if (attackerCard) {
+    attackerCard.exhausted = true
+  }
+
+  // Get the elements for animation
+  const fromElement = document.querySelector(`[data-card-id="${attackingCard.value}"]`) as HTMLElement
+  const toElement = document.querySelector(`[data-card-id="${targetCardId}"]`) as HTMLElement
+
+  // Show attack animation
+  if (fromElement && toElement) {
+    attackAnimation.value = {
+      active: true,
+      fromElement,
+      toElement
+    }
+
+    // Hide animation after it completes
+    setTimeout(() => {
+      attackAnimation.value = {
+        active: false,
+        fromElement: null,
+        toElement: null
+      }
+    }, 600)
+  }
+
+  // Send websocket message
+  sendWebSocketMessage({
+    type: 'use_card_action',
+    card_id: attackingCard.value,
+    target_type: 'card',
+    target_id: targetCardId
+  })
+
+  // Clear selection
+  attackingCard.value = null
+}
+
+const handleHeroTarget = async (heroId: string) => {
+  if (gameOver.value.isGameOver) return
+  if (!attackingCard.value || !gameState.value) return
+
+  // Optimistically set the card as exhausted
+  const attackerCard = gameState.value.cards[attackingCard.value]
+  if (attackerCard) {
+    attackerCard.exhausted = true
+  }
+
+  // Get the elements for animation
+  const fromElement = document.querySelector(`[data-card-id="${attackingCard.value}"]`) as HTMLElement
+  const toElement = document.querySelector(`[data-hero-id="${heroId}"]`) as HTMLElement
+
+  // Show attack animation
+  if (fromElement && toElement) {
+    attackAnimation.value = {
+      active: true,
+      fromElement,
+      toElement
+    }
+
+    // Hide animation after it completes
+    setTimeout(() => {
+      attackAnimation.value = {
+        active: false,
+        fromElement: null,
+        toElement: null
+      }
+    }, 600)
+  }
+
+  // Send websocket message
+  sendWebSocketMessage({
+    type: 'use_card_action',
+    card_id: attackingCard.value,
+    target_type: 'hero',
+    target_id: heroId
+  })
+
+  // Clear selection
+  attackingCard.value = null
+}
+
+const cancelAttack = () => {
+  attackingCard.value = null
+}
+
+const reloadPage = () => {
+  window.location.reload()
 }
 
 onMounted(() => {

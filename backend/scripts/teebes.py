@@ -68,6 +68,7 @@ def main():
     for card in cards_a:
         card_id += 1
         cards_in_play[str(card_id)] = CardInPlay(
+            card_type=card["card_type"],
             card_id=str(card_id),
             template_slug=card["slug"],
             attack=card["attack"],
@@ -80,6 +81,7 @@ def main():
     for card in cards_b:
         card_id += 1
         cards_in_play[str(card_id)] = CardInPlay(
+            card_type=card["card_type"],
             card_id=str(card_id),
             template_slug=card["slug"],
             attack=card["attack"],

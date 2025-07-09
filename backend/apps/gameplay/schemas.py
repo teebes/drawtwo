@@ -20,6 +20,8 @@ class PlayCardAction(ActionBase):
 class UseCardAction(ActionBase):
     type: Literal["use_card_action"] = "use_card_action"
     card_id: str
+    target_type: Literal["card", "hero"] = "card"
+    target_id: str
 
 
 class EndTurnAction(ActionBase):
@@ -60,17 +62,32 @@ class PlayCardEvent(EventBase):
     position: int
 
 
+class UseCardEvent(EventBase):
+    type: Literal["use_card_event"] = "use_card_event"
+    card_id: str
+    target_type: Literal["card", "hero"] = "card"
+    target_id: str
+
+
+class CardRetaliationEvent(EventBase):
+    type: Literal["card_retaliation_event"] = "card_retaliation_event"
+    card_id: str
+    target_id: str
+
+
 class NewTurnEvent(EventBase):
     type: Literal["end_turn"] = "new_turn"
 
 
 GameEvent = Annotated[
     Union[
-        RefreshPhaseEvent,
+        CardRetaliationEvent,
+        EndTurnEvent,
         DrawPhaseEvent,
         MainPhaseEvent,
-        EndTurnEvent,
-        PlayCardEvent],
+        PlayCardEvent,
+        RefreshPhaseEvent,
+        UseCardEvent],
     Discriminator('type')
 ]
 
@@ -85,6 +102,7 @@ class Trait(BaseModel):
 
 
 class CardInPlay(BaseModel):
+    card_type: Literal['minion', 'spell']
     card_id: str # Interal card ID for that game
     template_slug: str # ID of the card template
     attack: int
@@ -184,13 +202,39 @@ class PlayCardUpdate(UpdateBase):
     position: int
 
 
+class HeroDamageUpdate(UpdateBase):
+    type: Literal["hero_damage_update"] = "hero_damage_update"
+    hero_id: str
+    damage: int
+
+
+class CardDamageUpdate(UpdateBase):
+    type: Literal["card_damage_update"] = "card_damage_update"
+    card_id: str
+    damage: int
+
+
+class CardDestroyedUpdate(UpdateBase):
+    type: Literal["card_destroyed_update"] = "card_destroyed_update"
+    card_id: str
+
+
+class GameOverUpdate(UpdateBase):
+    type: Literal["game_over_update"] = "game_over_update"
+    winner: Literal["side_a", "side_b"]
+
+
 GameUpdate = Annotated[
     Union[
+        CardDamageUpdate,
+        CardDestroyedUpdate,
+        HeroDamageUpdate,
         DrawPhaseUpdate,
         EndTurnUpdate,
+        GameOverUpdate,
         MainPhaseUpdate,
-        RefreshPhaseUpdate,
         PlayCardUpdate,
+        RefreshPhaseUpdate,
         ],
     Discriminator('type')
 ]
