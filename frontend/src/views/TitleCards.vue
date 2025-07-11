@@ -12,15 +12,32 @@
 
       <!-- Navigation -->
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
-        <router-link
-          :to="{ name: 'Title', params: { slug: title.slug } }"
-          class="inline-flex items-center text-primary-600 hover:text-primary-700 transition-colors"
-        >
-          <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-          </svg>
-          Back to {{ title.name }}
-        </router-link>
+        <div class="flex items-center justify-between">
+          <router-link
+            :to="{ name: 'Title', params: { slug: title.slug } }"
+            class="inline-flex items-center text-primary-600 hover:text-primary-700 transition-colors"
+          >
+            <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+            Back to {{ title.name }}
+          </router-link>
+
+          <div v-if="canEditTitle" class="flex items-center space-x-4">
+            <router-link
+              :to="{ name: 'CardCreate', params: { slug: title.slug } }"
+              class="inline-flex items-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
+            >
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+              </svg>
+              Create New Card
+            </router-link>
+            <span class="text-sm text-gray-600 dark:text-gray-400">
+              Click on any card to edit it
+            </span>
+          </div>
+        </div>
       </div>
 
       <!-- Cards Sections -->
@@ -40,11 +57,31 @@
               Common Cards
             </h2>
             <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
-              <CollectionCard
+              <div
                 v-for="card in commonCards"
                 :key="card.slug"
-                :card="card"
-              />
+                class="relative group"
+              >
+                <CollectionCard
+                  :card="card"
+                  :class="canEditTitle ? 'cursor-pointer transition-transform group-hover:scale-105' : ''"
+                  @click="canEditTitle ? navigateToEdit(card.slug) : null"
+                />
+                <div
+                  v-if="canEditTitle"
+                  class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <button
+                    @click.stop="navigateToEdit(card.slug)"
+                    class="inline-flex items-center rounded-full bg-white dark:bg-gray-800 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 shadow-sm hover:shadow-md transition-all"
+                    title="Edit card"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -58,11 +95,31 @@
               {{ factionName }} Cards
             </h2>
             <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
-              <CollectionCard
+              <div
                 v-for="card in factionCards"
                 :key="card.slug"
-                :card="card"
-              />
+                class="relative group"
+              >
+                <CollectionCard
+                  :card="card"
+                  :class="canEditTitle ? 'cursor-pointer transition-transform group-hover:scale-105' : ''"
+                  @click="canEditTitle ? navigateToEdit(card.slug) : null"
+                />
+                <div
+                  v-if="canEditTitle"
+                  class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <button
+                    @click.stop="navigateToEdit(card.slug)"
+                    class="inline-flex items-center rounded-full bg-white dark:bg-gray-800 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 shadow-sm hover:shadow-md transition-all"
+                    title="Edit card"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
             </div>
           </section>
         </div>
@@ -91,7 +148,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth.js'
 import axios from '../config/api.js'
 import CollectionCard from '../components/game/CollectionCard.vue'
 import type { Card } from '../types/card'
@@ -109,9 +167,12 @@ interface TitleData {
   published_at: string | null
   created_at: string
   updated_at: string
+  can_edit?: boolean  // Optional since it's only present when user is authenticated
 }
 
 const route = useRoute()
+const router = useRouter()
+const authStore = useAuthStore()
 const title = ref<TitleData | null>(null)
 const cards = ref<Card[]>([])
 const loading = ref<boolean>(true)
@@ -138,6 +199,23 @@ const factionCardGroups = computed(() => {
   // Sort faction groups alphabetically
   return Array.from(factionGroups.entries()).sort(([a], [b]) => a.localeCompare(b))
 })
+
+// Check if user can edit this title
+const canEditTitle = computed(() => {
+  return authStore.isAuthenticated &&
+         title.value &&
+         title.value.can_edit === true
+})
+
+const navigateToEdit = (cardSlug: string): void => {
+  router.push({
+    name: 'CardEdit',
+    params: {
+      slug: title.value?.slug,
+      cardSlug
+    }
+  })
+}
 
 const fetchTitle = async (): Promise<void> => {
   try {

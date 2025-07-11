@@ -10,6 +10,7 @@ import Template from '../views/Template.vue'
 import Profile from '../views/Profile.vue'
 import Title from '../views/Title.vue'
 import TitleCards from '../views/TitleCards.vue'
+import CardEdit from '../views/CardEdit.vue'
 import DeckDetail from '../views/DeckDetail.vue'
 import GameBoard from '../views/GameBoard.vue'
 
@@ -73,6 +74,18 @@ const routes = [
     name: 'GameBoard',
     component: GameBoard,
     meta: { requiresAuth: true, hideHeader: true }
+  },
+  {
+    path: '/:slug/cards/new',
+    name: 'CardCreate',
+    component: CardEdit,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/:slug/cards/:cardSlug',
+    name: 'CardEdit',
+    component: CardEdit,
+    meta: { requiresAuth: true }
   },
   {
     path: '/:slug/cards',

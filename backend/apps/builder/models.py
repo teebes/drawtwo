@@ -45,6 +45,58 @@ class Title(TimestampedModel):
     def __str__(self):
         return f"{self.slug} v{self.version}"
 
+    def can_be_edited_by(self, user):
+        """Check if a user can edit this title (either author or builder)."""
+        if not user or not user.is_authenticated:
+            return False
+
+        # Author can always edit
+        if self.author == user:
+            return True
+
+        # Check if user is a builder for this title
+        return self.builders.filter(user=user).exists()
+
+
+class Builder(TimestampedModel):
+    """
+    Represents a many-to-many relationship between Title and User.
+    A Builder can edit cards for a title.
+    """
+    title = models.ForeignKey(Title, on_delete=models.CASCADE, related_name='builders')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='builder_titles')
+
+    # Additional metadata about the builder relationship
+    role = models.CharField(
+        max_length=20,
+        choices=[
+            ('editor', 'Editor'),
+            ('collaborator', 'Collaborator'),
+        ],
+        default='editor',
+        help_text="Role of the builder in this title"
+    )
+
+    # When this builder was added
+    added_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='added_builders',
+        help_text="User who added this builder to the title"
+    )
+
+    class Meta:
+        unique_together = ('title', 'user')
+        indexes = [
+            models.Index(fields=['title'], name='builder_title_idx'),
+            models.Index(fields=['user'], name='builder_user_idx'),
+        ]
+        verbose_name = "Builder"
+        verbose_name_plural = "Builders"
+
+    def __str__(self):
+        return f"{self.user} - {self.title} ({self.role})"
+
 
 class Tag(TimestampedModel):
     title = models.ForeignKey(Title, on_delete=models.PROTECT)

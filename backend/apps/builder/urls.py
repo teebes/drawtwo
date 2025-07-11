@@ -14,6 +14,10 @@ urlpatterns = [
     # Title endpoints
     path('titles/<slug:slug>/', views.title_by_slug, name='title-by-slug'),
 
+    # Card endpoints
+    path('titles/<slug:title_slug>/cards/', views.create_card, name='card-create'),
+    path('titles/<slug:title_slug>/cards/<slug:card_slug>/', views.card_detail, name='card-detail'),
+
     # Add custom URL patterns here as needed
     # Example:
     # path('projects/', views.ProjectListView.as_view(), name='project-list'),

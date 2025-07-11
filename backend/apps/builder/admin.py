@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Title, Tag, Trait, Faction, HeroTemplate, CardTemplate, CardTrait, AIPlayer
+from .models import Title, Tag, Trait, Faction, HeroTemplate, CardTemplate, CardTrait, AIPlayer, Builder
 
 
 @admin.register(Title)
@@ -226,3 +226,32 @@ class AIPlayerAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+
+@admin.register(Builder)
+class BuilderAdmin(admin.ModelAdmin):
+    list_display = ('title', 'user', 'role', 'added_by', 'created_at')
+    list_filter = ('role', 'title__status', 'created_at')
+    search_fields = ('title__name', 'title__slug', 'user__email', 'user__username', 'added_by__email')
+    readonly_fields = ('created_at', 'updated_at')
+    ordering = ('-created_at',)
+
+    fieldsets = (
+        ('Builder Relationship', {
+            'fields': ('title', 'user', 'role')
+        }),
+        ('Metadata', {
+            'fields': ('added_by',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        # Set the current user as default for added_by field when creating new builders
+        if not obj and 'added_by' in form.base_fields:
+            form.base_fields['added_by'].initial = request.user
+        return form
