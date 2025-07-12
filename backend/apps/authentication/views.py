@@ -24,7 +24,7 @@ class GoogleLogin(SocialLoginView):
     """Google OAuth2 login view."""
 
     adapter_class = GoogleOAuth2Adapter
-    callback_url = "http://localhost:5173/auth/callback/google"  # Frontend callback URL
+    callback_url = settings.FRONTEND_URL + "/auth/callback/google"  # Configurable frontend callback URL
     client_class = OAuth2Client
 
 
@@ -60,7 +60,7 @@ class PasswordlessLoginView(APIView):
 
                 # Create custom login link for frontend
                 frontend_url = (
-                    f"http://localhost:3000/auth/email-confirm/" f"{confirmation.key}"
+                    f"{settings.FRONTEND_EMAIL_CONFIRM_URL}/" f"{confirmation.key}"
                 )
 
                 # Send email with console backend for development

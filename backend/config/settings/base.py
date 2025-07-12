@@ -220,6 +220,10 @@ SOCIALACCOUNT_PROVIDERS = {
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"  # For development
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@drawtwo.com")
 
+# Frontend URL configuration
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+FRONTEND_EMAIL_CONFIRM_URL = os.environ.get("FRONTEND_EMAIL_CONFIRM_URL", f"{FRONTEND_URL}/auth/email-confirm")
+
 # dj-rest-auth settings
 REST_AUTH = {
     "USE_JWT": True,
