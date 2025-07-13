@@ -9,6 +9,7 @@ import Lobby from '../views/Lobby.vue'
 import Template from '../views/Template.vue'
 import Profile from '../views/Profile.vue'
 import Title from '../views/Title.vue'
+import TitleBriefCards from '../views/TitleBriefCards.vue'
 import TitleCards from '../views/TitleCards.vue'
 import CardEdit from '../views/CardEdit.vue'
 import DeckDetail from '../views/DeckDetail.vue'
@@ -91,6 +92,12 @@ const routes = [
     path: '/:slug/cards',
     name: 'TitleCards',
     component: TitleCards,
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/:slug/cards/brief',
+    name: 'TitleBriefCards',
+    component: TitleBriefCards,
     meta: { requiresAuth: false }
   },
   {
