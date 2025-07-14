@@ -104,6 +104,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { getBaseUrl } from '../config/api.js'
 
 const backendOnline = ref(false)
 const loading = ref(false)
@@ -111,7 +112,7 @@ const backendResponse = ref('')
 
 const checkBackend = async () => {
   try {
-    const response = await fetch('http://localhost:8000/api/health/')
+    const response = await fetch(`${getBaseUrl()}/api/health/`)
     if (response.ok) {
       backendOnline.value = true
       return await response.json()

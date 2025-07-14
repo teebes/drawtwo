@@ -239,6 +239,7 @@
 import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from '../config/api.js'
+import { getBaseUrl } from '../config/api.js'
 import type { GameState } from '../types/game'
 import GameHero from '../components/game/GameHero.vue'
 import BoardCard from '../components/game/BoardCard.vue'
@@ -322,8 +323,8 @@ const fetchGameState = async () => {
 const connectWebSocket = () => {
   const gameId = route.params.game_id
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-  // Match the API configuration pattern
-  const wsUrl = `${protocol}://localhost:8000/ws/game/${gameId}/`
+  const baseUrl = getBaseUrl().replace(/^https?:/, protocol + ':')
+  const wsUrl = `${baseUrl}/ws/game/${gameId}/`
 
   wsStatus.value = 'connecting'
 

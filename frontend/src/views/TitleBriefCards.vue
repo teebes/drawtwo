@@ -126,7 +126,7 @@ const filteredCards = computed(() => {
   })
 })
 
-const getTraits(card: Card) {
+const getTraits = (card: Card) => {
 
 }
 

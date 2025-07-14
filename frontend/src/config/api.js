@@ -1,7 +1,49 @@
 import axios from 'axios'
 
-// API Configuration
-const API_BASE_URL = 'http://localhost:8000/api'
+// API Configuration - Use runtime hostname detection
+const getApiBaseUrl = () => {
+  // Check for explicit environment configuration first
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL
+  }
+
+  // If we're in development mode (localhost), use the dev server
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:8000/api'
+  }
+  // In production, use relative path (same domain)
+  return '/api'
+}
+
+// Get the base URL without the /api suffix - useful for WebSocket connections
+export const getBaseUrl = () => {
+  // Check for explicit environment configuration first
+  if (import.meta.env.VITE_BASE_URL) {
+    return import.meta.env.VITE_BASE_URL
+  }
+
+  const hostname = window.location.hostname
+  const isDev = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.includes('localhost')
+
+  // Debug logging to help identify the issue
+  console.log('getBaseUrl debug:', {
+    hostname,
+    origin: window.location.origin,
+    isDev,
+    href: window.location.href
+  })
+
+  // If we're in development mode (localhost), use the dev server
+  if (isDev) {
+    return 'http://localhost:8000'
+  }
+
+  // In production, use current domain
+  // For drawtwo.com, this should return https://drawtwo.com
+  return window.location.origin
+}
+
+const API_BASE_URL = getApiBaseUrl()
 
 // Configure axios defaults
 axios.defaults.baseURL = API_BASE_URL

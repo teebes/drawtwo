@@ -18,6 +18,12 @@ venv.bak/
 .env.production
 production.env
 
+# SSL certificates (never commit these!)
+ssl/
+*.pem
+*.key
+*.crt
+
 # Database
 *.sqlite3
 *.db
