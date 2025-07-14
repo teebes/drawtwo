@@ -71,6 +71,7 @@ User = get_user_model()
 #     return Response(stats)
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def title_by_slug(request, slug):
     """Get the latest version of a title by its slug."""
     title = get_object_or_404(Title, slug=slug, is_latest=True)

@@ -13,18 +13,14 @@ docker push teebes/drawtwo-backend:latest
 docker push teebes/drawtwo-frontend:latest
 ```
 
-
-
-## Master command
-
-Bring up everything
+## Bring up everything
 
 ```
 docker compose -f docker-compose.production.yml --env-file production.env up -d
 ```
 
 
-Refresh frontend
+## Refresh Frontend
 
 ```
 dc pull frontend

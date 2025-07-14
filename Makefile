@@ -7,6 +7,7 @@ help:
 	@echo "Full Stack:"
 	@echo "  dev            - Start the full development stack (backend + frontend + celery)"
 	@echo "  build          - Build all Docker containers"
+	@echo "  build-prod     - Build for production"
 	@echo "  up             - Start all services"
 	@echo "  down           - Stop all services"
 	@echo "  restart        - Restart all services"
@@ -60,6 +61,12 @@ dev:
 # Docker commands
 build:
 	docker-compose build
+
+build-prod:
+	docker build -t teebes/drawtwo-backend:latest ./backend
+	docker build -t teebes/drawtwo-frontend:latest -f frontend/Dockerfile.production ./frontend
+	docker push teebes/drawtwo-backend:latest
+	docker push teebes/drawtwo-frontend:latest
 
 up:
 	docker-compose up

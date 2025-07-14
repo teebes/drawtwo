@@ -1,6 +1,7 @@
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from apps.builder.models import Title, CardTemplate
@@ -19,6 +20,7 @@ def titles(request):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def title_by_slug(request, slug):
     """Get the latest version of a title by its slug."""
     title = get_object_or_404(Title, slug=slug, is_latest=True)
@@ -26,6 +28,7 @@ def title_by_slug(request, slug):
     return Response(serializer.data)
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def title_cards(request, slug):
     """
     Get all cards for a title, ordered by cost then name.
