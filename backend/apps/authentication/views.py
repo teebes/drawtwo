@@ -6,6 +6,8 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework import permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -20,6 +22,7 @@ from .serializers import (
 User = get_user_model()
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class GoogleLogin(SocialLoginView):
     """Google OAuth2 login view."""
 
@@ -28,6 +31,7 @@ class GoogleLogin(SocialLoginView):
     client_class = OAuth2Client
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class PasswordlessLoginView(APIView):
     """Send passwordless login email to user."""
 
@@ -96,6 +100,7 @@ class PasswordlessLoginView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class EmailConfirmationView(APIView):
     """Confirm email and log user in."""
 
@@ -181,6 +186,7 @@ def protected_test_view(request):
 
 @api_view(["POST"])
 @permission_classes([permissions.AllowAny])
+@csrf_exempt
 def register_view(request):
     """Register a new user and send email verification."""
     from .serializers import CustomRegisterSerializer
