@@ -56,6 +56,21 @@
               <span v-if="card.faction">[ {{ card.faction.toLocaleUpperCase() }} ]</span>
               <span v-if="card.card_type == 'spell'">[ SPELL ]</span>
               {{ card.name }}
+              <span v-if="card.traits && card.traits.length">
+                [
+                <span v-for="(trait, idx) in card.traits" :key="trait.slug">
+                  <span v-if="idx !== 0"> | </span>
+                  {{ trait.name.toUpperCase() }}
+                  <span v-if="trait.data && Object.keys(trait.data).length">
+                    (
+                    <span v-for="(value, key, dIdx) in trait.data" :key="key">
+                      <span v-if="dIdx !== 0">, </span>{{ key }}: {{ value }}
+                    </span>
+                    )
+                  </span>
+                </span>
+                ]
+              </span>
             </router-link>
         </div>
       </section>
@@ -75,8 +90,8 @@ const cardsLoading = ref(false)
 const error = ref(null)
 
 // Filter state
-const selectedFaction = ref('')
-const selectedType = ref('')
+const selectedFaction = ref('common')
+const selectedType = ref('minion')
 
 const fetchCards = async (): Promise<void> => {
 

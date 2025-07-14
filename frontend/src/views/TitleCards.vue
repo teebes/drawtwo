@@ -56,7 +56,7 @@
             <h2 class="font-display text-2xl font-bold text-gray-900 dark:text-white mb-6">
               Common Cards
             </h2>
-            <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
+            <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               <div
                 v-for="card in commonCards"
                 :key="card.slug"
@@ -94,7 +94,7 @@
             <h2 class="font-display text-2xl font-bold text-gray-900 dark:text-white capitalize">
               {{ factionName }} Cards
             </h2>
-            <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
+            <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               <div
                 v-for="card in factionCards"
                 :key="card.slug"

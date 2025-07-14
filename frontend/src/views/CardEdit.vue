@@ -1,5 +1,5 @@
 <template>
-  <div class="card-edit-page min-h-screen bg-gray-50 dark:bg-gray-900">
+  <div class="card-edit-page min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
     <!-- Header -->
     <header class="bg-white dark:bg-gray-800 shadow">
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -35,7 +35,7 @@
     </header>
 
     <!-- Main Content -->
-    <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+    <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
       <div v-if="loading" class="flex items-center justify-center py-12">
         <p class="text-gray-600 dark:text-gray-400">Loading card...</p>
       </div>
@@ -52,99 +52,101 @@
         </Panel>
       </div>
 
-      <div v-else :class="isCreating ? 'max-w-6xl mx-auto' : 'grid grid-cols-1 lg:grid-cols-2 gap-8'">
-        <!-- Left Column: Card Preview (hidden when creating) -->
-        <div v-if="!isCreating" class="space-y-6">
+      <!-- Flex Column -->
+      <!-- <div v-else-if="true" class="w-full flex-1 flex flex-col-reverse sm:flex-row sm:space-x-8"> -->
+      <div v-else :class="isCreating ? 'max-w-6xl mx-auto': 'w-full flex-1 flex flex-col-reverse sm:flex-row sm:space-x-8'">
+
+        <!-- Card Preview-->
+        <div class="w-full flex justify-start sm:justify-center items-start" v-if="!isCreating">
           <Section title="Card Preview">
-            <div class="flex justify-center">
-              <CollectionCard
-                v-if="card && cardForDisplay"
-                :card="cardForDisplay"
-                class="transform-none"
-              />
-            </div>
+            <CollectionCard
+              class="sm:max-w-sm"
+              v-if="card && cardForDisplay"
+              :card="cardForDisplay"
+            />
           </Section>
-
-
         </div>
 
-        <!-- Right Column: YAML Editor -->
-        <div :class="isCreating ? 'space-y-6 w-full' : 'space-y-6'">
-          <Section title="YAML Definition">
-            <Panel>
-              <div class="space-y-4">
-                <div>
-                  <label for="yaml-editor" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Edit Card Definition
-                  </label>
-                  <textarea
-                    id="yaml-editor"
-                    v-model="yamlDefinition"
-                    rows="20"
-                    class="block w-full rounded-lg border-gray-300 font-mono text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
-                    placeholder="Enter YAML definition..."
-                    :disabled="saving"
-                  />
-                </div>
-
-                                <div class="space-y-3">
-                  <!-- Bump Version Checkbox (only when editing) -->
-                  <div v-if="!isCreating" class="flex items-center space-x-2">
-                    <input
-                      id="bump-version"
-                      v-model="bumpVersion"
-                      type="checkbox"
-                      class="rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
-                    />
-                    <label for="bump-version" class="text-sm text-gray-700 dark:text-gray-300">
-                      Create new version (v{{ (card?.version || 0) + 1 }})
+        <!-- YAML Editor -->
+        <div class="w-full">
+          <div :class="isCreating ? 'space-y-6 w-full' : 'space-y-6'">
+            <Section title="YAML Definition">
+              <Panel>
+                <div class="space-y-4">
+                  <div>
+                    <label for="yaml-editor" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Edit Card Definition
                     </label>
+                    <textarea
+                      id="yaml-editor"
+                      v-model="yamlDefinition"
+                      rows="20"
+                      class="block w-full rounded-lg border-gray-300 font-mono text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 py-2 px-3"
+                      placeholder="Enter YAML definition..."
+                      :disabled="saving"
+                    />
                   </div>
 
-                  <div class="flex items-center justify-end">
-                    <div class="flex space-x-3">
-                      <GameButton
-                        variant="secondary"
-                        @click="resetYaml"
-                        :disabled="saving"
-                      >
-                        Reset
-                      </GameButton>
-                      <GameButton
-                        variant="primary"
-                        @click="saveCard"
-                        :disabled="saving || (!hasChanges && !isCreating)"
-                      >
-                        {{ saving ? (isCreating ? 'Creating...' : 'Saving...') : (isCreating ? 'Create Card' : 'Save Changes') }}
-                      </GameButton>
+                  <div class="space-y-3">
+                    <!-- Bump Version Checkbox (only when editing) -->
+                    <div v-if="!isCreating" class="flex items-center space-x-2">
+                      <input
+                        id="bump-version"
+                        v-model="bumpVersion"
+                        type="checkbox"
+                        class="rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
+                      />
+                      <label for="bump-version" class="text-sm text-gray-700 dark:text-gray-300">
+                        Create new version (v{{ (card?.version || 0) + 1 }})
+                      </label>
+                    </div>
+
+                    <div class="flex items-center justify-end">
+                      <div class="flex space-x-3">
+                        <GameButton
+                          variant="secondary"
+                          @click="resetYaml"
+                          :disabled="saving"
+                        >
+                          Reset
+                        </GameButton>
+                        <GameButton
+                          variant="primary"
+                          @click="saveCard"
+                          :disabled="saving || (!hasChanges && !isCreating)"
+                        >
+                          {{ saving ? (isCreating ? 'Creating...' : 'Saving...') : (isCreating ? 'Create Card' : 'Save Changes') }}
+                        </GameButton>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </Panel>
-          </Section>
+              </Panel>
+            </Section>
 
-          <!-- Save Success/Error Messages -->
-          <div v-if="saveSuccess" class="space-y-2">
-            <Panel variant="success" title="Success">
-              <p v-if="lastSaveWasBump">Card updated successfully! New version: v{{ card?.version }}</p>
-              <p v-else>Card updated successfully! Current version: v{{ card?.version }}</p>
-            </Panel>
-          </div>
+            <!-- Save Success/Error Messages -->
+            <div v-if="saveSuccess" class="space-y-2">
+              <Panel variant="success" title="Success">
+                <p v-if="lastSaveWasBump">Card updated successfully! New version: v{{ card?.version }}</p>
+                <p v-else>Card updated successfully! Current version: v{{ card?.version }}</p>
+              </Panel>
+            </div>
 
-          <div v-if="saveError" class="space-y-2">
-            <Panel variant="error" title="Save Error">
-              <p>{{ saveError }}</p>
-            </Panel>
-          </div>
+            <div v-if="saveError" class="space-y-2">
+              <Panel variant="error" title="Save Error">
+                <p>{{ saveError }}</p>
+              </Panel>
+            </div>
 
-          <div v-if="deleteError" class="space-y-2">
-            <Panel variant="error" title="Delete Error">
-              <p>{{ deleteError }}</p>
-            </Panel>
+            <div v-if="deleteError" class="space-y-2">
+              <Panel variant="error" title="Delete Error">
+                <p>{{ deleteError }}</p>
+              </Panel>
+            </div>
           </div>
         </div>
       </div>
+
     </main>
   </div>
 </template>

@@ -1,7 +1,7 @@
 <template>
   <div class="group transform transition-all duration-300 hover:-translate-y-2 hover:shadow-xl">
     <div :class="[
-      'h-96 w-full max-w-sm mx-auto overflow-hidden rounded-xl border-2 p-1',
+      'h-96 w-full max-w-lg mx-auto overflow-hidden rounded-xl border-2 p-1',
       borderClass,
       backgroundClass
     ]">
