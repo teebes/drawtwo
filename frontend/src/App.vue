@@ -2,6 +2,7 @@
   <div id="app" class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
     <AppHeader v-if="!shouldHideHeader" />
     <router-view />
+    <ToastNotifications />
   </div>
 </template>
 
@@ -10,6 +11,7 @@ import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useThemeStore } from './stores/theme.js'
 import AppHeader from './components/AppHeader.vue'
+import ToastNotifications from './components/ui/ToastNotifications.vue'
 
 const route = useRoute()
 const themeStore = useThemeStore()

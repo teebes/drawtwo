@@ -135,7 +135,7 @@
           <div class="grid grid-cols-3 space-x-2">
             <GameButton variant="primary" @click="openCardModal">Add Card</GameButton>
             <GameButton variant="secondary" @click="cancelEdit">Edit</GameButton>
-            <GameButton variant="danger" @click="deleteCard(card.id)">Delete Deck</GameButton>
+            <GameButton variant="danger" @click="deleteDeck">Delete Deck</GameButton>
           </div>
         </Panel>
 
@@ -169,6 +169,7 @@ import Panel from '../components/layout/Panel.vue'
 import CardSelectionModal from '../components/ui/CardSelectionModal.vue'
 import type { DeckCard, Card } from '../types/card'
 import GameButton from '../components/ui/GameButton.vue'
+import { useNotificationStore } from '../stores/notifications.js'
 
 interface DeckData {
   id: number
@@ -192,6 +193,7 @@ interface DeckData {
 }
 
 const route = useRoute()
+const notificationStore = useNotificationStore()
 const deck = ref<DeckData | null>(null)
 const loading = ref<boolean>(true)
 const error = ref<string | null>(null)
@@ -249,10 +251,12 @@ const onCardSelected = async (card: Card): Promise<void> => {
     // Recalculate total cards
     deck.value.total_cards = deck.value.cards.reduce((sum, card) => sum + card.count, 0)
 
-    console.log('Card added successfully:', response.data.message)
+    // Show success notification
+    notificationStore.handleApiSuccess(response)
+    closeCardModal()
   } catch (err) {
     console.error('Error adding card to deck:', err)
-    // TODO: Show error message to user
+    notificationStore.handleApiError(err)
   }
 }
 
@@ -286,10 +290,11 @@ const saveEdit = async (): Promise<void> => {
       deck.value.total_cards = deck.value.cards.reduce((sum, card) => sum + card.count, 0)
     }
 
+    notificationStore.handleApiSuccess(response)
     cancelEdit()
   } catch (err) {
     console.error('Error saving card count:', err)
-    // TODO: Show error message to user
+    notificationStore.handleApiError(err)
   }
 }
 
@@ -303,11 +308,19 @@ const deleteCard = async (cardId: number): Promise<void> => {
     deck.value.cards = deck.value.cards.filter(c => c.id !== cardId)
     deck.value.total_cards = deck.value.cards.reduce((sum, card) => sum + card.count, 0)
 
+    notificationStore.success('Card removed from deck successfully')
     cancelEdit()
   } catch (err) {
     console.error('Error deleting card:', err)
-    // TODO: Show error message to user
+    notificationStore.handleApiError(err)
   }
+}
+
+const deleteDeck = async (): Promise<void> => {
+  if (!deck.value) return
+
+  // TODO: Implement deck deletion logic
+  notificationStore.info('Deck deletion feature coming soon')
 }
 
 const fetchDeck = async (): Promise<void> => {
@@ -357,6 +370,14 @@ const fetchDeck = async (): Promise<void> => {
 
 onMounted(() => {
   fetchDeck()
+
+  // Temporary test notifications for styling. Uncomment to test.
+  /*
+  notificationStore.success('This is a test success message!')
+  notificationStore.error('This is a test error message!')
+  notificationStore.warning('This is a test warning message!')
+  notificationStore.info('This is a test info message!')
+  */
 })
 </script>
 

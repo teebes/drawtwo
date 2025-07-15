@@ -91,6 +91,15 @@ class Deck(TimestampedModel):
         """Returns True if this is an AI-owned deck"""
         return self.ai_player is not None
 
+    @property
+    def deck_size(self):
+        """
+        Returns the total number of cards in the deck, counting duplicates.
+        """
+        return self.deckcard_set.aggregate(
+            total=models.Sum('count')
+        )['total'] or 0
+
     def __str__(self):
         return f"{self.owner_name} → {self.name}"
 

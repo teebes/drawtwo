@@ -28,6 +28,8 @@ class Title(TimestampedModel):
     )
     published_at = models.DateTimeField(null=True, blank=True)
 
+    config = models.JSONField(default=dict)
+
     class Meta:
         constraints = [
             # One row per (slug, version)

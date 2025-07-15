@@ -7,7 +7,9 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Count
 
 from apps.builder.models import Title, CardTemplate
+from apps.builder.schemas import TitleConfig
 from .models import Deck, DeckCard
+
 
 
 @api_view(['GET'])
@@ -192,18 +194,35 @@ def add_deck_card(request, deck_id):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    print('here')
+    world_config = TitleConfig.model_validate(card.title.config)
+    print(world_config)
+    print(world_config.model_dump())
+
     # Get count from request (default to 1)
     count = request.data.get('count', 1)
     try:
         count = int(count)
-        if count < 1 or count > 10:
+        if count < 1:
             return Response(
-                {'error': 'count must be between 1 and 10'},
+                {'error': 'count must be at least 1'},
                 status=status.HTTP_400_BAD_REQUEST
+            )
+        if count > world_config.deck_card_max_count:
+            return Response(
+                {'error': 'Cannot have more than %s copies of a card'
+                            % world_config.deck_card_max_count},
             )
     except (ValueError, TypeError):
         return Response(
             {'error': 'count must be a valid integer'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # See if the operation would put the deck over the size limit
+    if deck.deck_size + count > world_config.deck_size_limit:
+        return Response(
+            {'error': 'Deck size would exceed the limit'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
