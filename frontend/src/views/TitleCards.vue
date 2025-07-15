@@ -64,6 +64,8 @@
               >
                 <CollectionCard
                   :card="card"
+                  heightMode="fixed"
+                  height="md"
                   :class="canEditTitle ? 'cursor-pointer transition-transform group-hover:scale-105' : ''"
                   @click="canEditTitle ? navigateToEdit(card.slug) : null"
                 />
@@ -102,6 +104,7 @@
               >
                 <CollectionCard
                   :card="card"
+                  heightMode="auto"
                   :class="canEditTitle ? 'cursor-pointer transition-transform group-hover:scale-105' : ''"
                   @click="canEditTitle ? navigateToEdit(card.slug) : null"
                 />

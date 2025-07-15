@@ -84,6 +84,11 @@ def deck_detail(request, deck_id):
         'id': deck.id,
         'name': deck.name,
         'description': deck.description,
+        'title': {
+            'id': deck.hero.title.id,
+            'slug': deck.hero.title.slug,
+            'name': deck.hero.title.name,
+        },
         'hero': {
             'id': deck.hero.id,
             'name': deck.hero.name,
@@ -159,4 +164,67 @@ def delete_deck_card(request, deck_id, card_id):
 
     return Response({
         'message': f'Card "{card.name}" removed from deck'
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def add_deck_card(request, deck_id):
+    """
+    Add a card to a deck or update its count if it already exists.
+    """
+
+    deck = get_object_or_404(Deck, id=deck_id, user=request.user)
+
+    # Get card_id from request data
+    card_id = request.data.get('card_id')
+    if not card_id:
+        return Response(
+            {'error': 'card_id is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Get the card and verify it belongs to the same title as the deck's hero
+    card = get_object_or_404(CardTemplate, id=card_id)
+    if card.title != deck.hero.title:
+        return Response(
+            {'error': 'Card does not belong to the same title as the deck'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Get count from request (default to 1)
+    count = request.data.get('count', 1)
+    try:
+        count = int(count)
+        if count < 1 or count > 10:
+            return Response(
+                {'error': 'count must be between 1 and 10'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    except (ValueError, TypeError):
+        return Response(
+            {'error': 'count must be a valid integer'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Check if card is already in deck
+    deck_card, created = DeckCard.objects.get_or_create(
+        deck=deck,
+        card=card,
+        defaults={'count': count}
+    )
+
+    if not created:
+        # Update existing card count
+        deck_card.count += count
+        deck_card.save()
+        message = f'Updated "{card.name}" count to {count}'
+    else:
+        message = f'Added "{card.name}" to deck with count {count}'
+
+    return Response({
+        'id': card.id,
+        'name': card.name,
+        'count': deck_card.count,
+        'message': message
     }, status=status.HTTP_200_OK)

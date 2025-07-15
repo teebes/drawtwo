@@ -33,6 +33,7 @@ def serialize_cards_with_traits(queryset) -> List[Dict[str, Any]]:
 
         # Create Card schema object
         card_obj = Card(
+            id=card.id,
             slug=card.slug,
             name=card.name,
             description=card.description,

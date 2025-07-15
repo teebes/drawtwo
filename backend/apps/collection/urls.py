@@ -18,4 +18,5 @@ urlpatterns = [
     # Deck card endpoints
     path('decks/<int:deck_id>/cards/<int:card_id>/', views.update_deck_card, name='update-deck-card'),
     path('decks/<int:deck_id>/cards/<int:card_id>/delete/', views.delete_deck_card, name='delete-deck-card'),
+    path('decks/<int:deck_id>/cards/add/', views.add_deck_card, name='add-deck-card'),
 ]

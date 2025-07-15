@@ -1,7 +1,8 @@
 <template>
   <div class="group transform transition-all duration-300 hover:-translate-y-2 hover:shadow-xl">
     <div :class="[
-      'h-96 w-full max-w-lg mx-auto overflow-hidden rounded-xl border-2 p-1',
+      'w-full max-w-lg mx-auto overflow-hidden rounded-xl border-2 p-1',
+      heightClass,
       borderClass,
       backgroundClass
     ]">
@@ -62,9 +63,42 @@ import type { Card } from '../../types/card'
 
 interface Props {
   card: Card
+  heightMode?: 'fixed' | 'min' | 'auto'
+  height?: 'sm' | 'md' | 'lg' | 'xl'
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  heightMode: 'fixed',
+  height: 'lg'
+})
+
+const heightClass = computed(() => {
+
+  const heightSizes = {
+    sm: 'h-72',     // 18rem (288px)
+    md: 'h-80',     // 20rem (320px)
+    lg: 'h-96',     // 24rem (384px)
+    xl: 'h-[28rem]' // 28rem (448px)
+  }
+
+  const minHeightSizes = {
+    sm: 'min-h-72',     // min 18rem (288px)
+    md: 'min-h-80',     // min 20rem (320px)
+    lg: 'min-h-96',     // min 24rem (384px)
+    xl: 'min-h-[28rem]' // min 28rem (448px)
+  }
+
+  switch (props.heightMode) {
+    case 'fixed':
+      return heightSizes[props.height]
+    case 'min':
+      return minHeightSizes[props.height]
+    case 'auto':
+      return '' // No height constraint
+    default:
+      return heightSizes[props.height]
+  }
+})
 
 const borderClass = computed(() => {
   const borderMap = {

@@ -5,12 +5,11 @@
       <section class="py-16">
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div class="text-center">
-            <h1 class="font-display text-3xl font-bold text-gray-900 dark:text-white">
-              Page Title
-            </h1>
-            <p class="mt-4 text-lg text-gray-600 dark:text-gray-300">
-              Page description or content goes here.
-            </p>
+            <CollectionCard
+              :card="card"
+              heightMode="fixed"
+              height="md"
+            />
           </div>
         </div>
       </section>
@@ -18,7 +17,23 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
+import CollectionCard from '../components/game/CollectionCard.vue'
+import type { Card } from '../types/card'
+
+const card: Card = {
+  id: 1,
+  slug: 'test-card',
+  name: 'Test Card',
+  description: 'This is a test card',
+  card_type: 'minion',
+  cost: 1,
+  attack: 1,
+  health: 1,
+  traits: []
+}
+
+
 </script>
 
 <style scoped>

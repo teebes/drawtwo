@@ -5,6 +5,7 @@ export interface Trait {
 }
 
 export interface Card {
+  id: number
   slug: string
   name: string
   description: string

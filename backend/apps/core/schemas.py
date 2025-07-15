@@ -10,6 +10,7 @@ class Trait(BaseModel):
 
 
 class Card(BaseModel):
+    id: int
     slug: str
     name: str
     description: str

@@ -55,6 +55,7 @@
                    -->
                   <div class="flex flex-col w-full">
 
+                    <!-- First Row -->
                     <div class="flex flex-row w-full">
 
                       <!-- Editable count -->
@@ -93,7 +94,7 @@
                       </div>
                     </div>
 
-                    <!-- Edit actions on narrow displays -->
+                    <!-- Second row, edit actions on narrow displays -->
                     <div class="flex space-x-2 sm:hidden w-full mt-2 mb-4">
                       <GameButton variant="primary" @click="saveEdit">Save</GameButton>
                       <GameButton variant="secondary" @click="cancelEdit">Cancel</GameButton>
@@ -116,7 +117,7 @@
                       <span v-if="card.card_type === 'minion'">
                         {{ card.attack }}/{{ card.health }}
                       </span>
-                      <span v-else>Spell</span>
+                                              <span v-else>Spell</span>
                     </div>
                   </div>
 
@@ -132,7 +133,7 @@
 
         <Panel>
           <div class="grid grid-cols-3 space-x-2">
-            <GameButton variant="primary" @click="saveEdit">Add Card</GameButton>
+            <GameButton variant="primary" @click="openCardModal">Add Card</GameButton>
             <GameButton variant="secondary" @click="cancelEdit">Edit</GameButton>
             <GameButton variant="danger" @click="deleteCard(card.id)">Delete Deck</GameButton>
           </div>
@@ -149,6 +150,14 @@
     <div class="text-center p-8" v-if="loading">
       <p class="text-gray-600">Loading deck...</p>
     </div>
+
+    <!-- Card Selection Modal -->
+    <CardSelectionModal
+      :is-open="showCardModal"
+      :title-slug="titleSlug"
+      @close="closeCardModal"
+      @card-selected="onCardSelected"
+    />
   </div>
 </template>
 
@@ -157,13 +166,19 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from '../config/api.js'
 import Panel from '../components/layout/Panel.vue'
-import type { DeckCard } from '../types/card'
+import CardSelectionModal from '../components/ui/CardSelectionModal.vue'
+import type { DeckCard, Card } from '../types/card'
 import GameButton from '../components/ui/GameButton.vue'
 
 interface DeckData {
   id: number
   name: string
   description: string
+  title: {
+    id: number
+    slug: string
+    name: string
+  }
   hero: {
     id: number
     name: string
@@ -184,12 +199,62 @@ const error = ref<string | null>(null)
 const editingCardId = ref<number | null>(null)
 const editingCount = ref<number>(1)
 
+// Modal state
+const showCardModal = ref<boolean>(false)
+
+// Computed property to get title slug from deck
+const titleSlug = computed(() => {
+  return deck.value?.title?.slug || ''
+})
+
 const averageCost = computed(() => {
   if (!deck.value || deck.value.cards.length === 0) return 0
 
   const totalCost = deck.value.cards.reduce((sum, card) => sum + (card.cost * card.count), 0)
   return totalCost / deck.value.total_cards
 })
+
+const openCardModal = (): void => {
+  showCardModal.value = true
+}
+
+const closeCardModal = (): void => {
+  showCardModal.value = false
+}
+
+const onCardSelected = async (card: Card): Promise<void> => {
+  if (!deck.value) return
+
+  try {
+    const response = await axios.post(`/collection/decks/${deck.value.id}/cards/add/`, {
+      card_id: card.id,
+      count: 1
+    })
+
+    // Check if card already exists in deck
+    const existingCardIndex = deck.value.cards.findIndex(c => c.id === card.id)
+
+    if (existingCardIndex !== -1) {
+      // Update existing card count
+      deck.value.cards[existingCardIndex].count = response.data.count
+    } else {
+      // Add new card to deck
+      const newDeckCard: DeckCard = {
+        ...card,
+        count: response.data.count
+      }
+      deck.value.cards.push(newDeckCard)
+    }
+
+    // Recalculate total cards
+    deck.value.total_cards = deck.value.cards.reduce((sum, card) => sum + card.count, 0)
+
+    console.log('Card added successfully:', response.data.message)
+  } catch (err) {
+    console.error('Error adding card to deck:', err)
+    // TODO: Show error message to user
+  }
+}
 
 const startEdit = (card: DeckCard): void => {
   console.log('starting to edit card')
@@ -256,6 +321,11 @@ const fetchDeck = async (): Promise<void> => {
         id: 0,
         name: 'New Deck',
         description: 'Create a new deck for this title',
+        title: {
+          id: 0,
+          slug: 'new-deck',
+          name: 'New Deck'
+        },
         hero: {
           id: 0,
           name: 'Select Hero',
