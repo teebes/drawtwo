@@ -14,4 +14,8 @@ urlpatterns = [
     # Deck endpoints
     path('titles/<slug:title_slug>/decks/', views.deck_list_by_title, name='deck-list-by-title'),
     path('decks/<int:deck_id>/', views.deck_detail, name='deck-detail'),
+
+    # Deck card endpoints
+    path('decks/<int:deck_id>/cards/<int:card_id>/', views.update_deck_card, name='update-deck-card'),
+    path('decks/<int:deck_id>/cards/<int:card_id>/delete/', views.delete_deck_card, name='delete-deck-card'),
 ]

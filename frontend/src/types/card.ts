@@ -15,3 +15,8 @@ export interface Card {
   traits: Trait[]
   faction?: string | null
 }
+
+export interface DeckCard extends Card {
+  id: number
+  count: number
+}

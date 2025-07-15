@@ -2,7 +2,7 @@
   <div class="deck-detail-page">
 
     <div v-if="!loading && !error && deck">
-      <section class="bg-gradient-to-br from-primary-600 via-primary-700 to-secondary-700 py-16 text-center">
+      <section class="page-banner">
         <h1 class="font-display text-4xl font-bold">{{ deck.name }}</h1>
         <p class="mt-4 text-lg text-gray-200" v-if="deck.description">{{ deck.description }}</p>
         <div class="mt-4 flex items-center justify-center space-x-6 text-sm text-gray-200">
@@ -13,61 +13,131 @@
       </section>
 
       <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8 mt-8">
-        <Panel title="Deck Statistics">
-          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Panel>
+          <div class="grid gap-4 grid-cols-4 sm:grid-cols-4">
             <div class="text-center">
               <div class="text-2xl font-bold text-primary-600">{{ deck.total_cards }}</div>
-              <div class="text-sm text-gray-600">Total Cards</div>
+              <div class="text-xs text-gray-600">Total Cards</div>
             </div>
             <div class="text-center">
               <div class="text-2xl font-bold text-primary-600">{{ deck.cards.length }}</div>
-              <div class="text-sm text-gray-600">Unique Cards</div>
+              <div class="text-xs text-gray-600">Unique Cards</div>
             </div>
             <div class="text-center">
               <div class="text-2xl font-bold text-primary-600">{{ deck.hero.health }}</div>
-              <div class="text-sm text-gray-600">Hero Health</div>
+              <div class="text-xs text-gray-600">Hero Health</div>
             </div>
             <div class="text-center">
               <div class="text-2xl font-bold text-primary-600">{{ averageCost.toFixed(1) }}</div>
-              <div class="text-sm text-gray-600">Avg. Cost</div>
+              <div class="text-xs text-gray-600">Avg. Cost</div>
             </div>
           </div>
         </Panel>
 
-        <Panel title="Cards" v-if="deck.cards.length > 0">
-          <div class="space-y-2">
+
+
+        <Panel v-if="deck.cards.length > 0">
+          <div class="">
             <div
               v-for="card in deck.cards"
               :key="card.id"
-              class="flex items-center justify-between rounded-lg bg-gray-50 p-3 dark:bg-gray-800"
+              class="flex items-center justify-between rounded-lg bg-gray-50 p-1 dark:bg-gray-800"
             >
-              <div class="flex items-center space-x-3">
-                <div class="flex h-8 w-8 items-center justify-center rounded bg-primary-100 text-sm font-bold text-primary-600">
-                  {{ card.cost }}
+              <div class="flex items-center space-x-3 w-full">
+
+                <!-- Edit mode -->
+                <template v-if="editingCardId === card.id">
+
+                  <!--
+                    Because we want to display the actions below the card summary
+                    on low widths, we make two rows. On wider displays the second
+                    row is always empty.
+                   -->
+                  <div class="flex flex-col w-full">
+
+                    <div class="flex flex-row w-full">
+
+                      <!-- Editable count -->
+                      <div class="flex items-center space-x-2">
+                        <input
+                          v-model.number="editingCount"
+                          type="number"
+                          min="1"
+                          max="10"
+                          class="input-field">
+                        <span class="text-sm text-gray-500">x</span>
+                      </div>
+
+                      <!-- Card cost, name and info -->
+                      <div
+                        class="flex h-8 items-center justify-center rounded bg-primary-100 text-sm font-bold text-primary-600 w-8 ml-3 mr-3"
+                      >
+                        {{ card.cost }}
+                      </div>
+
+                      <div class="card-info flex-1 flex flex-row items-center w-full">
+                        <div class="font-medium">{{ card.name }}</div>
+                        <div class="text-sm text-gray-600 ml-4">
+                          <span v-if="card.card_type === 'minion'">
+                            {{ card.attack }}/{{ card.health }}
+                          </span>
+                          <span v-else>Spell</span>
+                        </div>
+                      </div>
+
+                      <!-- Edit actions on wide displays -->
+                      <div class="flex space-x-2 hidden sm:flex">
+                        <GameButton variant="primary" @click="saveEdit">Save</GameButton>
+                        <GameButton variant="secondary" @click="cancelEdit">Cancel</GameButton>
+                        <GameButton variant="danger" @click="deleteCard(card.id)">Delete</GameButton>
+                      </div>
+                    </div>
+
+                    <!-- Edit actions on narrow displays -->
+                    <div class="flex space-x-2 sm:hidden w-full mt-2 mb-4">
+                      <GameButton variant="primary" @click="saveEdit">Save</GameButton>
+                      <GameButton variant="secondary" @click="cancelEdit">Cancel</GameButton>
+                      <GameButton variant="danger" @click="deleteCard(card.id)">Delete</GameButton>
+                    </div>
                 </div>
-                <div>
-                  <div class="font-medium">{{ card.name }}</div>
-                  <div class="text-sm text-gray-600">
-                    {{ card.card_type }}
-                    <span v-if="card.attack !== null && card.health !== null">
-                      • {{ card.attack }}/{{ card.health }}
-                    </span>
+                </template>
+
+                <!-- Normal mode -->
+                <template v-else>
+                  <div class="text-lg font-bold text-gray-500 w-8">{{ card.count }}x</div>
+
+                  <div class="flex h-8 w-8 items-center justify-center rounded bg-primary-100 text-sm font-bold text-primary-600">
+                    {{ card.cost }}
                   </div>
-                </div>
+
+                  <div class="card-info flex-1 flex flex-row items-center w-full">
+                    <div class="font-medium">{{ card.name }}</div>
+                    <div class="text-sm text-gray-600 ml-4">
+                      <span v-if="card.card_type === 'minion'">
+                        {{ card.attack }}/{{ card.health }}
+                      </span>
+                      <span v-else>Spell</span>
+                    </div>
+                  </div>
+
+                  <div class="">
+                    <GameButton variant="secondary" @click="startEdit(card)">Edit</GameButton>
+                  </div>
+                </template>
+
               </div>
-              <div class="text-lg font-bold text-gray-900">{{ card.count }}x</div>
             </div>
           </div>
         </Panel>
 
-        <Panel title="Empty Deck" v-else>
-          <div class="text-center py-8">
-            <p class="text-gray-600 mb-4">This deck doesn't have any cards yet.</p>
-            <button class="inline-flex items-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
-              Add Cards
-            </button>
+        <Panel>
+          <div class="grid grid-cols-3 space-x-2">
+            <GameButton variant="primary" @click="saveEdit">Add Card</GameButton>
+            <GameButton variant="secondary" @click="cancelEdit">Edit</GameButton>
+            <GameButton variant="danger" @click="deleteCard(card.id)">Delete Deck</GameButton>
           </div>
         </Panel>
+
       </main>
     </div>
 
@@ -87,17 +157,8 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from '../config/api.js'
 import Panel from '../components/layout/Panel.vue'
-
-interface DeckCard {
-  id: number
-  name: string
-  slug: string
-  cost: number
-  card_type: string
-  attack: number | null
-  health: number | null
-  count: number
-}
+import type { DeckCard } from '../types/card'
+import GameButton from '../components/ui/GameButton.vue'
 
 interface DeckData {
   id: number
@@ -120,12 +181,69 @@ const deck = ref<DeckData | null>(null)
 const loading = ref<boolean>(true)
 const error = ref<string | null>(null)
 
+const editingCardId = ref<number | null>(null)
+const editingCount = ref<number>(1)
+
 const averageCost = computed(() => {
   if (!deck.value || deck.value.cards.length === 0) return 0
 
   const totalCost = deck.value.cards.reduce((sum, card) => sum + (card.cost * card.count), 0)
   return totalCost / deck.value.total_cards
 })
+
+const startEdit = (card: DeckCard): void => {
+  console.log('starting to edit card')
+  console.log(card)
+  console.log(editingCount.value)
+
+  editingCardId.value = card.id
+  editingCount.value = card.count
+}
+
+const cancelEdit = (): void => {
+  editingCardId.value = null
+  editingCount.value = 1
+}
+
+const saveEdit = async (): Promise<void> => {
+  if (!editingCardId.value || !deck.value) return
+
+  try {
+    const response = await axios.put(`/collection/decks/${deck.value.id}/cards/${editingCardId.value}/`, {
+      count: editingCount.value
+    })
+
+    // Update local state
+    const cardIndex = deck.value.cards.findIndex(c => c.id === editingCardId.value)
+    if (cardIndex !== -1) {
+      deck.value.cards[cardIndex].count = editingCount.value
+      // Recalculate total cards
+      deck.value.total_cards = deck.value.cards.reduce((sum, card) => sum + card.count, 0)
+    }
+
+    cancelEdit()
+  } catch (err) {
+    console.error('Error saving card count:', err)
+    // TODO: Show error message to user
+  }
+}
+
+const deleteCard = async (cardId: number): Promise<void> => {
+  if (!deck.value) return
+
+  try {
+    await axios.delete(`/collection/decks/${deck.value.id}/cards/${cardId}/delete/`)
+
+    // Update local state
+    deck.value.cards = deck.value.cards.filter(c => c.id !== cardId)
+    deck.value.total_cards = deck.value.cards.reduce((sum, card) => sum + card.count, 0)
+
+    cancelEdit()
+  } catch (err) {
+    console.error('Error deleting card:', err)
+    // TODO: Show error message to user
+  }
+}
 
 const fetchDeck = async (): Promise<void> => {
   try {

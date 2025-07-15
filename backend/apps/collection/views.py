@@ -6,8 +6,8 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.db.models import Count
 
-from apps.builder.models import Title
-from .models import Deck
+from apps.builder.models import Title, CardTemplate
+from .models import Deck, DeckCard
 
 
 @api_view(['GET'])
@@ -95,3 +95,68 @@ def deck_detail(request, deck_id):
         'created_at': deck.created_at.isoformat(),
         'updated_at': deck.updated_at.isoformat(),
     })
+
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def update_deck_card(request, deck_id, card_id):
+    """
+    Update the count of a specific card in a deck.
+    """
+    deck = get_object_or_404(Deck, id=deck_id, user=request.user)
+    card = get_object_or_404(CardTemplate, id=card_id)
+
+    # Get the deck card relationship
+    deck_card = get_object_or_404(DeckCard, deck=deck, card=card)
+
+    # Get the new count from request data
+    new_count = request.data.get('count')
+    if new_count is None:
+        return Response(
+            {'error': 'count is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Validate count
+    try:
+        new_count = int(new_count)
+        if new_count < 1 or new_count > 10:
+            return Response(
+                {'error': 'count must be between 1 and 10'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    except (ValueError, TypeError):
+        return Response(
+            {'error': 'count must be a valid integer'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Update the count
+    deck_card.count = new_count
+    deck_card.save()
+
+    return Response({
+        'id': card.id,
+        'count': deck_card.count,
+        'message': f'Card count updated to {new_count}'
+    })
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_deck_card(request, deck_id, card_id):
+    """
+    Remove a card from a deck.
+    """
+    deck = get_object_or_404(Deck, id=deck_id, user=request.user)
+    card = get_object_or_404(CardTemplate, id=card_id)
+
+    # Get the deck card relationship
+    deck_card = get_object_or_404(DeckCard, deck=deck, card=card)
+
+    # Delete the deck card
+    deck_card.delete()
+
+    return Response({
+        'message': f'Card "{card.name}" removed from deck'
+    }, status=status.HTTP_200_OK)
