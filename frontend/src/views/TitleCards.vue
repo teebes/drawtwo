@@ -1,7 +1,7 @@
 <template>
   <div class="title-cards-page min-h-screen bg-gray-50 dark:bg-gray-900">
 
-    <div v-if="!loading && !error && title">
+    <div v-if="!loading && !error && title" class="relative flex flex-col h-full">
       <!-- Hero Section -->
       <section class="page-banner">
         <h1 class="font-display text-4xl font-bold text-white">Collection</h1>
@@ -97,13 +97,16 @@
       </main>
 
       <!-- Bottom Bar -->
-      <section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+      <section v-if="canEditTitle"class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
         <div class="flex items-center justify-between">
           <div class="text-sm text-gray-600 dark:text-gray-400">
             {{ cards.length }} Cards
           </div>
 
-          <div v-if="canEditTitle" class="flex items-center space-x-4">
+          <div class="flex items-center space-x-4">
+            <span class="text-sm text-gray-600 dark:text-gray-400">
+              Click on any card to edit it
+            </span>
             <router-link
               :to="{ name: 'CardCreate', params: { slug: title.slug } }"
               class="inline-flex items-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
@@ -113,9 +116,6 @@
               </svg>
               Create New Card
             </router-link>
-            <span class="text-sm text-gray-600 dark:text-gray-400">
-              Click on any card to edit it
-            </span>
           </div>
         </div>
       </section>

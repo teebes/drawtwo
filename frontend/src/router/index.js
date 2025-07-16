@@ -66,7 +66,7 @@ const routes = [
     meta: { requiresAuth: false }
   },
   {
-    path: '/deck/:id',
+    path: '/:slug/decks/:id',
     name: 'DeckDetail',
     component: DeckDetail,
     meta: { requiresAuth: true }
@@ -115,7 +115,9 @@ const router = createRouter({
 })
 
 // List of routes that are title-related and use /:slug pattern
-const titleRoutes = ['Title', 'TitleCards', 'TitleBriefCards', 'CardCreate', 'CardEdit']
+const titleRoutes = [
+  'Title', 'TitleCards', 'TitleBriefCards', 'CardCreate', 'CardEdit', 'DeckDetail'
+]
 
 // Helper function to check if a route is a title route
 const isTitleRoute = (routeName) => titleRoutes.includes(routeName)

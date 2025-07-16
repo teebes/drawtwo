@@ -54,7 +54,7 @@
 
       <!-- Flex Column -->
       <!-- <div v-else-if="true" class="w-full flex-1 flex flex-col-reverse sm:flex-row sm:space-x-8"> -->
-      <div v-else :class="isCreating ? 'max-w-6xl mx-auto': 'w-full flex-1 flex flex-col-reverse sm:flex-row sm:space-x-8'">
+      <div v-else :class="isCreating ? 'max-w-6xl mx-auto': 'w-full flex-1 flex flex-col-reverse md:flex-row md:space-x-8'">
 
         <!-- Card Preview-->
         <div class="w-full flex justify-start sm:justify-center items-start" v-if="!isCreating">

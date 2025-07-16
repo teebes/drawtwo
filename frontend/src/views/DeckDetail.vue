@@ -133,9 +133,9 @@
 
         <Panel>
           <div class="grid grid-cols-3 space-x-2">
-            <GameButton variant="primary" @click="openCardModal">Add Card</GameButton>
-            <GameButton variant="secondary" @click="cancelEdit">Edit</GameButton>
             <GameButton variant="danger" @click="deleteDeck">Delete Deck</GameButton>
+            <GameButton variant="secondary" @click="cancelEdit">Edit</GameButton>
+            <GameButton variant="primary" @click="openCardModal">Add Card</GameButton>
           </div>
         </Panel>
 
