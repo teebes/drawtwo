@@ -13,12 +13,14 @@ class UserAdmin(BaseUserAdmin):
         "email",
         "username",
         "display_name",
+        "status",
         "is_email_verified",
         "is_staff",
         "is_active",
         "created_at",
     )
     list_filter = (
+        "status",
         "is_staff",
         "is_superuser",
         "is_active",
@@ -30,7 +32,7 @@ class UserAdmin(BaseUserAdmin):
 
     fieldsets = (
         (None, {"fields": ("email", "password")}),
-        ("Personal info", {"fields": ("username", "avatar")}),
+        ("Personal info", {"fields": ("username", "avatar", "status")}),
         (
             "Permissions",
             {

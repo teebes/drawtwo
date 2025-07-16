@@ -120,7 +120,21 @@ class EmailConfirmationView(APIView):
                     user.is_email_verified = True
                     user.save()
 
-                    # Generate JWT tokens
+                    # Check if user can login (considering whitelist mode)
+                    from apps.control.models import SiteSettings
+                    site_settings = SiteSettings.get_cached_settings()
+
+                    if site_settings.whitelist_mode_enabled and not user.can_login():
+                        return Response(
+                            {
+                                "message": "Email confirmed successfully, but your account is pending approval.",
+                                "user": UserSerializer(user).data,
+                                "requires_approval": True,
+                            },
+                            status=status.HTTP_200_OK,
+                        )
+
+                    # Generate JWT tokens only if user can login
                     from rest_framework_simplejwt.tokens import RefreshToken
 
                     refresh = RefreshToken.for_user(user)
@@ -190,17 +204,41 @@ def protected_test_view(request):
 def register_view(request):
     """Register a new user and send email verification."""
     from .serializers import CustomRegisterSerializer
+    from apps.control.models import SiteSettings
+
+    # Check if signup is disabled
+    site_settings = SiteSettings.get_cached_settings()
+    if site_settings.signup_disabled:
+        return Response(
+            {
+                "error": "User registration is currently disabled. Please contact an administrator.",
+                "signup_disabled": True
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
 
     serializer = CustomRegisterSerializer(data=request.data)
     if serializer.is_valid():
         user = serializer.save(request)
+
+        # New users start as pending by default (already set in model)
+        message = (
+            "Registration successful. Please check your email to "
+            "verify your account."
+        )
+
+        # Add additional message if whitelist mode is enabled
+        if site_settings.whitelist_mode_enabled:
+            message += (
+                " Your account will need to be approved by an administrator "
+                "before you can access the site."
+            )
+
         return Response(
             {
-                "message": (
-                    "Registration successful. Please check your email to "
-                    "verify your account."
-                ),
+                "message": message,
                 "user": UserSerializer(user).data,
+                "requires_approval": site_settings.whitelist_mode_enabled,
             },
             status=status.HTTP_201_CREATED,
         )

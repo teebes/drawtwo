@@ -5,6 +5,7 @@ import Home from '../views/Home.vue'
 import Login from '../views/Login.vue'
 import Dashboard from '../views/Dashboard.vue'
 import EmailConfirm from '../views/EmailConfirm.vue'
+import ControlPanel from '../views/ControlPanel.vue'
 import DesignReference from '../views/DesignReference.vue'
 import Lobby from '../views/Lobby.vue'
 import Template from '../views/Template.vue'
@@ -72,6 +73,12 @@ const routes = [
     name: 'Template',
     component: Template,
     meta: { requiresAuth: false }
+  },
+  {
+    path: '/control',
+    name: 'ControlPanel',
+    component: ControlPanel,
+    meta: { requiresAuth: true, requiresStaff: true }
   },
   {
     path: '/:slug/decks/new',
@@ -151,6 +158,10 @@ router.beforeEach(async (to, from, next) => {
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     // Redirect to login if route requires auth and user is not authenticated
     next({ name: 'Login', query: { redirect: to.fullPath } })
+    return
+  } else if (to.meta.requiresStaff && (!authStore.isAuthenticated || !authStore.user?.is_staff)) {
+    // Redirect to lobby if route requires staff and user is not staff
+    next({ name: 'Lobby' })
     return
   } else if (to.name === 'Login' && authStore.isAuthenticated) {
     // Redirect to lobby if user is already authenticated and trying to access login

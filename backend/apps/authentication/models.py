@@ -20,6 +20,8 @@ class UserManager(BaseUserManager):
         """Create and return a superuser with email and password."""
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
+        # Superusers should be approved by default
+        extra_fields.setdefault("status", User.STATUS_APPROVED)
 
         if extra_fields.get("is_staff") is not True:
             raise ValueError("Superuser must have is_staff=True.")
@@ -34,6 +36,19 @@ class User(AbstractUser):
     Custom user model that uses email instead of username for authentication.
     Extensible for future features like user profiles, preferences, etc.
     """
+
+    # User status choices
+    STATUS_PENDING = "pending"
+    STATUS_APPROVED = "approved"
+    STATUS_SUSPENDED = "suspended"
+    STATUS_BANNED = "banned"
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_APPROVED, "Approved"),
+        (STATUS_SUSPENDED, "Suspended"),
+        (STATUS_BANNED, "Banned"),
+    ]
 
     email = models.EmailField(unique=True)
 
@@ -62,6 +77,14 @@ class User(AbstractUser):
     # Authentication fields
     is_email_verified = models.BooleanField(default=False)
 
+    # User status for approval workflow
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        help_text="User approval status for site access control"
+    )
+
     objects = UserManager()  # Use our custom manager
 
     USERNAME_FIELD = "email"
@@ -81,3 +104,12 @@ class User(AbstractUser):
     def display_name(self):
         """Returns the user's display name."""
         return self.username or self.email
+
+    @property
+    def is_approved(self):
+        """Check if user is approved to access the site."""
+        return self.status == self.STATUS_APPROVED
+
+    def can_login(self):
+        """Check if user can log in based on their status."""
+        return self.status in [self.STATUS_APPROVED] and self.is_active

@@ -23,10 +23,11 @@ class UserSerializer(serializers.ModelSerializer):
             "avatar",
             "is_email_verified",
             "is_staff",
+            "status",
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "created_at", "updated_at", "is_email_verified", "is_staff")
+        read_only_fields = ("id", "created_at", "updated_at", "is_email_verified", "is_staff", "status")
 
 
 class CustomRegisterSerializer(RegisterSerializer):

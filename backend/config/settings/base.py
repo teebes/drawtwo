@@ -54,6 +54,7 @@ LOCAL_APPS = [
     "apps.builder",
     "apps.collection",
     "apps.gameplay",
+    "apps.control",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -66,6 +67,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "allauth.account.middleware.AccountMiddleware",  # Required by django-allauth
+    "apps.control.middleware.SiteAccessControlMiddleware",  # Site access control
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
