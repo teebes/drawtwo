@@ -3,42 +3,10 @@
 
     <div v-if="!loading && !error && title">
       <!-- Hero Section -->
-      <section class="bg-gradient-to-br from-primary-600 via-primary-700 to-secondary-700 py-16 text-center">
-        <h1 class="font-display text-4xl font-bold text-white">{{ title.name }} Collection</h1>
-        <p class="mt-4 text-lg text-primary-100">
-          Browse all {{ cards.length }} cards in this title
-        </p>
+      <section class="page-banner">
+        <h1 class="font-display text-4xl font-bold text-white">Collection</h1>
       </section>
 
-      <!-- Navigation -->
-      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
-        <div class="flex items-center justify-between">
-          <router-link
-            :to="{ name: 'Title', params: { slug: title.slug } }"
-            class="inline-flex items-center text-primary-600 hover:text-primary-700 transition-colors"
-          >
-            <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-            </svg>
-            Back to {{ title.name }}
-          </router-link>
-
-          <div v-if="canEditTitle" class="flex items-center space-x-4">
-            <router-link
-              :to="{ name: 'CardCreate', params: { slug: title.slug } }"
-              class="inline-flex items-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
-            >
-              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-              </svg>
-              Create New Card
-            </router-link>
-            <span class="text-sm text-gray-600 dark:text-gray-400">
-              Click on any card to edit it
-            </span>
-          </div>
-        </div>
-      </div>
 
       <!-- Cards Sections -->
       <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-16 space-y-12">
@@ -52,7 +20,7 @@
 
         <div v-else>
           <!-- Common Cards Section -->
-          <section v-if="commonCards.length > 0">
+          <section v-if="commonCards.length > 0" class="mt-4">
             <h2 class="font-display text-2xl font-bold text-gray-900 dark:text-white mb-6">
               Common Cards
             </h2>
@@ -127,6 +95,31 @@
           </section>
         </div>
       </main>
+
+      <!-- Bottom Bar -->
+      <section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+        <div class="flex items-center justify-between">
+          <div class="text-sm text-gray-600 dark:text-gray-400">
+            {{ cards.length }} Cards
+          </div>
+
+          <div v-if="canEditTitle" class="flex items-center space-x-4">
+            <router-link
+              :to="{ name: 'CardCreate', params: { slug: title.slug } }"
+              class="inline-flex items-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
+            >
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+              </svg>
+              Create New Card
+            </router-link>
+            <span class="text-sm text-gray-600 dark:text-gray-400">
+              Click on any card to edit it
+            </span>
+          </div>
+        </div>
+      </section>
+
     </div>
 
     <!-- Loading State -->
@@ -150,9 +143,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
+import { useTitleStore } from '../stores/title.js'
 import axios from '../config/api.js'
 import CollectionCard from '../components/game/CollectionCard.vue'
 import type { Card } from '../types/card'
@@ -176,11 +170,15 @@ interface TitleData {
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-const title = ref<TitleData | null>(null)
+const titleStore = useTitleStore()
+
+// Use the title from the store instead of local state
+const title = computed((): TitleData | null => titleStore.currentTitle)
+const loading = computed(() => titleStore.loading)
+const error = computed(() => titleStore.error)
+
 const cards = ref<Card[]>([])
-const loading = ref<boolean>(true)
 const cardsLoading = ref<boolean>(false)
-const error = ref<string | null>(null)
 
 // Computed properties for organizing cards by faction
 const commonCards = computed(() => {
@@ -220,22 +218,7 @@ const navigateToEdit = (cardSlug: string): void => {
   })
 }
 
-const fetchTitle = async (): Promise<void> => {
-  try {
-    const slug = route.params.slug as string
-    const response = await axios.get(`/builder/titles/${slug}/`)
-    title.value = response.data
-  } catch (err) {
-    if (err.response?.status === 404) {
-      error.value = 'Title not found'
-    } else {
-      error.value = err.response?.data?.message || err.message || 'Failed to load title'
-    }
-    console.error('Error fetching title:', err)
-  } finally {
-    loading.value = false
-  }
-}
+// Title data now comes from the store via router preloading
 
 const fetchCards = async (): Promise<void> => {
   if (!title.value) return
@@ -254,11 +237,15 @@ const fetchCards = async (): Promise<void> => {
   }
 }
 
-onMounted(async () => {
-  await fetchTitle()
-  if (title.value) {
+// Watch for title to be loaded and then fetch cards
+watch(title, async (newTitle) => {
+  if (newTitle) {
     await fetchCards()
   }
+}, { immediate: true })
+
+onMounted(() => {
+  // Title will be loaded by router, so we just need to watch for it
 })
 </script>
 

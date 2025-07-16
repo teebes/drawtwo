@@ -13,6 +13,16 @@
               class="ml-2 h-8 w-8 rounded-lg object-contain"
             />
           </router-link>
+          <!-- Show title name when viewing a title -->
+          <div v-if="titleStore.isViewingTitle" class="ml-4 flex items-center">
+            <span class="text-gray-400 dark:text-gray-500 mx-2">/</span>
+            <router-link
+              :to="{ name: 'Title', params: { slug: titleStore.titleSlug } }"
+              class="font-display text-xl font-semibold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors"
+            >
+              {{ titleStore.titleName }}
+            </router-link>
+          </div>
         </div>
 
         <nav class="flex items-center space-x-4">
@@ -48,6 +58,8 @@
 
 <script setup>
 import { useAuthStore } from '../stores/auth.js'
+import { useTitleStore } from '../stores/title.js'
 
 const authStore = useAuthStore()
+const titleStore = useTitleStore()
 </script>

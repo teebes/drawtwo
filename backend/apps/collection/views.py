@@ -194,10 +194,7 @@ def add_deck_card(request, deck_id):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    print('here')
     world_config = TitleConfig.model_validate(card.title.config)
-    print(world_config)
-    print(world_config.model_dump())
 
     # Get count from request (default to 1)
     count = request.data.get('count', 1)

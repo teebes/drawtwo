@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
+import { useTitleStore } from '../stores/title.js'
 import Home from '../views/Home.vue'
 import Login from '../views/Login.vue'
 import Dashboard from '../views/Dashboard.vue'
@@ -113,22 +114,47 @@ const router = createRouter({
   routes
 })
 
-// Navigation guards
-router.beforeEach((to, from, next) => {
-  const authStore = useAuthStore()
+// List of routes that are title-related and use /:slug pattern
+const titleRoutes = ['Title', 'TitleCards', 'TitleBriefCards', 'CardCreate', 'CardEdit']
 
+// Helper function to check if a route is a title route
+const isTitleRoute = (routeName) => titleRoutes.includes(routeName)
+
+// Navigation guards
+router.beforeEach(async (to, from, next) => {
+  const authStore = useAuthStore()
+  const titleStore = useTitleStore()
+
+  // Handle authentication first
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     // Redirect to login if route requires auth and user is not authenticated
     next({ name: 'Login', query: { redirect: to.fullPath } })
+    return
   } else if (to.name === 'Login' && authStore.isAuthenticated) {
     // Redirect to lobby if user is already authenticated and trying to access login
     next({ name: 'Lobby' })
+    return
   } else if (to.name === 'Home' && authStore.isAuthenticated) {
     // Redirect authenticated users from home to lobby
     next({ name: 'Lobby' })
-  } else {
-    next()
+    return
   }
+
+  // Handle title loading for title routes
+  if (isTitleRoute(to.name) && to.params.slug) {
+    try {
+      await titleStore.loadTitle(to.params.slug)
+    } catch (error) {
+      console.error('Failed to load title:', error)
+      // Continue navigation even if title loading fails
+      // The individual components can handle the error state
+    }
+  } else if (!isTitleRoute(to.name)) {
+    // Clear title when navigating away from title routes
+    titleStore.clearCurrentTitle()
+  }
+
+  next()
 })
 
 export default router

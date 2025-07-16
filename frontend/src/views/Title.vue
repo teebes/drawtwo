@@ -143,8 +143,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useTitleStore } from '../stores/title.js'
 import axios from '../config/api.js'
 import Panel from '../components/layout/Panel.vue'
 
@@ -183,30 +184,19 @@ interface GameData {
 }
 
 const route = useRoute()
-const title = ref<TitleData | null>(null)
+const titleStore = useTitleStore()
+
+// Use the title from the store instead of local state
+const title = computed((): TitleData | null => titleStore.currentTitle)
+const loading = computed(() => titleStore.loading)
+const error = computed(() => titleStore.error)
+
 const decks = ref<DeckData[]>([])
 const games = ref<GameData[]>([])
-const loading = ref<boolean>(true)
 const decksLoading = ref<boolean>(false)
 const gamesLoading = ref<boolean>(false)
-const error = ref<string | null>(null)
 
-const fetchTitle = async (): Promise<void> => {
-  try {
-    const slug = route.params.slug as string
-    const response = await axios.get(`/builder/titles/${slug}/`)
-    title.value = response.data
-  } catch (err) {
-    if (err.response?.status === 404) {
-      error.value = 'Title not found'
-    } else {
-      error.value = err.response?.data?.message || err.message || 'Failed to load title'
-    }
-    console.error('Error fetching title:', err)
-  } finally {
-    loading.value = false
-  }
-}
+// Title data now comes from the store via router preloading
 
 const fetchDecks = async (): Promise<void> => {
   if (!title.value) return
@@ -247,12 +237,16 @@ const formatDate = (dateString: string): string => {
   })
 }
 
-onMounted(async () => {
-  await fetchTitle()
-  if (title.value) {
+// Watch for title to be loaded and then fetch related data
+watch(title, async (newTitle) => {
+  if (newTitle) {
     await fetchDecks()
     await fetchGames()
   }
+}, { immediate: true })
+
+onMounted(() => {
+  // Title will be loaded by router, so we just need to watch for it
 })
 </script>
 
