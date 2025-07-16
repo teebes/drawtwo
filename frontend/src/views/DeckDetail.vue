@@ -165,7 +165,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import axios from '../config/api.js'
 import Panel from '../components/layout/Panel.vue'
 import CardSelectionModal from '../components/ui/CardSelectionModal.vue'
@@ -195,6 +195,7 @@ interface DeckData {
 }
 
 const route = useRoute()
+const router = useRouter()
 const notificationStore = useNotificationStore()
 const deck = ref<DeckData | null>(null)
 const loading = ref<boolean>(true)
@@ -321,8 +322,28 @@ const deleteCard = async (cardId: number): Promise<void> => {
 const deleteDeck = async (): Promise<void> => {
   if (!deck.value) return
 
-  // TODO: Implement deck deletion logic
-  notificationStore.info('Deck deletion feature coming soon')
+  // Show confirmation dialog
+  const confirmed = window.confirm(
+    `Are you sure you want to delete the deck "${deck.value.name}"? This action cannot be undone.`
+  )
+
+  if (!confirmed) return
+
+  try {
+    const response = await axios.delete(`/collection/decks/${deck.value.id}/`)
+
+    // Show success notification
+    notificationStore.handleApiSuccess(response)
+
+    // Navigate back to title page
+    router.push({
+      name: 'Title',
+      params: { slug: deck.value.title.slug }
+    })
+  } catch (err) {
+    console.error('Error deleting deck:', err)
+    notificationStore.handleApiError(err)
+  }
 }
 
 const fetchDeck = async (): Promise<void> => {

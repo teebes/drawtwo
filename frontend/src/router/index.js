@@ -9,6 +9,7 @@ import DesignReference from '../views/DesignReference.vue'
 import Lobby from '../views/Lobby.vue'
 import Template from '../views/Template.vue'
 import Profile from '../views/Profile.vue'
+import Mockup from '../views/Mockup.vue'
 import Title from '../views/Title.vue'
 import TitleBriefCards from '../views/TitleBriefCards.vue'
 import TitleCards from '../views/TitleCards.vue'
@@ -40,6 +41,12 @@ const routes = [
     path: '/profile',
     name: 'Profile',
     component: Profile,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/mockup',
+    name: 'Mockup',
+    component: Mockup,
     meta: { requiresAuth: true }
   },
   {

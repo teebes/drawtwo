@@ -119,12 +119,13 @@ def deck_list_by_title(request, title_slug):
         }, status=status.HTTP_201_CREATED)
 
 
-@api_view(['GET', 'PUT'])
+@api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def deck_detail(request, deck_id):
     """
     GET: Get details for a specific deck.
     PUT: Update an existing deck.
+    DELETE: Delete a deck.
     """
     deck = get_object_or_404(Deck, id=deck_id, user=request.user)
 
@@ -235,6 +236,17 @@ def deck_detail(request, deck_id):
             'updated_at': deck.updated_at.isoformat(),
             'message': f'Deck "{deck.name}" updated successfully'
         })
+
+    elif request.method == 'DELETE':
+        # Delete the deck
+        deck_name = deck.name
+        title_slug = deck.hero.title.slug
+        deck.delete()
+
+        return Response({
+            'message': f'Deck "{deck_name}" deleted successfully',
+            'title_slug': title_slug
+        }, status=status.HTTP_200_OK)
 
 
 @api_view(['PUT'])
