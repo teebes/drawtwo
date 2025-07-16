@@ -1,6 +1,6 @@
 <template>
-  <div class="template-page">
-    <main class="flex-1">
+  <div class="template-page flex flex-col">
+    <main class="flex-1 flex items-center justify-center">
       <!-- Content goes here -->
       <section class="py-16">
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -38,7 +38,7 @@ const card: Card = {
 
 <style scoped>
 .template-page {
-  min-height: 100vh;
+  height: calc(100vh - 4rem); /* Subtract header height (64px/4rem) */
   display: flex;
   flex-direction: column;
 }
