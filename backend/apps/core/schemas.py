@@ -20,3 +20,13 @@ class Card(BaseModel):
     health: int
     traits: List[Trait]
     faction: Optional[str] = None
+
+
+class Hero(BaseModel):
+    id: int
+    slug: str
+    name: str
+    health: int
+    hero_power: dict = {}
+    spec: dict = {}
+    faction: Optional[str] = None

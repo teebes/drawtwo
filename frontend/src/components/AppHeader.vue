@@ -4,7 +4,7 @@
       <div class="flex h-16 items-center justify-between">
         <div class="flex items-center">
           <router-link to="/" class="flex items-center">
-            <h1 class="font-display text-2xl font-bold text-gray-900 dark:text-white">
+            <h1 class="font-display text-2xl font-bold text-gray-900 dark:text-white hidden sm:block">
               DrawTwo
             </h1>
             <img

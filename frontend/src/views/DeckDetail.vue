@@ -134,7 +134,9 @@
         <Panel>
           <div class="grid grid-cols-3 space-x-2">
             <GameButton variant="danger" @click="deleteDeck">Delete Deck</GameButton>
-            <GameButton variant="secondary" @click="cancelEdit">Edit</GameButton>
+            <router-link :to="{ name: 'DeckEdit', params: { slug: deck.title.slug, id: deck.id } }">
+              <GameButton variant="secondary" class="w-full">Edit Deck</GameButton>
+            </router-link>
             <GameButton variant="primary" @click="openCardModal">Add Card</GameButton>
           </div>
         </Panel>
@@ -326,34 +328,6 @@ const deleteDeck = async (): Promise<void> => {
 const fetchDeck = async (): Promise<void> => {
   try {
     const deckId = route.params.id as string
-
-    // Handle "new" deck creation (placeholder for now)
-    if (deckId === 'new') {
-      // For now, just show a placeholder
-      deck.value = {
-        id: 0,
-        name: 'New Deck',
-        description: 'Create a new deck for this title',
-        title: {
-          id: 0,
-          slug: 'new-deck',
-          name: 'New Deck'
-        },
-        hero: {
-          id: 0,
-          name: 'Select Hero',
-          slug: '',
-          health: 0
-        },
-        cards: [],
-        total_cards: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-      loading.value = false
-      return
-    }
-
     const response = await axios.get(`/collection/decks/${deckId}/`)
     deck.value = response.data
   } catch (err) {

@@ -53,7 +53,7 @@
 
               <div class="pt-2 border-t border-gray-200 dark:border-gray-700">
                 <router-link
-                  :to="{ name: 'DeckDetail', params: { id: 'new' } }"
+                  :to="{ name: 'DeckCreate', params: { slug: title.slug } }"
                   class="flex items-center justify-center w-full rounded-lg border-2 border-dashed border-gray-300 p-3 text-sm font-medium text-gray-600 hover:border-primary-400 hover:text-primary-600 transition-colors"
                 >
                   <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -67,7 +67,7 @@
             <div v-else class="text-center py-8">
               <p class="text-gray-600 mb-4">You don't have any decks for this title yet.</p>
               <router-link
-                :to="{ name: 'DeckDetail', params: { id: 'new' } }"
+                :to="{ name: 'DeckCreate', params: { slug: title.slug } }"
                 class="inline-flex items-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
               >
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
