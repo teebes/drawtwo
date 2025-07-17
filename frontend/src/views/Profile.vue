@@ -78,10 +78,10 @@
                     Access the admin dashboard to manage the system.
                   </p>
 
-                  <div class="space-x-4">
+                  <div class="">
                     <router-link
                       to="/dashboard"
-                      class="inline-flex items-center rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                      class="mr-2 mb-2 inline-flex items-center rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
                     >
                       Admin Dashboard
                       <svg class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
