@@ -218,7 +218,8 @@ const fetchDecks = async (): Promise<void> => {
 const fetchGames = async (): Promise<void> => {
   try {
     gamesLoading.value = true
-    const response = await axios.get('/gameplay/games/')
+    const slug = route.params.slug as string
+    const response = await axios.get(`/titles/${slug}/games/`)
     games.value = response.data.games || []
   } catch (err) {
     console.error('Error fetching games:', err)

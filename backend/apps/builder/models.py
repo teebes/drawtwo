@@ -309,6 +309,7 @@ class AIPlayer(TimestampedModel):
     # AI behavior settings
     strategy_config = models.JSONField(
         default=dict,
+        blank=True,
         help_text="AI strategy parameters like aggression, card priorities, etc."
     )
 

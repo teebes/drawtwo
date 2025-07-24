@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.db import models
 
 from apps.core.models import TimestampedModel
-from apps.builder.models import CardTemplate, HeroTemplate, AIPlayer
+from apps.builder.models import CardTemplate, HeroTemplate, AIPlayer, Title
 
 User = get_user_model()
 
@@ -44,6 +44,9 @@ class Deck(TimestampedModel):
     # Either user-owned or AI-owned (exactly one must be set)
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     ai_player = models.ForeignKey(AIPlayer, on_delete=models.CASCADE, null=True, blank=True)
+
+    # Title that this deck belongs to
+    title = models.ForeignKey(Title, on_delete=models.PROTECT)
 
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)

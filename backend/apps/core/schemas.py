@@ -1,3 +1,4 @@
+import datetime
 from typing import Literal, List, Optional
 
 from pydantic import BaseModel
@@ -30,3 +31,13 @@ class Hero(BaseModel):
     hero_power: dict = {}
     spec: dict = {}
     faction: Optional[str] = None
+
+
+class Deck(BaseModel):
+    id: int
+    name: str
+    description: str
+    hero: Hero
+    card_count: int
+    created_at: datetime.datetime
+    updated_at: datetime.datetime

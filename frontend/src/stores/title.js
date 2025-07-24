@@ -25,7 +25,8 @@ export const useTitleStore = defineStore('title', {
       this.error = null
 
       try {
-        const response = await axios.get(`/builder/titles/${slug}/`)
+        // const response = await axios.get(`/builder/titles/${slug}/`)
+        const response = await axios.get(`/titles/${slug}/`)
         this.currentTitle = response.data
         return this.currentTitle
       } catch (error) {

@@ -44,15 +44,17 @@ class DeckCardInline(admin.TabularInline):
     model = DeckCard
     extra = 0
     fields = ['card', 'count']
+    raw_id_fields = ['card']
 
 
 @admin.register(Deck)
 class DeckAdmin(admin.ModelAdmin):
-    list_display = ['name', 'get_owner_type', 'owner_name', 'hero', 'get_card_count', 'created_at']
+    list_display = ['name', 'title', 'get_owner_type', 'owner_name', 'hero', 'get_card_count', 'created_at']
     list_filter = ['hero', 'created_at', 'user', 'ai_player']
     search_fields = ['name', 'user__email', 'ai_player__name', 'hero__name']
     readonly_fields = ['created_at', 'updated_at', 'owner_name', 'is_ai_deck']
     inlines = [DeckCardInline]
+    raw_id_fields = ['title', 'user', 'ai_player', 'hero']
 
     fieldsets = (
         ('Ownership', {
@@ -60,7 +62,7 @@ class DeckAdmin(admin.ModelAdmin):
             'description': 'Choose either a user OR an AI player as the deck owner'
         }),
         ('Deck Info', {
-            'fields': ('name', 'description', 'hero')
+            'fields': ('name', 'description', 'hero', 'title')
         }),
         ('Info', {
             'fields': ('owner_name', 'is_ai_deck', 'created_at', 'updated_at'),

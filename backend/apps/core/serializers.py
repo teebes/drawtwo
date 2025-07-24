@@ -1,5 +1,5 @@
 from typing import List, Dict, Any
-from .schemas import Card, Trait
+from .schemas import Card, Trait, Deck, Hero
 
 
 def serialize_cards_with_traits(queryset) -> List[Dict[str, Any]]:
@@ -48,3 +48,28 @@ def serialize_cards_with_traits(queryset) -> List[Dict[str, Any]]:
         card_data.append(card_obj.model_dump())
 
     return card_data
+
+def serialize_decks(queryset) -> List[Dict[str, Any]]:
+    queryset = queryset.select_related(
+        'hero', 'title', 'ai_player', 'user'
+    ).prefetch_related('deckcard_set')
+    return [
+        Deck(
+            id=deck.id,
+            name=deck.name,
+            description=deck.description,
+            hero=Hero(
+                id=deck.hero.id,
+                slug=deck.hero.slug,
+                name=deck.hero.name,
+                health=deck.hero.health,
+                hero_power=deck.hero.hero_power,
+                spec=deck.hero.spec,
+                faction=deck.hero.faction.slug if deck.hero.faction else None,
+            ),
+            card_count=deck.deck_size,
+            created_at=deck.created_at,
+            updated_at=deck.updated_at,
+        ).model_dump()
+        for deck in queryset
+    ]
