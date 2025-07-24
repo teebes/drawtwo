@@ -15,4 +15,4 @@ python manage.py migrate
 python manage.py collectstatic --noinput
 
 # Start server
-exec "$@"
+exec "$@" 
