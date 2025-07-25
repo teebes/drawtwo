@@ -148,7 +148,7 @@ class CardTemplateSerializer(serializers.ModelSerializer):
 
         return instance
 
-    def create_from_yaml(self, title, yaml_data):
+    def create_from_yaml(self, title, yaml_data, slug=None):
         """Create a new card instance from YAML data."""
         try:
             card_data = yaml.safe_load(yaml_data)
@@ -160,18 +160,23 @@ class CardTemplateSerializer(serializers.ModelSerializer):
         if not name:
             raise serializers.ValidationError("Card name is required")
 
-        # Generate slug from name (simple implementation)
-        import re
-        slug = re.sub(r'[^a-zA-Z0-9\-_]', '_', name.lower().replace(' ', '_'))
+        # Use provided slug or generate one from name
+        if slug:
+            # Use the provided slug (already validated in the view)
+            pass
+        else:
+            # Generate slug from name (simple implementation) - legacy behavior
+            import re
+            slug = re.sub(r'[^a-zA-Z0-9\-_]', '_', name.lower().replace(' ', '_'))
 
-        # Check if slug already exists in this title
-        if CardTemplate.objects.filter(title=title, slug=slug).exists():
-            # Find a unique slug by appending a number
-            base_slug = slug
-            counter = 1
-            while CardTemplate.objects.filter(title=title, slug=slug).exists():
-                slug = f"{base_slug}_{counter}"
-                counter += 1
+            # Check if slug already exists in this title
+            if CardTemplate.objects.filter(title=title, slug=slug).exists():
+                # Find a unique slug by appending a number
+                base_slug = slug
+                counter = 1
+                while CardTemplate.objects.filter(title=title, slug=slug).exists():
+                    slug = f"{base_slug}_{counter}"
+                    counter += 1
 
         # Create card instance
         card_type = card_data.get('card_type', 'minion')

@@ -61,6 +61,20 @@
         {{ wsStatus === 'connecting' ? 'Connecting...' : 'Disconnected' }}
       </div>
 
+      <!-- Exit Game Button -->
+      <div class="absolute top-2 left-2">
+        <button
+          @click="handleExitGame"
+          class="flex items-center px-3 py-2 bg-gray-700/80 hover:bg-gray-600/80 text-white text-sm font-medium rounded-lg transition-colors duration-200 shadow-lg backdrop-blur-sm"
+          title="Exit Game"
+        >
+          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+          Exit Game
+        </button>
+      </div>
+
       <!-- Side B (Top) -->
       <div class="flex-none px-4 pt-2">
         <div class="grid grid-cols-3 gap-4 items-center">
@@ -237,7 +251,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import axios from '../config/api.js'
 import { getBaseUrl } from '../config/api.js'
 import type { GameState } from '../types/game'
@@ -250,6 +264,7 @@ import PlacementZone from '../components/game/PlacementZone.vue'
 import AttackOverlay from '../components/game/AttackOverlay.vue'
 
 const route = useRoute()
+const router = useRouter()
 const gameState = ref<GameState | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -695,6 +710,13 @@ const cancelAttack = () => {
 
 const reloadPage = () => {
   window.location.reload()
+}
+
+const handleExitGame = () => {
+  if (confirm('Are you sure you want to exit the game?')) {
+    socket.value?.close()
+    router.push('/lobby')
+  }
 }
 
 onMounted(() => {

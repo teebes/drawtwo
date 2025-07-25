@@ -120,15 +120,15 @@
 
             <div v-else-if="!gamesLoading" class="text-center py-8">
               <p class="text-gray-600 mb-4">No active games at the moment.</p>
-              <button
-                disabled
-                class="inline-flex items-center rounded-lg bg-gray-300 px-4 py-2 text-sm font-medium text-gray-500 cursor-not-allowed"
+              <router-link
+                :to="{ name: 'GameCreate', params: { slug: title.slug } }"
+                class="inline-flex items-center rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
               >
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M19 4v3a3 3 0 01-3 3h-1m-1 0h-1m1 0V6a1 1 0 00-1-1h-2a1 1 0 00-1 1v3"></path>
                 </svg>
-                Create Game (Coming Soon)
-              </button>
+                Create Game
+              </router-link>
             </div>
 
             <div v-if="gamesLoading" class="text-center py-4">

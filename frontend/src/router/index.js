@@ -18,6 +18,7 @@ import CardEdit from '../views/CardEdit.vue'
 import DeckDetail from '../views/DeckDetail.vue'
 import DeckEdit from '../views/DeckEdit.vue'
 import GameBoard from '../views/GameBoard.vue'
+import GameCreate from '../views/GameCreate.vue'
 
 const routes = [
   {
@@ -105,6 +106,12 @@ const routes = [
     meta: { requiresAuth: true, hideHeader: true }
   },
   {
+    path: '/:slug/games/new',
+    name: 'GameCreate',
+    component: GameCreate,
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/:slug/cards/new',
     name: 'CardCreate',
     component: CardEdit,
@@ -143,7 +150,7 @@ const router = createRouter({
 
 // List of routes that are title-related and use /:slug pattern
 const titleRoutes = [
-  'Title', 'TitleCards', 'TitleBriefCards', 'CardCreate', 'CardEdit', 'DeckDetail', 'DeckEdit', 'DeckCreate'
+  'Title', 'TitleCards', 'TitleBriefCards', 'CardCreate', 'CardEdit', 'DeckDetail', 'DeckEdit', 'DeckCreate', 'GameCreate'
 ]
 
 // Helper function to check if a route is a title route

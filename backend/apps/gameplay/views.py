@@ -3,9 +3,12 @@ from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework import status
 
 from .models import Game
 from .schemas import GameState, GameSummary, GameList
+from .services import GameService
+from apps.collection.models import Deck
 
 
 @api_view(['GET'])
@@ -63,3 +66,80 @@ def advance_game(request, game_id):
         # because the user has to take an action (either play something, attack
         # something, or end their turn).
         return Response(status=400)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_game(request):
+    """
+    Create a new game between a player deck and an AI deck.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.debug(f"create_game called with data: {request.data}")
+    
+    player_deck_id = request.data.get('player_deck_id')
+    ai_deck_id = request.data.get('ai_deck_id')
+
+    # Validate input
+    if not player_deck_id:
+        logger.error("player_deck_id is missing")
+        return Response(
+            {'error': 'player_deck_id is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if not ai_deck_id:
+        logger.error("ai_deck_id is missing")
+        return Response(
+            {'error': 'ai_deck_id is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        # Get player deck and verify ownership
+        logger.debug(f"Looking for player deck with id: {player_deck_id}")
+        player_deck = get_object_or_404(Deck, id=player_deck_id, user=request.user)
+        logger.debug(f"Found player deck: {player_deck}")
+
+        # Get AI deck and verify it's an AI deck
+        logger.debug(f"Looking for AI deck with id: {ai_deck_id}")
+        ai_deck = get_object_or_404(Deck, id=ai_deck_id, ai_player__isnull=False)
+        logger.debug(f"Found AI deck: {ai_deck}")
+
+        # Verify both decks are from the same title
+        if player_deck.title != ai_deck.title:
+            logger.error(f"Title mismatch: player deck title {player_deck.title} != AI deck title {ai_deck.title}")
+            return Response(
+                {'error': 'Both decks must be from the same title'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        logger.debug("About to call GameService.start_game")
+        # Create the game using GameService
+        game = GameService.start_game(player_deck, ai_deck)
+        logger.debug(f"Game created successfully: {game}")
+
+        return Response({
+            'id': game.id,
+            'status': game.status,
+            'player_deck': {
+                'id': player_deck.id,
+                'name': player_deck.name,
+                'hero': player_deck.hero.name
+            },
+            'ai_deck': {
+                'id': ai_deck.id,
+                'name': ai_deck.name,
+                'hero': ai_deck.hero.name
+            },
+            'message': f'Game created successfully: {player_deck.hero.name} vs {ai_deck.hero.name}'
+        }, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        logger.exception(f"Error creating game: {str(e)}")
+        return Response(
+            {'error': f'Failed to create game: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

@@ -70,6 +70,34 @@
         <!-- YAML Editor -->
         <div class="w-full">
           <div :class="isCreating ? 'space-y-6 w-full' : 'space-y-6'">
+            
+            <!-- Slug Input (only when creating) -->
+            <Section v-if="isCreating" title="Card Slug">
+              <Panel>
+                <div class="space-y-2">
+                  <label for="card-slug" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Card Slug
+                  </label>
+                  <input
+                    id="card-slug"
+                    v-model="newCardSlug"
+                    type="text"
+                    class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 text-sm py-2 px-3"
+                    placeholder="e.g. lightning-bolt, fire-warrior, etc."
+                    :disabled="saving"
+                    pattern="[a-z0-9\-_]+"
+                    @input="validateSlug"
+                  />
+                  <p class="text-xs text-gray-500 dark:text-gray-400">
+                    Unique identifier for this card (lowercase letters, numbers, hyphens, and underscores only)
+                  </p>
+                  <div v-if="slugError" class="text-sm text-red-600 dark:text-red-400">
+                    {{ slugError }}
+                  </div>
+                </div>
+              </Panel>
+            </Section>
+
             <Section title="YAML Definition">
               <Panel>
                 <div class="space-y-4">
@@ -113,7 +141,7 @@
                         <GameButton
                           variant="primary"
                           @click="saveCard"
-                          :disabled="saving || (!hasChanges && !isCreating)"
+                          :disabled="saving || (!hasChanges && !isCreating) || (isCreating && (!newCardSlug || slugError))"
                         >
                           {{ saving ? (isCreating ? 'Creating...' : 'Saving...') : (isCreating ? 'Create Card' : 'Save Changes') }}
                         </GameButton>
@@ -204,6 +232,10 @@ const lastSaveWasBump = ref<boolean>(false)
 const deleting = ref<boolean>(false)
 const deleteError = ref<string | null>(null)
 
+// New variables for slug handling in create mode
+const newCardSlug = ref<string>('')
+const slugError = ref<string | null>(null)
+
 // Computed properties
 const hasChanges = computed(() => {
   return yamlDefinition.value !== originalYaml.value
@@ -213,6 +245,7 @@ const cardForDisplay = computed((): Card | null => {
   if (!card.value) return null
 
   return {
+    id: card.value.id,
     slug: card.value.slug,
     name: card.value.name,
     description: card.value.description,
@@ -261,6 +294,7 @@ const saveCard = async (): Promise<void> => {
     if (isCreating.value) {
       // Create new card
       const response = await axios.post(`/builder/titles/${titleSlug}/cards/`, {
+        slug: newCardSlug.value, // Pass the slug to the backend
         yaml_definition: yamlDefinition.value
       })
 
@@ -334,11 +368,57 @@ const deleteCard = async (): Promise<void> => {
   }
 }
 
+// Slug validation method
+const validateSlug = (): void => {
+  const slug = newCardSlug.value
+  slugError.value = null
+  
+  if (!slug) {
+    slugError.value = 'Slug is required'
+    return
+  }
+  
+  // Check format: only lowercase letters, numbers, hyphens, and underscores
+  const slugPattern = /^[a-z0-9\-_]+$/
+  if (!slugPattern.test(slug)) {
+    slugError.value = 'Slug can only contain lowercase letters, numbers, hyphens, and underscores'
+    return
+  }
+  
+  // Check length
+  if (slug.length < 2) {
+    slugError.value = 'Slug must be at least 2 characters long'
+    return
+  }
+  
+  if (slug.length > 50) {
+    slugError.value = 'Slug must be no more than 50 characters long'
+    return
+  }
+}
+
 // Clear success/error messages when YAML or bump version changes
 watch([yamlDefinition, bumpVersion], () => {
   saveSuccess.value = false
   saveError.value = null
   deleteError.value = null
+})
+
+// Clear slug error when slug changes (in addition to validation)
+watch(newCardSlug, () => {
+  slugError.value = null
+})
+
+// Watch for route changes to handle navigation from create to edit mode
+watch(() => route.params.cardSlug, () => {
+  // Re-initialize when card slug changes (e.g., after creating a card)
+  initializeCard()
+})
+
+// Watch for route name changes to handle switching between create and edit modes
+watch(() => route.name, () => {
+  // Re-initialize when switching between create and edit modes
+  initializeCard()
 })
 
 const initializeCard = (): void => {

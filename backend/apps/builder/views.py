@@ -15,60 +15,6 @@ from .serializers import TitleSerializer, CardTemplateSerializer
 
 User = get_user_model()
 
-# Your builder views will go here
-# Examples:
-
-# class ProjectViewSet(viewsets.ModelViewSet):
-#     """ViewSet for managing drawing projects."""
-#     serializer_class = ProjectSerializer
-#     permission_classes = [IsAuthenticated]
-#
-#     def get_queryset(self):
-#         """Return projects for the current user."""
-#         return Project.objects.filter(owner=self.request.user)
-#
-#     def perform_create(self, serializer):
-#         """Set the owner to the current user when creating."""
-#         serializer.save(owner=self.request.user)
-#
-#     @action(detail=True, methods=['post'])
-#     def duplicate(self, request, pk=None):
-#         """Create a copy of an existing project."""
-#         project = self.get_object()
-#         # Implementation for duplicating a project
-#         return Response({'status': 'Project duplicated'})
-
-# class CanvasViewSet(viewsets.ModelViewSet):
-#     """ViewSet for managing canvases within projects."""
-#     serializer_class = CanvasSerializer
-#     permission_classes = [IsAuthenticated]
-#
-#     def get_queryset(self):
-#         """Return canvases for projects owned by the current user."""
-#         return Canvas.objects.filter(project__owner=self.request.user)
-#
-#     @action(detail=True, methods=['post'])
-#     def save_data(self, request, pk=None):
-#         """Save canvas drawing data."""
-#         canvas = self.get_object()
-#         canvas.data = request.data.get('data', {})
-#         canvas.save()
-#         return Response({'status': 'Canvas data saved'})
-
-# Example function-based view
-# from rest_framework.decorators import api_view, permission_classes
-
-# @api_view(['GET'])
-# @permission_classes([IsAuthenticated])
-# def project_stats(request):
-#     """Get statistics about the user's projects."""
-#     user_projects = Project.objects.filter(owner=request.user)
-#     stats = {
-#         'total_projects': user_projects.count(),
-#         'public_projects': user_projects.filter(is_public=True).count(),
-#         'private_projects': user_projects.filter(is_public=False).count(),
-#     }
-#     return Response(stats)
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -108,11 +54,46 @@ def create_card(request, title_slug):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    # Get and validate slug
+    slug = request.data.get('slug', '').strip()
+    if not slug:
+        return Response(
+            {'error': 'slug is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Validate slug format
+    import re
+    if not re.match(r'^[a-z0-9\-_]+$', slug):
+        return Response(
+            {'error': 'Slug can only contain lowercase letters, numbers, hyphens, and underscores'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if len(slug) < 2:
+        return Response(
+            {'error': 'Slug must be at least 2 characters long'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if len(slug) > 50:
+        return Response(
+            {'error': 'Slug must be no more than 50 characters long'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Check if slug already exists in this title
+    if CardTemplate.objects.filter(title=title, slug=slug).exists():
+        return Response(
+            {'error': f'A card with slug "{slug}" already exists in this title'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     try:
         with transaction.atomic():
-            # Create new card using YAML data
+            # Create new card using YAML data and specified slug
             serializer = CardTemplateSerializer()
-            new_card = serializer.create_from_yaml(title, yaml_data)
+            new_card = serializer.create_from_yaml(title, yaml_data, slug=slug)
 
             response_serializer = CardTemplateSerializer(new_card)
             return Response(response_serializer.data, status=status.HTTP_201_CREATED)
