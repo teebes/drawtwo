@@ -18,6 +18,7 @@ from .schemas import (
     EndTurnUpdate,
     GameState,
     GameEvent,
+    GameOverEvent,
     GameOverUpdate,
     GameUpdate,
     HeroDamageUpdate,
@@ -100,8 +101,18 @@ def handle_refresh_phase(state: GameState, event: GameEvent) -> tuple[list[GameE
 
 def handle_draw_phase(state: GameState, event: GameEvent) -> tuple[list[GameEvent], list[GameUpdate]]:
     state.phase = "draw"
+
     deck = state.decks[event.side]
-    card_id = deck.pop(0)
+
+    try:
+        card_id = deck.pop(0)
+    except IndexError:
+        # No more cards in the deck
+        opposing_side = "side_b" if event.side == "side_a" else "side_a"
+        events = []
+        updates = [GameOverUpdate(side=event.side, winner=opposing_side)]
+        return events, updates
+
     state.hands[event.side].append(card_id)
     events = [MainPhaseEvent(side=event.side)]
     updates = [DrawPhaseUpdate(side=event.side)]
@@ -149,7 +160,10 @@ def handle_use_card(state: GameState, event: GameEvent) -> tuple[list[GameEvent]
         if hero.health <= 0:
             # If the hero dies, that is a game over event
             state.winner = event.side
-            return [], [GameOverUpdate(side=event.side, winner=event.side)]
+            events = []
+            #events = [GameOverEvent(winner=event.side)]
+            updates = [GameOverUpdate(side=event.side, winner=event.side)]
+            return events, updates
         else:
             return [], [HeroDamageUpdate(
                             side=event.side,

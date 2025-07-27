@@ -13,6 +13,7 @@ from .schemas import (
     HeroInPlay,
     PlayCardAction,
     PlayCardEvent,
+    RefreshPhaseEvent,
     UseCardAction,
     UseCardEvent,
 )
@@ -44,6 +45,7 @@ class GameService:
         decks = {'side_a': [], 'side_b': []}
 
         for card in cards_a:
+
             card_id += 1
             cards_in_play[str(card_id)] = CardInPlay(
                 card_type=card["card_type"],
@@ -75,13 +77,13 @@ class GameService:
 
         heroes = {
             'side_a': HeroInPlay(
-                hero_id=deck_a.hero.id,
+                hero_id=str(deck_a.hero.id),
                 template_slug=deck_a.hero.slug,
                 health=deck_a.hero.health,
                 name=deck_a.hero.name,
             ),
             'side_b': HeroInPlay(
-                hero_id=deck_b.hero.id,
+                hero_id=str(deck_b.hero.id),
                 template_slug=deck_b.hero.slug,
                 health=deck_b.hero.health,
                 name=deck_b.hero.name,
@@ -92,7 +94,9 @@ class GameService:
             turn=1,
             active='side_a',
             phase='start',
-            event_queue=[],
+            event_queue=[
+                RefreshPhaseEvent(side='side_a'),
+            ],
             cards=cards_in_play,
             heroes=heroes,
             decks=decks,
@@ -104,6 +108,8 @@ class GameService:
             side_b=deck_b,
             state=game_state.model_dump(),
         )
+
+        advance_game.apply_async(args=[game.id])
 
         return game
 
@@ -146,10 +152,11 @@ class GameService:
         game.save(update_fields=["state"])
         advance_game.apply_async(args=[game_id])
 
-    """
     def __init__(self, game: Game) -> None:
         self.game = game
         self.game_state = GameState.model_validate(game.state)
+
+    """
 
     def process_action(self, action: GameAction) -> List[UpdateType]:
         if action.type == "play_card":

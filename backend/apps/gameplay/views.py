@@ -34,6 +34,8 @@ def game_detail(request, game_id):
 def current_games(request):
     games = Game.objects.filter(
         Q(side_a__user=request.user) | Q(side_b__user=request.user)
+    ).exclude(
+        status=Game.GAME_STATUS_ENDED
     ).order_by('-created_at')
 
     #games = Game.objects.all()
@@ -67,6 +69,9 @@ def advance_game(request, game_id):
         # something, or end their turn).
         return Response(status=400)
 
+    from .tasks import advance_game as advance_game_task
+    advance_game_task.delay(game_id)
+    return Response(status=200)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])

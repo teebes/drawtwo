@@ -2,6 +2,7 @@ from django.db import models
 
 from apps.collection.models import Deck
 from apps.core.models import TimestampedModel, list_to_choices
+from .schemas import GameEvent, GameState
 
 
 class Game(TimestampedModel):
@@ -26,6 +27,10 @@ class Game(TimestampedModel):
                                blank=True, null=True, related_name='games_won')
 
     @property
+    def game_state(self):
+        return GameState.model_validate(self.state)
+
+    @property
     def is_vs_ai(self):
         """Returns True if this is a player vs AI game"""
         return self.side_a.is_ai_deck or self.side_b.is_ai_deck
@@ -48,5 +53,11 @@ class Game(TimestampedModel):
             return self.side_b
         return None  # No AI
 
+    def push_event(self, event: GameEvent):
+        state = GameState.model_validate(self.state)
+        state.event_queue.append(event)
+        self.state = state.model_dump()
+        self.save(update_fields=["state"])
+        
     def __str__(self):
         return f"{self.side_a.name} vs {self.side_b.name}"

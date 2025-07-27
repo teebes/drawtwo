@@ -79,11 +79,17 @@ class NewTurnEvent(EventBase):
     type: Literal["end_turn"] = "new_turn"
 
 
+class GameOverEvent(EventBase):
+    type: Literal["game_over"] = "game_over"
+    winner: Literal["side_a", "side_b"]
+
+
 GameEvent = Annotated[
     Union[
         CardRetaliationEvent,
-        EndTurnEvent,
         DrawPhaseEvent,
+        EndTurnEvent,
+        GameOverEvent,
         MainPhaseEvent,
         PlayCardEvent,
         RefreshPhaseEvent,
@@ -113,7 +119,7 @@ class CardInPlay(BaseModel):
 
 
 class HeroInPlay(BaseModel):
-    hero_id: int # Internal hero ID for that game
+    hero_id: str # Internal hero ID for that game
     template_slug: str # ID of the hero template
     health: int
     name: str

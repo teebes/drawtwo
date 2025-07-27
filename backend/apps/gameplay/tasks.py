@@ -39,11 +39,29 @@ def advance_game(game_id: int):
             resolved_event: ResolvedEvent = resolve_event(state=game_state)
             new_state = resolved_event.state
 
-            if GameOverUpdate in resolved_event.updates:
-                game.status = Game.GAME_STATUS_ENDED
-                game.winner = resolved_event.updates[0].winner
-                game.save(update_fields=["status", "winner"])
-                new_state.event_queue = []
+            print("==== Resolution ====")
+            print("Events: %s" % resolved_event.events)
+            print("Updates: %s" % resolved_event.updates)
+            print("==== End Resolution ====")
+
+            for update in resolved_event.updates:
+                if isinstance(update, GameOverUpdate):
+
+                #if GameOverUpdate in resolved_event.updates:
+                    print("game over")
+                    game.status = Game.GAME_STATUS_ENDED
+
+                    winner_side = resolved_event.updates[0].winner
+                    if winner_side == 'side_a':
+                        winner = game.side_a
+                    elif winner_side == 'side_b':
+                        winner = game.side_b
+
+                    game.winner = winner
+                    game.save(update_fields=["status", "winner"])
+
+                    new_state.event_queue = []
+                    break
 
             game.state = new_state.model_dump()
             game.save(update_fields=["state"])

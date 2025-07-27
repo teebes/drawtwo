@@ -93,6 +93,8 @@ def title_games(request, slug):
         side_a__title=title,
     ).filter(
         Q(side_a__user=request.user) | Q(side_b__user=request.user)
+    ).exclude(
+        status=Game.GAME_STATUS_ENDED
     ).order_by('-created_at')
 
     game_summaries = []
