@@ -37,6 +37,15 @@ class GameService:
         if existing_game:
             return existing_game
 
+        deck_a_card_copies = {
+            card_copy.card.id: card_copy.count
+            for card_copy in deck_a.deckcard_set.all()
+        }
+        deck_b_card_copies = {
+            card_copy.card.id: card_copy.count
+            for card_copy in deck_b.deckcard_set.all()
+        }
+
         cards_a = serialize_cards_with_traits(deck_a.cards.all())
         cards_b = serialize_cards_with_traits(deck_b.cards.all())
 
@@ -46,30 +55,35 @@ class GameService:
 
         for card in cards_a:
 
-            card_id += 1
-            cards_in_play[str(card_id)] = CardInPlay(
-                card_type=card["card_type"],
-                card_id=str(card_id),
-                template_slug=card["slug"],
-                attack=card["attack"],
-                health=card["health"],
-                cost=card["cost"],
-                traits=card["traits"],
-            )
-            decks['side_a'].append(str(card_id))
+            for _ in range(deck_a_card_copies[card["id"]]):
+
+                card_id += 1
+                cards_in_play[str(card_id)] = CardInPlay(
+                    card_type=card["card_type"],
+                    card_id=str(card_id),
+                    template_slug=card["slug"],
+                    attack=card["attack"],
+                    health=card["health"],
+                    cost=card["cost"],
+                    traits=card["traits"],
+                )
+                decks['side_a'].append(str(card_id))
 
         for card in cards_b:
-            card_id += 1
-            cards_in_play[str(card_id)] = CardInPlay(
-                card_type=card["card_type"],
-                card_id=str(card_id),
-                template_slug=card["slug"],
-                attack=card["attack"],
-                health=card["health"],
-                cost=card["cost"],
-                traits=card["traits"],
-            )
-            decks['side_b'].append(str(card_id))
+
+            for _ in range(deck_b_card_copies[card["id"]]):
+
+                card_id += 1
+                cards_in_play[str(card_id)] = CardInPlay(
+                    card_type=card["card_type"],
+                    card_id=str(card_id),
+                    template_slug=card["slug"],
+                    attack=card["attack"],
+                    health=card["health"],
+                    cost=card["cost"],
+                    traits=card["traits"],
+                )
+                decks['side_b'].append(str(card_id))
 
         # shuffle both decks
         random.shuffle(decks['side_a'])
