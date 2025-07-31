@@ -112,6 +112,7 @@ class CardInPlay(BaseModel):
     card_id: str # Interal card ID for that game
     template_slug: str # ID of the card template
     name: str
+    description: str
     attack: int
     health: int
     cost: int

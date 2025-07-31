@@ -16,6 +16,8 @@ export interface Trait {
 export interface CardInPlay {
   card_id: number
   template_slug: string
+  name: string
+  description: string
   attack: number
   health: number
   cost: number
