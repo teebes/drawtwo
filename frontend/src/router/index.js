@@ -7,6 +7,7 @@ import Dashboard from '../views/Dashboard.vue'
 import EmailConfirm from '../views/EmailConfirm.vue'
 import ControlPanel from '../views/ControlPanel.vue'
 import DesignReference from '../views/DesignReference.vue'
+import GameCard from '../views/CardReference.vue'
 import Lobby from '../views/Lobby.vue'
 import Template from '../views/Template.vue'
 import Profile from '../views/Profile.vue'
@@ -19,6 +20,7 @@ import DeckDetail from '../views/DeckDetail.vue'
 import DeckEdit from '../views/DeckEdit.vue'
 import GameBoard from '../views/GameBoard.vue'
 import GameCreate from '../views/GameCreate.vue'
+import Board from '../views/Board.vue'
 
 const routes = [
   {
@@ -67,6 +69,12 @@ const routes = [
     path: '/design-reference',
     name: 'DesignReference',
     component: DesignReference,
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/game-card',
+    name: 'GameCard',
+    component: GameCard,
     meta: { requiresAuth: false }
   },
   {
@@ -136,6 +144,12 @@ const routes = [
     meta: { requiresAuth: false }
   },
   {
+    path: '/:slug/games/:game_id',
+    name: 'Board',
+    component: Board,
+    meta: { requiresAuth: false, hideHeader: true }
+  },
+  {
     path: '/:slug',
     name: 'Title',
     component: Title,
@@ -150,7 +164,8 @@ const router = createRouter({
 
 // List of routes that are title-related and use /:slug pattern
 const titleRoutes = [
-  'Title', 'TitleCards', 'TitleBriefCards', 'CardCreate', 'CardEdit', 'DeckDetail', 'DeckEdit', 'DeckCreate', 'GameCreate'
+  'Title', 'TitleCards', 'TitleBriefCards', 'CardCreate', 'CardEdit', 'DeckDetail',
+  'DeckEdit', 'DeckCreate', 'GameCreate', 'Board'
 ]
 
 // Helper function to check if a route is a title route

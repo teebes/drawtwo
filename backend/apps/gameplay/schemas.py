@@ -111,6 +111,7 @@ class CardInPlay(BaseModel):
     card_type: Literal['minion', 'spell']
     card_id: str # Interal card ID for that game
     template_slug: str # ID of the card template
+    name: str
     attack: int
     health: int
     cost: int

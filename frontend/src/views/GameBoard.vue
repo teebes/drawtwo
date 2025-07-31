@@ -317,6 +317,7 @@ const fetchGameState = async () => {
     const response = await axios.get(`/gameplay/games/${gameId}/`)
 
     const data = response.data
+    console.log(data);
     viewer.value = data.viewer
     gameState.value = data.state;
     isVsAi.value = data.is_vs_ai;
