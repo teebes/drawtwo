@@ -1,13 +1,17 @@
 <template>
-    <div class="game-card border-2 border-gray-900 bg-gray-200 text-gray-900 rounded-xl flex-1 flex flex-col p-1 shadow-xl/30 shadow-white" :class="active_classes">
-        <div class="text-xs text-wrap">
-            <span v-if="compact">{{ makeInitials(displayName) }}</span>
+    <div class="game-card border-2 border-gray-900 bg-gray-300 text-gray-900 rounded-xl flex-1 flex flex-col p-1" :class="active_classes">
+        <div class="text-wrap">
+            <span v-if="compact" class="text-xs">{{ makeInitials(displayName) }}</span>
             <span v-else>{{ displayName }}</span>
         </div>
-        <div class="flex-1"></div>
-        <div class="text-xs flex flex-row justify-between">
+        <div class="flex-1">
+            <div v-if="!compact" class="mt-2">
+                <div>{{ card.description }}</div>
+            </div>
+        </div>
+        <div class="flex flex-row justify-between" :class="compact ? 'text-xs' : ''">
             <div>{{ card.attack }} | {{ card.health }}</div>
-            <div v-if="!in_lane">{{ card.cost }}</div>
+            <div v-if="!in_lane" class="mr-1">{{ card.cost }}</div>
         </div>
     </div>
 </template>
@@ -37,14 +41,10 @@ const displayName = computed(() => {
     if ('name' in props.card) {
         return props.card.name
     }
-    // If it's a CardInPlay type (has template_slug property)
-    if ('template_slug' in props.card) {
-        return props.card.template_slug
-            .replace(/_/g, ' ')
-            .replace(/\b\w/g, l => l.toUpperCase())
-    }
-    // Fallback
-    return 'Unknown Card'
+    // It must be CardInPlay type
+    return (props.card as CardInPlay).template_slug
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, l => l.toUpperCase())
 })
 
 const active_classes = computed(() => {
@@ -57,7 +57,7 @@ const active_classes = computed(() => {
     }
 
     if (props.active) {
-        classes.push('!border-purple-500')
+        classes.push('!border-yellow-500')
     }
 
     return classes.join(' ')

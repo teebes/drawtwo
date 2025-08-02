@@ -1,26 +1,21 @@
 <template>
     <div class="flex-1 flex flex-col">
-        <!-- Card Details-->
-        <div class="card-details flex-1 border-b border-gray-700 overflow-y-auto p-4">
-            <div>{{ card?.name }}</div>
-            <div>{{ card?.description }}</div>
-        </div>
 
         <!-- Selected Hand Card Display -->
-        <div v-if="selectedHandCard && getCard(selectedHandCard)" class="flex h-80 my-4">
-            <div class="p-1 mx-auto">
-                <GameCard
-                class=""
-                    :card="getCard(selectedHandCard)!"
-                    compact
-                />
+        <div class="flex flex-1 justify-center items-center">
+            <div v-if="selectedHandCard && getCard(selectedHandCard)" class="flex h-72 my-4">
+                <div class="p-1 mx-auto">
+                    <GameCard class="" :card="getCard(selectedHandCard)!"/>
+                </div>
             </div>
         </div>
 
+        <div class="text-center w-full border-t border-gray-700 py-2">Place the card on the board</div>
+
         <!-- Current Board with Placement Zones -->
-        <div class="flex w-full bg-gray-800 border-b border-t border-gray-700 py-8">
+        <div class="flex w-full bg-gray-800 border-b border-t border-gray-700 py-8 overflow-x-auto">
             <!-- If the card can be played -->
-            <div v-if="canPlayCard" class="flex flex-row w-full h-24 items-center justify-center">
+            <div v-if="canPlayCard" class="flex flex-row h-24 items-center mx-auto">
                 <!-- Show placement zones with current board cards -->
                 <template v-if="ownBoard && ownBoard.length > 0">
                     <!-- Place at beginning -->
@@ -30,11 +25,11 @@
                     />
 
                     <!-- Interleave cards with placement zones -->
-                    <template v-for="(card_id, index) in ownBoard" :key="`card-${card_id}`">
-                        <div class="p-1">
-                            <GameCard v-if="getCard(card_id)"
+                    <template v-for="(card, index) in ownBoard" :key="`card-${card.card_id}`">
+                        <div class="p-1 h-24">
+                            <GameCard v-if="card"
                                       class="flex-grow-0"
-                                      :card="getCard(card_id)!"
+                                      :card="card"
                                       compact in_lane />
                         </div>
                         <PlacementZone
@@ -72,21 +67,24 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { GameState } from '../../../types/game'
+import type { GameState, CardInPlay } from '@/types/game'
+import { useGameStore } from '@/stores/game'
 import GameCard from '../GameCard.vue'
 import PlacementZone from '../PlacementZone.vue'
 
 interface Props {
     gameState: GameState | null
     selectedHandCard: string | null
-    ownBoard: string[] | undefined
+    ownBoard: CardInPlay[] | undefined
     ownEnergy: number | undefined
 }
 
 const props = defineProps<Props>()
+const gameStore = useGameStore()
+
+console.log(props.ownBoard)
 
 const emit = defineEmits<{
-    'card-placement': [cardId: string, position: number]
     'close-overlay': []
 }>()
 
@@ -104,7 +102,11 @@ const handleCardPlacement = (position: number) => {
 
     console.log('Playing card', props.selectedHandCard, 'at position', position)
 
-    emit('card-placement', props.selectedHandCard, position)
+    // Use store action directly instead of emitting to parent
+    gameStore.playCard(props.selectedHandCard, position)
+
+    // Close the overlay
+    emit('close-overlay')
 }
 
 const canPlayCard = computed(() => {

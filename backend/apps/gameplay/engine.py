@@ -154,6 +154,8 @@ def handle_use_card(state: GameState, event: GameEvent) -> tuple[list[GameEvent]
 
     opposing_side = "side_b" if event.side == "side_a" else "side_a"
 
+    source_card.exhausted = True
+
     if target_type == "hero":
         hero = state.heroes[opposing_side]
         hero.health -= source_card.attack

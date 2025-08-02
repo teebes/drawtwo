@@ -14,7 +14,7 @@ export interface Trait {
 }
 
 export interface CardInPlay {
-  card_id: number
+  card_id: string
   template_slug: string
   name: string
   description: string
@@ -26,7 +26,7 @@ export interface CardInPlay {
 }
 
 export interface HeroInPlay {
-  hero_id: number
+  hero_id: string
   template_slug: string
   health: number
   name: string
