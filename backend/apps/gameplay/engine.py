@@ -12,25 +12,24 @@ from .schemas import (
     CardDamageUpdate,
     CardDestroyedUpdate,
     CardRetaliationEvent,
+    ChooseAIMoveEvent,
     DrawPhaseEvent,
     DrawPhaseUpdate,
     EndTurnEvent,
     EndTurnUpdate,
     GameState,
     GameEvent,
-    GameOverEvent,
     GameOverUpdate,
     GameUpdate,
     HeroDamageUpdate,
     MainPhaseEvent,
     MainPhaseUpdate,
-    Phase,
     PlayCardEvent,
     PlayCardUpdate,
     RefreshPhaseEvent,
     RefreshPhaseUpdate,
     ResolvedEvent,
-    UseCardEvent)
+    UseCardEvent,)
 
 
 class HandledEvent(BaseModel):
@@ -76,6 +75,9 @@ def resolve_event(state: GameState) -> ResolvedEvent:
     elif isinstance(event, CardRetaliationEvent):
         events, updates = handle_card_retaliation(new_state, event)
 
+    elif isinstance(event, ChooseAIMoveEvent):
+        events, updates = handle_choose_ai_move(new_state, event)
+
     else:
         raise ValueError(f"Invalid event: {event}")
 
@@ -92,8 +94,8 @@ def handle_refresh_phase(state: GameState, event: GameEvent) -> tuple[list[GameE
     state.phase = "refresh"
     state.mana_pool[event.side] = state.turn
     state.mana_used[event.side] = 0
-    for card_on_board in state.board[event.side]:
-        state.cards[card_on_board].exhausted = False
+    # for card_on_board in state.board[event.side]:
+    #     state.cards[card_on_board].exhausted = False
     events = [DrawPhaseEvent(side=event.side)]
     updates = [RefreshPhaseUpdate(side=state.active)]
     return events, updates
@@ -121,12 +123,22 @@ def handle_draw_phase(state: GameState, event: GameEvent) -> tuple[list[GameEven
 
 def handle_main_phase(state: GameState, event: GameEvent) -> tuple[list[GameEvent], list[GameUpdate]]:
     state.phase = "main"
+
     events = []
+
+    # If the new active side is an AI, queue up a choose ai move event
+    if event.side in state.ai_sides:
+        events = [ChooseAIMoveEvent(side=event.side)]
+
     updates = [MainPhaseUpdate(side=event.side)]
     return events, updates
 
 
 def handle_end_turn(state: GameState, event: GameEvent) -> tuple[list[GameEvent], list[GameUpdate]]:
+
+    for card_on_board in state.board[event.side]:
+        state.cards[card_on_board].exhausted = False
+
     state.active = "side_b" if state.active == "side_a" else "side_a"
     if state.active == "side_a":
         state.turn += 1
@@ -206,6 +218,41 @@ def handle_card_retaliation(state: GameState, event: GameEvent) -> tuple[list[Ga
                         side=event.side,
                         card_id=target_card_id,
                         damage=source_card.attack)]
+
+
+def handle_choose_ai_move(state: GameState, event: GameEvent) -> tuple[list[GameEvent], list[GameUpdate]]:
+    mana_pool = state.mana_pool[state.active]
+    mana_used = state.mana_used[state.active]
+    mana_available = mana_pool - mana_used
+
+    opposing_side = "side_b" if state.active == "side_a" else "side_a"
+
+    # See if there's a card that can be played from hand to board
+    for card_id in state.hands[state.active]:
+        card = state.cards[card_id]
+        if card.cost <= mana_available and card.card_type == 'minion':
+            card_id_to_play = card_id
+            play_event = PlayCardEvent(
+                side=state.active,
+                card_id=card_id_to_play,
+                position=0)
+            choose_ai_move = ChooseAIMoveEvent(side=state.active)
+            return [play_event, choose_ai_move], []
+
+    # See if there's a card that can be used to attack, and if there is,
+    # attack the hero.
+    for card_id in state.board[state.active]:
+        card = state.cards[card_id]
+        if not card.exhausted:
+            use_event = UseCardEvent(
+                side=state.active,
+                card_id=card_id,
+                target_type="hero",
+                target_id=state.heroes[opposing_side].hero_id)
+            choose_ai_move = ChooseAIMoveEvent(side=state.active)
+            return [use_event, choose_ai_move], []
+
+    return [EndTurnEvent(side=state.active)], []
 
 
 def determine_ai_move(state: GameState) -> GameEvent:

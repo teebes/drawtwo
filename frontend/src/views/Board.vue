@@ -1,5 +1,8 @@
 <template>
-    <div class="min-h-screen flex flex-row justify-center" v-if="!loading">
+    <div class="min-h-screen flex flex-row justify-center relative" v-if="!loading">
+
+        <!-- Game Over Overlay -->
+        <GameOverOverlay :game-over="gameOver" :viewer="viewer" />
 
         <!-- Normal Mode -->
         <main v-if="!overlay" class="board flex-1 flex flex-col max-w-md w-full border-r border-l border-gray-700">
@@ -201,6 +204,7 @@ import GameButton from '../components/ui/GameButton.vue'
 // Board Components
 import PlayCard from '../components/game/board/PlayCard.vue'
 import UseCard from '../components/game/board/UseCard.vue'
+import GameOverOverlay from '../components/game/board/GameOverOverlay.vue'
 
 const route = useRoute()
 const titleStore = useTitleStore()
@@ -211,6 +215,7 @@ const {
   loading,
   gameState,
   gameOver,
+  viewer,
   ownHero,
   ownHeroInitials,
   ownHandSize,
@@ -249,10 +254,12 @@ const isHandCardActive = (card_id: string | number) => {
 /* Handlers */
 
 const handleEndTurn = () => {
+    if (gameOver.value.isGameOver) return
     gameStore.endTurn()
 }
 
 const handleSelectHandCard = (card_id: string) => {
+    if (gameOver.value.isGameOver) return
     overlay.value = 'select_hand_card'
     overlay_text.value = "Play Card"
     selected_hand_card.value = card_id
@@ -268,6 +275,14 @@ const handleUseCard = (card_id: string | number) => {
     selected_use_card.value = get_card(card_id) || null
 }
 
+// Clear local UI state when game over is detected
+const clearLocalState = () => {
+    selected_hand_card.value = null
+    selected_use_card.value = null
+    overlay.value = null
+    overlay_text.value = null
+}
+
 // Hero clicking now handled directly by UseCard component
 
 
@@ -281,6 +296,13 @@ watch(title, async (newTitle) => {
         await gameStore.connectToGame(route.params.game_id as string)
     }
 }, { immediate: true })
+
+// Clear local state when game over is detected
+watch(() => gameOver.value.isGameOver, (isGameOver) => {
+    if (isGameOver) {
+        clearLocalState()
+    }
+})
 
 onUnmounted(() => {
     gameStore.disconnect()

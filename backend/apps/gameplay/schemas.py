@@ -7,6 +7,8 @@ PHASE_ORDER = ['start', 'refresh', 'draw', 'main',]
 Phase = Literal['start', 'refresh', 'draw', 'main', 'combat', 'end']
 
 
+# ==== Actions ====
+
 class ActionBase(BaseModel):
     type: str
 
@@ -75,6 +77,11 @@ class CardRetaliationEvent(EventBase):
     target_id: str
 
 
+class ChooseAIMoveEvent(EventBase):
+    type: Literal["choose_ai_move_event"] = "choose_ai_move_event"
+    side: Literal['side_a', 'side_b']
+
+
 class NewTurnEvent(EventBase):
     type: Literal["end_turn"] = "new_turn"
 
@@ -87,6 +94,7 @@ class GameOverEvent(EventBase):
 GameEvent = Annotated[
     Union[
         CardRetaliationEvent,
+        ChooseAIMoveEvent,
         DrawPhaseEvent,
         EndTurnEvent,
         GameOverEvent,
@@ -136,6 +144,8 @@ class GameState(BaseModel):
     cards: Dict[str, CardInPlay] = Field(default_factory=dict)
 
     heroes: Dict[str, HeroInPlay]
+
+    ai_sides: List[Literal['side_a', 'side_b']] = Field(default_factory=list)
 
     board: Dict[str, List[str]] = Field(
         default_factory=lambda: {

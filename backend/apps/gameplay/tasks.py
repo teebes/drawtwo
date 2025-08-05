@@ -9,12 +9,101 @@ from .schemas import (
     GameState,
     ResolvedEvent,)
 
-ADVANCE_GAME_DELAY = 2
+ADVANCE_GAME_DELAY = 1
+
+from dataclasses import dataclass
+
+@dataclass
+class StepResult:
+    needs_continuation: bool
+
+@shared_task
+def step(game_id: int):
+    from .engine import resolve_event, determine_ai_move
+    from .services import GameService
+
+    with transaction.atomic():
+        try:
+            game = (Game.objects
+                        .select_for_update(nowait=True)
+                        .get(id=game_id))
+        except DatabaseError:
+            return
+
+        if game.status == Game.GAME_STATUS_ENDED:
+            return
+
+        game_state = GameState.model_validate(game.state)
+
+        if len(game_state.event_queue) <= 0:
+            return
+
+        # Process one event from the event queue
+
+        resolved_event: ResolvedEvent = resolve_event(state=game_state)
+        new_state = resolved_event.state
+
+        for update in resolved_event.updates:
+            if isinstance(update, GameOverUpdate):
+
+                game.status = Game.GAME_STATUS_ENDED
+
+                winner_side = resolved_event.updates[0].winner
+                if winner_side == 'side_a':
+                    winner = game.side_a
+                elif winner_side == 'side_b':
+                    winner = game.side_b
+
+                game.winner = winner
+                game.save(update_fields=["status", "winner"])
+
+                new_state.event_queue = []
+                break
+
+        game.state = new_state.model_dump()
+        game.save(update_fields=["state"])
+
+        _send_game_updates_to_clients(
+            game.id,
+            new_state.model_dump(),
+            [ update.model_dump() for update in resolved_event.updates ])
+
+        if len(new_state.event_queue) > 0:
+            advance_game.apply_async(args=[game_id], countdown=ADVANCE_GAME_DELAY)
+
+        return game
+
+        """
+        if game_state.phase != "main":
+            return
+
+        active_side = game_state.active
+        active_deck = getattr(game, active_side)
+        if not active_deck.is_ai_deck:
+            return
+
+        # If we're here, we're in the main phase and it's an AI's turn.
+        # Determine which move the AI is making next.
+        event = determine_ai_move(game_state)
+        game_state.event_queue.append(event)
+        game.state = game_state.model_dump()
+        game.save(update_fields=["state"])
+
+        _send_game_updates_to_clients(
+            game.id,
+            game_state.model_dump(),
+            [])
+        advance_game.apply_async(args=[game_id], countdown=ADVANCE_GAME_DELAY)
+        """
 
 @shared_task
 def advance_game(game_id: int):
     from .engine import resolve_event, determine_ai_move
     from .services import GameService
+
+    # Call step synchronously first
+    step(game_id)
+    return
 
     with transaction.atomic():
         try:

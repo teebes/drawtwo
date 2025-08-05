@@ -52,6 +52,11 @@ export const useGameStore = defineStore('game', {
       return state.gameState?.cards[cardId]
     },
 
+    // Viewer perspective
+    currentViewer: (state): Side | null => {
+      return state.viewer
+    },
+
     // Player perspective helpers
     topSide: (state): Side | null => {
       return state.viewer === 'side_a' ? 'side_b' : 'side_a'
@@ -253,11 +258,7 @@ export const useGameStore = defineStore('game', {
 
         // Check if the game is over based on the state's winner field
         if (data.state.winner && data.state.winner !== 'none' && !this.gameOver.isGameOver) {
-          this.gameOver = {
-            isGameOver: true,
-            winner: data.state.winner
-          }
-          console.log(`Game over detected from state! Winner: ${data.state.winner}`)
+          this.setGameOver(data.state.winner)
         }
       }
 
@@ -265,15 +266,31 @@ export const useGameStore = defineStore('game', {
       if (data.updates && Array.isArray(data.updates)) {
         for (const update of data.updates) {
           if (update.type === 'game_over_update') {
-            this.gameOver = {
-              isGameOver: true,
-              winner: update.winner
-            }
-            console.log(`Game over! Winner: ${update.winner}`)
+            this.setGameOver(update.winner)
             break
           }
         }
       }
+    },
+
+    // Set game over state and handle cleanup
+    setGameOver(winner: Side): void {
+      if (this.gameOver.isGameOver) return // Already game over
+
+      this.gameOver = {
+        isGameOver: true,
+        winner: winner
+      }
+      console.log(`Game over! Winner: ${winner}`)
+
+      // Clear any pending actions or state that shouldn't persist
+      this.clearGameOverState()
+    },
+
+    // Clear any state that should be reset when game over happens
+    clearGameOverState(): void {
+      // Any store-level state that needs clearing can be added here
+      // For now, most UI state is handled by individual components
     },
 
     sendWebSocketMessage(message: WebSocketMessage): void {
@@ -337,6 +354,35 @@ export const useGameStore = defineStore('game', {
       if (!this.error) {
         this.connectWebSocket(gameId)
       }
+    },
+
+    // Game over utilities
+    resetGameOverState(): void {
+      this.gameOver = {
+        isGameOver: false,
+        winner: null
+      }
+    },
+
+    exitGame(): void {
+      this.disconnect()
+      // Reset all game state
+      this.gameState = null
+      this.viewer = null
+      this.isVsAi = false
+      this.loading = false
+      this.error = null
+      this.cardNameMap = {}
+      this.resetGameOverState()
+    },
+
+    // Exit game with confirmation (for use in components)
+    exitGameWithConfirmation(): boolean {
+      if (confirm('Are you sure you want to exit the game?')) {
+        this.exitGame()
+        return true
+      }
+      return false
     },
 
     // Cleanup

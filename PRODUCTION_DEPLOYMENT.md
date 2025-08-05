@@ -13,6 +13,11 @@ docker push teebes/drawtwo-backend:latest
 docker push teebes/drawtwo-frontend:latest
 ```
 
+Or simply
+```
+make build-prod
+```
+
 ## Bring up everything
 
 ```

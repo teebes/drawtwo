@@ -62,12 +62,14 @@ def current_games(request):
 def advance_game(request, game_id):
     game = get_object_or_404(Game, id=game_id)
 
+    """
     if ((game.side_a.user == request.user or game.side_b.user == request.user)
          and game.state['phase'] == 'main'):
         # If an actual player is in a 'main' phase, we can't advance anything
         # because the user has to take an action (either play something, attack
         # something, or end their turn).
         return Response(status=400)
+    """
 
     from .tasks import advance_game as advance_game_task
     advance_game_task.delay(game_id)
@@ -81,9 +83,9 @@ def create_game(request):
     """
     import logging
     logger = logging.getLogger(__name__)
-    
+
     logger.debug(f"create_game called with data: {request.data}")
-    
+
     player_deck_id = request.data.get('player_deck_id')
     ai_deck_id = request.data.get('ai_deck_id')
 
