@@ -71,8 +71,8 @@ def advance_game(request, game_id):
         return Response(status=400)
     """
 
-    from .tasks import advance_game as advance_game_task
-    advance_game_task.delay(game_id)
+    from .tasks import step
+    step.delay(game_id)
     return Response(status=200)
 
 @api_view(['POST'])

@@ -18,7 +18,7 @@ from .schemas import (
     UseCardEvent,
 )
 
-from .tasks import advance_game
+from .tasks import step
 from apps.core.serializers import serialize_cards_with_traits
 
 
@@ -134,7 +134,7 @@ class GameService:
             state=game_state.model_dump(),
         )
 
-        advance_game.apply_async(args=[game.id])
+        step.apply_async(args=[game.id])
 
         return game
 
@@ -175,7 +175,7 @@ class GameService:
 
         game.state = game_state.model_dump()
         game.save(update_fields=["state"])
-        advance_game.apply_async(args=[game_id])
+        step.apply_async(args=[game_id])
 
     def __init__(self, game: Game) -> None:
         self.game = game

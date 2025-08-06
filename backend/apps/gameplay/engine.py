@@ -29,12 +29,108 @@ from .schemas import (
     RefreshPhaseEvent,
     RefreshPhaseUpdate,
     ResolvedEvent,
-    UseCardEvent,)
+    UseCardEvent,
+    CardInPlay,
+    Trait,)
 
 
 class HandledEvent(BaseModel):
     events: list[GameEvent]
     updates: list[GameUpdate]
+
+
+# ==== Trait System ====
+
+def get_cards_for_event(state: GameState, event: GameEvent) -> list[str]:
+    """
+    Return list of card IDs that should have their traits checked for this event.
+    """
+    cards_to_check = []
+
+    if isinstance(event, PlayCardEvent):
+        # Only check the card that was just played
+        cards_to_check = [event.card_id]
+
+    elif isinstance(event, UseCardEvent):
+        # Check the attacking card and potentially the target card
+        cards_to_check = [event.card_id]
+        if event.target_type == "card":
+            cards_to_check.append(event.target_id)
+
+    elif isinstance(event, CardRetaliationEvent):
+        # Check the retaliating card
+        cards_to_check = [event.card_id]
+
+    elif isinstance(event, EndTurnEvent):
+        # Check all cards on the board for the ending turn side
+        cards_to_check = state.board[event.side].copy()
+
+    elif isinstance(event, RefreshPhaseEvent):
+        # Check all cards on the board for the refreshing side (turn start effects)
+        cards_to_check = state.board[event.side].copy()
+
+    elif isinstance(event, DrawPhaseEvent):
+        # Check all cards on the board for draw-related triggers
+        cards_to_check = state.board[event.side].copy()
+
+    return cards_to_check
+
+
+def handle_trait_effects(state: GameState, event: GameEvent) -> tuple[list[GameEvent], list[GameUpdate]]:
+    """Handle all trait effects for a given event"""
+    events = []
+    updates = []
+
+    # Get relevant cards based on event type
+    cards_to_check = get_cards_for_event(state, event)
+
+    for card_id in cards_to_check:
+        card = state.cards[card_id]
+        for trait in card.traits:
+            if trait.slug in TRAIT_HANDLERS:
+                trait_events, trait_updates = TRAIT_HANDLERS[trait.slug](
+                    state, event, card, trait
+                )
+                events.extend(trait_events)
+                updates.extend(trait_updates)
+
+    return events, updates
+
+
+# Individual trait handlers
+
+def handle_charge_trait(state: GameState, event: GameEvent, card: CardInPlay, trait: Trait) -> tuple[list[GameEvent], list[GameUpdate]]:
+    """Charge: Can attack immediately when played"""
+    if isinstance(event, PlayCardEvent) and event.card_id == card.card_id:
+        card.exhausted = False
+    return [], []
+
+
+# TODO: Add other trait handlers here:
+# def handle_deathrattle_trait(state: GameState, event: GameEvent, card: CardInPlay, trait: Trait):
+#     """Deathrattle: Effect triggers when card is destroyed"""
+#     # Implementation for deathrattle effects
+#     return [], []
+#
+# def handle_taunt_trait(state: GameState, event: GameEvent, card: CardInPlay, trait: Trait):
+#     """Taunt: Enemies must attack this card first"""
+#     # Implementation for taunt mechanics
+#     return [], []
+#
+# def handle_rush_trait(state: GameState, event: GameEvent, card: CardInPlay, trait: Trait):
+#     """Rush: Can attack minions (but not heroes) immediately when played"""
+#     # Implementation for rush mechanics
+#     return [], []
+
+
+# Registry of trait handlers
+TRAIT_HANDLERS = {
+    "charge": handle_charge_trait,
+    # TODO: Add other traits here as they're implemented
+    # "deathrattle": handle_deathrattle_trait,
+    # "taunt": handle_taunt_trait,
+    # "rush": handle_rush_trait,
+}
 
 
 def resolve_event(state: GameState) -> ResolvedEvent:
@@ -152,10 +248,14 @@ def handle_play_card(state: GameState, event: GameEvent) -> tuple[list[GameEvent
     state.hands[event.side].remove(event.card_id)
     state.board[event.side].insert(event.position, event.card_id)
     state.mana_used[event.side] += state.cards[event.card_id].cost
-    events = []
+
+    # Handle trait effects AFTER the card is played
+    trait_events, trait_updates = handle_trait_effects(state, event)
+
+    events = trait_events
     updates = [
         PlayCardUpdate(side=event.side, card_id=event.card_id, position=event.position)
-    ]
+    ] + trait_updates
     return events, updates
 
 

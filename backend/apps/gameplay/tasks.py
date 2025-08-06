@@ -9,7 +9,7 @@ from .schemas import (
     GameState,
     ResolvedEvent,)
 
-ADVANCE_GAME_DELAY = 1
+STEP_DELAY = 1
 
 from dataclasses import dataclass
 
@@ -38,17 +38,30 @@ def step(game_id: int):
         if len(game_state.event_queue) <= 0:
             return
 
-        # Process one event from the event queue
+        # Process multiple events in a batch to reduce DB round-trips
+        events_processed = 0
+        max_events_per_step = 10  # Prevent infinite loops and stack overflow
+        all_updates = []
 
-        resolved_event: ResolvedEvent = resolve_event(state=game_state)
-        new_state = resolved_event.state
+        while len(game_state.event_queue) > 0 and events_processed < max_events_per_step:
+            resolved_event: ResolvedEvent = resolve_event(state=game_state)
+            game_state = resolved_event.state
 
-        for update in resolved_event.updates:
-            if isinstance(update, GameOverUpdate):
+            # Accumulate all updates for batch sending
+            all_updates.extend(resolved_event.updates)
+            events_processed += 1
 
+            # Check for game over - if found, stop processing and handle it
+            game_over_update = None
+            for update in resolved_event.updates:
+                if isinstance(update, GameOverUpdate):
+                    game_over_update = update
+                    break
+
+            if game_over_update:
                 game.status = Game.GAME_STATUS_ENDED
 
-                winner_side = resolved_event.updates[0].winner
+                winner_side = game_over_update.winner
                 if winner_side == 'side_a':
                     winner = game.side_a
                 elif winner_side == 'side_b':
@@ -57,19 +70,22 @@ def step(game_id: int):
                 game.winner = winner
                 game.save(update_fields=["status", "winner"])
 
-                new_state.event_queue = []
+                game_state.event_queue = []
                 break
 
-        game.state = new_state.model_dump()
+        # Single DB save for all processed events
+        game.state = game_state.model_dump()
         game.save(update_fields=["state"])
 
+        # Single WebSocket send with all accumulated updates
         _send_game_updates_to_clients(
             game.id,
-            new_state.model_dump(),
-            [ update.model_dump() for update in resolved_event.updates ])
+            game_state.model_dump(),
+            [update.model_dump() for update in all_updates])
 
-        if len(new_state.event_queue) > 0:
-            advance_game.apply_async(args=[game_id], countdown=ADVANCE_GAME_DELAY)
+        # Continue processing if there are more events
+        if len(game_state.event_queue) > 0:
+            step.apply_async(args=[game_id], countdown=STEP_DELAY)
 
         return game
 
@@ -93,7 +109,7 @@ def step(game_id: int):
             game.id,
             game_state.model_dump(),
             [])
-        advance_game.apply_async(args=[game_id], countdown=ADVANCE_GAME_DELAY)
+        advance_game.apply_async(args=[game_id], countdown=STEP_DELAY)
         """
 
 @shared_task
@@ -159,7 +175,7 @@ def advance_game(game_id: int):
                 game.id,
                 new_state.model_dump(),
                 [ update.model_dump() for update in resolved_event.updates ])
-            advance_game.apply_async(args=[game_id], countdown=ADVANCE_GAME_DELAY)
+            advance_game.apply_async(args=[game_id], countdown=STEP_DELAY)
             return
 
         if game_state.phase != "main":
@@ -181,7 +197,7 @@ def advance_game(game_id: int):
             game.id,
             game_state.model_dump(),
             [])
-        advance_game.apply_async(args=[game_id], countdown=ADVANCE_GAME_DELAY)
+        advance_game.apply_async(args=[game_id], countdown=STEP_DELAY)
 
 
 @shared_task
