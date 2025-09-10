@@ -1,13 +1,16 @@
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+
 from rest_framework.test import APITestCase
 from rest_framework import status
-from django.contrib.auth import get_user_model
 
-# Import your models when you create them
-# from .models import Project, Canvas, Layer
+from .models import Title, CardTemplate, CardTrait
+from .services import IngestionService
+
 
 User = get_user_model()
+
 
 class BuilderTestCase(TestCase):
     """Test cases for the builder app."""
@@ -23,6 +26,63 @@ class BuilderTestCase(TestCase):
         """Test that the builder app is properly configured."""
         # This test will pass if the app is properly installed
         self.assertTrue(True)
+
+
+class TestIngestion(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="testuser@example.com",
+            username="testuser"
+        )
+        self.title = IngestionService.create_title(
+            name="Test Title",
+            slug="test-title",
+            author=self.user
+        ).title
+
+    def test_ingest_new_card(self):
+        card_yaml = """
+        - type: card
+          card_type: minion
+          slug: small-charge-drawrattle
+          name: Small Charge Drawrattle
+          description: Charge, draw a card on destruction.
+          cost: 2
+          attack: 1
+          health: 1
+          traits:
+          - type: charge
+          - type: deathrattle
+            actions:
+            - action: draw_card
+              amount: 1
+        """
+        self.assertEqual(CardTemplate.objects.count(), 0)
+
+        ingestion_service = IngestionService(self.title)
+        ingestion_service.ingest_yaml(card_yaml)
+
+        self.assertEqual(CardTemplate.objects.count(), 1)
+        card_template = CardTemplate.objects.first()
+        self.assertEqual(card_template.name, "Small Charge Drawrattle")
+        self.assertEqual(card_template.description, "Charge, draw a card on destruction.")
+        self.assertEqual(card_template.cost, 2)
+        self.assertEqual(card_template.attack, 1)
+        self.assertEqual(card_template.health, 1)
+        self.assertEqual(card_template.traits.count(), 2)
+        self.assertEqual(card_template.traits.filter(slug='charge').count(), 1)
+        self.assertEqual(card_template.traits.filter(slug='deathrattle').count(), 1)
+        deathrattle_trait = card_template.traits.filter(slug='deathrattle').first()
+        card_trait = CardTrait.objects.get(card=card_template, trait=deathrattle_trait)
+        self.assertEqual(card_trait.data['actions'][0]['action'], 'draw_card')
+        self.assertEqual(card_trait.data['actions'][0]['amount'], 1)
+
+
+
+
+
+
 
 # API Test examples for when you implement models and views:
 

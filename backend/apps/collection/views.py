@@ -93,7 +93,8 @@ def deck_list_by_title(request, title_slug):
             user=request.user,
             name=name,
             description=description,
-            hero=hero
+            hero=hero,
+            title=title,
         )
 
         return Response({

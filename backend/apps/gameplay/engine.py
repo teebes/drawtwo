@@ -6,13 +6,18 @@ and returns:
 * events
 """
 
+import random
+
 from pydantic import BaseModel
 
 from .schemas import (
     CardDamageUpdate,
     CardDestroyedUpdate,
     CardRetaliationEvent,
+    CastSpellEvent,
     ChooseAIMoveEvent,
+    DealDamageEvent,
+    DealDamageUpdate,
     DrawPhaseEvent,
     DrawPhaseUpdate,
     EndTurnEvent,
@@ -24,6 +29,7 @@ from .schemas import (
     HeroDamageUpdate,
     MainPhaseEvent,
     MainPhaseUpdate,
+    MinionAttackEvent,
     PlayCardEvent,
     PlayCardUpdate,
     RefreshPhaseEvent,
@@ -57,6 +63,18 @@ def get_cards_for_event(state: GameState, event: GameEvent) -> list[str]:
         if event.target_type == "card":
             cards_to_check.append(event.target_id)
 
+    elif isinstance(event, MinionAttackEvent):
+        # Check the attacking card and potentially the target card
+        cards_to_check = [event.card_id]
+        if event.target_type == "card":
+            cards_to_check.append(event.target_id)
+
+    elif isinstance(event, CastSpellEvent):
+        # Check the casting card and potentially the target card
+        cards_to_check = [event.card_id]
+        if event.target_type == "card":
+            cards_to_check.append(event.target_id)
+
     elif isinstance(event, CardRetaliationEvent):
         # Check the retaliating card
         cards_to_check = [event.card_id]
@@ -75,6 +93,27 @@ def get_cards_for_event(state: GameState, event: GameEvent) -> list[str]:
 
     return cards_to_check
 
+def get_cards_for_signal(state: GameState, signal: str) -> list[str]:
+    return []
+
+TRIGGER_MAP = {}
+TRIGGER_MAP[PlayCardUpdate.type] = ["charge", "battlecry"]
+
+def apply_traits(state: GameState, update: GameUpdate) -> tuple[list[GameEvent], list[GameUpdate]]:
+    events = []
+    updates = []
+
+    # Route the event to a trait handler based on the trigger map
+    for update_type in TRIGGER_MAP:
+        if update.type == update_type:
+            for trait_slug in TRIGGER_MAP[update_type]:
+                trait = state.cards[update.card_id].traits[trait_slug]
+                trait_events, trait_updates = TRAIT_HANDLERS[trait_slug](
+                    state, update, trait)
+                events.extend(trait_events)
+                updates.extend(trait_updates)
+
+    return events, updates
 
 def handle_trait_effects(state: GameState, event: GameEvent) -> tuple[list[GameEvent], list[GameUpdate]]:
     """Handle all trait effects for a given event"""
@@ -99,38 +138,29 @@ def handle_trait_effects(state: GameState, event: GameEvent) -> tuple[list[GameE
 
 # Individual trait handlers
 
-def handle_charge_trait(state: GameState, event: GameEvent, card: CardInPlay, trait: Trait) -> tuple[list[GameEvent], list[GameUpdate]]:
+def handle_charge_trait(state: GameState, update: PlayCardUpdate, card: CardInPlay, trait: Trait) -> tuple[list[GameEvent], list[GameUpdate]]:
     """Charge: Can attack immediately when played"""
-    if isinstance(event, PlayCardEvent) and event.card_id == card.card_id:
+    if update.card_id == card.card_id:
         card.exhausted = False
     return [], []
 
-
-# TODO: Add other trait handlers here:
-# def handle_deathrattle_trait(state: GameState, event: GameEvent, card: CardInPlay, trait: Trait):
-#     """Deathrattle: Effect triggers when card is destroyed"""
-#     # Implementation for deathrattle effects
-#     return [], []
-#
-# def handle_taunt_trait(state: GameState, event: GameEvent, card: CardInPlay, trait: Trait):
-#     """Taunt: Enemies must attack this card first"""
-#     # Implementation for taunt mechanics
-#     return [], []
-#
-# def handle_rush_trait(state: GameState, event: GameEvent, card: CardInPlay, trait: Trait):
-#     """Rush: Can attack minions (but not heroes) immediately when played"""
-#     # Implementation for rush mechanics
-#     return [], []
-
+def handle_battlecry_trait(state: GameState, update: PlayCardUpdate, card: CardInPlay, trait: Trait) -> tuple[list[GameEvent], list[GameUpdate]]:
+    """Battlecry: Effect triggers when card is played"""
+    return [], []
 
 # Registry of trait handlers
 TRAIT_HANDLERS = {
     "charge": handle_charge_trait,
-    # TODO: Add other traits here as they're implemented
-    # "deathrattle": handle_deathrattle_trait,
-    # "taunt": handle_taunt_trait,
-    # "rush": handle_rush_trait,
+    "battlecry": handle_battlecry_trait,
 }
+
+def translate_card_action(state: GameState, definition) -> list[GameEvent]:
+    """
+    Translate a card action definition into a list of events.
+    """
+    events = []
+    return events
+
 
 
 def resolve_event(state: GameState) -> ResolvedEvent:
@@ -167,6 +197,9 @@ def resolve_event(state: GameState) -> ResolvedEvent:
 
     elif isinstance(event, UseCardEvent):
         events, updates = handle_use_card(new_state, event)
+
+    elif isinstance(event, MinionAttackEvent):
+        events, updates = handle_minion_attack(new_state, event)
 
     elif isinstance(event, CardRetaliationEvent):
         events, updates = handle_card_retaliation(new_state, event)
@@ -249,6 +282,25 @@ def handle_play_card(state: GameState, event: GameEvent) -> tuple[list[GameEvent
     state.board[event.side].insert(event.position, event.card_id)
     state.mana_used[event.side] += state.cards[event.card_id].cost
 
+    events = []
+    updates = []
+
+    play_card_update = PlayCardUpdate(
+        side=event.side,
+        card_id=event.card_id,
+        position=event.position)
+
+    updates.append(play_card_update)
+
+    trait_events, trait_updates = apply_traits(state, play_card_update)
+
+
+
+    events.extend(trait_events)
+    updates.extend(trait_updates)
+
+    return events, updates
+
     # Handle trait effects AFTER the card is played
     trait_events, trait_updates = handle_trait_effects(state, event)
 
@@ -258,6 +310,63 @@ def handle_play_card(state: GameState, event: GameEvent) -> tuple[list[GameEvent
     ] + trait_updates
     return events, updates
 
+def handle_minion_attack(state: GameState, event: MinionAttackEvent) -> tuple[list[GameEvent], list[GameUpdate]]:
+    source_card_id = event.card_id
+    source_card = state.cards[source_card_id]
+    target_type = event.target_type
+    target_id = event.target_id
+
+    source_card.exhausted = True
+
+    damage_event = DealDamageEvent(
+        source_type="card",
+        source_id=source_card_id,
+        target_type=target_type,
+        target_id=target_id,
+        damage=source_card.attack
+    )
+
+    return [damage_event], []
+
+def handle_deal_damage(state: GameState, event: DealDamageEvent) -> tuple[list[GameEvent], list[GameUpdate]]:
+    target_type = event.target_type
+
+    opposing_side = "side_b" if event.side == "side_a" else "side_a"
+    updates = [DealDamageUpdate(
+        source_type=event.source_type,
+        source_id=event.source_id,
+        target_type=event.target_type,
+        target_id=event.target_id,
+        damage=event.damage
+    )]
+
+    if target_type == "hero":
+        hero = state.heroes[opposing_side]
+        hero.health -= event.damage
+        if hero.health <= 0:
+            # If the hero dies, that is a game over event
+            state.winner = event.side
+            updates.append(GameOverUpdate(side=event.side, winner=event.side))
+        return [], updates
+
+    # target is card
+    target_card = state.cards[event.target_id]
+
+    target_card.health -= event.damage
+    if target_card.health <= 0:
+        state.board[opposing_side].remove(event.target_id)
+        # TODO: put deathrattle mechanism here
+        return [], [CardDestroyedUpdate(side=event.side, card_id=event.target_id)]
+    else:
+        events = [CardRetaliationEvent(
+                    side=event.side,
+                    card_id=event.target_id,
+                    target_id=source_card_id)]
+        changes = [CardDamageUpdate(
+                        side=event.side,
+                        card_id=target_card_id,
+                        damage=source_card.attack)]
+        return events, changes
 
 def handle_use_card(state: GameState, event: GameEvent) -> tuple[list[GameEvent], list[GameUpdate]]:
     source_card_id = event.card_id
@@ -344,11 +453,18 @@ def handle_choose_ai_move(state: GameState, event: GameEvent) -> tuple[list[Game
     for card_id in state.board[state.active]:
         card = state.cards[card_id]
         if not card.exhausted:
+            # 50/50 chance to attack hero or card
+            if random.random() < 0.5:
+                target_type = "hero"
+                target_id = state.heroes[opposing_side].hero_id
+            else:
+                target_type = "card"
+                target_id = random.choice(state.board[opposing_side])
             use_event = UseCardEvent(
                 side=state.active,
                 card_id=card_id,
-                target_type="hero",
-                target_id=state.heroes[opposing_side].hero_id)
+                target_type=target_type,
+                target_id=target_id)
             choose_ai_move = ChooseAIMoveEvent(side=state.active)
             return [use_event, choose_ai_move], []
 

@@ -9,6 +9,7 @@ class TitleAdmin(admin.ModelAdmin):
     search_fields = ('slug', 'name', 'description')
     readonly_fields = ('created_at', 'updated_at')
     ordering = ('-created_at',)
+    raw_id_fields = ('author',)
 
     fieldsets = (
         ('Basic Information', {
@@ -77,19 +78,16 @@ class TagAdmin(admin.ModelAdmin):
 
 @admin.register(Trait)
 class TraitAdmin(admin.ModelAdmin):
-    list_display = ('name', 'slug', 'title', 'accepts_arguments', 'created_at')
-    list_filter = ('title', 'accepts_arguments', 'created_at')
+    list_display = ('name', 'slug', 'title', 'created_at')
+    list_filter = ('title', 'created_at')
     search_fields = ('name', 'slug', 'description', 'title__name')
     readonly_fields = ('created_at', 'updated_at')
     ordering = ('-created_at',)
+    raw_id_fields = ('title',)
 
     fieldsets = (
         ('Basic Information', {
             'fields': ('title', 'slug', 'name', 'description')
-        }),
-        ('Arguments Configuration', {
-            'fields': ('accepts_arguments', 'argument_description'),
-            'description': 'Configure whether this trait accepts numeric arguments (e.g., "armor 3")'
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
@@ -208,14 +206,14 @@ class CardTemplateAdmin(admin.ModelAdmin):
 
 @admin.register(AIPlayer)
 class AIPlayerAdmin(admin.ModelAdmin):
-    list_display = ['name', 'difficulty', 'hero', 'created_at']
-    list_filter = ['difficulty', 'hero', 'created_at']
-    search_fields = ['name', 'hero__name']
+    list_display = ['name', 'difficulty', 'created_at']
+    list_filter = ['difficulty', 'created_at']
+    search_fields = ['name']
     readonly_fields = ['created_at', 'updated_at']
 
     fieldsets = (
         ('Basic Info', {
-            'fields': ('name', 'difficulty', 'hero')
+            'fields': ('name', 'difficulty')
         }),
         ('AI Strategy', {
             'fields': ('strategy_config',),

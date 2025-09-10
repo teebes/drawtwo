@@ -13,7 +13,7 @@ class Title(TimestampedModel):
     STATUS_ARCHIVED = "archived"
 
     slug = models.SlugField()
-    version = models.PositiveIntegerField()
+    version = models.PositiveIntegerField(default=1)
     is_latest = models.BooleanField(default=True)
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True)
@@ -139,11 +139,6 @@ class Trait(TimestampedModel):
     name = models.CharField(max_length=40)
     description = models.TextField(blank=True)
 
-    # Whether this trait type accepts arguments (e.g., armor value)
-    accepts_arguments = models.BooleanField(default=False)
-    # Description of what the argument represents
-    argument_description = models.CharField(max_length=100, blank=True)
-
     class Meta:
         indexes = [
             models.Index(fields=['name'], name='trait_name_idx'),
@@ -231,7 +226,7 @@ class CardTemplate(TemplateBase):
     )
 
 
-    cost = models.PositiveSmallIntegerField()
+    cost = models.PositiveSmallIntegerField(default=0)
     attack = models.PositiveSmallIntegerField(null=True, blank=True)
     health = models.PositiveSmallIntegerField(null=True, blank=True)
 
@@ -304,7 +299,6 @@ class AIPlayer(TimestampedModel):
         ],
         default=AI_DIFFICULTY_MEDIUM,
     )
-    hero = models.ForeignKey(HeroTemplate, on_delete=models.PROTECT)
 
     # AI behavior settings
     strategy_config = models.JSONField(

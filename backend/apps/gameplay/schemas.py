@@ -71,6 +71,29 @@ class UseCardEvent(EventBase):
     target_id: str
 
 
+class MinionAttackEvent(EventBase):
+    type: Literal["minion_attack_event"] = "minion_attack_event"
+    card_id: str
+    target_type: Literal["card", "hero"] = "card"
+    target_id: str
+
+
+class CastSpellEvent(EventBase):
+    type: Literal["cast_spell_event"] = "cast_spell_event"
+    card_id: str
+    target_type: Literal["card", "hero"] = "card"
+    target_id: str
+
+
+class DealDamageEvent(EventBase):
+    type: Literal["deal_damage_event"] = "deal_damage_event"
+    source_type: Literal["card", "hero", "board"] = "card"
+    source_id: str
+    target_type: Literal["card", "hero",] = "card"
+    target_id: str
+    damage: int
+
+
 class CardRetaliationEvent(EventBase):
     type: Literal["card_retaliation_event"] = "card_retaliation_event"
     card_id: str
@@ -99,6 +122,7 @@ GameEvent = Annotated[
         EndTurnEvent,
         GameOverEvent,
         MainPhaseEvent,
+        MinionAttackEvent,
         PlayCardEvent,
         RefreshPhaseEvent,
         UseCardEvent],
@@ -109,10 +133,11 @@ GameEvent = Annotated[
 # ==== Game State ====
 
 
-class Trait(BaseModel):
-    slug: str
-    name: str
-    data: dict = {}
+from apps.builder.schemas import Trait
+# class Trait(BaseModel):
+#     slug: str
+#     name: str
+#     data: dict = {}
 
 
 class CardInPlay(BaseModel):
@@ -220,6 +245,15 @@ class PlayCardUpdate(UpdateBase):
     position: int
 
 
+class DealDamageUpdate(UpdateBase):
+    type: Literal["deal_damage_update"] = "deal_damage_update"
+    source_type: Literal["card", "hero", "board"] = "card"
+    source_id: str
+    target_type: Literal["card", "hero",] = "card"
+    target_id: str
+    damage: int
+
+
 class HeroDamageUpdate(UpdateBase):
     type: Literal["hero_damage_update"] = "hero_damage_update"
     hero_id: str
@@ -268,3 +302,63 @@ class ResolvedEvent(BaseModel):
     state: GameState
     updates: list[GameUpdate]
     events: list[GameEvent]
+
+
+# ==== Card Actions ====
+
+class CardActionBase(BaseModel):
+    action: Literal["action"] = "card_action"
+
+
+class CardActionDamage(CardActionBase):
+    action: Literal["damage"] = "damage"
+    amount: int
+    target: Literal["hero", "minion", "enemy"] = "minion"
+
+
+class CardActionBattleCry(CardActionBase):
+    action: Literal["battlecry"] = "battlecry"
+    damage: int
+    target: Literal["hero", "minion", "enemy"] = "minion"
+
+
+class CardActionDeathRattle(CardActionBase): pass
+
+
+class CardActionDraw(CardActionBase):
+    action: Literal["draw_card"] = "draw_card"
+    amount: int
+
+
+# ==== Traits ====
+
+class TraitBase(BaseModel):
+    type: Literal["trait"] = "trait"
+
+
+class ChargeTrait(TraitBase):
+    type: Literal["charge"] = "charge"
+
+
+class RangedTrait(TraitBase):
+    type: Literal["ranged"] = "ranged"
+
+
+class BattlecryTrait(TraitBase):
+    type: Literal["battlecry"] = "battlecry"
+
+
+class DeathRattleTrait(TraitBase):
+    type: Literal["deathrattle"] = "deathrattle"
+    action: str # TODO: Define action schema - example 'draw_card'
+    amount: int
+
+
+class TauntTrait(TraitBase):
+    type: Literal["taunt"] = "taunt"
+
+
+Trait = Annotated[
+    Union[ChargeTrait, BattlecryTrait, TauntTrait],
+    Discriminator('type')
+]
