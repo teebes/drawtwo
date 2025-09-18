@@ -58,6 +58,6 @@ class Game(TimestampedModel):
         state.event_queue.append(event)
         self.state = state.model_dump()
         self.save(update_fields=["state"])
-        
+
     def __str__(self):
         return f"{self.side_a.name} vs {self.side_b.name}"

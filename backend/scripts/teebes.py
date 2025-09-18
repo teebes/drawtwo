@@ -32,27 +32,7 @@ User = get_user_model()
 
 
 def main():
-    """
-    Main function - put your script logic here.
-
-    This template includes several common patterns you can use or remove as needed.
-    """
-
-    import yaml
-    from apps.builder.models import Title, Trait
-    from apps.builder.services import TitleService
-
-    title = Title.objects.get(pk=3)
-
-    TitleService(title).assign_traits()
-
-    # with open('backend/dev_data/archetypes.yaml', 'r') as file:
-    #     data = yaml.safe_load(file)
-    #     for item in data:
-    #         Title.objects.create(name=item['name'], slug=item['slug'], author=title.author)
-
-
-
+    pass
 
 if __name__ == '__main__':
     # Parse command line arguments if needed

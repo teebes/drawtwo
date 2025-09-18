@@ -9,6 +9,12 @@ from .schemas import (
     GameState,
     ResolvedEvent,)
 
+from apps.gameplay.schemas.events import (
+    DrawPhaseEvent,
+    MainPhaseEvent,
+)
+
+
 STEP_DELAY = 1
 
 from dataclasses import dataclass
@@ -19,6 +25,7 @@ class StepResult:
 
 @shared_task
 def step(game_id: int):
+    print("==== STEP FUNCTION ====")
     from .engine import resolve_event, determine_ai_move
     from .services import GameService
 
@@ -36,7 +43,17 @@ def step(game_id: int):
         game_state = GameState.model_validate(game.state)
 
         if len(game_state.event_queue) <= 0:
-            return
+
+            # Look for games that may be stuck. If there's no more events but
+            # we're not in a main phase, then we need to try to move the game
+            # forward.
+            if game_state.phase == "refresh":
+                game_state.event_queue.append(DrawPhaseEvent(side=game_state.active))
+            elif game_state.phase == "draw":
+                print('Advancing to main phase')
+                game_state.event_queue.append(MainPhaseEvent(side=game_state.active))
+            else:
+                return
 
         # Process multiple events in a batch to reduce DB round-trips
         events_processed = 0
@@ -59,6 +76,7 @@ def step(game_id: int):
                     break
 
             if game_over_update:
+                print("Game over Detected")
                 game.status = Game.GAME_STATUS_ENDED
 
                 winner_side = game_over_update.winner
@@ -70,6 +88,7 @@ def step(game_id: int):
                 game.winner = winner
                 game.save(update_fields=["status", "winner"])
 
+                game_state.winner = winner_side
                 game_state.event_queue = []
                 break
 
@@ -87,7 +106,7 @@ def step(game_id: int):
         if len(game_state.event_queue) > 0:
             step.apply_async(args=[game_id], countdown=STEP_DELAY)
 
-        return game
+        return {"game_id": game_id, "events_processed": events_processed}
 
         """
         if game_state.phase != "main":

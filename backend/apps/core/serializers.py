@@ -1,5 +1,8 @@
 from typing import List, Dict, Any
-from .schemas import Card, Trait, Deck, Hero
+#from .schemas import Card, Trait, Deck, Hero
+from .schemas import Deck, Hero
+from apps.builder.schemas import Card, Trait
+from pydantic import TypeAdapter
 
 
 def serialize_cards_with_traits(queryset) -> List[Dict[str, Any]]:
@@ -24,11 +27,14 @@ def serialize_cards_with_traits(queryset) -> List[Dict[str, Any]]:
         traits_list = []
 
         for card_trait in card.cardtrait_set.all().order_by('trait__name'):
-            trait_obj = Trait(
-                slug=card_trait.trait.slug,
-                name=card_trait.trait.name,
-                data=card_trait.data
-            )
+            trait_data = {
+                'type': card_trait.trait.slug,
+                **card_trait.data
+            }
+
+            # Use TypeAdapter to properly validate and create the discriminated union
+            trait_adapter = TypeAdapter(Trait)
+            trait_obj = trait_adapter.validate_python(trait_data)
             traits_list.append(trait_obj)
 
         # Create Card schema object

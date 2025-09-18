@@ -1,7 +1,12 @@
+// export interface Trait {
+//   slug: string
+//   name: string
+//   data: Record<string, any>
+// }
+
 export interface Trait {
-  slug: string
-  name: string
-  data: Record<string, any>
+  type: string
+  actions: {}[]
 }
 
 export interface Card {

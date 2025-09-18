@@ -232,7 +232,8 @@ const onCardSelected = async (card: Card): Promise<void> => {
 
   try {
     const response = await axios.post(`/collection/decks/${deck.value.id}/cards/add/`, {
-      card_id: card.id,
+      // card_id: card.id,
+      card_slug: card.slug,
       count: 1
     })
 

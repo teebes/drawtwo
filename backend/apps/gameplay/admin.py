@@ -4,7 +4,7 @@ from .models import Game
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
-    list_display = ['__str__', 'status', 'get_game_type', 'get_winner', 'created_at']
+    list_display = ['id', '__str__', 'status', 'get_game_type', 'get_winner', 'created_at']
     list_filter = ['status', 'created_at']
     search_fields = [
         'side_a__name',

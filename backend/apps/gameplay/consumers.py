@@ -62,42 +62,6 @@ class GameConsumer(AsyncWebsocketConsumer):
 
         result = await self.process_game_action(data)
 
-        # await self.channel_layer.group_send(
-        #     self.game_group_name,
-        #     {
-        #         'type': 'game_updates',
-        #         'updates': result['updates'],
-        #         'state': result['state']
-        #     }
-        # )
-
-        return
-
-        if message_type == 'action':
-            # Handle game action
-            action = data.get('action')
-            if action:
-                print(f"Processing action: {action}")
-                result = await self.process_game_action(action)
-                print(f"Action result: {result}")
-
-                # Broadcast update to all players in the game
-                await self.channel_layer.group_send(
-                    self.game_group_name,
-                    {
-                        'type': 'game_update',
-                        'update': result
-                    }
-                )
-    """
-    async def game_update(self, event):
-        # Send game update to WebSocket
-        await self.send(text_data=json.dumps({
-            'type': 'game_update',
-            'update': event['update']
-        }))
-    """
-
     async def game_updates(self, event):
         # Send game updates to WebSocket
         await self.send(text_data=json.dumps({
@@ -131,33 +95,3 @@ class GameConsumer(AsyncWebsocketConsumer):
             game_id=self.game_id,
             action=action,
         )
-
-        game = Game.objects.get(id=self.game_id)
-
-        # Parse current state to get active player
-        current_state = GameState.model_validate(game.state)
-
-        # Add player field if not present
-        if 'player' not in action:
-            action['player'] = current_state.active
-
-        # Apply action to game state
-        new_state = apply_action(game.state, action)
-        game.state = json.loads(new_state)
-        game.save()
-
-        # Parse the state to check for specific updates
-        state = GameState.model_validate(game.state)
-
-        # Determine what type of update this is
-        update_type = 'state_change'
-
-        # Check if a card was drawn
-        if action.get('type') == 'phase_transition' and state.phase == 'draw':
-            update_type = 'draw_card'
-
-        return {
-            'type': update_type,
-            'state': game.state,
-            'action': action
-        }

@@ -13,12 +13,13 @@ from .schemas import (
     HeroInPlay,
     PlayCardAction,
     PlayCardEvent,
-    RefreshPhaseEvent,
+    StartGameEvent,
     UseCardAction,
     UseCardEvent,
 )
 
 from .tasks import step
+from apps.builder.schemas import TitleConfig
 from apps.core.serializers import serialize_cards_with_traits
 
 
@@ -114,17 +115,20 @@ class GameService:
         if deck_b.is_ai_deck:
             ai_sides.append('side_b')
 
+        config = TitleConfig.model_validate(deck_a.title.config)
+
         game_state = GameState(
             turn=1,
             active='side_a',
             phase='start',
             event_queue=[
-                RefreshPhaseEvent(side='side_a'),
+                StartGameEvent(side='side_a'),
             ],
             cards=cards_in_play,
             heroes=heroes,
             decks=decks,
             ai_sides=ai_sides,
+            config=config,
         )
 
         game = Game.objects.create(

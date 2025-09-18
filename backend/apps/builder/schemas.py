@@ -3,10 +3,10 @@ from typing import Literal, List, Annotated, Union, Optional
 from pydantic import Discriminator
 
 
-
 class TitleConfig(BaseModel):
     deck_size_limit: int = 30
     deck_card_max_count: int = 9
+    hand_start_size: int = 3
 
 
 class Encounter(BaseModel):
@@ -16,23 +16,23 @@ class Encounter(BaseModel):
 # Ingestable data
 
 
-class ActionBase(BaseModel):
+class CardActionBase(BaseModel):
     action: str
 
 
-class DrawCardAction(ActionBase):
-    action: Literal['draw_card'] = 'draw_card'
-    amount: int
+class CardActionDraw(CardActionBase):
+    action: Literal['draw'] = 'draw'
+    amount: int = 1
 
 
-class DamageAction(ActionBase):
+class CardActionDamage(CardActionBase):
     action: Literal['damage'] = 'damage'
     amount: int
     target: Literal['hero', 'minion', 'enemy'] = 'minion'
 
 
 CardAction = Annotated[
-    Union[DrawCardAction, DamageAction],
+    Union[CardActionDraw, CardActionDamage],
     Discriminator('action')
 ]
 
@@ -54,12 +54,16 @@ class Taunt(TraitBase):
     type: Literal['taunt'] = 'taunt'
 
 
+class Battlecry(TraitBase):
+    type: Literal['battlecry'] = 'battlecry'
+
+
 class DeathRattle(TraitBase):
     type: Literal['deathrattle'] = 'deathrattle'
 
 
 Trait = Annotated[
-    Union[Charge, Ranged, Taunt, DeathRattle],
+    Union[Charge, Ranged, Taunt, Battlecry, DeathRattle],
     Discriminator('type')
 ]
 
@@ -69,6 +73,7 @@ class ResourceBase(BaseModel):
 
 
 class Card(ResourceBase):
+    id: Optional[int] = None
     type: Literal['card'] = 'card'
     card_type: Literal['minion', 'spell']
     slug: str
@@ -78,9 +83,30 @@ class Card(ResourceBase):
     attack: int
     health: int
     traits: List[Trait]
+    faction: Optional[str] = None
+
+
+class Deck(ResourceBase):
+    type: Literal['deck'] = 'deck'
+    name: str
+    hero: str
+    cards: List[dict] = Field(default_factory=list)
+
+
+class Hero(ResourceBase):
+    type: Literal['hero'] = 'hero'
+    slug: str
+    name: str
+    description: str
+    health: int
+    hero_power: dict
+    faction: Optional[str] = None
 
 
 Resource = Annotated[
-    Union[Card],
+    Union[Card, Deck, Hero],
     Discriminator('type')
 ]
+
+
+#

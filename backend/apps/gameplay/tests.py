@@ -1,13 +1,17 @@
 from django.test import TestCase
 
+from apps.builder.schemas import Battlecry, CardActionDraw
+from apps.gameplay.engine import resolve_event
+from apps.gameplay.schemas.events import PlayCardEvent, DrawCardEvent
+from apps.gameplay.schemas.updates import GameOverUpdate
 from .schemas import GameState, CardInPlay, HeroInPlay
 from .services import GameService
 
 
-class GamePhaseChangesTests(TestCase):
+class GamePlayTestBase(TestCase):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def setUp(self, *args, **kwargs):
+        super().setUp(*args, **kwargs)
         self.game_state = GameState(
             turn=1,
             active="side_a",
@@ -20,44 +24,62 @@ class GamePhaseChangesTests(TestCase):
             board={'side_a': []},
             hands={'side_a': []},
             heroes={'side_a': HeroInPlay(
-                hero_id=1,
+                hero_id="1",
                 template_slug="test",
                 health=1,
                 name="test",
             )},
         )
 
-    # def test_draw_phase(self):
-    #     self.game_state.mana_pool['side_a'] = 1
-    #     self.game_state.cards[1] = CardInPlay(
-    #         card_id=1,
-    #         template_slug="test",
-    #         attack=1,
-    #         health=1,
-    #         cost=1,
-    #     )
-    #     self.game_state.cards[2] = CardInPlay(
-    #         card_id=2,
-    #         template_slug="test",
-    #         attack=1,
-    #         health=1,
-    #         cost=1,
-    #     )
-    #     self.game_state.decks['side_a'] = [1, 2]
 
-    #     game_update = GameService.draw_card(self.game_state, 'side_a')
-    #     self.assertEqual(game_update[0].type, "draw_card")
-    #     self.assertEqual(game_update[0].side, "side_a")
-    #     self.assertEqual(game_update[0].data['card']['card_id'], 1)
-    #     self.assertEqual(self.game_state.decks['side_a'], [2])
-    #     self.assertEqual(self.game_state.hands['side_a'], [1])
+class TestTraits(GamePlayTestBase):
 
-    #     game_update = GameService.draw_card(self.game_state, 'side_a')
-    #     self.assertEqual(game_update[0].type, "draw_card")
-    #     self.assertEqual(game_update[0].side, "side_a")
-    #     self.assertEqual(game_update[0].data['card']['card_id'], 2)
-    #     self.assertEqual(self.game_state.decks['side_a'], [])
-    #     self.assertEqual(self.game_state.hands['side_a'], [1, 2])
+    def test_battlecry_draw(self):
+        battlecry_draw = CardInPlay(
+            card_type="minion",
+            card_id="1",
+            template_slug="battlecry-draw",
+            name="Battlecry Draw",
+            description="Battlecry: Draw a card.",
+            attack=1,
+            health=1,
+            cost=1,
+            traits=[
+                Battlecry(
+                    type="battlecry",
+                    actions=[
+                        CardActionDraw()
+                    ],
+                )
+            ],
+        )
 
-    #     with self.assertRaises(ValueError):
-    #         GameService.draw_card(self.game_state, 'side_b')
+        self.game_state.cards["1"] = battlecry_draw
+        self.game_state.hands["side_a"] = ["1"]
+
+        play_card_event = PlayCardEvent(
+            side="side_a",
+            card_id="1",
+            position=0,
+        )
+
+        self.game_state.event_queue.append(play_card_event)
+
+        resolved_event = resolve_event(self.game_state)
+
+        new_state = resolved_event.state
+        self.assertEqual(new_state.decks["side_a"], [])
+        self.assertEqual(new_state.board["side_a"], ["1"])
+        self.assertEqual(new_state.event_queue[0].type, 'event_draw_card')
+
+
+class TestEndGame(GamePlayTestBase):
+
+    def test_decking_out_via_card_action(self):
+        draw_card_event = DrawCardEvent(
+            side="side_a",
+            amount=1,
+        )
+        self.game_state.event_queue.append(draw_card_event)
+        resolved_event = resolve_event(self.game_state)
+        self.assertTrue(isinstance(resolved_event.updates[0], GameOverUpdate))

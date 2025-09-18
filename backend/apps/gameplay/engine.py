@@ -7,97 +7,57 @@ and returns:
 """
 
 import random
+from typing import List
 
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
+
+from apps.builder.schemas import (
+    CardActionDraw,
+    CardActionDamage,
+    CardAction,
+)
+
+from apps.gameplay.schemas.events import (
+    CardRetaliationEvent,
+    ChooseAIMoveEvent,
+    DealDamageEvent,
+    DrawCardEvent,
+    DrawPhaseEvent,
+    EndTurnEvent,
+    GameEvent,
+    MainPhaseEvent,
+    MinionAttackEvent,
+    PlayCardEvent,
+    RefreshPhaseEvent,
+    StartGameEvent,
+    UseCardEvent,
+)
 
 from .schemas import (
     CardDamageUpdate,
     CardDestroyedUpdate,
-    CardRetaliationEvent,
-    CastSpellEvent,
-    ChooseAIMoveEvent,
-    DealDamageEvent,
     DealDamageUpdate,
-    DrawPhaseEvent,
+    DrawCardEvent,
+    DrawCardUpdate,
     DrawPhaseUpdate,
-    EndTurnEvent,
     EndTurnUpdate,
     GameState,
-    GameEvent,
     GameOverUpdate,
     GameUpdate,
     HeroDamageUpdate,
-    MainPhaseEvent,
     MainPhaseUpdate,
-    MinionAttackEvent,
-    PlayCardEvent,
     PlayCardUpdate,
-    RefreshPhaseEvent,
     RefreshPhaseUpdate,
     ResolvedEvent,
-    UseCardEvent,
     CardInPlay,
     Trait,)
 
 
-class HandledEvent(BaseModel):
-    events: list[GameEvent]
-    updates: list[GameUpdate]
-
 
 # ==== Trait System ====
 
-def get_cards_for_event(state: GameState, event: GameEvent) -> list[str]:
-    """
-    Return list of card IDs that should have their traits checked for this event.
-    """
-    cards_to_check = []
-
-    if isinstance(event, PlayCardEvent):
-        # Only check the card that was just played
-        cards_to_check = [event.card_id]
-
-    elif isinstance(event, UseCardEvent):
-        # Check the attacking card and potentially the target card
-        cards_to_check = [event.card_id]
-        if event.target_type == "card":
-            cards_to_check.append(event.target_id)
-
-    elif isinstance(event, MinionAttackEvent):
-        # Check the attacking card and potentially the target card
-        cards_to_check = [event.card_id]
-        if event.target_type == "card":
-            cards_to_check.append(event.target_id)
-
-    elif isinstance(event, CastSpellEvent):
-        # Check the casting card and potentially the target card
-        cards_to_check = [event.card_id]
-        if event.target_type == "card":
-            cards_to_check.append(event.target_id)
-
-    elif isinstance(event, CardRetaliationEvent):
-        # Check the retaliating card
-        cards_to_check = [event.card_id]
-
-    elif isinstance(event, EndTurnEvent):
-        # Check all cards on the board for the ending turn side
-        cards_to_check = state.board[event.side].copy()
-
-    elif isinstance(event, RefreshPhaseEvent):
-        # Check all cards on the board for the refreshing side (turn start effects)
-        cards_to_check = state.board[event.side].copy()
-
-    elif isinstance(event, DrawPhaseEvent):
-        # Check all cards on the board for draw-related triggers
-        cards_to_check = state.board[event.side].copy()
-
-    return cards_to_check
-
-def get_cards_for_signal(state: GameState, signal: str) -> list[str]:
-    return []
-
 TRIGGER_MAP = {}
-TRIGGER_MAP[PlayCardUpdate.type] = ["charge", "battlecry"]
+TRIGGER_MAP['update_play_card'] = ["charge", "battlecry"]
 
 def apply_traits(state: GameState, update: GameUpdate) -> tuple[list[GameEvent], list[GameUpdate]]:
     events = []
@@ -106,52 +66,54 @@ def apply_traits(state: GameState, update: GameUpdate) -> tuple[list[GameEvent],
     # Route the event to a trait handler based on the trigger map
     for update_type in TRIGGER_MAP:
         if update.type == update_type:
-            for trait_slug in TRIGGER_MAP[update_type]:
-                trait = state.cards[update.card_id].traits[trait_slug]
-                trait_events, trait_updates = TRAIT_HANDLERS[trait_slug](
-                    state, update, trait)
-                events.extend(trait_events)
-                updates.extend(trait_updates)
+            card: CardInPlay = state.cards[update.card_id]
+            for trait in state.cards[update.card_id].traits:
+                if trait.type in TRIGGER_MAP[update_type]:
+                    trait_events, trait_updates = TRAIT_HANDLERS[trait.type](
+                        state, update, card, trait)
+                    events.extend(trait_events)
+                    updates.extend(trait_updates)
 
     return events, updates
 
-def handle_trait_effects(state: GameState, event: GameEvent) -> tuple[list[GameEvent], list[GameUpdate]]:
-    """Handle all trait effects for a given event"""
+def handle_card_actions(state: GameState, card: CardInPlay, trait: Trait) -> tuple[list[GameEvent], list[GameUpdate]]:
+    events = []
+    updates = []
+    for card_action in trait.actions:
+        _events, _updates = handle_card_action(state, card, card_action)
+        events.extend(_events)
+        updates.extend(_updates)
+    return events, updates
+
+def handle_card_action(state: GameState, card: CardInPlay, card_action: CardAction) -> tuple[list[GameEvent], list[GameUpdate]]:
     events = []
     updates = []
 
-    # Get relevant cards based on event type
-    cards_to_check = get_cards_for_event(state, event)
-
-    for card_id in cards_to_check:
-        card = state.cards[card_id]
-        for trait in card.traits:
-            if trait.slug in TRAIT_HANDLERS:
-                trait_events, trait_updates = TRAIT_HANDLERS[trait.slug](
-                    state, event, card, trait
-                )
-                events.extend(trait_events)
-                updates.extend(trait_updates)
+    if isinstance(card_action, CardActionDraw):
+        events.append(DrawCardEvent(side=state.active, amount=card_action.amount))
 
     return events, updates
-
 
 # Individual trait handlers
 
 def handle_charge_trait(state: GameState, update: PlayCardUpdate, card: CardInPlay, trait: Trait) -> tuple[list[GameEvent], list[GameUpdate]]:
     """Charge: Can attack immediately when played"""
-    if update.card_id == card.card_id:
-        card.exhausted = False
+    card.exhausted = False
     return [], []
 
 def handle_battlecry_trait(state: GameState, update: PlayCardUpdate, card: CardInPlay, trait: Trait) -> tuple[list[GameEvent], list[GameUpdate]]:
     """Battlecry: Effect triggers when card is played"""
-    return [], []
+    return handle_card_actions(state, card, trait)
+
+def handle_deathrattle_trait(state: GameState, update: PlayCardUpdate, card: CardInPlay, trait: Trait) -> tuple[list[GameEvent], list[GameUpdate]]:
+    """Deathrattle: Effect triggers when card is destroyed"""
+    return handle_card_actions(state, card, trait)
 
 # Registry of trait handlers
 TRAIT_HANDLERS = {
     "charge": handle_charge_trait,
     "battlecry": handle_battlecry_trait,
+    "deathrattle": handle_deathrattle_trait,
 }
 
 def translate_card_action(state: GameState, definition) -> list[GameEvent]:
@@ -162,7 +124,6 @@ def translate_card_action(state: GameState, definition) -> list[GameEvent]:
     return events
 
 
-
 def resolve_event(state: GameState) -> ResolvedEvent:
     """
     Resolve an event and return the updated state, any new events to process,
@@ -171,16 +132,15 @@ def resolve_event(state: GameState) -> ResolvedEvent:
 
     event = state.event_queue.pop(0)
 
-    print('=========================')
-    print(f"Resolving event: {event}")
-    print('')
-
     events = []
     updates = []
     # The new state will be mutated by the handlers
     new_state: GameState = state.model_copy(deep=True)
 
-    if isinstance(event, RefreshPhaseEvent):
+    if isinstance(event, StartGameEvent):
+        events, updates = handle_start_game(new_state, event)
+
+    elif isinstance(event, RefreshPhaseEvent):
         events, updates = handle_refresh_phase(new_state, event)
 
     elif isinstance(event, DrawPhaseEvent):
@@ -191,6 +151,9 @@ def resolve_event(state: GameState) -> ResolvedEvent:
 
     elif isinstance(event, EndTurnEvent):
         events, updates = handle_end_turn(new_state, event)
+
+    elif isinstance(event, DrawCardEvent):
+        events, updates = handle_draw_card(new_state, event)
 
     elif isinstance(event, PlayCardEvent):
         events, updates = handle_play_card(new_state, event)
@@ -219,6 +182,23 @@ def resolve_event(state: GameState) -> ResolvedEvent:
     )
 
 
+def handle_start_game(state: GameState, event: GameEvent) -> tuple[list[GameEvent], list[GameUpdate]]:
+    state.phase = "start"
+
+    hand_size = state.config.hand_start_size
+    if hand_size < 0: hand_size = 0
+
+    events = []
+
+    for _ in range(hand_size):
+        events.append(DrawCardEvent(side=state.active))
+
+    events.append(RefreshPhaseEvent(side=state.active))
+
+    updates = []
+    return events, updates
+
+
 def handle_refresh_phase(state: GameState, event: GameEvent) -> tuple[list[GameEvent], list[GameUpdate]]:
     state.phase = "refresh"
     state.mana_pool[event.side] = state.turn
@@ -232,20 +212,7 @@ def handle_refresh_phase(state: GameState, event: GameEvent) -> tuple[list[GameE
 
 def handle_draw_phase(state: GameState, event: GameEvent) -> tuple[list[GameEvent], list[GameUpdate]]:
     state.phase = "draw"
-
-    deck = state.decks[event.side]
-
-    try:
-        card_id = deck.pop(0)
-    except IndexError:
-        # No more cards in the deck
-        opposing_side = "side_b" if event.side == "side_a" else "side_a"
-        events = []
-        updates = [GameOverUpdate(side=event.side, winner=opposing_side)]
-        return events, updates
-
-    state.hands[event.side].append(card_id)
-    events = [MainPhaseEvent(side=event.side)]
+    events = [DrawCardEvent(side=event.side), MainPhaseEvent(side=event.side)]
     updates = [DrawPhaseUpdate(side=event.side)]
     return events, updates
 
@@ -268,14 +235,33 @@ def handle_end_turn(state: GameState, event: GameEvent) -> tuple[list[GameEvent]
     for card_on_board in state.board[event.side]:
         state.cards[card_on_board].exhausted = False
 
+    end_of_turn_active = state.active
+
     state.active = "side_b" if state.active == "side_a" else "side_a"
     if state.active == "side_a":
         state.turn += 1
     state.phase = "start"
     events = [RefreshPhaseEvent(side=state.active)]
-    updates = [EndTurnUpdate(side=state.active)]
+    updates = [EndTurnUpdate(side=end_of_turn_active)]
     return events, updates
 
+def handle_draw_card(state: GameState, event: GameEvent) -> tuple[list[GameEvent], list[GameUpdate]]:
+    deck = state.decks[event.side]
+
+    try:
+        card_id = deck.pop(0)
+    except IndexError:
+        # No more cards in the deck
+        opposing_side = "side_b" if event.side == "side_a" else "side_a"
+        events = []
+        updates = [GameOverUpdate(side=event.side, winner=opposing_side)]
+        return events, updates
+
+    state.hands[event.side].append(card_id)
+
+    events = []
+    updates = [DrawCardUpdate(side=event.side, card_id=card_id)]
+    return events, updates
 
 def handle_play_card(state: GameState, event: GameEvent) -> tuple[list[GameEvent], list[GameUpdate]]:
     state.hands[event.side].remove(event.card_id)
@@ -294,21 +280,11 @@ def handle_play_card(state: GameState, event: GameEvent) -> tuple[list[GameEvent
 
     trait_events, trait_updates = apply_traits(state, play_card_update)
 
-
-
     events.extend(trait_events)
     updates.extend(trait_updates)
 
     return events, updates
 
-    # Handle trait effects AFTER the card is played
-    trait_events, trait_updates = handle_trait_effects(state, event)
-
-    events = trait_events
-    updates = [
-        PlayCardUpdate(side=event.side, card_id=event.card_id, position=event.position)
-    ] + trait_updates
-    return events, updates
 
 def handle_minion_attack(state: GameState, event: MinionAttackEvent) -> tuple[list[GameEvent], list[GameUpdate]]:
     source_card_id = event.card_id
@@ -487,22 +463,3 @@ def determine_ai_move(state: GameState) -> GameEvent:
                 position=0)
 
     return EndTurnEvent(side=state.active)
-
-
-"""
-def apply_action(state_dict: dict, action: dict) -> dict:
-    state = GameState.model_validate(state_dict)
-    queue:list[Event] = list(state.event_queue)
-    queue.append(Event(**action))
-
-    emitted: list[Event] = []
-
-    while queue:
-        evt = queue.pop(0)
-        emitted.append(evt)
-        state, new_evts = resolve(evt, state)
-        queue.extend(new_evts)
-
-    state.event_queue = []
-    return state.model_dump_json()
-"""

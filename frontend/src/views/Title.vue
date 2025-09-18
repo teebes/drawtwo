@@ -109,7 +109,7 @@
                 </div>
                 <div class="flex items-center">
                   <router-link
-                    :to="{ name: 'GameBoard', params: { game_id: game.id } }"
+                    :to="{ name: 'Board', params: { game_id: game.id, slug: title.slug } }"
                     class="inline-flex items-center rounded-lg bg-green-600 px-3 py-1 text-sm font-medium text-white hover:bg-green-700 transition-colors"
                   >
                     Join Game

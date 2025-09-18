@@ -18,14 +18,16 @@
                         <div class="">{{ opposingHero?.health }}</div>
                     </div>
 
-                    <div class="flex flex-1 flex-row items-center justify-center space-x-4">
-                        <div>{{ gameState?.phase }}</div>
-                        <!-- <div>{{ gameState?.active }}</div> -->
+                    <!-- Recent Updates -->
+                    <div class="flex flex-1 flex-col p-2">
+                        <div v-for="(update, index) in [...displayUpdates].slice(-3)" :key="index">
+                            {{ update.side }}: {{ update.type }}
+                        </div>
                     </div>
 
                     <!-- Menu -->
                     <div class="w-24 flex justify-center items-center text-center border-l border-gray-700">
-                        <span class="inline-block">
+                        <span class="inline-block" @click="handleMenuClick">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-label="Menu" xmlns="http://www.w3.org/2000/svg">
                                 <rect y="5" width="24" height="2" rx="1" fill="currentColor"/>
                                 <rect y="11" width="24" height="2" rx="1" fill="currentColor"/>
@@ -47,7 +49,7 @@
                     </div>
                     <div class="flex flex-col text-center">
                         <div>Energy</div>
-                        <div>{{ opposingEnergy }}</div>
+                        <div>{{ opposingEnergy }}/{{ opposingEnergyPool }}</div>
                     </div>
                  </div>
 
@@ -65,7 +67,10 @@
             </div>
 
             <!-- Mid Section -->
-            <div class="flex flex-row-reverse border-gray-700 border-t border-b">
+            <div class="flex flex-row justify-between border-gray-700 border-t border-b">
+                <div class="flex items-center justify-center ml-2">
+                    Turn {{ gameState?.turn }} <span class="text-gray-400 ml-2">[ {{ gameState?.phase }} ]</span>
+                </div>
                 <GameButton
                     variant="secondary"
                     class="m-2"
@@ -99,7 +104,7 @@
                     </div>
                     <div class="flex flex-col text-center">
                         <div>Energy</div>
-                        <div>{{ ownEnergy }}</div>
+                        <div>{{ ownEnergy }}/{{ ownEnergyPool }}</div>
                     </div>
                  </div>
 
@@ -178,6 +183,30 @@
 
             />
 
+            <!-- Menu Overlay -->
+            <div v-if="overlay == 'menu'">
+                <div class="flex flex-col items-center justify-center space-y-8 my-8">
+                    <div class="text-2xl cursor-pointer" @click="handleClickUpdates">
+                        Updates
+                    </div>
+
+                    <div class="text-2xl">
+                        <router-link :to="{ name: 'Title', params: { slug: titleStore.titleSlug } }">
+                            Exit Game
+                        </router-link>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Updates Overlay -->
+            <div v-if="overlay == 'updates'">
+                <div class="flex flex-col items-center justify-center space-y-8 my-8">
+                    <div class="" v-for="(update, index) in displayUpdates" :key="index">
+                        {{ update.side }} - {{ update.type }}
+                    </div>
+                </div>
+            </div>
+
          </main>
 
         <!-- -->
@@ -222,21 +251,26 @@ const {
   ownDeckSize,
   ownHand,
   ownEnergy,
+  ownEnergyPool,
+  ownEnergyUsed,
   ownBoard,
   opposingHero,
   opposingHeroInitials,
   opposingHandSize,
   opposingDeckSize,
   opposingEnergy,
+  opposingEnergyPool,
+  opposingEnergyUsed,
   opposingBoard,
   topSide,
-  bottomSide
+  bottomSide,
+  displayUpdates
 } = storeToRefs(gameStore)
 
 // Local UI state only
 const selected_hand_card = ref<string | null>(null)
 const selected_use_card = ref<CardInPlay | null>(null)
-const overlay = ref<'select_hand_card' | 'use_card' | null>(null)
+const overlay = ref<'select_hand_card' | 'use_card' | 'menu' | 'updates' | null>(null)
 const overlay_text = ref<string | null>(null)
 
 
@@ -273,6 +307,16 @@ const handleUseCard = (card_id: string | number) => {
     overlay.value = 'use_card'
     overlay_text.value = "Use Card"
     selected_use_card.value = get_card(card_id) || null
+}
+
+const handleMenuClick = () => {
+    overlay.value = 'menu'
+    overlay_text.value = "Menu"
+}
+
+const handleClickUpdates = () => {
+    overlay.value = 'updates'
+    overlay_text.value = "Updates"
 }
 
 // Clear local UI state when game over is detected

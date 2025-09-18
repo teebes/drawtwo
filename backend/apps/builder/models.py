@@ -136,7 +136,7 @@ class Trait(TimestampedModel):
             TRAIT_UNIQUE,
         ])
     )
-    name = models.CharField(max_length=40)
+    name = models.CharField(max_length=40, blank=True)
     description = models.TextField(blank=True)
 
     class Meta:
@@ -247,18 +247,17 @@ class CardTemplate(TemplateBase):
         ]
 
     def add_trait(self, trait, data=None):
-        """Add a trait with optional data"""
+        "Add or update a trait"
         if data is None:
-            data = {}
-        CardTrait.objects.get_or_create(
+            data = trait.data or {}
+        card_trait, created = CardTrait.objects.get_or_create(
             card=self,
             trait=trait,
             defaults={'data': data}
         )
-
-    def add_trait_with_value(self, trait, value):
-        """Add a trait with a simple value (convenience method for backwards compatibility)"""
-        self.add_trait(trait, {'value': value})
+        if not created:
+            card_trait.data = data
+            card_trait.save(update_fields=['data'])
 
     def get_trait_data(self, trait):
         """Get the data dict for a trait, or empty dict if no data"""
@@ -266,11 +265,6 @@ class CardTemplate(TemplateBase):
             return self.cardtrait_set.get(trait=trait).data
         except CardTrait.DoesNotExist:
             return {}
-
-    def get_trait_value(self, trait):
-        """Get the 'value' from trait data, or None if not present (convenience method)"""
-        data = self.get_trait_data(trait)
-        return data.get('value')
 
     def get_all_traits_with_data(self):
         """Get all traits as a list of (trait, data) tuples"""

@@ -325,15 +325,15 @@ def add_deck_card(request, deck_id):
     deck = get_object_or_404(Deck, id=deck_id, user=request.user)
 
     # Get card_id from request data
-    card_id = request.data.get('card_id')
-    if not card_id:
+    card_slug = request.data.get('card_slug')
+    if not card_slug:
         return Response(
-            {'error': 'card_id is required'},
+            {'error': 'card_slug is required'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
     # Get the card and verify it belongs to the same title as the deck's hero
-    card = get_object_or_404(CardTemplate, id=card_id)
+    card = get_object_or_404(CardTemplate, slug=card_slug, is_latest=True)
     if card.title != deck.hero.title:
         return Response(
             {'error': 'Card does not belong to the same title as the deck'},

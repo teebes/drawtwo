@@ -21,6 +21,8 @@ interface GameStoreState {
   }
   socket: WebSocket | null
   wsStatus: WebSocketStatus
+
+  updates: any[]
 }
 
 // WebSocket message type
@@ -43,7 +45,8 @@ export const useGameStore = defineStore('game', {
     },
     // WebSocket state
     socket: null,
-    wsStatus: 'disconnected'
+    wsStatus: 'disconnected',
+    updates: []
   }),
 
   getters: {
@@ -107,6 +110,20 @@ export const useGameStore = defineStore('game', {
       return pool - used
     },
 
+    ownEnergyPool: (state): number => {
+      if (!state.gameState?.mana_pool || !state.viewer) {
+        return 0
+      }
+      return state.gameState.mana_pool[state.viewer]
+    },
+
+    ownEnergyUsed: (state): number => {
+      if (!state.gameState?.mana_used || !state.viewer) {
+        return 0
+      }
+      return state.gameState.mana_used[state.viewer]
+    },
+
     ownBoard: (state): CardInPlay[] => {
       if (!state.viewer || !state.gameState) return []
 
@@ -158,6 +175,18 @@ export const useGameStore = defineStore('game', {
       return pool - used
     },
 
+    opposingEnergyPool: (state): number => {
+      if (!state.viewer || !state.gameState?.mana_pool) return 0
+      const opposingSide = state.viewer === 'side_a' ? 'side_b' : 'side_a'
+      return state.gameState.mana_pool[opposingSide]
+    },
+
+    opposingEnergyUsed: (state): number => {
+      if (!state.viewer || !state.gameState?.mana_used) return 0
+      const opposingSide = state.viewer === 'side_a' ? 'side_b' : 'side_a'
+      return state.gameState.mana_used[opposingSide]
+    },
+
     opposingBoard: (state): CardInPlay[] => {
       if (!state.viewer || !state.gameState) return []
 
@@ -188,6 +217,19 @@ export const useGameStore = defineStore('game', {
       const energy = pool - used
 
       return card.cost <= energy
+    },
+
+    // Filtered updates for display
+    displayUpdates: (state): any[] => {
+      return state.updates.filter((update: any) => {
+        const display_types = ['update_draw_card', 'update_play_card', 'update_end_turn']
+
+        if (display_types.includes(update.type)) {
+          return true
+        }
+
+        return false
+      })
     }
   },
 
@@ -265,11 +307,14 @@ export const useGameStore = defineStore('game', {
       // Process any updates that came with the message
       if (data.updates && Array.isArray(data.updates)) {
         for (const update of data.updates) {
-          if (update.type === 'game_over_update') {
+          if (update.type === 'update_game_over') {
             this.setGameOver(update.winner)
             break
           }
         }
+
+        this.updates.push(...data.updates)
+
       }
     },
 

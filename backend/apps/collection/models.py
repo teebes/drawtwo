@@ -53,6 +53,8 @@ class Deck(TimestampedModel):
     cards = models.ManyToManyField(CardTemplate, through='DeckCard')
     hero = models.ForeignKey(HeroTemplate, on_delete=models.PROTECT)
 
+    script = models.JSONField(default=dict, blank=True)
+
     class Meta:
         constraints = [
             # Ensure exactly one owner

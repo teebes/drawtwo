@@ -36,10 +36,10 @@
           <div class="flex flex-wrap gap-1">
             <span
               v-for="trait in card.traits"
-              :key="trait.slug"
+              :key="trait.type"
               class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
             >
-              {{ trait.name }}
+              {{ trait.type }}
               <span v-if="getTraitValue(trait)" class="ml-1 font-bold">{{ getTraitValue(trait) }}</span>
             </span>
           </div>
@@ -125,6 +125,7 @@ const costBgClass = computed(() => {
 })
 
 const getTraitValue = (trait: Card['traits'][0]) => {
+  return trait.type;
   // Check for common value patterns in the data object
   if (trait.data.value !== undefined) {
     return trait.data.value

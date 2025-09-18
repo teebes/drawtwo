@@ -32,7 +32,7 @@
             <div v-if="playerDecksLoading" class="text-center py-8">
               <p class="text-gray-600">Loading your decks...</p>
             </div>
-            
+
             <div v-else-if="playerDecks.length === 0" class="text-center py-8">
               <p class="text-gray-600 mb-4">You don't have any decks for this title yet.</p>
               <router-link
@@ -80,7 +80,7 @@
             <div v-if="pveDecksLoading" class="text-center py-8">
               <p class="text-gray-600">Loading AI opponents...</p>
             </div>
-            
+
             <div v-else-if="pveDecks.length === 0" class="text-center py-8">
               <p class="text-gray-600">No AI opponents available for this title yet.</p>
             </div>
@@ -126,7 +126,7 @@
           >
             Cancel
           </router-link>
-          
+
           <button
             @click="createGame"
             :disabled="!canCreateGame || creating"
@@ -253,8 +253,11 @@ const createGame = async (): Promise<void> => {
 
     // Redirect to the game board
     router.push({
-      name: 'GameBoard',
-      params: { game_id: gameId }
+      name: 'Board',
+      params: {
+        game_id: gameId,
+        slug: titleSlug.value
+      }
     })
   } catch (err) {
     console.error('Error creating game:', err)
@@ -289,4 +292,4 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
 }
-</style> 
+</style>
