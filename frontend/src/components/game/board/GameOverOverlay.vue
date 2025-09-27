@@ -14,17 +14,19 @@
             </div>
 
             <div class="space-y-3">
+                <router-link :to="{ name: 'Title', params: { slug: titleStore.titleSlug } }">
+                    <button
+                        class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+                    >
+                        Exit Game
+                    </button>
+                </router-link>
+
                 <button
-                    @click="handleReturnToLobby"
-                    class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-                >
-                    Return to Lobby
-                </button>
-                <button
-                    @click="handlePlayAgain"
+                    @click="handleReturnToGame"
                     class="w-full px-4 py-3 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors"
                 >
-                    Play Again
+                    Return to Game
                 </button>
             </div>
         </div>
@@ -33,7 +35,10 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
+import { useTitleStore } from '@/stores/title'
 import type { Side } from '../../../types/game'
+
+const titleStore = useTitleStore()
 
 interface GameOverState {
     isGameOver: boolean
@@ -52,7 +57,7 @@ const handleReturnToLobby = () => {
     router.push('/lobby')
 }
 
-const handlePlayAgain = () => {
+const handleReturnToGame = () => {
     window.location.reload()
 }
 </script>

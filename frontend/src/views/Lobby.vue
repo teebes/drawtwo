@@ -146,7 +146,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from '../config/api.js'
+import axios from '../config/api'
 
 interface TitleData {
   id: number

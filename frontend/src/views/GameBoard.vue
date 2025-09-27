@@ -252,8 +252,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from '../config/api.js'
-import { getBaseUrl } from '../config/api.js'
+import axios from '../config/api'
+import { getBaseUrl } from '../config/api'
 import type { GameState } from '../types/game'
 import GameHero from '../components/game/GameHero.vue'
 import BoardCard from '../components/game/BoardCard.vue'

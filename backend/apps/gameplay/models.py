@@ -61,3 +61,11 @@ class Game(TimestampedModel):
 
     def __str__(self):
         return f"{self.side_a.name} vs {self.side_b.name}"
+
+
+class GameUpdate(TimestampedModel):
+    game = models.ForeignKey(Game, on_delete=models.CASCADE)
+    update = models.JSONField()
+
+    def __str__(self):
+        return f"{self.game.side_a.name} vs {self.game.side_b.name} - {self.update['type']}"

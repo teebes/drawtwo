@@ -1,21 +1,38 @@
 import { defineStore } from 'pinia'
-import axios from '../config/api.js'
+import axios from '../config/api'
+
+// Types for title data
+interface Title {
+  id: number
+  name: string
+  slug: string
+  description?: string
+  created_at?: string
+  updated_at?: string
+  [key: string]: any // Allow for additional title fields
+}
+
+interface TitleState {
+  currentTitle: Title | null
+  loading: boolean
+  error: string | null
+}
 
 export const useTitleStore = defineStore('title', {
-  state: () => ({
+  state: (): TitleState => ({
     currentTitle: null,
     loading: false,
     error: null
   }),
 
   getters: {
-    isViewingTitle: (state) => state.currentTitle !== null,
-    titleName: (state) => state.currentTitle?.name || null,
-    titleSlug: (state) => state.currentTitle?.slug || null
+    isViewingTitle: (state): boolean => state.currentTitle !== null,
+    titleName: (state): string | null => state.currentTitle?.name || null,
+    titleSlug: (state): string | null => state.currentTitle?.slug || null
   },
 
   actions: {
-    async loadTitle(slug) {
+    async loadTitle(slug: string): Promise<Title> {
       // Don't reload if we already have the same title
       if (this.currentTitle?.slug === slug) {
         return this.currentTitle
@@ -27,9 +44,9 @@ export const useTitleStore = defineStore('title', {
       try {
         // const response = await axios.get(`/builder/titles/${slug}/`)
         const response = await axios.get(`/titles/${slug}/`)
-        this.currentTitle = response.data
+        this.currentTitle = response.data as Title
         return this.currentTitle
-      } catch (error) {
+      } catch (error: any) {
         this.error = error.response?.data?.message || error.message || 'Failed to load title'
         this.currentTitle = null
         throw error
@@ -38,12 +55,12 @@ export const useTitleStore = defineStore('title', {
       }
     },
 
-    setCurrentTitle(titleData) {
+    setCurrentTitle(titleData: Title): void {
       this.currentTitle = titleData
       this.error = null
     },
 
-    clearCurrentTitle() {
+    clearCurrentTitle(): void {
       this.currentTitle = null
       this.error = null
       this.loading = false

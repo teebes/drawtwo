@@ -145,8 +145,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { useTitleStore } from '../stores/title.js'
-import axios from '../config/api.js'
+import { useTitleStore } from '../stores/title'
+import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
 
 interface TitleData {

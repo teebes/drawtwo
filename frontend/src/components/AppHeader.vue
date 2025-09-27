@@ -57,8 +57,8 @@
 </template>
 
 <script setup>
-import { useAuthStore } from '../stores/auth.js'
-import { useTitleStore } from '../stores/title.js'
+import { useAuthStore } from '../stores/auth'
+import { useTitleStore } from '../stores/title'
 
 const authStore = useAuthStore()
 const titleStore = useTitleStore()

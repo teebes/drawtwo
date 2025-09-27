@@ -7,13 +7,17 @@ export interface Event {
   player: Side
 }
 
+export type CardAction =
+  | { action: 'draw'; amount: number }
+  | { action: 'damage'; amount: number; target: 'hero' | 'minion' | 'enemy' }
+
 export interface Trait {
-  slug: string
-  name: string
-  data: Record<string, any>
+  type: string
+  actions: CardAction[]
 }
 
 export interface CardInPlay {
+  card_type?: 'minion' | 'spell'
   card_id: string
   template_slug: string
   name: string

@@ -86,7 +86,7 @@
 </template>
 
 <script setup>
-import { useNotificationStore } from '../../stores/notifications.js'
+import { useNotificationStore } from '../../stores/notifications'
 
 const notificationStore = useNotificationStore()
 

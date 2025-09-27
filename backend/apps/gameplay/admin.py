@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Game
+from .models import Game, GameUpdate
 
 
 @admin.register(Game)
@@ -47,3 +47,37 @@ class GameAdmin(admin.ModelAdmin):
                 return f"👤 {obj.winner.name}"
         return "No winner yet"
     get_winner.short_description = "Winner"
+
+
+@admin.register(GameUpdate)
+class GameUpdateAdmin(admin.ModelAdmin):
+    list_display = ['id', 'game', 'get_update_type', 'created_at']
+    list_filter = ['created_at']
+    search_fields = [
+        'game__side_a__name',
+        'game__side_b__name',
+        'game__side_a__user__email',
+        'game__side_b__user__email',
+    ]
+    readonly_fields = ['created_at', 'updated_at']
+    raw_id_fields = ['game']
+
+    fieldsets = (
+        ('Game', {
+            'fields': ('game',)
+        }),
+        ('Update', {
+            'fields': ('update',)
+        }),
+        ('Info', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def get_update_type(self, obj):
+        try:
+            return obj.update.get('type')
+        except Exception:
+            return None
+    get_update_type.short_description = "Update Type"

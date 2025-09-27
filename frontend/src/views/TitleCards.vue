@@ -215,9 +215,9 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '../stores/auth.js'
-import { useTitleStore } from '../stores/title.js'
-import axios from '../config/api.js'
+import { useAuthStore } from '../stores/auth'
+import { useTitleStore } from '../stores/title'
+import axios from '../config/api'
 import CollectionCard from '../components/game/CollectionCard.vue'
 import type { Card } from '../types/card'
 

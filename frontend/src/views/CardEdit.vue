@@ -70,7 +70,7 @@
         <!-- YAML Editor -->
         <div class="w-full">
           <div :class="isCreating ? 'space-y-6 w-full' : 'space-y-6'">
-            
+
             <!-- Slug Input (only when creating) -->
             <Section v-if="isCreating" title="Card Slug">
               <Panel>
@@ -182,7 +182,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from '../config/api.js'
+import axios from '../config/api'
 import Section from '../components/layout/Section.vue'
 import Panel from '../components/layout/Panel.vue'
 import CollectionCard from '../components/game/CollectionCard.vue'
@@ -372,25 +372,25 @@ const deleteCard = async (): Promise<void> => {
 const validateSlug = (): void => {
   const slug = newCardSlug.value
   slugError.value = null
-  
+
   if (!slug) {
     slugError.value = 'Slug is required'
     return
   }
-  
+
   // Check format: only lowercase letters, numbers, hyphens, and underscores
   const slugPattern = /^[a-z0-9\-_]+$/
   if (!slugPattern.test(slug)) {
     slugError.value = 'Slug can only contain lowercase letters, numbers, hyphens, and underscores'
     return
   }
-  
+
   // Check length
   if (slug.length < 2) {
     slugError.value = 'Slug must be at least 2 characters long'
     return
   }
-  
+
   if (slug.length > 50) {
     slugError.value = 'Slug must be no more than 50 characters long'
     return

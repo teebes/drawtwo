@@ -2,9 +2,10 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
-from .models import Game
-from .schemas import GameState, GameUpdates
+from .models import Game, GameUpdate
+from .schemas import GameState, GameUpdates, GameUpdate as PydGameUpdate
 from .services import GameService
+from pydantic import TypeAdapter
 
 
 class GameConsumer(AsyncWebsocketConsumer):
@@ -13,7 +14,7 @@ class GameConsumer(AsyncWebsocketConsumer):
         self.game_group_name = f'game_{self.game_id}'
 
         # Check if user is authenticated
-        if self.scope["user"] == AnonymousUser():
+        if not self.scope["user"].is_authenticated:
             await self.close()
             return
 
@@ -32,18 +33,18 @@ class GameConsumer(AsyncWebsocketConsumer):
 
         # Send current game state
         game_state = await self.get_game_state()
+
+        raw_updates = await self.get_game_updates()
+        updates = TypeAdapter(list[PydGameUpdate]).validate_python(raw_updates)
+
         await self.send(text_data=json.dumps(
             GameUpdates(
                 state=GameState.model_validate(game_state),
-                updates=[],
-            ).model_dump()
+                updates=updates,
+            ).model_dump(mode="json")
         ))
 
         return
-        await self.send(text_data=json.dumps({
-            'type': 'game_state',
-            'state': game_state
-        }))
 
     async def disconnect(self, close_code):
         # Leave game group
@@ -67,6 +68,7 @@ class GameConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'type': 'game_updates',
             'updates': event['updates'],
+            'errors': event['errors'],
             'state': event['state']
         }))
 
@@ -82,6 +84,16 @@ class GameConsumer(AsyncWebsocketConsumer):
                     game.side_a.ai_player is not None or game.side_b.ai_player is not None)
         except Game.DoesNotExist:
             return False
+
+    @database_sync_to_async
+    def get_game_updates(self):
+        # Evaluate queryset in sync context and return list of raw update dicts
+        return list(
+            GameUpdate.objects
+            .filter(game_id=self.game_id)
+            .order_by('created_at')
+            .values_list('update', flat=True)
+        )
 
     @database_sync_to_async
     def get_game_state(self):

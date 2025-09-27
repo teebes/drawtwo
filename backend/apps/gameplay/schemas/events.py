@@ -1,4 +1,4 @@
-from typing import Literal, Annotated, Union
+from typing import Literal, Annotated, Union, Optional
 from pydantic import BaseModel, Discriminator
 
 
@@ -38,17 +38,12 @@ class PlayCardEvent(EventBase):
     type: Literal["event_play_card"] = "event_play_card"
     card_id: str
     position: int
+    target_type: Optional[Literal["card", "hero"]] = None
+    target_id: Optional[str] = None
 
 
 class UseCardEvent(EventBase):
     type: Literal["event_use_card"] = "event_use_card"
-    card_id: str
-    target_type: Literal["card", "hero"] = "card"
-    target_id: str
-
-
-class MinionAttackEvent(EventBase):
-    type: Literal["event_minion_attack"] = "event_minion_attack"
     card_id: str
     target_type: Literal["card", "hero"] = "card"
     target_id: str
@@ -62,12 +57,16 @@ class CastSpellEvent(EventBase):
 
 
 class DealDamageEvent(EventBase):
-    type: Literal["event_deal_damage"] = "event_deal_damage"
+    type: Literal["event_damage"] = "event_damage"
+    damage_type: Literal["physical", "spell"] = "physical"
     source_type: Literal["card", "hero", "board"] = "card"
     source_id: str
     target_type: Literal["card", "hero",] = "card"
     target_id: str
     damage: int
+    # Whether the target should attempt to retaliate. Mostly used to disable
+    # retaliation in the case of retaliation to avoid an infinite loop.
+    retaliate: bool = True
 
 
 class CardRetaliationEvent(EventBase):
@@ -95,11 +94,11 @@ GameEvent = Annotated[
         StartGameEvent,
         CardRetaliationEvent,
         ChooseAIMoveEvent,
+        DealDamageEvent,
         DrawPhaseEvent,
         EndTurnEvent,
         GameOverEvent,
         MainPhaseEvent,
-        MinionAttackEvent,
         DrawCardEvent,
         PlayCardEvent,
         RefreshPhaseEvent,

@@ -1,12 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 
+type Theme = 'dark' | 'light'
+
 export const useThemeStore = defineStore('theme', () => {
   // Default to dark mode
-  const isDark = ref(true)
+  const isDark = ref<boolean>(true)
 
   // Initialize theme from localStorage or default to dark
-  const initTheme = () => {
+  const initTheme = (): void => {
     const stored = localStorage.getItem('drawtwo-theme')
     if (stored) {
       isDark.value = stored === 'dark'
@@ -17,7 +19,7 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   // Apply theme to document
-  const applyTheme = () => {
+  const applyTheme = (): void => {
     if (isDark.value) {
       document.documentElement.classList.add('dark')
       document.documentElement.classList.remove('light')
@@ -28,17 +30,17 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   // Toggle theme
-  const toggleTheme = () => {
+  const toggleTheme = (): void => {
     isDark.value = !isDark.value
   }
 
   // Set specific theme
-  const setTheme = (theme) => {
+  const setTheme = (theme: Theme): void => {
     isDark.value = theme === 'dark'
   }
 
   // Watch for theme changes and persist to localStorage
-  watch(isDark, (newValue) => {
+  watch(isDark, (newValue: boolean) => {
     localStorage.setItem('drawtwo-theme', newValue ? 'dark' : 'light')
     applyTheme()
   })

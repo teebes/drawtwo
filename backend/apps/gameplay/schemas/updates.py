@@ -1,11 +1,15 @@
-from typing import Literal, Annotated, Union
-from pydantic import BaseModel, Discriminator
+from datetime import datetime, timezone
+from typing import Literal, Annotated, Union, Optional
 
+from pydantic import BaseModel, Discriminator, Field
 
 
 class UpdateBase(BaseModel):
     type: Literal["update"] = "update"
     side: Literal['side_a', 'side_b']
+    # Use default_factory so each instance gets a fresh timestamp
+    # and ensure timezone-aware datetimes
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class RefreshPhaseUpdate(UpdateBase):
@@ -33,6 +37,8 @@ class PlayCardUpdate(UpdateBase):
     type: Literal["update_play_card"] = "update_play_card"
     card_id: str
     position: int
+    target_type: Optional[Literal["card", "hero"]] = None
+    target_id: Optional[str] = None
 
 
 class DealDamageUpdate(UpdateBase):
@@ -42,6 +48,10 @@ class DealDamageUpdate(UpdateBase):
     target_type: Literal["card", "hero",] = "card"
     target_id: str
     damage: int
+
+
+class DamageUpdate(DealDamageUpdate):
+    type: Literal["update_damage"] = "update_damage"
 
 
 class HeroDamageUpdate(UpdateBase):
@@ -70,6 +80,7 @@ GameUpdate = Annotated[
     Union[
         CardDamageUpdate,
         CardDestroyedUpdate,
+        DamageUpdate,
         HeroDamageUpdate,
         DrawPhaseUpdate,
         EndTurnUpdate,

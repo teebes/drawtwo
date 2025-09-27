@@ -11,7 +11,7 @@
 <script setup>
 import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { useThemeStore } from './stores/theme.js'
+import { useThemeStore } from './stores/theme'
 import AppHeader from './components/AppHeader.vue'
 import ToastNotifications from './components/ui/ToastNotifications.vue'
 

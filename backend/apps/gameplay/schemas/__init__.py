@@ -1,4 +1,4 @@
-from typing import Literal, List, Dict, Union, Annotated
+from typing import Literal, List, Dict, Union, Annotated, Literal, Optional
 from pydantic import BaseModel, Field, Discriminator
 
 from apps.builder.schemas import TitleConfig, Trait
@@ -7,36 +7,10 @@ PHASE_ORDER = ['start', 'refresh', 'draw', 'main',]
 
 Phase = Literal['start', 'refresh', 'draw', 'main', 'combat', 'end']
 
-
-# ==== Actions ====
-
-class ActionBase(BaseModel):
-    type: str
-
-
-class PlayCardAction(ActionBase):
-    type: Literal["play_card_action"] = "play_card_action"
-    card_id: str
-    position: int
-
-
-class UseCardAction(ActionBase):
-    type: Literal["use_card_action"] = "use_card_action"
-    card_id: str
-    target_type: Literal["card", "hero"] = "card"
-    target_id: str
-
-
-class EndTurnAction(ActionBase):
-    type: Literal["end_turn_action"] = "end_turn_action"
-
-
-GameAction = Annotated[
-    Union[PlayCardAction, UseCardAction, EndTurnAction],
-    Discriminator('type')]
-
-
+from .actions import *
 from .events import *
+from .updates import *
+from .errors import *
 
 
 # ==== Game State ====
@@ -46,12 +20,15 @@ class CardInPlay(BaseModel):
     card_id: str # Interal card ID for that game
     template_slug: str # ID of the card template
     name: str
-    description: str
-    attack: int
-    health: int
-    cost: int
+    description: str = ''
+    attack: int = 0
+    health: int = 0
+    cost: int = 0
     traits: List[Trait] = Field(default_factory=list)
     exhausted: bool = True
+
+    def has_trait(self, trait_code: str) -> bool:
+        return any(trait.type == trait_code for trait in self.traits)
 
 
 class HeroInPlay(BaseModel):
@@ -59,6 +36,7 @@ class HeroInPlay(BaseModel):
     template_slug: str # ID of the hero template
     health: int
     name: str
+    exhausted: bool = True
 
 
 class GameState(BaseModel):
@@ -91,6 +69,13 @@ class GameState(BaseModel):
             "side_b": [],
         }
     )
+    graveyard: Dict[str, List[str]] = Field(
+        default_factory=lambda: {
+            "side_a": [],
+            "side_b": [],
+        }
+    )
+
     mana_pool: Dict[str, int] = Field(
         default_factory=lambda: {
             "side_a": 0,
@@ -118,10 +103,8 @@ class GameList(BaseModel):
     games: List[GameSummary]
 
 
+
 # ==== Updates ====
-
-
-from .updates import *
 
 class GameUpdates(BaseModel):
     type: Literal["game_updates"] = "game_updates"
@@ -133,3 +116,4 @@ class ResolvedEvent(BaseModel):
     state: GameState
     updates: list[GameUpdate]
     events: list[GameEvent]
+    errors: list[GameError]

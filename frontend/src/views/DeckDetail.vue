@@ -166,12 +166,12 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from '../config/api.js'
+import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
 import CardSelectionModal from '../components/ui/CardSelectionModal.vue'
 import type { DeckCard, Card } from '../types/card'
 import GameButton from '../components/ui/GameButton.vue'
-import { useNotificationStore } from '../stores/notifications.js'
+import { useNotificationStore } from '../stores/notifications'
 
 interface DeckData {
   id: number

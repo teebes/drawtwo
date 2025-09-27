@@ -80,8 +80,8 @@ class Card(ResourceBase):
     name: str
     description: str
     cost: int
-    attack: int
-    health: int
+    attack: int = 0
+    health: int = 0
     traits: List[Trait]
     faction: Optional[str] = None
 

@@ -148,7 +148,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '../stores/auth.js'
+import { useAuthStore } from '../stores/auth'
 import ThemeToggle from '../components/ui/ThemeToggle.vue'
 
 const router = useRouter()

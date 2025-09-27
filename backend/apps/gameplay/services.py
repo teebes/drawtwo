@@ -153,15 +153,20 @@ class GameService:
 
         if game_state.phase != "main": return
 
-        #game_action = GameAction.model_validate(action)
         game_action = TypeAdapter(GameAction).validate_python(action)
+        print('game_action ----> ', game_action)
 
         if isinstance(game_action, PlayCardAction):
-            game_state.event_queue.append(PlayCardEvent(
+            print('game_action.card_id is %s' % game_action.card_id)
+            play_card_event = PlayCardEvent(
                 side=game_state.active,
                 card_id=game_action.card_id,
                 position=game_action.position,
-            ))
+                target_type=game_action.target_type,
+                target_id=game_action.target_id,
+            )
+            print(play_card_event)
+            game_state.event_queue.append(play_card_event)
         elif isinstance(game_action, EndTurnAction):
             game_state.event_queue.append(EndTurnEvent(
                 side=game_state.active,

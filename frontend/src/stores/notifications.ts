@@ -1,20 +1,47 @@
 import { defineStore } from 'pinia'
+import { AxiosError, AxiosResponse } from 'axios'
+
+// Types for notifications
+type NotificationType = 'success' | 'error' | 'warning' | 'info'
+
+interface Notification {
+  id: number
+  type: NotificationType
+  title: string
+  message: string
+  duration: number
+  persistent: boolean
+  dismissed: boolean
+  timestamp: Date
+}
+
+interface NotificationOptions {
+  type?: NotificationType
+  title?: string
+  message?: string
+  duration?: number
+  persistent?: boolean
+}
+
+interface NotificationState {
+  notifications: Notification[]
+}
 
 export const useNotificationStore = defineStore('notifications', {
-  state: () => ({
+  state: (): NotificationState => ({
     notifications: []
   }),
 
   getters: {
-    activeNotifications: (state) => state.notifications.filter(n => !n.dismissed)
+    activeNotifications: (state): Notification[] => state.notifications.filter(n => !n.dismissed)
   },
 
   actions: {
-    addNotification(notification) {
+    addNotification(notification: NotificationOptions): number {
       const id = Date.now() + Math.random()
-      const newNotification = {
+      const newNotification: Notification = {
         id,
-        type: notification.type || 'info', // 'success', 'error', 'warning', 'info'
+        type: notification.type || 'info',
         title: notification.title || '',
         message: notification.message || '',
         duration: notification.duration || 5000, // Auto-dismiss after 5 seconds by default
@@ -35,19 +62,19 @@ export const useNotificationStore = defineStore('notifications', {
       return id
     },
 
-    dismissNotification(id) {
+    dismissNotification(id: number): void {
       const notification = this.notifications.find(n => n.id === id)
       if (notification) {
         notification.dismissed = true
       }
     },
 
-    clearAll() {
+    clearAll(): void {
       this.notifications.forEach(n => n.dismissed = true)
     },
 
     // Convenience methods for different notification types
-    success(message, options = {}) {
+    success(message: string, options: Omit<NotificationOptions, 'type' | 'message'> = {}): number {
       return this.addNotification({
         type: 'success',
         message,
@@ -55,7 +82,7 @@ export const useNotificationStore = defineStore('notifications', {
       })
     },
 
-    error(message, options = {}) {
+    error(message: string, options: Omit<NotificationOptions, 'type' | 'message'> = {}): number {
       return this.addNotification({
         type: 'error',
         message,
@@ -64,7 +91,7 @@ export const useNotificationStore = defineStore('notifications', {
       })
     },
 
-    warning(message, options = {}) {
+    warning(message: string, options: Omit<NotificationOptions, 'type' | 'message'> = {}): number {
       return this.addNotification({
         type: 'warning',
         message,
@@ -72,7 +99,7 @@ export const useNotificationStore = defineStore('notifications', {
       })
     },
 
-    info(message, options = {}) {
+    info(message: string, options: Omit<NotificationOptions, 'type' | 'message'> = {}): number {
       return this.addNotification({
         type: 'info',
         message,
@@ -81,14 +108,21 @@ export const useNotificationStore = defineStore('notifications', {
     },
 
     // Handle API errors automatically
-    handleApiError(error, customMessage = null) {
+    handleApiError(error: AxiosError | Error, customMessage: string | null = null): number {
       let message = customMessage
 
       if (!message) {
-        if (error.response?.data?.error) {
-          message = error.response.data.error
-        } else if (error.response?.data?.message) {
-          message = error.response.data.message
+        if ('response' in error && error.response?.data) {
+          const data = error.response.data as any
+          if (data.error) {
+            message = data.error
+          } else if (data.message) {
+            message = data.message
+          } else if (error.message) {
+            message = error.message
+          } else {
+            message = 'An unexpected error occurred'
+          }
         } else if (error.message) {
           message = error.message
         } else {
@@ -100,12 +134,13 @@ export const useNotificationStore = defineStore('notifications', {
     },
 
     // Handle API success responses
-    handleApiSuccess(response, customMessage = null) {
+    handleApiSuccess(response: AxiosResponse, customMessage: string | null = null): number {
       let message = customMessage
 
       if (!message) {
-        if (response.data?.message) {
-          message = response.data.message
+        const data = response.data as any
+        if (data?.message) {
+          message = data.message
         } else {
           message = 'Operation completed successfully'
         }

@@ -1,16 +1,6 @@
 <template>
     <div class="flex-1 flex flex-col">
 
-        <!-- Selected Hand Card Display -->
-        <div class="flex flex-1 justify-center items-center">
-            <div v-if="selectedHandCard && getCard(selectedHandCard)" class="flex h-72 my-4">
-                <div class="p-1 mx-auto">
-                    <GameCard class="" :card="getCard(selectedHandCard)!"/>
-                </div>
-            </div>
-        </div>
-
-        <div class="text-center w-full border-t border-gray-700 py-2">Place the card on the board</div>
 
         <!-- Current Board with Placement Zones -->
         <div class="flex w-full bg-gray-800 border-b border-t border-gray-700 py-8 overflow-x-auto">
@@ -61,6 +51,17 @@
             </div>
         </div>
 
+        <div class="text-center w-full border-b border-gray-700 py-2">Place the card on the board</div>
+
+        <!-- Selected Hand Card Display -->
+        <div class="flex flex-1 justify-center items-center">
+            <div v-if="selectedHandCard && getCard(selectedHandCard)" class="flex h-72 my-4">
+                <div class="p-1 mx-auto">
+                    <GameCard class="" :card="getCard(selectedHandCard)!"/>
+                </div>
+            </div>
+        </div>
+
 
     </div>
 </template>
@@ -73,7 +74,7 @@ import GameCard from '../GameCard.vue'
 import PlacementZone from '../PlacementZone.vue'
 
 interface Props {
-    gameState: GameState | null
+    gameState: GameState
     selectedHandCard: string | null
     ownBoard: CardInPlay[] | undefined
     ownEnergy: number | undefined
@@ -86,6 +87,7 @@ console.log(props.ownBoard)
 
 const emit = defineEmits<{
     'close-overlay': []
+    'target-required': [{ card_id: string; position: number; allowedTargets: Array<'card' | 'hero' | 'any'> }]
 }>()
 
 const card = computed(() => {
@@ -94,7 +96,7 @@ const card = computed(() => {
 })
 
 const getCard = (card_id: string) => {
-    return props.gameState?.cards[card_id]
+    return props.gameState.cards[card_id]
 }
 
 const handleCardPlacement = (position: number) => {
@@ -102,7 +104,15 @@ const handleCardPlacement = (position: number) => {
 
     console.log('Playing card', props.selectedHandCard, 'at position', position)
 
-    // Use store action directly instead of emitting to parent
+    // If the card has a battlecry that needs a target, emit target-required
+    const playedCard = getCard(props.selectedHandCard)
+    if (playedCard && requiresTargetOnPlay(playedCard)) {
+        const allowedTargets = getAllowedTargets(playedCard)
+        emit('target-required', { card_id: props.selectedHandCard, position, allowedTargets })
+        return
+    }
+
+    // Otherwise send immediately
     gameStore.playCard(props.selectedHandCard, position)
 
     // Close the overlay
@@ -110,14 +120,63 @@ const handleCardPlacement = (position: number) => {
 }
 
 const canPlayCard = computed(() => {
+    console.log('CANHAZPLAY?!')
     if (!props.selectedHandCard) return false
     if (!props.ownEnergy) return false
 
     const card = getCard(props.selectedHandCard)
+
+    console.log('card', card)
+    console.log('ownEnergy', props.ownEnergy)
+    console.log('card.cost', card.cost)
+    console.log('--------------------------------')
+
     if (!card) return false
 
     if (card.cost <= props.ownEnergy ) return true
 
     return false
 })
+
+function requiresTargetOnPlay(card: any): boolean {
+    // Spells always may require targets depending on actions; treat similar to battlecry
+    const traits = card.traits || []
+    const battlecry = traits.find((t: any) => t.type === 'battlecry')
+    if (!battlecry) {
+        // Some spells might encode their behaviors as battlecry-equivalent via battlecry type
+        return card.card_type === 'spell' && hasTargetingActions(traits)
+    }
+    return hasTargetingActions([battlecry])
+}
+
+function hasTargetingActions(traits: any[]): boolean {
+    for (const trait of traits) {
+        const actions = trait.actions || []
+        for (const action of actions) {
+            if (action.action === 'damage') {
+                // damage typically needs a target (hero or minion or enemy)
+                return true
+            }
+        }
+    }
+    return false
+}
+
+function getAllowedTargets(card: any): Array<'card' | 'hero' | 'any'> {
+    const allowed = new Set<'card' | 'hero' | 'any'>()
+    const traits = card.traits || []
+    const consider = traits.find((t: any) => t.type === 'battlecry') || { actions: [] }
+    for (const action of consider.actions || []) {
+        if (action.action === 'damage') {
+            if (action.target === 'minion' || action.target === 'enemy') {
+                allowed.add('card')
+            }
+            if (action.target === 'hero' || action.target === 'enemy') {
+                allowed.add('hero')
+            }
+        }
+    }
+    if (allowed.size === 0) allowed.add('any')
+    return Array.from(allowed)
+}
 </script>

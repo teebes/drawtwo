@@ -3,11 +3,12 @@ from django.db import transaction, DatabaseError
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
-from .models import Game
+from .models import Game, GameUpdate
 from .schemas import (
     GameOverUpdate,
     GameState,
-    ResolvedEvent,)
+    ResolvedEvent,
+)
 
 from apps.gameplay.schemas.events import (
     DrawPhaseEvent,
@@ -26,8 +27,7 @@ class StepResult:
 @shared_task
 def step(game_id: int):
     print("==== STEP FUNCTION ====")
-    from .engine import resolve_event, determine_ai_move
-    from .services import GameService
+    from .engine import resolve_event
 
     with transaction.atomic():
         try:
@@ -36,6 +36,9 @@ def step(game_id: int):
                         .get(id=game_id))
         except DatabaseError:
             return
+
+        print("['event_queue']:")
+        print(game.state['event_queue'])
 
         if game.status == Game.GAME_STATUS_ENDED:
             return
@@ -59,6 +62,7 @@ def step(game_id: int):
         events_processed = 0
         max_events_per_step = 10  # Prevent infinite loops and stack overflow
         all_updates = []
+        all_errors = []
 
         while len(game_state.event_queue) > 0 and events_processed < max_events_per_step:
             resolved_event: ResolvedEvent = resolve_event(state=game_state)
@@ -66,11 +70,18 @@ def step(game_id: int):
 
             # Accumulate all updates for batch sending
             all_updates.extend(resolved_event.updates)
+            all_errors.extend(resolved_event.errors)
             events_processed += 1
 
             # Check for game over - if found, stop processing and handle it
             game_over_update = None
             for update in resolved_event.updates:
+
+                GameUpdate.objects.create(
+                    game=game,
+                    update=update.model_dump(mode="json"),
+                )
+
                 if isinstance(update, GameOverUpdate):
                     game_over_update = update
                     break
@@ -92,6 +103,9 @@ def step(game_id: int):
                 game_state.event_queue = []
                 break
 
+            if len(all_errors) > 0:
+                break
+
         # Single DB save for all processed events
         game.state = game_state.model_dump()
         game.save(update_fields=["state"])
@@ -99,8 +113,9 @@ def step(game_id: int):
         # Single WebSocket send with all accumulated updates
         _send_game_updates_to_clients(
             game.id,
-            game_state.model_dump(),
-            [update.model_dump() for update in all_updates])
+            game_state.model_dump(mode="json"),
+            updates=[update.model_dump(mode="json") for update in all_updates],
+            errors=[error.model_dump(mode="json") for error in all_errors])
 
         # Continue processing if there are more events
         if len(game_state.event_queue) > 0:
@@ -139,84 +154,6 @@ def advance_game(game_id: int):
     # Call step synchronously first
     step(game_id)
     return
-
-    with transaction.atomic():
-        try:
-            game = (Game.objects
-                        .select_for_update(nowait=True)
-                        .get(id=game_id))
-        except DatabaseError:
-            print('DB Lock, skipping')
-            return
-
-        if game.status == Game.GAME_STATUS_ENDED:
-            return
-
-        game_state = GameState.model_validate(game.state)
-
-        print("Advancing game at state %s for %s " % (
-            game_state.phase, game_state.active))
-
-        if len(game_state.event_queue) > 0:
-            print('Event queue, resolving')
-
-            resolved_event: ResolvedEvent = resolve_event(state=game_state)
-            new_state = resolved_event.state
-
-            print("==== Resolution ====")
-            print("Events: %s" % resolved_event.events)
-            print("Updates: %s" % resolved_event.updates)
-            print("==== End Resolution ====")
-
-            for update in resolved_event.updates:
-                if isinstance(update, GameOverUpdate):
-
-                #if GameOverUpdate in resolved_event.updates:
-                    print("game over")
-                    game.status = Game.GAME_STATUS_ENDED
-
-                    winner_side = resolved_event.updates[0].winner
-                    if winner_side == 'side_a':
-                        winner = game.side_a
-                    elif winner_side == 'side_b':
-                        winner = game.side_b
-
-                    game.winner = winner
-                    game.save(update_fields=["status", "winner"])
-
-                    new_state.event_queue = []
-                    break
-
-            game.state = new_state.model_dump()
-            game.save(update_fields=["state"])
-
-            _send_game_updates_to_clients(
-                game.id,
-                new_state.model_dump(),
-                [ update.model_dump() for update in resolved_event.updates ])
-            advance_game.apply_async(args=[game_id], countdown=STEP_DELAY)
-            return
-
-        if game_state.phase != "main":
-            return
-
-        active_side = game_state.active
-        active_deck = getattr(game, active_side)
-        if not active_deck.is_ai_deck:
-            return
-
-        # If we're here, we're in the main phase and it's an AI's turn.
-        # Determine which move the AI is making next.
-        event = determine_ai_move(game_state)
-        game_state.event_queue.append(event)
-        game.state = game_state.model_dump()
-        game.save(update_fields=["state"])
-
-        _send_game_updates_to_clients(
-            game.id,
-            game_state.model_dump(),
-            [])
-        advance_game.apply_async(args=[game_id], countdown=STEP_DELAY)
 
 
 @shared_task
@@ -307,42 +244,20 @@ def process_ai_action(game_id: int):
         if result['state']['active'] == ai_side:
             process_ai_action.apply_async(args=[game_id], countdown=2)
 
-        return
 
-
-        # TODO: Implement AI decision logic here
-        # For now, let's assume we have an AI action to apply
-        ai_action = {
-            'type': 'phase_transition',
-            'phase': 'end',
-            'player': game.state.get('active', 'side_b')  # Assuming AI is side_b
-        }
-
-        # Apply the AI action to the game state
-        new_state_dict, emitted = apply_action(game.state, ai_action)
-
-        new_state = GameState.model_validate(new_state_dict)
-        game.state = new_state_dict
-        game.status = Game.GAME_STATUS_IN_PROGRESS
-        game.winner = new_state_dict.get("winner")
-        game.save(update_fields=["state", "status", "winner"])
-
-    # Send updates to WebSocket clients
-    _send_game_updates_to_clients(game_id, new_state_dict, emitted)
-
-def _send_game_updates_to_clients(game_id: int, state_dict: dict, updates: list):
+def _send_game_updates_to_clients(game_id: int, state_dict: dict, updates: list, errors: list = []):
     """
     Send game updates to all WebSocket clients connected to this game.
     """
     channel_layer = get_channel_layer()
     game_group_name = f'game_{game_id}'
-
     # Convert to sync call since we're in a sync context (Celery task)
     async_to_sync(channel_layer.group_send)(
         game_group_name,
         {
             'type': 'game_updates',
             'updates': updates,
+            'errors': errors,
             'state': state_dict
         }
     )
