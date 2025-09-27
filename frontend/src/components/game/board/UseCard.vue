@@ -1,46 +1,48 @@
 <template>
     <div class="flex-1 flex flex-col">
 
-        <!-- Opponent Hero-->
-        <div v-if="!noplay_reason"
-             class="flex w-full justify-center border-gray-700 border-b"
-             :class="canSelectHeroTarget ? 'cursor-pointer' : 'opacity-50 pointer-events-none'"
-             @click="canSelectHeroTarget && handleHeroClick()">
-            <div class="flex flex-col h-24 items-center justify-center border-gray-700">
-                <div>{{ opposingHero?.name }}</div>
-                <div>{{ opposingHero?.health }}</div>
-            </div>
-        </div>
-
-        <!-- Opponent Board -->
-        <div class="flex w-full bg-gray-800 border-b border-gray-700 py-8 overflow-x-auto">
-
-            <!-- If interactions are allowed (selection mode always allows) -->
-            <div v-if="canInteract" class="flex flex-row w-full h-24 mx-auto">
-                <div v-for="card in opposingBoard" :key="card.card_id" class="p-1">
-                    <GameCard v-if="card"
-                              class="flex-grow-0"
-                              :card="card"
-                              compact in_lane
-                              :class="canSelectCardTargets ? 'cursor-pointer' : 'opacity-50 pointer-events-none'"
-                              @click="canSelectCardTargets && handleCardClick(card.card_id)"
-                              />
+        <template v-if="gameState.winner === 'none'">
+            <!-- Opponent Hero-->
+            <div v-if="!noplay_reason"
+                class="flex w-full justify-center border-gray-700 border-b"
+                :class="canSelectHeroTarget ? 'cursor-pointer' : 'opacity-50 pointer-events-none'"
+                @click="canSelectHeroTarget && handleHeroClick()">
+                <div class="flex flex-col h-24 items-center justify-center border-gray-700">
+                    <div>{{ opposingHero?.name }}</div>
+                    <div>{{ opposingHero?.health }}</div>
                 </div>
             </div>
 
-            <!-- Cannot play card message -->
-            <div v-else-if="noplay_reason" class="flex flex-row w-full h-24 items-center justify-center"
-                        @click="emit('close-overlay')">
-                <div class="text-red-400 text-center">
-                    <div class="text-lg">Cannot use this card</div>
-                    <div class="text-sm opacity-75">
-                        {{ noplay_reason }}
+            <!-- Opponent Board -->
+            <div class="flex w-full bg-gray-800 border-b border-gray-700 py-8 overflow-x-auto">
+
+                <!-- If interactions are allowed (selection mode always allows) -->
+                <div v-if="canInteract" class="flex flex-row w-full h-24 mx-auto">
+                    <div v-for="card in opposingBoard" :key="card.card_id" class="p-1">
+                        <GameCard v-if="card"
+                                class="flex-grow-0"
+                                :card="card"
+                                compact in_lane
+                                :class="canSelectCardTargets ? 'cursor-pointer' : 'opacity-50 pointer-events-none'"
+                                @click="canSelectCardTargets && handleCardClick(card.card_id)"
+                                />
+                    </div>
+                </div>
+
+                <!-- Cannot play card message -->
+                <div v-else-if="noplay_reason" class="flex flex-row w-full h-24 items-center justify-center"
+                            @click="emit('close-overlay')">
+                    <div class="text-red-400 text-center">
+                        <div class="text-lg">Cannot use this card</div>
+                        <div class="text-sm opacity-75">
+                            {{ noplay_reason }}
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div v-if="!noplay_reason" class="text-center w-full border-b border-gray-700 py-2">Select Target</div>
+            <div v-if="!noplay_reason" class="text-center w-full border-b border-gray-700 py-2">Select Target</div>
+        </template>
 
         <!-- Selected Card Display -->
         <div class="flex flex-1 justify-center items-center">
@@ -97,13 +99,6 @@ const canSelectHeroTarget = computed(() => {
 
 const canPlayCard = computed(() => {
     return !noplay_reason.value
-
-    if (!props.card) return false
-
-    const availableEnergy = gameStore.gameState.mana_pool[props.gameState.active] - gameStore.gameState.mana_used[props.gameState.active]
-    if (props.card.cost <= availableEnergy) return true
-
-    return false
 })
 
 // Similar to canPlayCard except it returns a message indicating why it can't

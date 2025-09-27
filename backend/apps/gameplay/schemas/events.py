@@ -1,6 +1,7 @@
 from typing import Literal, Annotated, Union, Optional
-from pydantic import BaseModel, Discriminator
+from pydantic import BaseModel, Discriminator, Field
 
+from apps.builder.schemas import DeckScript
 
 
 # ==== Events ====
@@ -78,6 +79,7 @@ class CardRetaliationEvent(EventBase):
 class ChooseAIMoveEvent(EventBase):
     type: Literal["event_choose_ai_move"] = "event_choose_ai_move"
     side: Literal['side_a', 'side_b']
+    script: Optional[DeckScript] = Field(default_factory=DeckScript)
 
 
 class NewTurnEvent(EventBase):

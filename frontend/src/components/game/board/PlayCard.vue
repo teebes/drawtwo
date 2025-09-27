@@ -3,55 +3,57 @@
 
 
         <!-- Current Board with Placement Zones -->
-        <div class="flex w-full bg-gray-800 border-b border-t border-gray-700 py-8 overflow-x-auto">
-            <!-- If the card can be played -->
-            <div v-if="canPlayCard" class="flex flex-row h-24 items-center mx-auto">
-                <!-- Show placement zones with current board cards -->
-                <template v-if="ownBoard && ownBoard.length > 0">
-                    <!-- Place at beginning -->
-                    <PlacementZone
-                        :position="0"
-                        @placement-clicked="handleCardPlacement"
-                    />
-
-                    <!-- Interleave cards with placement zones -->
-                    <template v-for="(card, index) in ownBoard" :key="`card-${card.card_id}`">
-                        <div class="p-1 h-24">
-                            <GameCard v-if="card"
-                                      class="flex-grow-0"
-                                      :card="card"
-                                      compact in_lane />
-                        </div>
+        <template v-if="gameState.winner === 'none'">
+            <div class="flex w-full bg-gray-800 border-b border-t border-gray-700 py-8 overflow-x-auto">
+                <!-- If the card can be played -->
+                <div v-if="canPlayCard" class="flex flex-row h-24 items-center mx-auto">
+                    <!-- Show placement zones with current board cards -->
+                    <template v-if="ownBoard && ownBoard.length > 0">
+                        <!-- Place at beginning -->
                         <PlacementZone
-                            :position="index + 1"
+                            :position="0"
+                            @placement-clicked="handleCardPlacement"
+                        />
+
+                        <!-- Interleave cards with placement zones -->
+                        <template v-for="(card, index) in ownBoard" :key="`card-${card.card_id}`">
+                            <div class="p-1 h-24">
+                                <GameCard v-if="card"
+                                        class="flex-grow-0"
+                                        :card="card"
+                                        compact in_lane />
+                            </div>
+                            <PlacementZone
+                                :position="index + 1"
+                                @placement-clicked="handleCardPlacement"
+                            />
+                        </template>
+                    </template>
+
+                    <!-- Place in center if no cards -->
+                    <template v-else>
+                        <PlacementZone
+                            :position="0"
                             @placement-clicked="handleCardPlacement"
                         />
                     </template>
-                </template>
+                </div>
 
-                <!-- Place in center if no cards -->
-                <template v-else>
-                    <PlacementZone
-                        :position="0"
-                        @placement-clicked="handleCardPlacement"
-                    />
-                </template>
-            </div>
-
-            <!-- Cannot play card message -->
-            <div v-else class="flex flex-row w-full h-24 items-center justify-center"
-                        @click="emit('close-overlay')">
-                <div class="text-red-400 text-center">
-                    <div class="text-lg">Cannot play this card</div>
-                    <div class="text-sm opacity-75">
-                        Insufficient energy
-                        [<span class="mx-1">{{ ownEnergy }}</span> / <span class="mx-1">{{ card?.cost }}</span>]
+                <!-- Cannot play card message -->
+                <div v-else class="flex flex-row w-full h-24 items-center justify-center"
+                            @click="emit('close-overlay')">
+                    <div class="text-red-400 text-center">
+                        <div class="text-lg">Cannot play this card</div>
+                        <div class="text-sm opacity-75">
+                            Insufficient energy
+                            [<span class="mx-1">{{ ownEnergy }}</span> / <span class="mx-1">{{ card?.cost }}</span>]
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="text-center w-full border-b border-gray-700 py-2">Place the card on the board</div>
+            <div class="text-center w-full border-b border-gray-700 py-2">Place the card on the board</div>
+        </template>
 
         <!-- Selected Hand Card Display -->
         <div class="flex flex-1 justify-center items-center">
@@ -83,8 +85,6 @@ interface Props {
 const props = defineProps<Props>()
 const gameStore = useGameStore()
 
-console.log(props.ownBoard)
-
 const emit = defineEmits<{
     'close-overlay': []
     'target-required': [{ card_id: string; position: number; allowedTargets: Array<'card' | 'hero' | 'any'> }]
@@ -102,8 +102,6 @@ const getCard = (card_id: string) => {
 const handleCardPlacement = (position: number) => {
     if (!props.selectedHandCard) return
 
-    console.log('Playing card', props.selectedHandCard, 'at position', position)
-
     // If the card has a battlecry that needs a target, emit target-required
     const playedCard = getCard(props.selectedHandCard)
     if (playedCard && requiresTargetOnPlay(playedCard)) {
@@ -120,16 +118,10 @@ const handleCardPlacement = (position: number) => {
 }
 
 const canPlayCard = computed(() => {
-    console.log('CANHAZPLAY?!')
     if (!props.selectedHandCard) return false
     if (!props.ownEnergy) return false
 
     const card = getCard(props.selectedHandCard)
-
-    console.log('card', card)
-    console.log('ownEnergy', props.ownEnergy)
-    console.log('card.cost', card.cost)
-    console.log('--------------------------------')
 
     if (!card) return false
 

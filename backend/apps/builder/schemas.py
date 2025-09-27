@@ -16,6 +16,8 @@ class Encounter(BaseModel):
 # Ingestable data
 
 
+# Card Actions
+
 class CardActionBase(BaseModel):
     action: str
 
@@ -36,6 +38,8 @@ CardAction = Annotated[
     Discriminator('action')
 ]
 
+
+# Traits
 
 class TraitBase(BaseModel):
     type: str
@@ -66,6 +70,12 @@ Trait = Annotated[
     Union[Charge, Ranged, Taunt, Battlecry, DeathRattle],
     Discriminator('type')
 ]
+
+
+# Deck Script
+
+class DeckScript(BaseModel):
+    strategy: Literal['rush', 'control', 'combo', 'aggressive', 'defensive'] = 'rush'
 
 
 class ResourceBase(BaseModel):

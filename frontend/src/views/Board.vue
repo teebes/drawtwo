@@ -2,7 +2,11 @@
     <div class="min-h-screen flex flex-row justify-center relative" v-if="!loading">
 
         <!-- Game Over Overlay -->
-        <GameOverOverlay v-if="showingGameOver" :game-over="gameOver" :viewer="viewer" />
+        <GameOverOverlay
+            v-if="showingGameOver"
+            :game-over="gameOver"
+            :viewer="viewer"
+            @close="showingGameOver = false" />
 
         <!-- Normal Mode -->
         <main v-if="!overlay" class="board flex-1 flex flex-col max-w-md w-full border-r border-l border-gray-700">
@@ -203,9 +207,9 @@
             </div>
 
             <!-- Updates Overlay -->
-            <div v-if="overlay == 'updates'">
-                <div class="flex flex-col border-gray-700 overflow-y-scroll">
-                    <div class="flex flex-grow border-gray-700 items-center justify-center py-2" :class="{ 'border-b': update.type === 'update_end_turn' }"
+            <div v-if="overlay == 'updates'" class="flex-1 min-h-0">
+                <div class="flex flex-col h-full border-gray-700 overflow-y-auto">
+                    <div class="flex border-gray-700 items-center justify-center py-2" :class="{ 'border-b': update.type === 'update_end_turn' }"
                          v-for="update in displayUpdates" :key="update.timestamp">
                         <Update :update="update" />
                     </div>
@@ -303,7 +307,6 @@ const handleEndTurn = () => {
 }
 
 const handleSelectHandCard = (card_id: string) => {
-    if (gameOver.value.isGameOver) return
     const card = get_card(card_id)
     if (!card) return
 
@@ -334,8 +337,6 @@ const handleSelectHandCard = (card_id: string) => {
 // Card placement now handled directly by PlayCard component
 
 const handleUseCard = (card_id: string | number) => {
-    if (gameOver.value.isGameOver) return
-
     overlay.value = 'use_card'
     overlay_text.value = "Use Card"
     selected_use_card.value = get_card(card_id) || null

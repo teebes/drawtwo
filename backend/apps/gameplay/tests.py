@@ -1,8 +1,19 @@
 from django.test import TestCase
 
-from apps.builder.schemas import Battlecry, CardActionDraw, CardActionDamage
+from apps.builder.schemas import (
+    Battlecry,
+    CardActionDamage,
+    CardActionDraw,
+    Charge,
+)
 from apps.gameplay.engine import resolve_event
-from apps.gameplay.schemas.events import PlayCardEvent, DrawCardEvent, DealDamageEvent
+from apps.gameplay.schemas.events import (
+    ChooseAIMoveEvent,
+    DealDamageEvent,
+    DrawCardEvent,
+    PlayCardEvent,
+
+)
 from apps.gameplay.schemas.updates import DamageUpdate, GameOverUpdate
 from .schemas import GameState, CardInPlay, HeroInPlay
 from .services import GameService
@@ -18,11 +29,11 @@ class GamePlayTestBase(TestCase):
             phase="start",
             event_queue=[],
             cards={},
-            decks={'side_a': []},
-            mana_pool={'side_a': 0},
-            mana_used={'side_a': 0},
-            board={'side_a': []},
-            hands={'side_a': []},
+            decks={'side_a': [], 'side_b': []},
+            mana_pool={'side_a': 0, 'side_b': 0},
+            mana_used={'side_a': 0, 'side_b': 0},
+            board={'side_a': [], 'side_b': []},
+            hands={'side_a': [], 'side_b': []},
             heroes={
                 'side_a': HeroInPlay(
                     hero_id="1",
@@ -196,8 +207,31 @@ class TestDamage(GamePlayTestBase):
         self.assertEqual(resolved_event.events[0].target_id, "1")
         self.assertEqual(resolved_event.events[0].target_type, "hero")
 
-    def test_spell_damage_does_not_retaliate(self):
-        self.assertTrue(False)
+
+class TestPlayMinion(GamePlayTestBase):
+    def test_play_minion_to_board(self):
+        minion = CardInPlay(
+            card_type="minion",
+            card_id="1",
+            template_slug="test",
+            name="test",
+            attack=1,
+            health=1,
+            cost=1,
+            exhausted=False,
+        )
+        self.game_state.cards["1"] = minion
+        self.game_state.hands["side_a"] = ["1"]
+        self.game_state.mana_pool["side_a"] = 1
+        self.game_state.mana_used["side_a"] = 0
+        self.game_state.event_queue.append(PlayCardEvent(
+            side="side_a",
+            card_id="1",
+            position=0,
+        ))
+        resolved_event = resolve_event(self.game_state)
+        new_state = resolved_event.state
+        self.assertEqual(new_state.board["side_a"], ["1"])
 
 
 class TestPlaySpell(GamePlayTestBase):
@@ -302,6 +336,8 @@ class TestTraits(GamePlayTestBase):
 
         self.game_state.cards["1"] = battlecry_draw
         self.game_state.hands["side_a"] = ["1"]
+        self.game_state.mana_pool["side_a"] = 1
+        self.game_state.mana_used["side_a"] = 0
 
         play_card_event = PlayCardEvent(
             side="side_a",
@@ -329,3 +365,31 @@ class TestEndGame(GamePlayTestBase):
         self.game_state.event_queue.append(draw_card_event)
         resolved_event = resolve_event(self.game_state)
         self.assertTrue(isinstance(resolved_event.updates[0], GameOverUpdate))
+
+
+class TestAI(GamePlayTestBase):
+    "Regression test for an AI using a charge card after it's played"
+
+    def test_ai_uses_charge_card(self):
+        charge_card = CardInPlay(
+            card_type="minion",
+            card_id="1",
+            template_slug="charge-card",
+            name="Charge Card",
+            cost=1,
+            attack=1,
+            health=1,
+            traits=[Charge()],
+            exhausted=False,
+        )
+        self.game_state.cards["1"] = charge_card
+        self.game_state.board['side_b'] = ["1"]
+        self.game_state.active = "side_b"
+        self.game_state.ai_sides = ["side_b"]
+        self.game_state.mana_pool["side_b"] = 1
+        self.game_state.mana_used["side_b"] = 1
+
+        self.game_state.event_queue.append(ChooseAIMoveEvent(side="side_b"))
+
+        resolved_event = resolve_event(self.game_state)
+        self.assertEqual(resolved_event.events[0].type, "event_use_card")

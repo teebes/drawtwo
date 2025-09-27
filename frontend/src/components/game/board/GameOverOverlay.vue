@@ -34,7 +34,6 @@
 </template>
 
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
 import { useTitleStore } from '@/stores/title'
 import type { Side } from '../../../types/game'
 
@@ -51,13 +50,12 @@ interface Props {
 }
 
 const props = defineProps<Props>()
-const router = useRouter()
 
-const handleReturnToLobby = () => {
-    router.push('/lobby')
-}
+const emit = defineEmits<{
+    'close': []
+}>()
 
 const handleReturnToGame = () => {
-    window.location.reload()
+    emit('close')
 }
 </script>

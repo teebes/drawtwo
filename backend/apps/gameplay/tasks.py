@@ -10,7 +10,10 @@ from .schemas import (
     ResolvedEvent,
 )
 
+from apps.builder.schemas import DeckScript
+
 from apps.gameplay.schemas.events import (
+    ChooseAIMoveEvent,
     DrawPhaseEvent,
     MainPhaseEvent,
 )
@@ -36,6 +39,8 @@ def step(game_id: int):
                         .get(id=game_id))
         except DatabaseError:
             return
+
+        game.status = Game.GAME_STATUS_IN_PROGRESS
 
         print("['event_queue']:")
         print(game.state['event_queue'])
@@ -105,6 +110,20 @@ def step(game_id: int):
 
             if len(all_errors) > 0:
                 break
+
+        # If it's an AI's turn and there's no more events queued, see if it can
+        # take another action. If not, it will queue an end turn event.
+        if (len(game_state.event_queue) == 0
+            and game_state.phase == "main"
+            and game_state.active in game_state.ai_sides):
+
+            deck = getattr(game, game_state.active)
+
+            event = ChooseAIMoveEvent(
+                side=game_state.active,
+                script=DeckScript.model_validate(deck.script or {}))
+
+            game_state.event_queue.append(event)
 
         # Single DB save for all processed events
         game.state = game_state.model_dump()

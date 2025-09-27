@@ -171,8 +171,8 @@ def handle_main_phase(state: GameState, event: GameEvent) -> ResolvedEvent:
     events = []
 
     # If the new active side is an AI, queue up a choose ai move event
-    if event.side in state.ai_sides:
-        events = [ChooseAIMoveEvent(side=event.side)]
+    #if event.side in state.ai_sides:
+    #    events = [ChooseAIMoveEvent(side=event.side)]
 
     updates = [MainPhaseUpdate(side=event.side)]
     return ResolvedEvent(
@@ -235,7 +235,6 @@ def handle_draw_card(state: GameState, event: GameEvent) -> ResolvedEvent:
 
 def handle_play_card(state: GameState, event: PlayCardEvent) -> ResolvedEvent:
     card = state.cards[event.card_id]
-    print('# Played card: %s #' % card)
 
     # Make sure that the player has enough energy to play the card
     usable_mana = state.mana_pool[event.side] - state.mana_used[event.side]
@@ -283,7 +282,6 @@ def handle_play_card(state: GameState, event: PlayCardEvent) -> ResolvedEvent:
 
 def handle_use_card(state: GameState, event: GameEvent) -> ResolvedEvent:
     card = state.cards[event.card_id]
-    print('# Used card: %s #' % card)
 
     deal_damage_event = DealDamageEvent(
         side=event.side,
@@ -325,8 +323,6 @@ def handle_deal_damage(state: GameState, event: DealDamageEvent) -> ResolvedEven
     else:
         raise NotImplementedError
 
-    print('DAMAGE - %s > %s' % (source, target))
-
     setattr(source, "exhausted", True)
 
     updates = [DamageUpdate(
@@ -340,17 +336,12 @@ def handle_deal_damage(state: GameState, event: DealDamageEvent) -> ResolvedEven
 
     if target_type == "hero":
 
-        print('hero health before: %s' % target.health)
-
         hero = target
         hero.health -= event.damage
-
-        print('hero health after: %s' % hero.health)
 
         if hero.health <= 0:
             # If the hero dies, that is a game over event
             state.winner = event.side
-            print('hero health is 0, game over')
             updates.append(GameOverUpdate(side=event.side, winner=event.side))
 
     if target_type == "card":
@@ -430,7 +421,7 @@ def handle_card_retaliation(state: GameState, event: GameEvent) -> ResolvedEvent
                         damage=source_card.attack)])
 
 
-def handle_choose_ai_move(state: GameState, event: GameEvent) -> ResolvedEvent:
+def handle_choose_ai_move(state: GameState, event: ChooseAIMoveEvent) -> ResolvedEvent:
     mana_pool = state.mana_pool[state.active]
     mana_used = state.mana_used[state.active]
     mana_available = mana_pool - mana_used
@@ -459,36 +450,39 @@ def handle_choose_ai_move(state: GameState, event: GameEvent) -> ResolvedEvent:
     for card_id in state.board[state.active]:
         card = state.cards[card_id]
 
-        print("Ai Evaluating card: %s" % card)
         if card.exhausted: continue
 
-        print('card is playable')
-
-        # 50/50 chance to attack hero or card
-        if random.random() < 0.5:
+        if event.script.strategy == "rush":
             target_type = "hero"
             target_id = state.heroes[opposing_side].hero_id
-        else:
+        elif event.script.strategy == "control":
             target_type = "card"
-            try:
-                target_id = random.choice(state.board[opposing_side])
-            except IndexError:
+            target_id = random.choice(state.board[opposing_side])
+        else:
+            # 50/50 chance to attack hero or card
+            if random.random() < 0.5:
                 target_type = "hero"
                 target_id = state.heroes[opposing_side].hero_id
+            else:
+                target_type = "card"
+                try:
+                    target_id = random.choice(state.board[opposing_side])
+                except IndexError:
+                    target_type = "hero"
+                    target_id = state.heroes[opposing_side].hero_id
 
-        if mana_available >= card.cost:
-            use_event = UseCardEvent(
-                side=state.active,
-                card_id=card_id,
-                target_type=target_type,
-                target_id=target_id)
-            choose_ai_move = ChooseAIMoveEvent(side=state.active)
-            return ResolvedEvent(
-                state=state,
-                events=[use_event, choose_ai_move],
-                updates=[],
-                errors=[]
-            )
+        use_event = UseCardEvent(
+            side=state.active,
+            card_id=card_id,
+            target_type=target_type,
+            target_id=target_id)
+        #choose_ai_move = ChooseAIMoveEvent(side=state.active)
+        return ResolvedEvent(
+            state=state,
+            events=[use_event],
+            updates=[],
+            errors=[]
+        )
 
     return ResolvedEvent(
         state=state,
@@ -496,22 +490,3 @@ def handle_choose_ai_move(state: GameState, event: GameEvent) -> ResolvedEvent:
         updates=[],
         errors=[]
     )
-
-"""
-def determine_ai_move(state: GameState) -> GameEvent:
-    # Start by seeing if there's a card that can be played from hand to board
-    mana_pool = state.mana_pool[state.active]
-    mana_used = state.mana_used[state.active]
-    mana_available = mana_pool - mana_used
-
-    for card_id in state.hands[state.active]:
-        card = state.cards[card_id]
-        if card.cost <= mana_available and card.card_type == 'minion':
-            card_id_to_play = card_id
-            return PlayCardEvent(
-                side=state.active,
-                card_id=card_id_to_play,
-                position=0)
-
-    return EndTurnEvent(side=state.active)
-"""
