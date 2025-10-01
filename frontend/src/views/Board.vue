@@ -74,7 +74,7 @@
                     Turn {{ gameState.turn }} <span class="text-gray-400 ml-2">[ {{ gameState.phase }} ]</span>
                 </div>
                 <GameButton
-                    v-if="!gameOver.isGameOver"
+                    v-if="gameState.winner === 'none'"
                     variant="secondary"
                     class="m-2"
                     @click="handleEndTurn">End Turn</GameButton>
@@ -115,7 +115,7 @@
                 <!-- Footer -->
                 <div class="h-24 flex flex-row border-t border-gray-700">
                     <!-- Viewer Hero -->
-                    <div class="hero w-24 h-full border-r border-gray-700 flex flex-col items-center justify-center" :class="{ 'bg-yellow-500/20': gameState.active === bottomSide }">
+                    <div class="hero w-24 h-full border-r border-gray-700 flex flex-col items-center justify-center cursor-pointer" :class="{ 'bg-yellow-500/20': gameState.active === bottomSide }" @click="handleUseHero()">
                         <div class="hero-name">{{ ownHeroInitials }}</div>
                         <div class="hero-health">{{ ownHero?.health }}</div>
                     </div>
@@ -172,10 +172,11 @@
                 }"
             />
 
-            <UseCard
-                v-if="overlay == 'use_card'"
+            <UseAction
+                v-if="overlay == 'use_action'"
                 :game-state="gameState"
-                :card="selected_use_card"
+                :initiator="useInitiator"
+                :card="useInitiator?.type === 'card' ? selected_use_card : null"
                 :own-board="ownBoard"
                 :opposing-board="opposingBoard"
                 :opposing-hero="opposingHero"
@@ -186,6 +187,7 @@
                 @close-overlay="() => {
                     overlay = null
                     selected_use_card = null
+                    selected_use_hero = null
                     overlay_text = null
                 }"
 
@@ -241,7 +243,7 @@ import GameCard from '../components/game/GameCard.vue'
 import GameButton from '../components/ui/GameButton.vue'
 // Board Components
 import PlayCard from '../components/game/board/PlayCard.vue'
-import UseCard from '../components/game/board/UseCard.vue'
+import UseAction from '../components/game/board/UseAction.vue'
 import GameOverOverlay from '../components/game/board/GameOverOverlay.vue'
 import Update from '../components/game/board/Update.vue'
 
@@ -278,7 +280,8 @@ const {
 // Local UI state only
 const selected_hand_card = ref<string | null>(null)
 const selected_use_card = ref<CardInPlay | null>(null)
-const overlay = ref<'select_hand_card' | 'use_card' | 'menu' | 'updates' | null>(null)
+const selected_use_hero = ref<{ hero_id: string } | null>(null)
+const overlay = ref<'select_hand_card' | 'use_action' | 'menu' | 'updates' | null>(null)
 const overlay_text = ref<string | null>(null)
 const useCardMode = ref<'use' | 'select'>('use')
 const allowedTargetTypes = ref<Array<'card' | 'hero' | 'any'>>(['any'])
@@ -319,7 +322,7 @@ const handleSelectHandCard = (card_id: string) => {
             allowedTargetTypes.value = getAllowedTargets(card)
             selected_use_card.value = card
             useCardMode.value = 'select'
-            overlay.value = 'use_card'
+            overlay.value = 'use_action'
             overlay_text.value = 'Use Card'
             return
         }
@@ -337,10 +340,22 @@ const handleSelectHandCard = (card_id: string) => {
 // Card placement now handled directly by PlayCard component
 
 const handleUseCard = (card_id: string | number) => {
-    overlay.value = 'use_card'
+    overlay.value = 'use_action'
     overlay_text.value = "Use Card"
     selected_use_card.value = get_card(card_id) || null
+    selected_use_hero.value = null
     useCardMode.value = 'use'
+}
+
+const handleUseHero = () => {
+    if (!ownHero.value) return
+    overlay.value = 'use_action'
+    overlay_text.value = 'Use Hero'
+    selected_use_card.value = null
+    selected_use_hero.value = { hero_id: ownHero.value.hero_id }
+    useCardMode.value = 'use'
+    // For now, allow targeting both card and hero
+    allowedTargetTypes.value = ['card', 'hero']
 }
 
 const handleMenuClick = () => {
@@ -359,7 +374,7 @@ const onPlayTargetRequired = (payload: { card_id: string; position: number; allo
     allowedTargetTypes.value = payload.allowedTargets
     selected_use_card.value = get_card(payload.card_id) || null
     useCardMode.value = 'select'
-    overlay.value = 'use_card'
+    overlay.value = 'use_action'
     overlay_text.value = 'Use Card'
 }
 
@@ -457,6 +472,16 @@ function getAllowedTargets(card: any): Array<'card' | 'hero' | 'any'> {
     if (allowed.size === 0) allowed.add('any')
     return Array.from(allowed)
 }
+
+const useInitiator = computed(() => {
+    if (selected_use_card.value) {
+        return { type: 'card' as const, id: selected_use_card.value.card_id }
+    }
+    if (selected_use_hero.value) {
+        return { type: 'hero' as const, id: selected_use_hero.value.hero_id }
+    }
+    return { type: 'card' as const, id: '' }
+})
 </script>
 
 <style scoped>

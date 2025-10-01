@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import axios from '../config/api'
 import { getBaseUrl } from '../config/api'
 import { makeInitials } from '../utils/index'
-import type { GameState, Side, CardInPlay, HeroInPlay, Winner } from '../types/game'
+import type { GameState, Side, CardInPlay, HeroInPlay } from '../types/game'
 import { useNotificationStore } from './notifications'
 
 // WebSocket status type
@@ -408,7 +408,7 @@ export const useGameStore = defineStore('game', {
       console.log('Playing card', cardId, 'at position', position, 'with target', target)
 
       const message: any = {
-        type: 'play_card_action',
+        type: 'action_play_card',
         card_id: String(cardId),
       }
 
@@ -430,7 +430,7 @@ export const useGameStore = defineStore('game', {
       console.log('Using card', cardId, 'on card', targetCardId)
 
       this.sendWebSocketMessage({
-        type: 'use_card_action',
+        type: 'action_use_card',
         card_id: cardId,
         target_id: targetCardId,
         target_type: 'card',
@@ -443,9 +443,35 @@ export const useGameStore = defineStore('game', {
       console.log('Using card', cardId, 'on hero', heroId)
 
       this.sendWebSocketMessage({
-        type: 'use_card_action',
+        type: 'action_use_card',
         card_id: cardId,
         target_id: heroId,
+        target_type: 'hero',
+      })
+    },
+
+    useHeroOnCard(heroId: string, targetCardId: string): void {
+      if (this.gameOver.isGameOver) return
+
+      console.log('Using hero', heroId, 'on card', targetCardId)
+
+      this.sendWebSocketMessage({
+        type: 'action_use_hero',
+        hero_id: heroId,
+        target_id: targetCardId,
+        target_type: 'card',
+      })
+    },
+
+    useHeroOnHero(heroId: string, targetHeroId: string): void {
+      if (this.gameOver.isGameOver) return
+
+      console.log('Using hero', heroId, 'on hero', targetHeroId)
+
+      this.sendWebSocketMessage({
+        type: 'action_use_hero',
+        hero_id: heroId,
+        target_id: targetHeroId,
         target_type: 'hero',
       })
     },

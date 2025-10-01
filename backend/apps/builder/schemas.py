@@ -92,7 +92,7 @@ class Card(ResourceBase):
     cost: int
     attack: int = 0
     health: int = 0
-    traits: List[Trait]
+    traits: List[Trait] = Field(default_factory=list)
     faction: Optional[str] = None
 
 
@@ -103,13 +103,19 @@ class Deck(ResourceBase):
     cards: List[dict] = Field(default_factory=list)
 
 
+class HeroPower(BaseModel):
+    name: str
+    description: Optional[str] = None
+    actions: List[CardAction] = Field(default_factory=list)
+
+
 class Hero(ResourceBase):
     type: Literal['hero'] = 'hero'
     slug: str
     name: str
     description: str
     health: int
-    hero_power: dict
+    hero_power: HeroPower
     faction: Optional[str] = None
 
 
@@ -117,6 +123,3 @@ Resource = Annotated[
     Union[Card, Deck, Hero],
     Discriminator('type')
 ]
-
-
-#

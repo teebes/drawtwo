@@ -50,6 +50,13 @@ class UseCardEvent(EventBase):
     target_id: str
 
 
+class UseHeroEvent(EventBase):
+    type: Literal["event_use_hero"] = "event_use_hero"
+    hero_id: str
+    target_type: Literal["card", "hero"] = "card"
+    target_id: str
+
+
 class CastSpellEvent(EventBase):
     type: Literal["event_cast_spell"] = "event_cast_spell"
     card_id: str
@@ -104,6 +111,8 @@ GameEvent = Annotated[
         DrawCardEvent,
         PlayCardEvent,
         RefreshPhaseEvent,
-        UseCardEvent],
+        UseCardEvent,
+        UseHeroEvent,
+    ],
     Discriminator('type')
 ]

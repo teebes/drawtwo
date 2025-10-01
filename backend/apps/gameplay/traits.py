@@ -53,14 +53,20 @@ def handle_card_actions(state: GameState, card: CardInPlay, trait: Trait, update
         updates.extend(_updates)
     return events, updates
 
+
 def handle_card_action(state: GameState, card: CardInPlay, card_action: CardAction, update: GameUpdate) -> tuple[list[GameEvent], list[GameUpdate]]:
     events = []
     updates = []
+
+    print('handling card action: %s' % card_action)
 
     if isinstance(card_action, CardActionDraw):
         events.append(DrawCardEvent(side=state.active, amount=card_action.amount))
 
     elif isinstance(card_action, CardActionDamage):
+
+
+
         events.append(DealDamageEvent(
             side=state.active,
             damage_type="physical" if card.card_type == "minion" else "spell",
@@ -72,6 +78,8 @@ def handle_card_action(state: GameState, card: CardInPlay, card_action: CardActi
             damage=card_action.amount,
             retaliate=False
         ))
+
+    print('returning events: %s' % events)
 
     return events, updates
 

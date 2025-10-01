@@ -1,7 +1,12 @@
 from typing import Literal, List, Dict, Union, Annotated, Literal, Optional
 from pydantic import BaseModel, Field, Discriminator
 
-from apps.builder.schemas import TitleConfig, Trait
+from apps.builder.schemas import (
+    TitleConfig,
+    Trait,
+    CardAction,
+    HeroPower,
+)
 
 PHASE_ORDER = ['start', 'refresh', 'draw', 'main',]
 
@@ -37,6 +42,8 @@ class HeroInPlay(BaseModel):
     health: int
     name: str
     exhausted: bool = True
+    actions: List[CardAction] = Field(default_factory=list)
+    hero_power: HeroPower
 
 
 class GameState(BaseModel):

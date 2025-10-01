@@ -3,24 +3,30 @@ import random
 from django.db import transaction
 from pydantic import TypeAdapter
 
-from .models import Game
-from .schemas import (
+from apps.builder.schemas import TitleConfig
+from apps.core.serializers import serialize_cards_with_traits
+from apps.gameplay.models import Game
+from apps.gameplay.schemas import (
     CardInPlay,
-    EndTurnAction,
-    EndTurnEvent,
-    GameAction,
     GameState,
     HeroInPlay,
+)
+from apps.gameplay.schemas.actions import (
+    EndTurnAction,
+    GameAction,
     PlayCardAction,
+    UseCardAction,
+    UseHeroAction,
+)
+from apps.gameplay.schemas.events import (
+    EndTurnEvent,
     PlayCardEvent,
     StartGameEvent,
-    UseCardAction,
+    UseHeroEvent,
     UseCardEvent,
 )
 
-from .tasks import step
-from apps.builder.schemas import TitleConfig
-from apps.core.serializers import serialize_cards_with_traits
+from apps.gameplay.tasks import step
 
 
 class GameService:
@@ -100,12 +106,14 @@ class GameService:
                 template_slug=deck_a.hero.slug,
                 health=deck_a.hero.health,
                 name=deck_a.hero.name,
+                hero_power=deck_a.hero.hero_power,
             ),
             'side_b': HeroInPlay(
                 hero_id=str(deck_b.hero.id),
                 template_slug=deck_b.hero.slug,
                 health=deck_b.hero.health,
                 name=deck_b.hero.name,
+                hero_power=deck_b.hero.hero_power,
             ),
         }
 
@@ -172,6 +180,13 @@ class GameService:
             game_state.event_queue.append(UseCardEvent(
                 side=game_state.active,
                 card_id=game_action.card_id,
+                target_type=game_action.target_type,
+                target_id=game_action.target_id,
+            ))
+        elif isinstance(game_action, UseHeroAction):
+            game_state.event_queue.append(UseHeroEvent(
+                side=game_state.active,
+                hero_id=game_action.hero_id,
                 target_type=game_action.target_type,
                 target_id=game_action.target_id,
             ))

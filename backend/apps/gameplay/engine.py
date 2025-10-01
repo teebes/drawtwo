@@ -9,14 +9,6 @@ and returns:
 import random
 from typing import List
 
-from pydantic import BaseModel, TypeAdapter
-
-# Card actions
-from apps.builder.schemas import (
-    CardActionDraw,
-    CardActionDamage,
-    CardAction,
-)
 
 # Gameplay events
 from apps.gameplay.schemas.events import (
@@ -32,6 +24,7 @@ from apps.gameplay.schemas.events import (
     RefreshPhaseEvent,
     StartGameEvent,
     UseCardEvent,
+    UseHeroEvent,
 )
 
 # Gameplay updates
@@ -102,6 +95,9 @@ def resolve_event(state: GameState) -> ResolvedEvent:
     elif isinstance(event, UseCardEvent):
         resolved_event = handle_use_card(new_state, event)
 
+    elif isinstance(event, UseHeroEvent):
+        resolved_event = handle_use_hero(new_state, event)
+
     elif isinstance(event, CardRetaliationEvent):
         resolved_event = handle_card_retaliation(new_state, event)
 
@@ -137,12 +133,10 @@ def handle_start_game(state: GameState, event:GameEvent) -> ResolvedEvent:
     )
 
 
-def handle_refresh_phase(state: GameState, event: GameEvent) -> ResolvedEvent:
+def handle_refresh_phase(state: GameState, event: RefreshPhaseEvent) -> ResolvedEvent:
     state.phase = "refresh"
     state.mana_pool[event.side] = state.turn
     state.mana_used[event.side] = 0
-    # for card_on_board in state.board[event.side]:
-    #     state.cards[card_on_board].exhausted = False
     events = [DrawPhaseEvent(side=event.side)]
     updates = [RefreshPhaseUpdate(side=state.active)]
     return ResolvedEvent(
@@ -185,8 +179,11 @@ def handle_main_phase(state: GameState, event: GameEvent) -> ResolvedEvent:
 
 def handle_end_turn(state: GameState, event: GameEvent) -> ResolvedEvent:
 
+    # Mark all cards on the board as not exhausted
     for card_on_board in state.board[event.side]:
         state.cards[card_on_board].exhausted = False
+    # Mark the hero as not exhausted
+    state.heroes[event.side].exhausted = False
 
     end_of_turn_active = state.active
 
@@ -281,8 +278,6 @@ def handle_play_card(state: GameState, event: PlayCardEvent) -> ResolvedEvent:
 
 
 def handle_use_card(state: GameState, event: GameEvent) -> ResolvedEvent:
-    card = state.cards[event.card_id]
-
     deal_damage_event = DealDamageEvent(
         side=event.side,
         damage_type="physical",
@@ -298,6 +293,33 @@ def handle_use_card(state: GameState, event: GameEvent) -> ResolvedEvent:
         errors=[]
     )
 
+
+def handle_use_hero(state: GameState, event: UseHeroEvent) -> ResolvedEvent:
+    from apps.gameplay.traits import handle_card_action
+    hero = state.heroes[event.side]
+    events = []
+    updates = []
+
+    for action in hero.hero_power.actions:
+        print('action: %s' % action)
+        _events, _updates = handle_card_action(state, hero, action, event)
+        events.extend(_events)
+        updates.extend(_updates)
+
+    # deal_damage_event = DealDamageEvent(
+    #     side=event.side,
+    #     damage_type="physical",
+    #     source_type="hero",
+    #     source_id=event.hero_id,
+    #     target_type=event.target_type,
+    #     target_id=event.target_id,
+    #     damage=state.heroes[event.side].attack)
+    return ResolvedEvent(
+        state=state,
+        events=events,
+        updates=updates,
+        errors=[]
+    )
 
 
 def handle_deal_damage(state: GameState, event: DealDamageEvent) -> ResolvedEvent:

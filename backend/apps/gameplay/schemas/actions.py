@@ -15,7 +15,7 @@ class ActionBase(BaseModel):
 
 
 class PlayCardAction(ActionBase):
-    type: Literal["play_card_action"] = "play_card_action"
+    type: Literal["action_play_card"] = "action_play_card"
     card_id: str
     position: int
     target_type: Optional[Literal["card", "hero"]] = None
@@ -23,16 +23,28 @@ class PlayCardAction(ActionBase):
 
 
 class UseCardAction(ActionBase):
-    type: Literal["use_card_action"] = "use_card_action"
+    type: Literal["action_use_card"] = "action_use_card"
     card_id: str
     target_type: Literal["card", "hero"] = "card"
     target_id: str
 
 
+class UseHeroAction(ActionBase):
+    type: Literal["action_use_hero"] = "action_use_hero"
+    hero_id: str
+    target_type: Literal["card", "hero"] = "card"
+    target_id: str
+
+
 class EndTurnAction(ActionBase):
-    type: Literal["end_turn_action"] = "end_turn_action"
+    type: Literal["action_end_turn"] = "action_end_turn"
 
 
 GameAction = Annotated[
-    Union[PlayCardAction, UseCardAction, EndTurnAction],
+    Union[
+        EndTurnAction,
+        PlayCardAction,
+        UseCardAction,
+        UseHeroAction,
+    ],
     Discriminator('type')]

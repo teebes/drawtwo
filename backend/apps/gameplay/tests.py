@@ -40,12 +40,28 @@ class GamePlayTestBase(TestCase):
                     template_slug="hero_a",
                     health=10,
                     name="Hero A",
+                    hero_power={
+                        "actions": [
+                            CardActionDamage(
+                                amount=1,
+                                target="enemy",
+                            )
+                        ]
+                    },
                 ),
                 'side_b': HeroInPlay(
                     hero_id="2",
                     template_slug="hero_b",
                     health=10,
                     name="Hero B",
+                    hero_power={
+                        "actions": [
+                            CardActionDamage(
+                                amount=1,
+                                target="enemy",
+                            )
+                        ]
+                    },
                 ),
             },
         )

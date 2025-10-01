@@ -552,7 +552,7 @@ const handleCardPlacement = (position: number) => {
 
   // Send websocket message to play the card
   sendWebSocketMessage({
-    type: 'play_card_action',
+    type: 'action_play_card',
     card_id: selectedCard.value,
     position: position
   })
@@ -651,7 +651,7 @@ const handleCardTarget = async (targetCardId: string) => {
 
   // Send websocket message
   sendWebSocketMessage({
-    type: 'use_card_action',
+    type: 'action_use_card',
     card_id: attackingCard.value,
     target_type: 'card',
     target_id: targetCardId
@@ -695,7 +695,7 @@ const handleHeroTarget = async (heroId: string) => {
 
   // Send websocket message
   sendWebSocketMessage({
-    type: 'use_card_action',
+    type: 'action_use_card',
     card_id: attackingCard.value,
     target_type: 'hero',
     target_id: heroId

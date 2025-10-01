@@ -35,6 +35,10 @@ class TitleService:
         resource_data = yaml.safe_load(yaml_data)
 
         if isinstance(resource_data, list):
+            # resources = []
+            # for resource in resource_data:
+            #     print(resource)
+            #     resources.append(TypeAdapter(Resource).validate_python(resource))
             resources = [
                 TypeAdapter(Resource).validate_python(resource)
                 for resource in resource_data

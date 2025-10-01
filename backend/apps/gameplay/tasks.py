@@ -40,13 +40,13 @@ def step(game_id: int):
         except DatabaseError:
             return
 
-        game.status = Game.GAME_STATUS_IN_PROGRESS
-
         print("['event_queue']:")
         print(game.state['event_queue'])
 
         if game.status == Game.GAME_STATUS_ENDED:
             return
+
+        game.status = Game.GAME_STATUS_IN_PROGRESS
 
         game_state = GameState.model_validate(game.state)
 
