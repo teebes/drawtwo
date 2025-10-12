@@ -17,7 +17,7 @@
             <div class="flex w-full bg-gray-800 border-b border-gray-700 py-8 overflow-x-auto">
 
                 <!-- If interactions are allowed (selection mode always allows) -->
-                <div v-if="canInteract" class="flex flex-row w-full h-24 mx-auto">
+                <div v-if="canInteract" class="flex flex-row h-24 mx-auto">
                     <div v-for="cardInLane in opposingBoard" :key="cardInLane.card_id" class="p-1">
                         <GameCard v-if="cardInLane"
                                 class="flex-grow-0"
@@ -113,7 +113,7 @@ const noplay_reason = computed(() => {
             if (props.card.cost > availableEnergy) return 'Not enough energy'
         }
 
-        if (props.card.card_type === 'minion' && props.card.exhausted) return 'Card is exhausted'
+        if (props.card.card_type === 'creature' && props.card.exhausted) return 'Card is exhausted'
         return null
     }
 
@@ -122,6 +122,11 @@ const noplay_reason = computed(() => {
     if (!viewer) return 'No viewer'
     if (props.gameState.active !== viewer) return 'Not your turn'
     if (props.gameState.phase !== 'main') return 'Not in main phase'
+
+    // Check if hero is exhausted
+    const hero = props.gameState.heroes[viewer]
+    if (hero?.exhausted) return 'Hero is exhausted'
+
     return null
 })
 

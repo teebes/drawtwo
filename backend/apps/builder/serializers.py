@@ -57,8 +57,8 @@ class CardTemplateSerializer(serializers.ModelSerializer):
             'cost': obj.cost,
         }
 
-        # Add attack/health for minions
-        if obj.card_type == 'minion':
+        # Add attack/health for creatures
+        if obj.card_type == 'creature':
             card_data['attack'] = obj.attack
             card_data['health'] = obj.health
 
@@ -100,8 +100,8 @@ class CardTemplateSerializer(serializers.ModelSerializer):
         instance.card_type = card_data.get('card_type', instance.card_type)
         instance.cost = card_data.get('cost', instance.cost)
 
-        # Update attack/health for minions
-        if instance.card_type == 'minion':
+        # Update attack/health for creatures
+        if instance.card_type == 'creature':
             instance.attack = card_data.get('attack', instance.attack)
             instance.health = card_data.get('health', instance.health)
         else:
@@ -179,7 +179,7 @@ class CardTemplateSerializer(serializers.ModelSerializer):
                     counter += 1
 
         # Create card instance
-        card_type = card_data.get('card_type', 'minion')
+        card_type = card_data.get('card_type', 'creature')
         cost = card_data.get('cost', 0)
 
         instance = CardTemplate.objects.create(
@@ -189,8 +189,8 @@ class CardTemplateSerializer(serializers.ModelSerializer):
             description=card_data.get('description', ''),
             card_type=card_type,
             cost=cost,
-            attack=card_data.get('attack') if card_type == 'minion' else None,
-            health=card_data.get('health') if card_type == 'minion' else None,
+            attack=card_data.get('attack') if card_type == 'creature' else None,
+            health=card_data.get('health') if card_type == 'creature' else None,
             spec=card_data.get('spec', {}),
             version=1,
             is_latest=True

@@ -4,12 +4,11 @@ from pydantic import BaseModel, Discriminator, Field
 from apps.builder.schemas import DeckScript
 
 
-# ==== Events ====
 
 class EventBase(BaseModel):
     type: str
     side: Literal['side_a', 'side_b']
-
+"""
 
 class StartGameEvent(EventBase):
     type: Literal["event_start_game"] = "event_start_game"
@@ -39,7 +38,7 @@ class PlayCardEvent(EventBase):
     type: Literal["event_play_card"] = "event_play_card"
     card_id: str
     position: int
-    target_type: Optional[Literal["card", "hero"]] = None
+    target_type: Optional[Literal["card", "hero", "creature"]] = None
     target_id: Optional[str] = None
 
 
@@ -96,23 +95,57 @@ class NewTurnEvent(EventBase):
 class GameOverEvent(EventBase):
     type: Literal["event_game_over"] = "event_game_over"
     winner: Literal["side_a", "side_b"]
+"""
 
 
-GameEvent = Annotated[
+class DamageEvent(EventBase):
+    type: Literal["event_damage"] = "event_damage"
+    damage_type: Literal["physical", "spell"] = "physical"
+    source_type: Literal["card", "hero", "board"] = "card"
+    source_id: str
+    target_type: Literal["card", "hero",] = "card"
+    target_id: str
+    damage: int
+    # Whether the target should attempt to retaliate. Mostly used to disable
+    # retaliation in the case of retaliation to avoid an infinite loop.
+    retaliate: bool = True
+
+
+class DrawEvent(EventBase):
+    type: Literal["event_draw"] = "event_draw"
+    card_id: str
+
+
+class EndTurnEvent(EventBase):
+    type: Literal["event_end_turn"] = "event_end_turn"
+
+
+class GameOverEvent(EventBase):
+    type: Literal["event_game_over"] = "event_game_over"
+    winner: Literal["side_a", "side_b"]
+
+
+class NewPhaseEvent(EventBase):
+    type: Literal["event_phase"] = "event_phase"
+    phase: str
+
+
+class PlayEvent(EventBase):
+    type: Literal["event_play"] = "event_play"
+    card_id: str
+    position: int
+    target_type: Optional[Literal["card", "hero", "creature"]] = None
+    target_id: Optional[str] = None
+
+
+Event = Annotated[
     Union[
-        StartGameEvent,
-        CardRetaliationEvent,
-        ChooseAIMoveEvent,
-        DealDamageEvent,
-        DrawPhaseEvent,
+        DamageEvent,
+        DrawEvent,
         EndTurnEvent,
         GameOverEvent,
-        MainPhaseEvent,
-        DrawCardEvent,
-        PlayCardEvent,
-        RefreshPhaseEvent,
-        UseCardEvent,
-        UseHeroEvent,
+        NewPhaseEvent,
+        PlayEvent,
     ],
     Discriminator('type')
 ]

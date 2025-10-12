@@ -32,7 +32,10 @@ User = get_user_model()
 
 
 def main():
-    pass
+    from apps.gameplay.services import GameService
+    GameService.advance(70)
+
+
 
 if __name__ == '__main__':
     # Parse command line arguments if needed

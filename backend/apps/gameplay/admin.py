@@ -24,6 +24,10 @@ class GameAdmin(admin.ModelAdmin):
             'fields': ('state',),
             'classes': ('collapse',)
         }),
+        ('Game Queue', {
+            'fields': ('queue',),
+            'classes': ('collapse',)
+        }),
         ('Results', {
             'fields': ('winner',)
         }),

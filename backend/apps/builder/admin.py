@@ -180,7 +180,7 @@ class CardTemplateAdmin(admin.ModelAdmin):
         }),
         ('Combat Stats', {
             'fields': ('attack', 'health'),
-            'description': 'Attack and Health are only applicable to minion cards'
+            'description': 'Attack and Health are only applicable to creature cards'
         }),
         ('Classification', {
             'fields': ('tags',),

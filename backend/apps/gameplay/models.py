@@ -2,7 +2,8 @@ from django.db import models
 
 from apps.collection.models import Deck
 from apps.core.models import TimestampedModel, list_to_choices
-from .schemas import GameEvent, GameState
+from apps.gameplay.schemas.game import GameState
+from apps.gameplay.schemas.effects import Effect
 
 
 class Game(TimestampedModel):
@@ -25,6 +26,8 @@ class Game(TimestampedModel):
 
     winner = models.ForeignKey(Deck, on_delete=models.PROTECT,
                                blank=True, null=True, related_name='games_won')
+
+    queue = models.JSONField(default=list)
 
     @property
     def game_state(self):
@@ -53,14 +56,20 @@ class Game(TimestampedModel):
             return self.side_b
         return None  # No AI
 
-    def push_event(self, event: GameEvent):
-        state = GameState.model_validate(self.state)
-        state.event_queue.append(event)
-        self.state = state.model_dump()
-        self.save(update_fields=["state"])
-
     def __str__(self):
         return f"{self.side_a.name} vs {self.side_b.name}"
+
+    def enqueue(self, effects: list[Effect], trigger: bool=True, prepend: bool=False):
+        if effects:
+            serialized_effects = [effect.model_dump() for effect in effects]
+            if prepend:
+                self.queue = serialized_effects + self.queue
+            else:
+                self.queue.extend(serialized_effects)
+            self.save(update_fields=['queue'])
+        if trigger:
+            from apps.gameplay.tasks import advance
+            advance.apply_async(args=[self.id])
 
 
 class GameUpdate(TimestampedModel):

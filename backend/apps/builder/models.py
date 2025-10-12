@@ -215,14 +215,14 @@ class HeroTemplate(TemplateBase):
 
 
 class CardTemplate(TemplateBase):
-    CARD_TYPE_MINION = "minion"
+    CARD_TYPE_CREATURE = "creature"
     CARD_TYPE_SPELL = "spell"
     card_type = models.CharField(
         max_length=15,
         choices=list_to_choices([
-            CARD_TYPE_MINION,
+            CARD_TYPE_CREATURE,
             CARD_TYPE_SPELL]),
-        default=CARD_TYPE_MINION,
+        default=CARD_TYPE_CREATURE,
     )
 
 
@@ -242,7 +242,7 @@ class CardTemplate(TemplateBase):
         indexes = TemplateBase.Meta.indexes + [
             # Composite index for efficient filtering and ordering
             # Covers: WHERE title=X AND is_latest=Y ORDER BY cost, card_type, attack, health, name
-            # Handles: cost grouping -> minions before spells -> attack/health ordering -> name tie-breaker
+            # Handles: cost grouping -> creatures before spells -> attack/health ordering -> name tie-breaker
             models.Index(fields=['title', 'is_latest', 'cost', 'card_type', 'attack', 'health', 'name'], name='card_full_sort_idx'),
         ]
 

@@ -9,7 +9,7 @@ export interface Event {
 
 export type CardAction =
   | { action: 'draw'; amount: number }
-  | { action: 'damage'; amount: number; target: 'hero' | 'minion' | 'enemy' }
+  | { action: 'damage'; amount: number; target: 'hero' | 'creature' | 'enemy' }
 
 export interface Trait {
   type: string
@@ -17,7 +17,7 @@ export interface Trait {
 }
 
 export interface CardInPlay {
-  card_type?: 'minion' | 'spell'
+  card_type?: 'creature' | 'spell'
   card_id: string
   template_slug: string
   name: string
@@ -34,6 +34,7 @@ export interface HeroInPlay {
   template_slug: string
   health: number
   name: string
+  exhausted: boolean
 }
 
 export interface GameState {
@@ -50,4 +51,15 @@ export interface GameState {
   mana_used: Record<string, number>
   winner: Winner
   is_vs_ai: boolean
+}
+
+// Game error types - matches backend Result types
+export type GameErrorType = 'outcome_rejected' | 'outcome_prevented' | 'outcome_fault'
+
+export interface GameError {
+  type: GameErrorType
+  reason: string  // User-visible error message
+  details?: Record<string, any>
+  error_id?: string  // Only present for Fault
+  effect?: any  // Only present for Fault (for debugging)
 }

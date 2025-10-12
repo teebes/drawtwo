@@ -44,7 +44,7 @@ class TestIngestion(TestCase):
     def test_ingest_new_card(self):
         card_yaml = """
         - type: card
-          card_type: minion
+          card_type: creature
           slug: small-charge-drawrattle
           name: Small Charge Drawrattle
           description: Charge, draw a card on destruction.
@@ -55,7 +55,7 @@ class TestIngestion(TestCase):
           - type: charge
           - type: deathrattle
             actions:
-            - action: draw_card
+            - action: draw
               amount: 1
         """
         self.assertEqual(CardTemplate.objects.count(), 0)
@@ -75,7 +75,7 @@ class TestIngestion(TestCase):
         self.assertEqual(card_template.traits.filter(slug='deathrattle').count(), 1)
         deathrattle_trait = card_template.traits.filter(slug='deathrattle').first()
         card_trait = CardTrait.objects.get(card=card_template, trait=deathrattle_trait)
-        self.assertEqual(card_trait.data['actions'][0]['action'], 'draw_card')
+        self.assertEqual(card_trait.data['actions'][0]['action'], 'draw')
         self.assertEqual(card_trait.data['actions'][0]['amount'], 1)
 
 

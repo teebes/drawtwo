@@ -16,8 +16,9 @@ class TitleService:
     @classmethod
     def create_title(cls, author: User, slug: str,name: str):
         title = Title.objects.create(name=name, slug=slug, author=author)
-        title.assign_traits(title)
-        return cls(title)
+        service = cls(title)
+        service.assign_traits()
+        return service
 
     def __init__(self, title: Title):
         self.title = title
@@ -120,7 +121,7 @@ class TitleService:
         hero_template.name = resource.name
         hero_template.description = resource.description
         hero_template.health = resource.health
-        hero_template.hero_power = resource.hero_power
+        hero_template.hero_power = resource.hero_power.model_dump()
         hero_template.save()
 
     def ingest_deck(self, resource: Deck):

@@ -2,6 +2,7 @@ from typing import Literal, List, Dict, Union, Annotated, Literal, Optional
 from pydantic import BaseModel, Field, Discriminator
 
 from apps.builder.schemas import (
+    Action,
     TitleConfig,
     Trait,
     HeroPower,
@@ -11,14 +12,8 @@ PHASE_ORDER = ['start', 'refresh', 'draw', 'main',]
 
 Phase = Literal['start', 'refresh', 'draw', 'main', 'combat', 'end']
 
-from apps.builder.schemas import Action
 from apps.gameplay.schemas.effects import Effect
 
-from .events import *
-from .updates import *
-from .errors import *
-
-# ==== Game State ====
 
 class CardInPlay(BaseModel):
     card_type: Literal['creature', 'spell']
@@ -50,6 +45,7 @@ class GameState(BaseModel):
     turn: int = 1
     active: Literal["side_a", "side_b"] = "side_a"
     phase: Phase = "start"
+    event_queue: List[Dict] = Field(default_factory=list)  # Old system (deprecated)
     queue: list[Effect] = Field(default_factory=list)
     # Centralized storage of all cards in the game by their unique ID
     cards: Dict[str, CardInPlay] = Field(default_factory=dict)
@@ -100,26 +96,6 @@ class GameState(BaseModel):
 
     config: TitleConfig = Field(default_factory=TitleConfig)
 
-
-class GameSummary(BaseModel):
-    id: int
-    name: str
-
-
-class GameList(BaseModel):
-    games: List[GameSummary]
-
-
-
-# ==== Updates ====
-
-class GameUpdates(BaseModel):
-    type: Literal["game_updates"] = "game_updates"
-    updates: List[GameUpdate]
-    state: GameState
-
-
-class ResolvedEvent(BaseModel):
-    state: GameState
-    updates: list[GameUpdate]
-    errors: list[GameError]
+    @property
+    def opposite_side(self) -> Literal["side_a", "side_b"]:
+        return "side_b" if self.active == "side_a" else "side_a"

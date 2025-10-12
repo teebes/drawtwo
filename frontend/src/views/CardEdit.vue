@@ -196,7 +196,7 @@ interface CardTemplate {
   description: string
   version: number
   is_latest: boolean
-  card_type: 'minion' | 'spell'
+  card_type: 'creature' | 'spell'
   cost: number
   attack: number | null
   health: number | null
@@ -427,7 +427,7 @@ const initializeCard = (): void => {
     card.value = null
     yamlDefinition.value = `name: "New Card"
 description: "A new card description"
-card_type: "minion"
+card_type: "creature"
 cost: 1
 attack: 1
 health: 1

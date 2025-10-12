@@ -111,7 +111,7 @@ const noplay_reason = computed(() => {
         if (props.card.cost > availableEnergy) return 'Not enough energy'
     }
 
-    if (props.card.card_type === 'minion'&& props.card.exhausted) return 'Card is exhausted'
+    if (props.card.card_type === 'creature'&& props.card.exhausted) return 'Card is exhausted'
 
     return null
 })

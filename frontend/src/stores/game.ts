@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import axios from '../config/api'
 import { getBaseUrl } from '../config/api'
 import { makeInitials } from '../utils/index'
-import type { GameState, Side, CardInPlay, HeroInPlay } from '../types/game'
+import type { GameState, Side, CardInPlay, HeroInPlay, GameError } from '../types/game'
 import { useNotificationStore } from './notifications'
 
 // WebSocket status type
@@ -237,6 +237,17 @@ export const useGameStore = defineStore('game', {
       return card.cost <= energy
     },
 
+    canUseHero: (state): boolean => {
+      if (!state.viewer) return false
+      if (state.gameState.active !== state.viewer) return false
+      if (state.gameState.phase !== 'main') return false
+
+      const hero = state.gameState.heroes[state.viewer]
+      if (!hero) return false
+
+      return !hero.exhausted
+    },
+
     // Filtered updates for display
     displayUpdates: (state): any[] => {
       return state.updates.filter((update: any) => {
@@ -324,10 +335,9 @@ export const useGameStore = defineStore('game', {
       // Handle errors first
       if (data.errors && Array.isArray(data.errors)) {
         const notificationStore = this.getNotificationStore()
-        for (const error of data.errors) {
-          if (error.message) {
-            notificationStore.error(error.message)
-          }
+        for (const error of data.errors as GameError[]) {
+          // Backend always sends 'reason' for all error types (Rejected, Prevented, Fault)
+          notificationStore.error(error.reason)
         }
       }
 
@@ -394,21 +404,21 @@ export const useGameStore = defineStore('game', {
       console.log('Ending turn')
 
       this.sendWebSocketMessage({
-        type: 'end_turn_action',
+        type: 'cmd_end_turn',
       })
     },
 
     playCard(
       cardId: string | number,
       position?: number,
-      target?: { target_id: string; target_type: 'card' | 'hero' }
+      target?: { target_id: string; target_type: 'creature' | 'hero' | 'card' }
     ): void {
       if (this.gameOver.isGameOver) return
 
       console.log('Playing card', cardId, 'at position', position, 'with target', target)
 
       const message: any = {
-        type: 'action_play_card',
+        type: 'cmd_play_card',
         card_id: String(cardId),
       }
 
@@ -430,7 +440,7 @@ export const useGameStore = defineStore('game', {
       console.log('Using card', cardId, 'on card', targetCardId)
 
       this.sendWebSocketMessage({
-        type: 'action_use_card',
+        type: 'cmd_use_card',
         card_id: cardId,
         target_id: targetCardId,
         target_type: 'card',
@@ -443,7 +453,7 @@ export const useGameStore = defineStore('game', {
       console.log('Using card', cardId, 'on hero', heroId)
 
       this.sendWebSocketMessage({
-        type: 'action_use_card',
+        type: 'cmd_use_card',
         card_id: cardId,
         target_id: heroId,
         target_type: 'hero',
@@ -456,7 +466,7 @@ export const useGameStore = defineStore('game', {
       console.log('Using hero', heroId, 'on card', targetCardId)
 
       this.sendWebSocketMessage({
-        type: 'action_use_hero',
+        type: 'cmd_use_hero',
         hero_id: heroId,
         target_id: targetCardId,
         target_type: 'card',
@@ -469,7 +479,7 @@ export const useGameStore = defineStore('game', {
       console.log('Using hero', heroId, 'on hero', targetHeroId)
 
       this.sendWebSocketMessage({
-        type: 'action_use_hero',
+        type: 'cmd_use_hero',
         hero_id: heroId,
         target_id: targetHeroId,
         target_type: 'hero',

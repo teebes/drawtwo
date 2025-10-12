@@ -79,7 +79,7 @@
                       <div class="card-info flex-1 flex flex-row items-center w-full">
                         <div class="font-medium">{{ card.name }}</div>
                         <div class="text-sm text-gray-600 ml-4">
-                          <span v-if="card.card_type === 'minion'">
+                          <span v-if="card.card_type === 'creature'">
                             {{ card.attack }}/{{ card.health }}
                           </span>
                           <span v-else>Spell</span>
@@ -114,7 +114,7 @@
                   <div class="card-info flex-1 flex flex-row items-center w-full">
                     <div class="font-medium">{{ card.name }}</div>
                     <div class="text-sm text-gray-600 ml-4">
-                      <span v-if="card.card_type === 'minion'">
+                      <span v-if="card.card_type === 'creature'">
                         {{ card.attack }}/{{ card.health }}
                       </span>
                                               <span v-else>Spell</span>

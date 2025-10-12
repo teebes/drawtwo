@@ -5,10 +5,13 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
-from .models import Game
-from .schemas import GameState, GameSummary, GameList
-from .services import GameService
+
 from apps.collection.models import Deck
+from apps.gameplay.models import Game
+from apps.gameplay.schemas import GameSummary, GameList
+from apps.gameplay.schemas.game import GameState
+from apps.gameplay.services import GameService
+from apps.gameplay.tasks import advance
 
 
 @api_view(['GET'])
@@ -57,22 +60,30 @@ def current_games(request):
     return Response(GameList(games=game_summaries).model_dump())
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def game_queue(request, game_id):
+    """
+    Get the current effect queue for a game.
+    """
+    game = get_object_or_404(Game, id=game_id)
+
+    # Verify the user has access to this game
+    if game.side_a.user != request.user and game.side_b.user != request.user:
+        return Response(
+            {'error': 'You do not have access to this game'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    return Response({'queue': game.queue})
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def advance_game(request, game_id):
     game = get_object_or_404(Game, id=game_id)
-
-    """
-    if ((game.side_a.user == request.user or game.side_b.user == request.user)
-         and game.state['phase'] == 'main'):
-        # If an actual player is in a 'main' phase, we can't advance anything
-        # because the user has to take an action (either play something, attack
-        # something, or end their turn).
-        return Response(status=400)
-    """
-
-    from .tasks import step
-    step.delay(game_id)
+    from .tasks import advance
+    advance.delay(game_id)
     return Response(status=200)
 
 @api_view(['POST'])
@@ -127,6 +138,8 @@ def create_game(request):
         # Create the game using GameService
         game = GameService.start_game(player_deck, ai_deck)
         logger.debug(f"Game created successfully: {game}")
+
+        advance.delay(game.id)
 
         return Response({
             'id': game.id,

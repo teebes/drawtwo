@@ -14,7 +14,7 @@ export interface Card {
   slug: string
   name: string
   description: string
-  card_type: 'minion' | 'spell'
+  card_type: 'creature' | 'spell'
   cost: number
   attack: number
   health: number

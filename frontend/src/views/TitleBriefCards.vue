@@ -41,7 +41,7 @@
                 class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">All</option>
-                <option value="minion">Minion</option>
+                <option value="creature">Creature</option>
                 <option value="spell">Spell</option>
               </select>
             </div>
@@ -91,7 +91,7 @@ const error = ref(null)
 
 // Filter state
 const selectedFaction = ref('common')
-const selectedType = ref('minion')
+const selectedType = ref('creature')
 
 const fetchCards = async (): Promise<void> => {
 

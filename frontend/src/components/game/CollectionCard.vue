@@ -23,7 +23,7 @@
         <!-- Type line -->
         <div class="text-sm text-gray-600 dark:text-gray-400 mb-3 capitalize">
           {{ card.card_type }}
-          <span v-if="card.card_type === 'minion'" class="text-gray-500">Creature</span>
+          <span v-if="card.card_type === 'creature'" class="text-gray-500">Creature</span>
         </div>
 
         <!-- Card text -->
@@ -45,8 +45,8 @@
           </div>
         </div>
 
-        <!-- Stats (for minions) -->
-        <div v-if="card.card_type === 'minion'" class="flex justify-between items-center">
+        <!-- Stats (for creatures) -->
+        <div v-if="card.card_type === 'creature'" class="flex justify-between items-center">
           <div class="text-sm text-gray-600 dark:text-gray-400">Attack / Health</div>
           <div class="rounded bg-gray-200 px-3 py-1 text-sm font-bold text-gray-800 dark:bg-gray-700 dark:text-gray-200">
             {{ card.attack }}/{{ card.health }}
@@ -103,7 +103,7 @@ const heightClass = computed(() => {
 const borderClass = computed(() => {
   const borderMap = {
     spell: 'border-blue-500',
-    minion: 'border-yellow-500'
+    creature: 'border-yellow-500'
   }
   return borderMap[props.card.card_type]
 })
@@ -111,7 +111,7 @@ const borderClass = computed(() => {
 const backgroundClass = computed(() => {
   const bgMap = {
     spell: 'bg-gradient-to-b from-blue-50 to-blue-100 dark:from-blue-900/50 dark:to-blue-800/50',
-    minion: 'bg-gradient-to-b from-yellow-50 to-yellow-100 dark:from-yellow-900/50 dark:to-yellow-800/50'
+    creature: 'bg-gradient-to-b from-yellow-50 to-yellow-100 dark:from-yellow-900/50 dark:to-yellow-800/50'
   }
   return bgMap[props.card.card_type]
 })
@@ -119,7 +119,7 @@ const backgroundClass = computed(() => {
 const costBgClass = computed(() => {
   const costMap = {
     spell: 'bg-blue-500',
-    minion: 'bg-red-500'
+    creature: 'bg-red-500'
   }
   return costMap[props.card.card_type]
 })

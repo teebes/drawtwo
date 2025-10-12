@@ -17,7 +17,7 @@ const card: Card = {
   slug: 'test-card',
   name: 'Test Card',
   description: 'This is a test card',
-  card_type: 'minion',
+  card_type: 'creature',
   cost: 1,
   attack: 1,
   health: 1,

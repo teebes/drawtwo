@@ -32,10 +32,10 @@
                     type="button"
                     class="px-3 py-1.5 text-sm font-medium border-l border-gray-200 dark:border-gray-700 focus:outline-none"
                     :class="[
-                      typeFilter === 'minion' ? 'bg-primary-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700',
+                      typeFilter === 'creature' ? 'bg-primary-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700',
                     ]"
-                    @click="typeFilter = 'minion'"
-                  >Minions</button>
+                    @click="typeFilter = 'creature'"
+                  >Creatures</button>
                   <button
                     type="button"
                     class="px-3 py-1.5 text-sm font-medium border-l border-gray-200 dark:border-gray-700 focus:outline-none"
@@ -251,7 +251,7 @@ const cards = ref<Card[]>([])
 const cardsLoading = ref<boolean>(false)
 
 // Filters
-const typeFilter = ref<'all' | 'minion' | 'spell'>('all')
+const typeFilter = ref<'all' | 'creature' | 'spell'>('all')
 const minCostStr = ref<string>('')
 const maxCostStr = ref<string>('')
 

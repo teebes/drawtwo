@@ -530,10 +530,10 @@ const getCardName = (cardId: string): string => {
   return cardNameMap.value[card.template_slug] || card.template_slug
 }
 
-const getCardType = (cardId: string): 'minion' | 'spell' => {
+const getCardType = (cardId: string): 'creature' | 'spell' => {
   const card = gameState.value?.cards[cardId]
-  // For now, assume all cards with attack/health are minions
-  return (card?.attack !== undefined && card?.health !== undefined) ? 'minion' : 'spell'
+  // For now, assume all cards with attack/health are creatures
+  return (card?.attack !== undefined && card?.health !== undefined) ? 'creature' : 'spell'
 }
 
 const handleCardSelection = (cardId: string | null) => {

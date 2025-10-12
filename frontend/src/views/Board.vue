@@ -115,7 +115,12 @@
                 <!-- Footer -->
                 <div class="h-24 flex flex-row border-t border-gray-700">
                     <!-- Viewer Hero -->
-                    <div class="hero w-24 h-full border-r border-gray-700 flex flex-col items-center justify-center cursor-pointer" :class="{ 'bg-yellow-500/20': gameState.active === bottomSide }" @click="handleUseHero()">
+                    <div class="hero w-24 h-full border-r border-gray-700 flex flex-col items-center justify-center cursor-pointer"
+                         :class="{
+                           'bg-yellow-500/20': gameState.active === bottomSide,
+                           'opacity-50': !canUseHero
+                         }"
+                         @click="handleUseHero()">
                         <div class="hero-name">{{ ownHeroInitials }}</div>
                         <div class="hero-health">{{ ownHero?.health }}</div>
                     </div>
@@ -139,23 +144,7 @@
         <!-- Overlay Mode -->
          <main v-else class="board flex-1 flex flex-col max-w-md w-full border-r border-l border-gray-700">
             <!-- Header -->
-            <div class="flex flex-row w-full h-24 border-b border-gray-700 items-center">
-                <!-- Display Text -->
-                <div class="flex-1 text-center text-gray-400">{{ overlay_text }}</div>
-
-                <!-- Close Button-->
-                <div
-                  class="w-24 h-full flex items-center justify-center cursor-pointer group relative border-l border-gray-700"
-                  @click="overlay = null"
-                  title="Click to close overlay"
-                >
-                  <span
-                    class="text-6xl text-gray-500 group-hover:text-gray-100 select-none pointer-events-none"
-                    style="line-height: 1;"
-                  >&times;</span>
-                  <span class="sr-only">Close overlay</span>
-                </div>
-            </div>
+            <OverlayHeader :text="overlay_text" @close="overlay = null" />
 
             <!-- Hand Card Board Selection Overlay-->
             <PlayCard
@@ -200,6 +189,10 @@
                         Updates
                     </div>
 
+                    <div v-if="canEditTitle" class="text-2xl cursor-pointer" @click="handleClickDebug">
+                        Debug
+                    </div>
+
                     <div class="text-2xl">
                         <router-link :to="{ name: 'Title', params: { slug: titleStore.titleSlug } }">
                             Exit Game
@@ -218,6 +211,9 @@
                 </div>
             </div>
 
+            <!-- Debug Overlay -->
+            <DebugOverlay v-if="overlay == 'debug'" :game-id="gameId" />
+
          </main>
 
         <!-- -->
@@ -235,6 +231,7 @@
 import { watch, computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import type { CardInPlay } from '../types/game'
+import { useAuthStore } from '../stores/auth'
 import { useTitleStore } from '../stores/title'
 import { useGameStore } from '../stores/game'
 import { storeToRefs } from 'pinia'
@@ -246,8 +243,11 @@ import PlayCard from '../components/game/board/PlayCard.vue'
 import UseAction from '../components/game/board/UseAction.vue'
 import GameOverOverlay from '../components/game/board/GameOverOverlay.vue'
 import Update from '../components/game/board/Update.vue'
+import OverlayHeader from '../components/game/board/OverlayHeader.vue'
+import DebugOverlay from '../components/game/board/DebugOverlay.vue'
 
 const route = useRoute()
+const authStore = useAuthStore()
 const titleStore = useTitleStore()
 const gameStore = useGameStore()
 
@@ -274,14 +274,15 @@ const {
   opposingBoard,
   topSide,
   bottomSide,
-  displayUpdates
+  displayUpdates,
+  canUseHero
 } = storeToRefs(gameStore)
 
 // Local UI state only
 const selected_hand_card = ref<string | null>(null)
 const selected_use_card = ref<CardInPlay | null>(null)
 const selected_use_hero = ref<{ hero_id: string } | null>(null)
-const overlay = ref<'select_hand_card' | 'use_action' | 'menu' | 'updates' | null>(null)
+const overlay = ref<'select_hand_card' | 'use_action' | 'menu' | 'updates' | 'debug' | null>(null)
 const overlay_text = ref<string | null>(null)
 const useCardMode = ref<'use' | 'select'>('use')
 const allowedTargetTypes = ref<Array<'card' | 'hero' | 'any'>>(['any'])
@@ -292,6 +293,16 @@ const pendingPlay = ref<{ card_id: string; position: number } | null>(null)
 const showingGameOver = ref(false)
 
 const title = computed(() => titleStore.currentTitle)
+
+// Check if user can edit this title (for debug features)
+const canEditTitle = computed(() => {
+  return authStore.isAuthenticated &&
+         title.value &&
+         title.value.can_edit === true
+})
+
+// Game ID for debug overlay
+const gameId = computed(() => route.params.game_id as string)
 
 // Helper methods from store
 const get_card = (card_id: string | number) => {
@@ -310,13 +321,15 @@ const handleEndTurn = () => {
 }
 
 const handleSelectHandCard = (card_id: string) => {
+    console.log('handleSelectHandCard', card_id)
     const card = get_card(card_id)
     if (!card) return
 
-    // Spells or minions with battlecry targeting may require target first/after placement
+    // Spells or creatures with battlecry targeting may require target first/after placement
     if (card.card_type === 'spell') {
         selected_hand_card.value = card_id
         if (requiresTargetOnPlay(card)) {
+            console.log('requiresTargetOnPlay', card)
             // Open target selection directly for spells
             pendingPlay.value = { card_id, position: 0 }
             allowedTargetTypes.value = getAllowedTargets(card)
@@ -331,7 +344,7 @@ const handleSelectHandCard = (card_id: string) => {
         return
     }
 
-    // Default: show placement overlay for minions
+    // Default: show placement overlay for creatures
     overlay.value = 'select_hand_card'
     overlay_text.value = 'Play Card'
     selected_hand_card.value = card_id
@@ -349,6 +362,7 @@ const handleUseCard = (card_id: string | number) => {
 
 const handleUseHero = () => {
     if (!ownHero.value) return
+    // Always allow clicking to view hero details, UseAction will show error if exhausted
     overlay.value = 'use_action'
     overlay_text.value = 'Use Hero'
     selected_use_card.value = null
@@ -368,6 +382,11 @@ const handleClickUpdates = () => {
     overlay_text.value = "Updates"
 }
 
+const handleClickDebug = () => {
+    overlay.value = 'debug'
+    overlay_text.value = "Debug"
+}
+
 // When PlayCard determines a target is required
 const onPlayTargetRequired = (payload: { card_id: string; position: number; allowedTargets: Array<'card' | 'hero' | 'any'> }) => {
     pendingPlay.value = { card_id: payload.card_id, position: payload.position }
@@ -379,7 +398,7 @@ const onPlayTargetRequired = (payload: { card_id: string; position: number; allo
 }
 
 // Receive target from UseCard in selection mode and submit play with target
-const onTargetSelected = (target: { target_type: 'card' | 'hero'; target_id: string }) => {
+const onTargetSelected = (target: { target_type: 'card' | 'hero' | 'creature'; target_id: string }) => {
     if (!pendingPlay.value) return
     const { card_id, position } = pendingPlay.value
     gameStore.playCard(card_id, position, target)
@@ -461,7 +480,7 @@ function getAllowedTargets(card: any): Array<'card' | 'hero' | 'any'> {
     const consider = traits.find((t: any) => t.type === 'battlecry') || { actions: [] }
     for (const action of consider.actions || []) {
         if (action.action === 'damage') {
-            if (action.target === 'minion' || action.target === 'enemy') {
+            if (action.target === 'creature' || action.target === 'enemy') {
                 allowed.add('card')
             }
             if (action.target === 'hero' || action.target === 'enemy') {

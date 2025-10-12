@@ -146,7 +146,7 @@ function hasTargetingActions(traits: any[]): boolean {
         const actions = trait.actions || []
         for (const action of actions) {
             if (action.action === 'damage') {
-                // damage typically needs a target (hero or minion or enemy)
+                // damage typically needs a target (hero or creature or enemy)
                 return true
             }
         }
@@ -160,7 +160,7 @@ function getAllowedTargets(card: any): Array<'card' | 'hero' | 'any'> {
     const consider = traits.find((t: any) => t.type === 'battlecry') || { actions: [] }
     for (const action of consider.actions || []) {
         if (action.action === 'damage') {
-            if (action.target === 'minion' || action.target === 'enemy') {
+            if (action.target === 'creature' || action.target === 'enemy') {
                 allowed.add('card')
             }
             if (action.target === 'hero' || action.target === 'enemy') {

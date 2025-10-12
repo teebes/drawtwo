@@ -6,10 +6,13 @@ and returns:
 * events
 """
 
+"""
+from dataclasses import dataclass
 import random
 from typing import List
 
 
+from apps.gameplay.engine.dispatcher import resolve
 # Gameplay events
 from apps.gameplay.schemas.events import (
     CardRetaliationEvent,
@@ -18,7 +21,6 @@ from apps.gameplay.schemas.events import (
     DrawCardEvent,
     DrawPhaseEvent,
     EndTurnEvent,
-    GameEvent,
     MainPhaseEvent,
     PlayCardEvent,
     RefreshPhaseEvent,
@@ -26,7 +28,6 @@ from apps.gameplay.schemas.events import (
     UseCardEvent,
     UseHeroEvent,
 )
-
 # Gameplay updates
 from apps.gameplay.schemas.updates import (
     CardDestroyedUpdate,
@@ -39,26 +40,28 @@ from apps.gameplay.schemas.updates import (
     PlayCardUpdate,
     RefreshPhaseUpdate,
 )
-
 # Gameplay errors
 from apps.gameplay.schemas.errors import EnergyError
 
-from .schemas import (
+from apps.gameplay.schemas.effects import Effect
+from apps.gameplay.schemas.engine import Result, Success, Prevented, Rejected, Fault
+from apps.gameplay.schemas.game import PHASE_ORDER
+
+from apps.gameplay.schemas import (
     CardDamageUpdate,
     GameState,
     GameUpdate,
     HeroDamageUpdate,
     ResolvedEvent,
     CardInPlay)
+"""
 
-from apps.gameplay.traits import apply_traits
-
-def resolve_event(state: GameState) -> ResolvedEvent:
+def resolve_event(state):
     """
     Resolve an event and return the updated state, any new events to process,
     and any updates to send to the client.
     """
-
+    return
     event = state.event_queue.pop(0)
 
     print("\033[92m# %s #\033[0m" % event)
@@ -111,8 +114,8 @@ def resolve_event(state: GameState) -> ResolvedEvent:
     resolved_event.state = new_state
     return resolved_event
 
-
-def handle_start_game(state: GameState, event:GameEvent) -> ResolvedEvent:
+"""
+def handle_start_game(state: GameState, event) -> ResolvedEvent:
     state.phase = "start"
 
     hand_size = state.config.hand_start_size
@@ -147,7 +150,7 @@ def handle_refresh_phase(state: GameState, event: RefreshPhaseEvent) -> Resolved
     )
 
 
-def handle_draw_phase(state: GameState, event: GameEvent) -> ResolvedEvent:
+def handle_draw_phase(state: GameState, event) -> ResolvedEvent:
     state.phase = "draw"
     events = [DrawCardEvent(side=event.side), MainPhaseEvent(side=event.side)]
     updates = [DrawPhaseUpdate(side=event.side)]
@@ -159,7 +162,7 @@ def handle_draw_phase(state: GameState, event: GameEvent) -> ResolvedEvent:
     )
 
 
-def handle_main_phase(state: GameState, event: GameEvent) -> ResolvedEvent:
+def handle_main_phase(state: GameState, event) -> ResolvedEvent:
     state.phase = "main"
 
     events = []
@@ -177,7 +180,7 @@ def handle_main_phase(state: GameState, event: GameEvent) -> ResolvedEvent:
     )
 
 
-def handle_end_turn(state: GameState, event: GameEvent) -> ResolvedEvent:
+def handle_end_turn(state: GameState, event) -> ResolvedEvent:
 
     # Mark all cards on the board as not exhausted
     for card_on_board in state.board[event.side]:
@@ -201,7 +204,7 @@ def handle_end_turn(state: GameState, event: GameEvent) -> ResolvedEvent:
     )
 
 
-def handle_draw_card(state: GameState, event: GameEvent) -> ResolvedEvent:
+def handle_draw_card(state: GameState, event) -> ResolvedEvent:
     deck = state.decks[event.side]
 
     try:
@@ -264,10 +267,10 @@ def handle_play_card(state: GameState, event: PlayCardEvent) -> ResolvedEvent:
 
     updates.append(play_card_update)
 
-    trait_events, trait_updates = apply_traits(state, play_card_update)
-
-    events.extend(trait_events)
-    updates.extend(trait_updates)
+    # NOTE: Trait processing moved to new engine system (services.py)
+    # trait_events, trait_updates = apply_traits(state, play_card_update)
+    # events.extend(trait_events)
+    # updates.extend(trait_updates)
 
     return ResolvedEvent(
         state=state,
@@ -277,7 +280,7 @@ def handle_play_card(state: GameState, event: PlayCardEvent) -> ResolvedEvent:
     )
 
 
-def handle_use_card(state: GameState, event: GameEvent) -> ResolvedEvent:
+def handle_use_card(state: GameState, event) -> ResolvedEvent:
     deal_damage_event = DealDamageEvent(
         side=event.side,
         damage_type="physical",
@@ -374,13 +377,14 @@ def handle_deal_damage(state: GameState, event: DealDamageEvent) -> ResolvedEven
             state.board[opposing_side].remove(event.target_id)
 
             # Deathrattle
-            card_destroy_update = CardDestroyedUpdate(
-                side=event.side,
-                card_id=event.target_id
-            )
-            trait_events, trait_updates = apply_traits(state, card_destroy_update)
-            events.extend(trait_events)
-            updates.extend(trait_updates)
+            # NOTE: Trait processing moved to new engine system (services.py)
+            # card_destroy_update = CardDestroyedUpdate(
+            #     side=event.side,
+            #     card_id=event.target_id
+            # )
+            # trait_events, trait_updates = apply_traits(state, card_destroy_update)
+            # events.extend(trait_events)
+            # updates.extend(trait_updates)
         else:
             # Determine if we need to retaliate
             should_retaliate = (
@@ -419,7 +423,7 @@ def handle_deal_damage(state: GameState, event: DealDamageEvent) -> ResolvedEven
     )
 
 
-def handle_card_retaliation(state: GameState, event: GameEvent) -> ResolvedEvent:
+def handle_card_retaliation(state: GameState, event) -> ResolvedEvent:
     source_card_id = event.card_id
     source_card = state.cards[source_card_id]
     target_card_id = event.target_id
@@ -453,7 +457,7 @@ def handle_choose_ai_move(state: GameState, event: ChooseAIMoveEvent) -> Resolve
     # See if there's a card that can be played from hand to board
     for card_id in state.hands[state.active]:
         card = state.cards[card_id]
-        if card.cost <= mana_available and card.card_type == 'minion':
+        if card.cost <= mana_available and card.card_type == 'creature':
             card_id_to_play = card_id
             play_event = PlayCardEvent(
                 side=state.active,
@@ -512,3 +516,4 @@ def handle_choose_ai_move(state: GameState, event: ChooseAIMoveEvent) -> Resolve
         updates=[],
         errors=[]
     )
+"""

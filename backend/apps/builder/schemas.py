@@ -16,25 +16,25 @@ class Encounter(BaseModel):
 # Ingestable data
 
 
-# Card Actions
+# Actions
 
-class CardActionBase(BaseModel):
+class ActionBase(BaseModel):
     action: str
 
 
-class CardActionDraw(CardActionBase):
+class DrawAction(ActionBase):
     action: Literal['draw'] = 'draw'
     amount: int = 1
 
 
-class CardActionDamage(CardActionBase):
+class DamageAction(ActionBase):
     action: Literal['damage'] = 'damage'
     amount: int
-    target: Literal['hero', 'minion', 'enemy'] = 'minion'
+    target: Literal['hero', 'creature', 'enemy'] = 'creature'
 
 
-CardAction = Annotated[
-    Union[CardActionDraw, CardActionDamage],
+Action = Annotated[
+    Union[DrawAction, DamageAction],
     Discriminator('action')
 ]
 
@@ -43,7 +43,7 @@ CardAction = Annotated[
 
 class TraitBase(BaseModel):
     type: str
-    actions: List[CardAction] = Field(default_factory=list)
+    actions: List[Action] = Field(default_factory=list)
 
 
 class Charge(TraitBase):
@@ -85,7 +85,7 @@ class ResourceBase(BaseModel):
 class Card(ResourceBase):
     id: Optional[int] = None
     type: Literal['card'] = 'card'
-    card_type: Literal['minion', 'spell']
+    card_type: Literal['creature', 'spell']
     slug: str
     name: str
     description: str
@@ -104,9 +104,9 @@ class Deck(ResourceBase):
 
 
 class HeroPower(BaseModel):
-    name: str
+    name: str = 'Power'
     description: Optional[str] = None
-    actions: List[CardAction] = Field(default_factory=list)
+    actions: List[Action] = Field(default_factory=list)
 
 
 class Hero(ResourceBase):
