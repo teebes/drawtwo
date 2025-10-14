@@ -1,4 +1,6 @@
 import random
+import traceback
+import uuid
 
 from django.db import transaction, DatabaseError
 from pydantic import TypeAdapter, ValidationError
@@ -19,6 +21,7 @@ from apps.gameplay.schemas.game import (
     HeroInPlay,
 )
 from apps.gameplay.schemas.commands import (
+    AttackCommand,
     Command,
     PlayCardCommand,
     EndTurnCommand,
@@ -26,6 +29,7 @@ from apps.gameplay.schemas.commands import (
     UseHeroCommand,
 )
 from apps.gameplay.schemas.effects import (
+    AttackEffect,
     DamageEffect,
     DrawEffect,
     Effect,
@@ -36,7 +40,13 @@ from apps.gameplay.schemas.effects import (
     UseHeroEffect,
 )
 from apps.gameplay.schemas.engine import Success, Result, Prevented, Rejected, Fault
-from apps.gameplay.schemas.events import GameOverEvent
+from apps.gameplay.schemas.events import (
+    ActionableEvent,
+    Event,
+    GameOverEvent,
+    UseHeroEvent,
+)
+
 
 # Moved to avoid circular import - imported where needed
 
@@ -165,7 +175,7 @@ class GameService:
 
     @staticmethod
     @transaction.atomic
-    def advance(game_id: int):
+    def step(game_id: int):
 
         try:
             game = (Game.objects
@@ -175,7 +185,9 @@ class GameService:
             return
 
         print("==== STEP FUNCTION with queue: ====")
-        print(game.queue)
+        for queue_item in game.queue or []:
+            print(queue_item)
+        print("===================================")
 
         if game.status == Game.GAME_STATUS_ENDED: return
         game.status = Game.GAME_STATUS_IN_PROGRESS
@@ -197,67 +209,93 @@ class GameService:
                 print(f"Invalid effect: {effect}")
                 continue
 
-            # Effect engine resolution
-            result = resolve(effect, game_state)
-            effects_processed += 1
+            # Wrap the entire effect processing in a try-except to catch any unhandled exceptions
+            try:
+                # Effect engine resolution
+                result = resolve(effect, game_state)
+                effects_processed += 1
 
-            # Handle different result types
-            if isinstance(result, Success):
-                # Update state and process normally
-                game_state = result.new_state
+                # Handle different result types
+                if isinstance(result, Success):
+                    # Update state and process normally
+                    game_state = result.new_state
 
-                # Terminal Check
-                for event in result.events:
-                    if isinstance(event, GameOverEvent):
-                        game.status = Game.GAME_STATUS_ENDED
-                        game.winner = getattr(game, event.winner)
-                        game.save(update_fields=["status", "winner"])
-                        game_state.winner = event.winner
-                        game_state.queue = []
+                    # Terminal Check
+                    for event in result.events:
+                        if isinstance(event, GameOverEvent):
+                            game.status = Game.GAME_STATUS_ENDED
+                            game.winner = getattr(game, event.winner)
+                            game.save(update_fields=["status", "winner"])
+                            game_state.winner = event.winner
+                            game_state.queue = []
+                            break
+
+                    # Enqueue child effects (depth-first)
+                    if result.child_effects:
+                        game.enqueue(result.child_effects, trigger=False, prepend=True)
+
+                    all_events.extend(result.events)
+
+                    # Process trait triggers for each event
+                    from apps.gameplay import traits
+                    for event in result.events:
+                        print('event: %s' % event)
+                        trait_result = traits.apply(game_state, event)
+                        if trait_result.child_effects:
+                            game.enqueue(trait_result.child_effects, trigger=False, prepend=True)
+
+                elif isinstance(result, (Prevented, Rejected)):
+                    # Domain-level prevention or rejection
+                    # State doesn't change, but we send user feedback and emit any events
+                    print(f"Effect {result.type}: {result.reason}")
+                    all_events.extend(result.events)
+
+                    # Add user-visible error message
+                    all_errors.append({
+                        'type': result.type,
+                        'reason': result.reason,
+                        'details': result.details,
+                    })
+                    # Continue processing (these are not critical failures)
+
+                elif isinstance(result, Fault):
+                    # System/engine error - this is a bug
+                    print(f"⚠️  FAULT: {result.reason} (error_id: {result.error_id})")
+                    all_errors.append({
+                        'error_id': result.error_id,
+                        'reason': result.reason,
+                        'details': result.details,
+                        'effect': effect.model_dump(mode="json"),
+                    })
+
+                    # If unrecoverable, stop processing to avoid cascading failures
+                    if not result.retryable:
+                        print(f"Non-retryable fault encountered, stopping effect processing")
                         break
+                    # Otherwise continue processing (retryable faults)
 
-                # Enqueue child effects (depth-first)
-                if result.child_effects:
-                    game.enqueue(result.child_effects, trigger=False, prepend=True)
+            except Exception as e:
+                # Catch any unhandled exceptions and convert them to Fault responses
+                error_id = str(uuid.uuid4())
+                print(f"⚠️  UNHANDLED EXCEPTION: {str(e)} (error_id: {error_id})")
+                print(traceback.format_exc())
 
-                all_events.extend(result.events)
-
-                # Process trait triggers for each event
-                from apps.gameplay import traits
-                for event in result.events:
-                    trait_result = traits.apply(game_state, event)
-                    if trait_result.child_effects:
-                        game.enqueue(trait_result.child_effects, trigger=False, prepend=True)
-
-            elif isinstance(result, (Prevented, Rejected)):
-                # Domain-level prevention or rejection
-                # State doesn't change, but we send user feedback and emit any events
-                print(f"Effect {result.type}: {result.reason}")
-                all_events.extend(result.events)
-
-                # Add user-visible error message
+                # Create a Fault response
                 all_errors.append({
-                    'type': result.type,
-                    'reason': result.reason,
-                    'details': result.details,
-                })
-                # Continue processing (these are not critical failures)
-
-            elif isinstance(result, Fault):
-                # System/engine error - this is a bug
-                print(f"⚠️  FAULT: {result.reason} (error_id: {result.error_id})")
-                all_errors.append({
-                    'error_id': result.error_id,
-                    'reason': result.reason,
-                    'details': result.details,
+                    'type': 'outcome_fault',
+                    'error_id': error_id,
+                    'reason': f'System error: {type(e).__name__}',
+                    'details': {
+                        'exception_type': type(e).__name__,
+                        'exception_message': str(e),
+                        'traceback': traceback.format_exc(),
+                    },
                     'effect': effect.model_dump(mode="json"),
                 })
 
-                # If unrecoverable, stop processing to avoid cascading failures
-                if not result.retryable:
-                    print(f"Non-retryable fault encountered, stopping effect processing")
-                    break
-                # Otherwise continue processing (retryable faults)
+                # Stop processing to avoid cascading failures
+                print(f"Stopping effect processing due to unhandled exception")
+                break
 
         # Convert events to updates and persist them
         all_updates = GameService._events_to_updates(all_events)
@@ -296,8 +334,121 @@ class GameService:
 
         # Continue processing if there are more effects in queue
         if len(game.queue) > 0:
-            from apps.gameplay.tasks import advance
-            advance.apply_async(args=[game_id], countdown=0.1)
+            from apps.gameplay.tasks import step
+            step.apply_async(args=[game_id], countdown=0.1)
+
+
+    @staticmethod
+    def process_command(game_id: int, command: dict, side):
+        try:
+            game = Game.objects.get(id=game_id)
+        except Game.DoesNotExist:
+            raise ValueError(f"Game with id {game_id} does not exist")
+
+        game_state = GameState.model_validate(game.state)
+        effects = GameService.compile_cmd(game_state, command, side)
+        game.enqueue(effects)
+
+    @staticmethod
+    def compile_cmd(game_state: GameState, command: dict, side) -> list[Effect]:
+        "Translates a Command into a list of Effect objects"
+
+        if side != game_state.active:
+            raise ValueError(f"It is not your turn.")
+
+        effects = []
+
+        try:
+            command = TypeAdapter(Command).validate_python(command)
+        except ValidationError as e:
+            # Extract the command type that was sent
+            sent_type = command.get('type', 'unknown')
+            raise ValueError(f"Invalid command type '{sent_type}'")
+
+        # Because we're transitioning to a system where the cards on the
+        # board are creatures and not just cards, we make the transition
+        # easier for the frontend by translating the target when possible.
+        target_type = getattr(command, 'target_type', None)
+        if target_type == "card":
+            target_type = "creature"
+
+        if isinstance(command, PlayCardCommand):
+            effects.append(PlayEffect(
+                side=game_state.active,
+                source_id=command.card_id,
+                position=command.position,
+                target_type=target_type,
+                target_id=command.target_id,
+            ))
+        elif isinstance(command, EndTurnCommand):
+            effects.append(EndTurnEffect(
+                side=game_state.active,
+            ))
+        elif (isinstance(command, UseCardCommand)
+              or isinstance(command, AttackCommand)):
+              effects.append(AttackEffect(
+                side=game_state.active,
+                card_id=command.card_id,
+                target_type=target_type,
+                target_id=command.target_id,
+              ))
+            # effects.append(UseCardEffect(
+            #     side=game_state.active,
+            #     card_id=command.card_id,
+            #     target_type=target_type,
+            #     target_id=command.target_id,
+            # ))
+        elif isinstance(command, UseHeroCommand):
+            effects.append(UseHeroEffect(
+                side=game_state.active,
+                source_id=command.hero_id,
+                target_type=target_type,
+                target_id=command.target_id,
+            ))
+        else:
+            raise ValueError(f"Invalid command: {command}")
+
+        print('effects: %s' % effects)
+
+        return effects
+
+    @staticmethod
+    def compile_action(
+        state: GameState,
+        event: ActionableEvent,
+        action: Action
+    ) -> Effect:
+        if isinstance(action, DrawAction):
+            return DrawEffect(
+                side=state.active,
+                amount=action.amount,
+            )
+
+        # This can be called by 3 things:
+        # * playing a card with a battlecry
+        # * using a hero power
+        # * dealing damage with a spell
+        if isinstance(action, DamageAction):
+            if action.target == "hero":
+                target_type = "hero"
+                target_id = state.heroes[state.opposite_side].hero_id
+            elif action.target == "creature":
+                target_type = "card"
+                target_id = event.target_id or state.board[state.opposite_side][0]
+            else:
+                target_type = event.target_type
+                target_id = event.target_id
+            return DamageEffect(
+                side=state.active,
+                damage_type="physical",
+                source_type=event.source_type,
+                source_id=event.source_id,
+                target_type=target_type,
+                target_id=target_id,
+                damage=action.amount,
+                retaliate=False,
+            )
+        raise ValueError(f"Invalid action: {action}")
 
     @staticmethod
     def choose_ai_move(state: GameState, script: DeckScript) -> Effect | None:
@@ -330,7 +481,7 @@ class GameService:
                 target_type = "hero"
                 target_id = state.heroes[opposing_side].hero_id
             elif script.strategy == "control":
-                target_type = "card"
+                target_type = "creature"
                 target_id = random.choice(state.board[opposing_side])
             else:
                 # 50/50 chance to attack hero or card
@@ -338,107 +489,20 @@ class GameService:
                     target_type = "hero"
                     target_id = state.heroes[opposing_side].hero_id
                 else:
-                    target_type = "card"
+                    target_type = "creature"
                     try:
                         target_id = random.choice(state.board[opposing_side])
                     except IndexError:
                         target_type = "hero"
                         target_id = state.heroes[opposing_side].hero_id
 
-            return UseCardEffect(
+            return AttackEffect(
                 side=state.active,
                 card_id=card_id,
                 target_type=target_type,
                 target_id=target_id)
 
         return
-
-    @staticmethod
-    def process_command(game_id: int, command: dict, side):
-        try:
-            game = Game.objects.get(id=game_id)
-        except Game.DoesNotExist:
-            raise ValueError(f"Game with id {game_id} does not exist")
-
-        game_state = GameState.model_validate(game.state)
-        print('state is good')
-        effects = GameService.compile(game_state, command, side)
-        print('effects: %s' % effects)
-        game.enqueue(effects)
-
-    @staticmethod
-    def compile(game_state: GameState, command: dict, side) -> list[Effect]:
-        "Translates a Command into a list of Effect objects"
-
-        if side != game_state.active:
-            raise ValueError(f"It is not your turn.")
-
-        effects = []
-
-        try:
-            command = TypeAdapter(Command).validate_python(command)
-        except ValidationError as e:
-            # Extract the command type that was sent
-            sent_type = command.get('type', 'unknown')
-            raise ValueError(f"Invalid command type '{sent_type}'")
-
-        # Because we're transitioning to a system where the cards on the
-        # board are creatures and not just cards, we make the transition
-        # easier for the frontend by translating the target when possible.
-        target_type = command.target_type
-        if target_type == "card":
-            target_type = "creature"
-
-        if isinstance(command, PlayCardCommand):
-            effects.append(PlayEffect(
-                side=game_state.active,
-                source_id=command.card_id,
-                position=command.position,
-                target_type=target_type,
-                target_id=command.target_id,
-            ))
-        elif isinstance(command, EndTurnCommand):
-            effects.append(EndTurnEffect(
-                side=game_state.active,
-            ))
-        elif isinstance(command, UseCardCommand):
-            effects.append(UseCardEffect(
-                side=game_state.active,
-                card_id=command.card_id,
-                target_type=target_type,
-                target_id=command.target_id,
-            ))
-        elif isinstance(command, UseHeroCommand):
-            effects.append(UseHeroEffect(
-                side=game_state.active,
-                source_id=command.hero_id,
-                target_type=target_type,
-                target_id=command.target_id,
-            ))
-        else:
-            raise ValueError(f"Invalid command: {command}")
-
-        return effects
-
-    @staticmethod
-    def compile_action(game_state: GameState, action: Action) -> Effect:
-        if isinstance(action, DrawAction):
-            return DrawEffect(
-                side=game_state.active,
-                amount=action.amount,
-            )
-        elif isinstance(action, DamageAction):
-            return DamageEffect(
-                side=game_state.active,
-                damage_type="physical",
-                source_type="card",
-                source_id=action.source_id,
-                target_type=action.target_type,
-                target_id=action.target_id,
-                damage=action.amount,
-                retaliate=False,
-            )
-        raise ValueError(f"Invalid action: {action}")
 
     @staticmethod
     def _events_to_updates(events):
@@ -463,7 +527,7 @@ class GameService:
             elif event.type == "event_play":
                 updates.append(PlayCardUpdate(
                     side=event.side,
-                    card_id=event.card_id,
+                    card_id=event.source_id,
                     position=event.position,
                     target_type=event.target_type,
                     target_id=event.target_id,

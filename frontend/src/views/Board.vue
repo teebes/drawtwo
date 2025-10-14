@@ -154,32 +154,20 @@
                 :own-board="ownBoard"
                 :own-energy="ownEnergy"
                 @target-required="onPlayTargetRequired"
-                @close-overlay="() => {
-                    overlay = null
-                    selected_hand_card = null
-                    overlay_text = null
-                }"
+                @close-overlay="closeOverlay"
             />
 
-            <UseAction
-                v-if="overlay == 'use_action'"
-                :game-state="gameState"
-                :initiator="useInitiator"
-                :card="useInitiator?.type === 'card' ? selected_use_card : null"
-                :own-board="ownBoard"
+            <!-- Target Selection Overlays -->
+            <Target
+                v-if="overlay == 'target_spell' || overlay == 'target_battlecry' || overlay == 'target_attack' || overlay == 'target_hero'"
                 :opposing-board="opposingBoard"
                 :opposing-hero="opposingHero"
-                :opposing-hero-initials="opposingHeroInitials"
-                :mode="useCardMode"
-                :allowed-target-types="allowedTargetTypes"
+                :allowed-target-types="targetingConfig.allowedTypes"
+                :source-card="targetingConfig.sourceCard"
+                :error-message="targetingConfig.errorMessage"
+                :title="targetingConfig.title"
                 @target-selected="onTargetSelected"
-                @close-overlay="() => {
-                    overlay = null
-                    selected_use_card = null
-                    selected_use_hero = null
-                    overlay_text = null
-                }"
-
+                @cancelled="closeOverlay"
             />
 
             <!-- Menu Overlay -->
@@ -240,7 +228,7 @@ import GameCard from '../components/game/GameCard.vue'
 import GameButton from '../components/ui/GameButton.vue'
 // Board Components
 import PlayCard from '../components/game/board/PlayCard.vue'
-import UseAction from '../components/game/board/UseAction.vue'
+import Target from '../components/game/board/Target.vue'
 import GameOverOverlay from '../components/game/board/GameOverOverlay.vue'
 import Update from '../components/game/board/Update.vue'
 import OverlayHeader from '../components/game/board/OverlayHeader.vue'
@@ -280,12 +268,16 @@ const {
 
 // Local UI state only
 const selected_hand_card = ref<string | null>(null)
-const selected_use_card = ref<CardInPlay | null>(null)
-const selected_use_hero = ref<{ hero_id: string } | null>(null)
-const overlay = ref<'select_hand_card' | 'use_action' | 'menu' | 'updates' | 'debug' | null>(null)
+const overlay = ref<'select_hand_card' | 'target_spell' | 'target_battlecry' | 'target_attack' | 'target_hero' | 'menu' | 'updates' | 'debug' | null>(null)
 const overlay_text = ref<string | null>(null)
-const useCardMode = ref<'use' | 'select'>('use')
-const allowedTargetTypes = ref<Array<'card' | 'hero' | 'any'>>(['any'])
+
+// Targeting state
+interface TargetingState {
+    sourceType: 'creature' | 'hero' | 'spell'
+    sourceId: string
+    allowedTypes: 'creature' | 'hero' | 'both'
+}
+const targetingState = ref<TargetingState | null>(null)
 
 // Pending play context when a target is required (battlecry/spell)
 const pendingPlay = ref<{ card_id: string; position: number } | null>(null)
@@ -313,6 +305,54 @@ const isHandCardActive = (card_id: string | number) => {
     return gameStore.isHandCardActive(String(card_id))
 }
 
+// Computed targeting configuration
+const targetingConfig = computed(() => {
+    if (!targetingState.value) {
+        return {
+            allowedTypes: 'both' as const,
+            sourceCard: null,
+            errorMessage: null,
+            title: 'Select Target'
+        }
+    }
+
+    const { sourceType, sourceId, allowedTypes } = targetingState.value
+    let sourceCard: CardInPlay | null = null
+    let errorMessage: string | null = null
+    let title = 'Select Target'
+
+    // Get source card if applicable
+    if (sourceType === 'creature' || sourceType === 'spell') {
+        sourceCard = get_card(sourceId) || null
+    }
+
+    // Validate based on source type
+    if (sourceType === 'creature' && sourceCard) {
+        if (sourceCard.exhausted) {
+            errorMessage = 'Creature is exhausted'
+        }
+        title = 'Attack Target'
+    } else if (sourceType === 'hero') {
+        if (!canUseHero.value) {
+            errorMessage = 'Hero cannot be used'
+        }
+        title = 'Use Hero Power'
+    } else if (sourceType === 'spell' && sourceCard) {
+        const availableEnergy = ownEnergy.value
+        if (sourceCard.cost > availableEnergy) {
+            errorMessage = 'Not enough energy'
+        }
+        title = 'Cast Spell'
+    }
+
+    return {
+        allowedTypes,
+        sourceCard,
+        errorMessage,
+        title
+    }
+})
+
 /* Handlers */
 
 const handleEndTurn = () => {
@@ -325,18 +365,22 @@ const handleSelectHandCard = (card_id: string) => {
     const card = get_card(card_id)
     if (!card) return
 
-    // Spells or creatures with battlecry targeting may require target first/after placement
+    // Spells require target selection
     if (card.card_type === 'spell') {
         selected_hand_card.value = card_id
         if (requiresTargetOnPlay(card)) {
             console.log('requiresTargetOnPlay', card)
-            // Open target selection directly for spells
+            // Open target selection for spells
+            // After target is selected, onTargetSelected() handles the execution
+            // via gameStore.playCard()
             pendingPlay.value = { card_id, position: 0 }
-            allowedTargetTypes.value = getAllowedTargets(card)
-            selected_use_card.value = card
-            useCardMode.value = 'select'
-            overlay.value = 'use_action'
-            overlay_text.value = 'Use Card'
+            targetingState.value = {
+                sourceType: 'spell',
+                sourceId: card_id,
+                allowedTypes: convertAllowedTargets(getAllowedTargets(card))
+            }
+            overlay.value = 'target_spell'
+            overlay_text.value = 'Cast Spell'
             return
         }
         // If no target required, just play immediately
@@ -350,26 +394,31 @@ const handleSelectHandCard = (card_id: string) => {
     selected_hand_card.value = card_id
 }
 
-// Card placement now handled directly by PlayCard component
-
+// Creature attack handler
 const handleUseCard = (card_id: string | number) => {
-    overlay.value = 'use_action'
-    overlay_text.value = "Use Card"
-    selected_use_card.value = get_card(card_id) || null
-    selected_use_hero.value = null
-    useCardMode.value = 'use'
+    const card = get_card(card_id)
+    if (!card) return
+
+    targetingState.value = {
+        sourceType: 'creature',
+        sourceId: String(card_id),
+        allowedTypes: 'both'  // Creatures can attack both heroes and other creatures
+    }
+    overlay.value = 'target_attack'
+    overlay_text.value = 'Attack'
 }
 
+// Hero power handler
 const handleUseHero = () => {
     if (!ownHero.value) return
-    // Always allow clicking to view hero details, UseAction will show error if exhausted
-    overlay.value = 'use_action'
-    overlay_text.value = 'Use Hero'
-    selected_use_card.value = null
-    selected_use_hero.value = { hero_id: ownHero.value.hero_id }
-    useCardMode.value = 'use'
-    // For now, allow targeting both card and hero
-    allowedTargetTypes.value = ['card', 'hero']
+
+    targetingState.value = {
+        sourceType: 'hero',
+        sourceId: ownHero.value.hero_id,
+        allowedTypes: 'both'  // Heroes can target both creatures and heroes
+    }
+    overlay.value = 'target_hero'
+    overlay_text.value = 'Use Hero Power'
 }
 
 const handleMenuClick = () => {
@@ -387,30 +436,77 @@ const handleClickDebug = () => {
     overlay_text.value = "Debug"
 }
 
-// When PlayCard determines a target is required
+// When PlayCard determines a target is required (battlecry after placement)
+// After target is selected, onTargetSelected() handles the execution via gameStore.playCard()
 const onPlayTargetRequired = (payload: { card_id: string; position: number; allowedTargets: Array<'card' | 'hero' | 'any'> }) => {
     pendingPlay.value = { card_id: payload.card_id, position: payload.position }
-    allowedTargetTypes.value = payload.allowedTargets
-    selected_use_card.value = get_card(payload.card_id) || null
-    useCardMode.value = 'select'
-    overlay.value = 'use_action'
-    overlay_text.value = 'Use Card'
+    targetingState.value = {
+        sourceType: 'creature',
+        sourceId: payload.card_id,
+        allowedTypes: convertAllowedTargets(payload.allowedTargets)
+    }
+    overlay.value = 'target_battlecry'
+    overlay_text.value = 'Choose Battlecry Target'
 }
 
-// Receive target from UseCard in selection mode and submit play with target
-const onTargetSelected = (target: { target_type: 'card' | 'hero' | 'creature'; target_id: string }) => {
-    if (!pendingPlay.value) return
-    const { card_id, position } = pendingPlay.value
-    gameStore.playCard(card_id, position, target)
+// Receive target from Target component and execute appropriate command
+const onTargetSelected = (target: { target_type: 'creature' | 'hero'; target_id: string }) => {
+    if (!targetingState.value) return
+
+    const { sourceType, sourceId } = targetingState.value
+
+    // Handle battlecry targeting (card being played)
+    if (pendingPlay.value) {
+        const { card_id, position } = pendingPlay.value
+        // Convert 'creature' to 'card' for backend compatibility
+        const backendTarget = {
+            target_type: target.target_type === 'creature' ? 'card' as const : target.target_type,
+            target_id: target.target_id
+        }
+        gameStore.playCard(card_id, position, backendTarget)
+        pendingPlay.value = null
+        closeOverlay()
+        return
+    }
+
+    // Handle creature attack
+    if (sourceType === 'creature') {
+        if (target.target_type === 'creature') {
+            gameStore.useCardOnCard(sourceId, target.target_id)
+        } else {
+            gameStore.useCardOnHero(sourceId, target.target_id)
+        }
+        closeOverlay()
+        return
+    }
+
+    // Handle hero power
+    if (sourceType === 'hero') {
+        if (target.target_type === 'creature') {
+            gameStore.useHeroOnCard(sourceId, target.target_id)
+        } else {
+            gameStore.useHeroOnHero(sourceId, target.target_id)
+        }
+        closeOverlay()
+        return
+    }
+
+    // Note: Spell targeting is handled by the pendingPlay check above
+    // since spells always set pendingPlay before opening the target overlay
+}
+
+// Close overlay and clear state
+const closeOverlay = () => {
+    overlay.value = null
+    overlay_text.value = null
+    targetingState.value = null
+    selected_hand_card.value = null
     pendingPlay.value = null
 }
 
 // Clear local UI state when game over is detected
 const clearLocalState = () => {
-    selected_hand_card.value = null
-    selected_use_card.value = null
-    overlay.value = null
-    overlay_text.value = null
+    closeOverlay()
 }
 
 // Hero clicking now handled directly by UseCard component
@@ -438,11 +534,7 @@ watch(() => gameOver.value.isGameOver, (isGameOver) => {
 // Handle escape key to close overlay
 const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Escape' && overlay.value) {
-        overlay.value = null
-        selected_hand_card.value = null
-        selected_use_card.value = null
-        overlay_text.value = null
-        pendingPlay.value = null
+        closeOverlay()
     }
 }
 
@@ -492,15 +584,14 @@ function getAllowedTargets(card: any): Array<'card' | 'hero' | 'any'> {
     return Array.from(allowed)
 }
 
-const useInitiator = computed(() => {
-    if (selected_use_card.value) {
-        return { type: 'card' as const, id: selected_use_card.value.card_id }
-    }
-    if (selected_use_hero.value) {
-        return { type: 'hero' as const, id: selected_use_hero.value.hero_id }
-    }
-    return { type: 'card' as const, id: '' }
-})
+// Convert old target format to new format
+function convertAllowedTargets(targets: Array<'card' | 'hero' | 'any'>): 'creature' | 'hero' | 'both' {
+    if (targets.includes('any')) return 'both'
+    if (targets.includes('card') && targets.includes('hero')) return 'both'
+    if (targets.includes('card')) return 'creature'
+    if (targets.includes('hero')) return 'hero'
+    return 'both'
+}
 </script>
 
 <style scoped>

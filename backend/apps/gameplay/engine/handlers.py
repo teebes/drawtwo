@@ -4,9 +4,9 @@ Effect handlers for the engine.
 
 from pydantic import TypeAdapter
 from apps.builder.schemas import Action
-from apps.gameplay.engine.actions import handle_action
 from apps.gameplay.engine.dispatcher import register
 from apps.gameplay.schemas.effects import (
+    AttackEffect,
     DamageEffect,
     EndTurnEffect,
     DrawEffect,
@@ -15,7 +15,6 @@ from apps.gameplay.schemas.effects import (
     PlayEffect,
     StartGameEffect,
     UseHeroEffect,
-    UseCardEffect,
 )
 from apps.gameplay.schemas.events import (
     DamageEvent,
@@ -24,6 +23,7 @@ from apps.gameplay.schemas.events import (
     GameOverEvent,
     NewPhaseEvent,
     PlayEvent,
+    UseHeroEvent,
 )
 from apps.gameplay.schemas.game import GameState
 from apps.gameplay.schemas.engine import (
@@ -73,7 +73,8 @@ def play(effect: PlayEffect, state: GameState) -> Result:
         new_state=state,
         events=[PlayEvent(
             side=effect.side,
-            card_id=effect.source_id,
+            source_type="card",
+            source_id=effect.source_id,
             position=effect.position,
             target_type=effect.target_type,
             target_id=effect.target_id,
@@ -92,6 +93,8 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
         source = state.heroes[effect.side]
     elif effect.source_type == "card":
         source = state.cards[effect.source_id]
+    elif effect.source_type == "creature":
+        source = state.cards[effect.source_id]
     else:
         raise NotImplementedError
 
@@ -99,6 +102,8 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
     if effect.target_type == "hero":
         target = state.heroes[opposing_side]
     elif effect.target_type == "card":
+        target = state.cards[effect.target_id]
+    elif effect.target_type == "creature":
         target = state.cards[effect.target_id]
     else:
         raise NotImplementedError
@@ -124,7 +129,7 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
             state.winner = effect.side
             events.append(GameOverEvent(side=effect.side, winner=effect.side))
 
-    if target_type == "card":
+    if target_type == "card" or target_type == "creature":
         # target is card
         target = state.cards[effect.target_id]
         target.health -= effect.damage
@@ -135,11 +140,12 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
             should_retaliate = (
                 effect.retaliate
                 and effect.damage_type == "physical"
-                and target_type == "card"
+                and (target_type == "card" or target_type == "creature")
             )
 
             # Ranged trait doesn't get retaliated against
-            if effect.source_type == "card" and should_retaliate:
+            if ((effect.source_type == "card" or effect.source_type == "creature")
+            and should_retaliate):
                 has_ranged_trait = lambda trait: trait.type == "ranged"
                 source_has_ranged_trait = any(
                     has_ranged_trait(trait)
@@ -173,8 +179,8 @@ def mark_exhausted(effect: MarkExhaustedEffect, state: GameState) -> Result:
         state.heroes[effect.side].exhausted = True
     return Success(new_state=state)
 
-@register("effect_use_card")
-def use_card(effect: UseCardEffect, state: GameState) -> Result:
+@register("effect_attack")
+def attack(effect: AttackEffect, state: GameState) -> Result:
     damage_effect = DamageEffect(
         side=effect.side,
         damage_type="physical",
@@ -192,8 +198,12 @@ def use_card(effect: UseCardEffect, state: GameState) -> Result:
     child_effects = [mark_exhausted_effect, damage_effect]
     return Success(new_state=state, child_effects=child_effects)
 
+
 @register("effect_use_hero")
 def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
+    # Lazy import to avoid circular dependency
+    from apps.gameplay.services import GameService
+
     hero = state.heroes[effect.side]
 
     if hero.exhausted:
@@ -201,21 +211,41 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
 
     child_effects = []
 
+    use_hero_event = UseHeroEvent(
+        side=effect.side,
+        source_type="hero",
+        source_id=effect.source_id,
+        target_type=effect.target_type,
+        target_id=effect.target_id,
+    )
+
     # Parse out hero power actions
     for action in hero.hero_power.actions:
         action = TypeAdapter(Action).validate_python(action)
-        child_effects.extend(
-            handle_action(state, effect, action))
+        child_effects.append(
+            GameService.compile_action(
+                state=state,
+                event=use_hero_event,
+                action=action,
+            )
+        )
 
     # Mark hero exhausted first
     mark_exhausted_effect = MarkExhaustedEffect(
         side=effect.side,
         target_type="hero",
-        target_id=effect.source_id
+        target_id=effect.source_id,
     )
     child_effects.append(mark_exhausted_effect)
 
-    return Success(new_state=state, child_effects=child_effects)
+    print('child effects: %s' % child_effects)
+    print('use hero event: %s' % use_hero_event)
+
+    return Success(
+        new_state=state,
+        child_effects=child_effects,
+        events=[use_hero_event]
+    )
 
 @register("effect_end_turn")
 def end_turn(effect: EndTurnEffect, state: GameState) -> Result:

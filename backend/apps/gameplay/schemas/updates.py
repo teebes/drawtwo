@@ -37,15 +37,15 @@ class PlayCardUpdate(UpdateBase):
     type: Literal["update_play_card"] = "update_play_card"
     card_id: str
     position: int
-    target_type: Optional[Literal["card", "hero"]] = None
+    target_type: Optional[Literal["card", "hero", "creature"]] = None
     target_id: Optional[str] = None
 
 
 class DealDamageUpdate(UpdateBase):
     type: Literal["update_deal_damage"] = "update_deal_damage"
-    source_type: Literal["card", "hero", "board"] = "card"
+    source_type: Literal["card", "hero", "board", "creature"] = "card"
     source_id: str
-    target_type: Literal["card", "hero",] = "card"
+    target_type: Literal["card", "hero", "creature"] = "card"
     target_id: str
     damage: int
 

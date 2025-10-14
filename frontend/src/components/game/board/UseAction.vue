@@ -152,6 +152,7 @@ const handleHeroClick = () => {
 }
 
 const handleCardClick = (cardId: string) => {
+    console.log('handleCardClick', cardId)
     if (isSelectionMode.value) {
         emit('target-selected', { target_type: 'card', target_id: cardId })
         emit('close-overlay')

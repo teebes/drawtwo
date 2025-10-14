@@ -22,6 +22,13 @@ class PlayCardCommand(CommandBase):
     target_id: Optional[str] = None
 
 
+class AttackCommand(CommandBase):
+    type: Literal["cmd_attack"] = "cmd_attack"
+    card_id: str
+    target_type: Literal["card", "creature", "hero"] = "card"
+    target_id: str
+
+
 class UseCardCommand(CommandBase):
     type: Literal["cmd_use_card"] = "cmd_use_card"
     card_id: str
@@ -35,13 +42,13 @@ class UseHeroCommand(CommandBase):
     target_type: Literal["card", "hero"] = "card"
     target_id: str
 
-
 class EndTurnCommand(CommandBase):
     type: Literal["cmd_end_turn"] = "cmd_end_turn"
 
 
 Command = Annotated[
     Union[
+        AttackCommand,
         EndTurnCommand,
         PlayCardCommand,
         UseCardCommand,

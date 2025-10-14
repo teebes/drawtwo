@@ -98,12 +98,19 @@ class GameOverEvent(EventBase):
 """
 
 
+class ActionableEvent(EventBase):
+    source_type: Literal["card", "hero", "board"] = "card"
+    source_id: str
+    target_type: Optional[Literal["card", "hero", "creature"]] = "card"
+    target_id: Optional[str] = None
+
+
 class DamageEvent(EventBase):
     type: Literal["event_damage"] = "event_damage"
     damage_type: Literal["physical", "spell"] = "physical"
-    source_type: Literal["card", "hero", "board"] = "card"
+    source_type: Literal["card", "hero", "board", "creature"] = "card"
     source_id: str
-    target_type: Literal["card", "hero",] = "card"
+    target_type: Literal["card", "hero", "creature"] = "card"
     target_id: str
     damage: int
     # Whether the target should attempt to retaliate. Mostly used to disable
@@ -130,12 +137,17 @@ class NewPhaseEvent(EventBase):
     phase: str
 
 
-class PlayEvent(EventBase):
+class PlayEvent(ActionableEvent):
     type: Literal["event_play"] = "event_play"
-    card_id: str
+    source_type: Literal["card"] = "card"
     position: int
     target_type: Optional[Literal["card", "hero", "creature"]] = None
     target_id: Optional[str] = None
+
+
+class UseHeroEvent(ActionableEvent):
+    type: Literal["event_use_hero"] = "event_use_hero"
+    source_type: Literal["hero"] = "hero"
 
 
 Event = Annotated[
@@ -146,6 +158,7 @@ Event = Annotated[
         GameOverEvent,
         NewPhaseEvent,
         PlayEvent,
+        UseHeroEvent,
     ],
     Discriminator('type')
 ]

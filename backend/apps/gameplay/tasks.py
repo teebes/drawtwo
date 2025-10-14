@@ -2,5 +2,5 @@ from celery import shared_task
 from apps.gameplay.services import GameService
 
 @shared_task
-def advance(game_id: int):
-    return GameService.advance(game_id)
+def step(game_id: int):
+    return GameService.step(game_id)

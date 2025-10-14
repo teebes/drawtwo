@@ -50,8 +50,8 @@ def apply(state: GameState, event: Event) -> Result:
         return Success(new_state=state, events=[], child_effects=[])
 
     # For events that reference a specific card, check that card's traits
-    if hasattr(event, 'card_id'):
-        card = state.cards.get(event.card_id)
+    if getattr(event, 'source_type', None) == 'card':
+        card = state.cards.get(event.source_id)
         if card:
             for trait in card.traits:
                 if trait.type in triggered_traits:
@@ -68,50 +68,6 @@ def apply(state: GameState, event: Event) -> Result:
     return Success(
         new_state=state,
         events=events,
-        child_effects=child_effects
-    )
-
-
-def handle_card_action(
-    state: GameState,
-    card: CardInPlay,
-    card_action: Action,
-    event: Event
-) -> Result:
-    """
-    Converts a card action into game effects.
-
-    Card actions are declarative definitions (draw X cards, deal Y damage).
-    This function converts them into concrete effects that can be executed.
-    """
-    child_effects = []
-
-    if isinstance(card_action, DrawAction):
-        child_effects.append(
-            DrawEffect(side=state.active, amount=card_action.amount)
-        )
-
-    elif isinstance(card_action, DamageAction):
-        # For targeted actions, use the event's target if available
-        target_type = event.target_type if hasattr(event, 'target_type') else "hero"
-        target_id = event.target_id if hasattr(event, 'target_id') else None
-
-        child_effects.append(
-            DamageEffect(
-                side=state.active,
-                damage_type="physical" if card.card_type == "creature" else "spell",
-                source_type="card",
-                source_id=card.card_id,
-                target_type=target_type,
-                target_id=target_id,
-                damage=card_action.amount,
-                retaliate=False
-            )
-        )
-
-    return Success(
-        new_state=state,
-        events=[],
         child_effects=child_effects
     )
 
@@ -157,7 +113,11 @@ def handle_battlecry_trait(
             print(f"Invalid card action: {card_action}")
             continue
 
-        effect = GameService.compile_action(state, card_action)
+        effect = GameService.compile_action(
+            state=state,
+            event=event,
+            action=card_action,
+        )
         child_effects.append(effect)
 
     return Success(
@@ -184,7 +144,7 @@ def handle_deathrattle_trait(
         child_effects = []
 
         for card_action in trait.actions:
-            result = handle_card_action(state, card, card_action, event)
+            result = GameService.compile_action(state, card_action)
             child_effects.extend(result.child_effects)
 
         return Success(

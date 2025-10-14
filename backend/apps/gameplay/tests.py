@@ -32,7 +32,7 @@ from apps.gameplay import traits
 User = get_user_model()
 
 
-class ServiceTests(TestCase):
+class ServiceTestsBase(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -63,6 +63,9 @@ class ServiceTests(TestCase):
 
         self.game = GameService.start_game(self.deck_a, self.deck_b)
 
+
+class ServiceTests(ServiceTestsBase):
+
     def test_create_game(self):
         game = self.game
 
@@ -80,7 +83,7 @@ class ServiceTests(TestCase):
 
     def test_start_game_effect(self):
         while self.game.queue:
-            GameService.advance(self.game.id)
+            GameService.step(self.game.id)
             self.game.refresh_from_db()
 
         #self.assertEqual(self.game.queue, [])
@@ -89,6 +92,39 @@ class ServiceTests(TestCase):
         self.assertEqual(self.game.state['phase'], 'main')
         self.assertEqual(len(self.game.state['hands']['side_a']), 4)
         self.assertEqual(len(self.game.state['hands']['side_b']), 3)
+
+
+class ProcessCommandTests(ServiceTestsBase):
+
+    def setUp(self):
+        super().setUp()
+        while self.game.queue:
+            GameService.step(self.game.id)
+            self.game.refresh_from_db()
+
+    def test_attack(self):
+        self.game.state['board']['side_a'] = ["card-1"]
+        self.game.state['board']['side_b'] = ["card-2"]
+        command = {
+            'type': 'cmd_attack',
+            'card_id': 'card-1',
+            'target_id': 'card-2',
+            'target_type': 'creature'
+        }
+        GameService.process_command(self.game.id, command, 'side_a')
+        self.game.refresh_from_db()
+        self.assertEqual(len(self.game.queue), 1)
+        self.assertEqual(self.game.queue[0]['type'], 'effect_attack')
+        self.assertEqual(self.game.queue[0]['target_type'], 'creature')
+        self.assertEqual(self.game.queue[0]['target_id'], 'card-2')
+        self.assertEqual(self.game.queue[0]['card_id'], 'card-1')
+
+    def test_end_turn(self):
+        command = {'type': 'cmd_end_turn'}
+        GameService.process_command(self.game.id, command, 'side_a')
+        self.game.refresh_from_db()
+        self.assertEqual(len(self.game.queue), 1)
+        self.assertEqual(self.game.queue[0]['type'], 'effect_end_turn')
 
 
 class GamePlayTestBase(TestCase):
@@ -208,6 +244,131 @@ class EngineTests(GamePlayTestBase):
         self.assertEqual(len(result.child_effects), 2)
         self.assertEqual(result.child_effects[0].type, 'effect_damage')
         self.assertEqual(result.child_effects[1].type, 'effect_mark_exhausted')
+
+    def test_play_spell_card(self):
+        spell_card = CardInPlay(
+            card_type="spell",
+            card_id="1",
+            template_slug="small-nuke",
+            name="Small Nuke",
+            cost=1,
+            traits=[
+                Battlecry(
+                    actions=[
+                        DamageAction(
+                            amount=1,
+                            target="enemy",
+                        )
+                    ]
+                )
+            ],
+        )
+
+        # Play can't afford the spell
+        self.game_state.mana_pool["side_a"] = 1
+        self.game_state.mana_used["side_a"] = 1
+        self.game_state.cards["1"] = spell_card
+        self.game_state.hands["side_a"] = ["1"]
+        play_effect = PlayEffect(
+            side="side_a",
+            source_id="1",
+            position=0,
+            target_type="hero",
+            target_id="2",
+        )
+        result = resolve(play_effect, self.game_state)
+        self.assertTrue(isinstance(result, Rejected))
+        self.assertIn("energy", result.reason.lower())
+
+        # Play can afford the spell
+        self.game_state.mana_pool["side_a"] = 1
+        self.game_state.mana_used["side_a"] = 0
+        self.game_state.cards["1"] = spell_card
+        self.game_state.hands["side_a"] = ["1"]
+
+        play_effect = PlayEffect(
+            side="side_a",
+            source_id="1",
+            position=0,
+            target_type="hero",
+            target_id="2",
+        )
+        result = resolve(play_effect, self.game_state)
+        self.assertTrue(isinstance(result, Success))
+        new_state = result.new_state
+
+        # PlayEffect generates a PlayEvent that triggers battlecry actions
+        self.assertEqual(result.events[0].type, 'event_play')
+        self.assertEqual(new_state.hands["side_a"], [])
+        self.assertEqual(new_state.graveyard["side_a"], ["1"])
+        self.assertEqual(new_state.mana_used["side_a"], 1)
+
+    def test_play_spell_card_on_creature(self):
+        spell_card = CardInPlay(
+            card_type="spell",
+            card_id="1",
+            template_slug="small-nuke",
+            name="Small Nuke",
+            cost=1,
+            traits=[
+                Battlecry(
+                    actions=[
+                        DamageAction(
+                            amount=1,
+                            target="enemy",
+                        )
+                    ]
+                )
+            ],
+        )
+
+        creature_card = CardInPlay(
+            card_type="creature",
+            card_id="2",
+            template_slug="test",
+            name="test",
+            attack=1,
+            health=10,
+            cost=1,
+            exhausted=False,
+        )
+
+        self.game_state.mana_pool["side_a"] = 1
+        self.game_state.mana_used["side_a"] = 0
+        self.game_state.cards["1"] = spell_card
+        self.game_state.cards["2"] = creature_card
+        self.game_state.hands["side_a"] = ["1"]
+        self.game_state.board["side_b"] = ["2"]
+
+        play_effect = PlayEffect(
+            side="side_a",
+            source_id="1",
+            position=0,
+            target_type="creature",
+            target_id="2",
+        )
+        result = resolve(play_effect, self.game_state)
+        self.assertTrue(isinstance(result, Success))
+        new_state = result.new_state
+
+        # PlayEffect generates a PlayEvent that triggers battlecry actions
+        self.assertEqual(result.events[0].type, 'event_play')
+        self.assertEqual(new_state.hands["side_a"], [])
+        self.assertEqual(new_state.graveyard["side_a"], ["1"])
+        self.assertEqual(new_state.mana_used["side_a"], 1)
+
+        # Now process the PlayEvent through traits to trigger the battlecry
+        play_event = result.events[0]
+        trait_result = traits.apply(new_state, play_event)
+        self.assertEqual(len(trait_result.child_effects), 1)
+        self.assertEqual(trait_result.child_effects[0].type, 'effect_damage')
+
+        # Actually resolve the DamageEffect that was generated by the battlecry
+        damage_effect = trait_result.child_effects[0]
+        damage_result = resolve(damage_effect, new_state)
+        self.assertTrue(isinstance(damage_result, Success))
+        # This should work without errors - creature should take 1 damage
+        self.assertEqual(damage_result.new_state.cards["2"].health, 9)
 
 
 class TestDamage(GamePlayTestBase):
@@ -389,74 +550,6 @@ class TestDamage(GamePlayTestBase):
         self.assertEqual(result.new_state.heroes['side_b'].health, 9)
 
 
-class TestPlaySpell(GamePlayTestBase):
-
-    def setUp(self, *args, **kwargs):
-        super().setUp(*args, **kwargs)
-        self.spell_card = CardInPlay(
-            card_type="spell",
-            card_id="1",
-            template_slug="small-nuke",
-            name="Small Nuke",
-            cost=1,
-            traits=[
-                Battlecry(
-                    actions=[
-                        DamageAction(
-                            amount=1,
-                            target="enemy",
-                        )
-                    ]
-                )
-            ],
-        )
-
-    def test_play_spell_energy_check(self):
-        "Prevented is returned if the player can't afford the spell"
-        spell_card = self.spell_card
-
-        self.game_state.mana_pool["side_a"] = 1
-        self.game_state.mana_used["side_a"] = 1
-        self.game_state.cards["1"] = spell_card
-        self.game_state.hands["side_a"] = ["1"]
-
-        play_effect = PlayEffect(
-            side="side_a",
-            source_id="1",
-            position=0,
-            target_type="hero",
-            target_id="2",
-        )
-        result = resolve(play_effect, self.game_state)
-        self.assertTrue(isinstance(result, Rejected))
-        self.assertIn("energy", result.reason.lower())
-
-    def test_play_spell_card(self):
-        spell_card = self.spell_card
-
-        self.game_state.mana_pool["side_a"] = 1
-        self.game_state.mana_used["side_a"] = 0
-        self.game_state.cards["1"] = spell_card
-        self.game_state.hands["side_a"] = ["1"]
-
-        play_effect = PlayEffect(
-            side="side_a",
-            source_id="1",
-            position=0,
-            target_type="hero",
-            target_id="2",
-        )
-        result = resolve(play_effect, self.game_state)
-        self.assertTrue(isinstance(result, Success))
-        new_state = result.new_state
-
-        # PlayEffect generates a PlayEvent that triggers battlecry actions
-        self.assertEqual(result.events[0].type, 'event_play')
-        self.assertEqual(new_state.hands["side_a"], [])
-        self.assertEqual(new_state.graveyard["side_a"], ["1"])
-        self.assertEqual(new_state.mana_used["side_a"], 1)
-
-
 class TestTraits(GamePlayTestBase):
 
     def test_battlecry_draw(self):
@@ -581,7 +674,8 @@ class TestTraitProcessing(GamePlayTestBase):
         # Create a play event for a card with charge
         play_event = PlayEvent(
             side="side_a",
-            card_id="card_1",
+            source_type="card",
+            source_id="card_1",
             position=0
         )
 
@@ -595,12 +689,50 @@ class TestTraitProcessing(GamePlayTestBase):
         self.assertFalse(self.game_state.cards["card_1"].exhausted)
         self.assertEqual(len(result.child_effects), 0)
 
+    def test_damage_battlecry(self):
+        self.game_state.board["side_b"] = ["card_1"]
+        self.assertEqual(self.game_state.cards["card_1"].health, 3)
+
+        battlecry_damage = CardInPlay(
+            card_type="creature",
+            card_id="card_3",
+            template_slug="battlecry-damage",
+            name="Battlecry Damage",
+            description="Battlecry: Deal 1 damage to a target.",
+            attack=1,
+            health=1,
+            cost=1,
+            traits=[Battlecry(actions=[DamageAction(amount=1, target="enemy")])],
+            exhausted=False,
+        )
+        self.game_state.cards["card_3"] = battlecry_damage
+        self.game_state.hands["side_a"] = ["card_3"]
+        event = PlayEvent(
+            side="side_a",
+            source_type="card",
+            source_id="card_3",
+            position=0,
+            target_type="creature",
+            target_id="card_1",
+        )
+        result = traits.apply(self.game_state, event)
+        self.assertTrue(isinstance(result, Success))
+        self.assertEqual(result.child_effects[0].type, "effect_damage")
+        self.assertEqual(result.child_effects[0].side, "side_a")
+        self.assertEqual(result.child_effects[0].source_type, "card")
+        self.assertEqual(result.child_effects[0].source_id, "card_3")
+        self.assertEqual(result.child_effects[0].target_type, "creature")
+        self.assertEqual(result.child_effects[0].target_id, "card_1")
+        self.assertEqual(result.child_effects[0].damage, 1)
+        self.assertEqual(result.child_effects[0].retaliate, False)
+
     def test_battlecry_trait_direct(self):
         """Test that battlecry trait generates child effects on play."""
         # Create a play event for a card with battlecry
         play_event = PlayEvent(
             side="side_a",
-            card_id="card_2",
+            source_type="card",
+            source_id="card_2",
             position=0
         )
 
@@ -644,7 +776,8 @@ class TestTraitProcessing(GamePlayTestBase):
 
         play_event = PlayEvent(
             side="side_a",
-            card_id="card_3",
+            source_type="card",
+            source_id="card_3",
             position=0
         )
 

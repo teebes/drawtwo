@@ -11,7 +11,7 @@ from apps.gameplay.models import Game
 from apps.gameplay.schemas import GameSummary, GameList
 from apps.gameplay.schemas.game import GameState
 from apps.gameplay.services import GameService
-from apps.gameplay.tasks import advance
+from apps.gameplay.tasks import step
 
 
 @api_view(['GET'])
@@ -82,8 +82,8 @@ def game_queue(request, game_id):
 @permission_classes([IsAuthenticated])
 def advance_game(request, game_id):
     game = get_object_or_404(Game, id=game_id)
-    from .tasks import advance
-    advance.delay(game_id)
+    from .tasks import step
+    step.delay(game_id)
     return Response(status=200)
 
 @api_view(['POST'])
@@ -139,7 +139,7 @@ def create_game(request):
         game = GameService.start_game(player_deck, ai_deck)
         logger.debug(f"Game created successfully: {game}")
 
-        advance.delay(game.id)
+        step.delay(game.id)
 
         return Response({
             'id': game.id,

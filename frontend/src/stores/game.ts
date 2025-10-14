@@ -434,26 +434,48 @@ export const useGameStore = defineStore('game', {
       this.sendWebSocketMessage(message)
     },
 
+    castSpell(
+      cardId: string,
+      target?: { target_id: string; target_type: 'creature' | 'hero' | 'card' }
+    ): void {
+      if (this.gameOver.isGameOver) return
+
+      console.log('Casting spell card', cardId, 'with target', target)
+
+      const message: any = {
+        type: 'cmd_cast',
+        card_id: String(cardId),
+      }
+
+      if (target) {
+        message.target_id = target.target_id
+        message.target_type = target.target_type
+      }
+
+      this.sendWebSocketMessage(message)
+    },
+
     useCardOnCard(cardId: string, targetCardId: string): void {
       if (this.gameOver.isGameOver) return
 
-      console.log('Using card', cardId, 'on card', targetCardId)
+      console.log('Using creature', cardId, 'on creature', targetCardId)
 
       this.sendWebSocketMessage({
-        type: 'cmd_use_card',
+        // type: 'cmd_use_card',
+        type: 'cmd_attack',
         card_id: cardId,
         target_id: targetCardId,
-        target_type: 'card',
+        target_type: 'creature',
       })
     },
 
     useCardOnHero(cardId: string, heroId: string): void {
       if (this.gameOver.isGameOver) return
 
-      console.log('Using card', cardId, 'on hero', heroId)
+      console.log('Using creature', cardId, 'on hero', heroId)
 
       this.sendWebSocketMessage({
-        type: 'cmd_use_card',
+        type: 'cmd_attack',
         card_id: cardId,
         target_id: heroId,
         target_type: 'hero',

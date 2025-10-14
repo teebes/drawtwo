@@ -68,8 +68,8 @@ class Game(TimestampedModel):
                 self.queue.extend(serialized_effects)
             self.save(update_fields=['queue'])
         if trigger:
-            from apps.gameplay.tasks import advance
-            advance.apply_async(args=[self.id])
+            from apps.gameplay.tasks import step
+            step.apply_async(args=[self.id])
 
 
 class GameUpdate(TimestampedModel):

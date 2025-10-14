@@ -42,7 +42,7 @@ class DamageEffect(EffectBase):
     damage_type: Literal["physical", "spell"] = "physical"
     source_type: Literal["card", "creature", "hero", "board"] = "creature"
     source_id: str
-    target_type: Literal["card", "hero",] = "card"
+    target_type: Literal["card", "hero", "creature"] = "card"
     target_id: str
     damage: int
     # Whether the target should attempt to retaliate. Mostly used to disable
@@ -68,10 +68,24 @@ class PlayEffect(ActionSourceEffect):
     # source_id (card_id), target_type, and target_id inherited from ActionSourceEffect
 
 
+class AttackEffect(EffectBase):
+    type: Literal["effect_attack"] = "effect_attack"
+    card_id: str
+    target_type: Literal["card", "hero", "creature"] = "hero"
+    target_id: str
+
+
+class CastEffect(EffectBase):
+    type: Literal["effect_cast"] = "effect_cast"
+    card_id: str
+    target_type: Literal["card", "hero", "creature"] = "hero"
+    target_id: str
+
+
 class UseCardEffect(EffectBase):
     type: Literal["effect_use_card"] = "effect_use_card"
     card_id: str
-    target_type: Literal["card", "hero"] = "card"
+    target_type: Literal["card", "hero", "creature"] = "card"
     target_id: str
 
 
@@ -97,6 +111,8 @@ class MarkExhaustedEffect(EffectBase):
 
 Effect = Annotated[
     Union[
+        AttackEffect,
+        CastEffect,
         DamageEffect,
         DrawEffect,
         EndTurnEffect,
