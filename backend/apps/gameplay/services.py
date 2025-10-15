@@ -239,7 +239,6 @@ class GameService:
                     # Process trait triggers for each event
                     from apps.gameplay import traits
                     for event in result.events:
-                        print('event: %s' % event)
                         trait_result = traits.apply(game_state, event)
                         if trait_result.child_effects:
                             game.enqueue(trait_result.child_effects, trigger=False, prepend=True)
@@ -337,7 +336,6 @@ class GameService:
             from apps.gameplay.tasks import step
             step.apply_async(args=[game_id], countdown=0.1)
 
-
     @staticmethod
     def process_command(game_id: int, command: dict, side):
         try:
@@ -358,12 +356,7 @@ class GameService:
 
         effects = []
 
-        try:
-            command = TypeAdapter(Command).validate_python(command)
-        except ValidationError as e:
-            # Extract the command type that was sent
-            sent_type = command.get('type', 'unknown')
-            raise ValueError(f"Invalid command type '{sent_type}'")
+        command = TypeAdapter(Command).validate_python(command)
 
         # Because we're transitioning to a system where the cards on the
         # board are creatures and not just cards, we make the transition

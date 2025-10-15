@@ -57,36 +57,19 @@ class ServiceTestsBase(TestCase):
                 title=self.title,
                 slug='card-%s' % i,
                 name='Card %s' % i,
+                cost=1,
             )
             DeckCard.objects.create(deck=self.deck_a, card=card)
             DeckCard.objects.create(deck=self.deck_b, card=card)
 
         self.game = GameService.start_game(self.deck_a, self.deck_b)
+        self.game.refresh_from_db()
 
 
 class ServiceTests(ServiceTestsBase):
 
-    def test_create_game(self):
-        game = self.game
-
-        self.assertEqual(game.side_a, self.deck_a)
-        self.assertEqual(game.side_b, self.deck_b)
-        self.assertEqual(game.status, 'init')
-        self.assertEqual(game.state['heroes']['side_a']['template_slug'], 'hero-a')
-        self.assertEqual(game.state['heroes']['side_b']['template_slug'], 'hero-b')
-        self.assertEqual(game.state['turn'], 0)
-        self.assertEqual(game.state['active'], 'side_a')
-        self.assertEqual(game.state['phase'], 'start')
-        self.assertEqual(game.state['cards']["1"]['template_slug'], 'card-0')
-        # Queue is now stored separately in game.queue field
-        self.assertEqual(game.queue[0]['type'], 'effect_start_game')
-
-    def test_start_game_effect(self):
-        while self.game.queue:
-            GameService.step(self.game.id)
-            self.game.refresh_from_db()
-
-        #self.assertEqual(self.game.queue, [])
+    def test_start_game(self):
+        self.assertEqual(self.game.status, 'in_progress')
         self.assertEqual(self.game.state['turn'], 1)
         self.assertEqual(self.game.state['active'], 'side_a')
         self.assertEqual(self.game.state['phase'], 'main')
@@ -96,35 +79,93 @@ class ServiceTests(ServiceTestsBase):
 
 class ProcessCommandTests(ServiceTestsBase):
 
+    def test_attack_with_retaliation(self):
+        # Put a card from the player's hand onto the board
+        self.game.state['board']['side_a'].append('1')
+        # Put a card from the opponent's hand onto the board
+        self.game.state['board']['side_b'].append('5')
+        self.game.state['cards']['1']['exhausted'] = False
+        self.game.state['cards']['1']['attack'] = 1
+        self.game.state['cards']['1']['health'] = 10
+        self.game.state['cards']['5']['attack'] = 1
+        self.game.state['cards']['5']['health'] = 10
+        self.game.save()
+
+        command = {
+            'type': 'cmd_attack',
+            'card_id': '1',
+            'target_id': '5',
+            'target_type': 'creature'
+        }
+        GameService.process_command(self.game.id, command, 'side_a')
+        self.game.refresh_from_db()
+        self.assertEqual(self.game.state['cards']['5']['health'], 9)
+        self.assertEqual(self.game.state['cards']['1']['health'], 9)
+        self.assertEqual(len(self.game.queue), 0)
+
+    def test_end_turn(self):
+        self.assertEqual(self.game.state['turn'], 1)
+        self.assertEqual(self.game.state['active'], 'side_a')
+        self.assertEqual(self.game.state['phase'], 'main')
+        command = {'type': 'cmd_end_turn'}
+        GameService.process_command(self.game.id, command, 'side_a')
+        self.game.refresh_from_db()
+        self.assertEqual(self.game.state['turn'], 2)
+        self.assertEqual(self.game.state['active'], 'side_a')
+        self.assertEqual(self.game.state['phase'], 'main')
+        print(self.game.state['board']['side_b'])
+
+
+class SmokeTests(ServiceTestsBase):
+    "Tests that take frontend input and steps it through the queue until the end."
+
     def setUp(self):
         super().setUp()
         while self.game.queue:
             GameService.step(self.game.id)
             self.game.refresh_from_db()
 
-    def test_attack(self):
-        self.game.state['board']['side_a'] = ["card-1"]
-        self.game.state['board']['side_b'] = ["card-2"]
-        command = {
-            'type': 'cmd_attack',
-            'card_id': 'card-1',
-            'target_id': 'card-2',
-            'target_type': 'creature'
-        }
-        GameService.process_command(self.game.id, command, 'side_a')
-        self.game.refresh_from_db()
-        self.assertEqual(len(self.game.queue), 1)
-        self.assertEqual(self.game.queue[0]['type'], 'effect_attack')
-        self.assertEqual(self.game.queue[0]['target_type'], 'creature')
-        self.assertEqual(self.game.queue[0]['target_id'], 'card-2')
-        self.assertEqual(self.game.queue[0]['card_id'], 'card-1')
 
-    def test_end_turn(self):
-        command = {'type': 'cmd_end_turn'}
+
+    def test_draw_two(self):
+        draw_two_card = CardInPlay(
+            card_type="spell",
+            card_id="10",
+            template_slug="draw-two",
+            name="Draw Two",
+            description="Draw two cards.",
+            cost=1,
+            traits=[Battlecry(actions=[DrawAction(amount=2)])],
+        )
+        self.game.state['mana_pool']['side_a'] = 1
+        self.game.state['mana_used']['side_a'] = 0
+        self.game.state['cards']['10'] = draw_two_card.model_dump()
+        self.game.state['hands']['side_a'].append('10')
+        # Add two more cards to the deck so that we don't deck out
+        for i in range(2):
+            card_id = str(11+i)
+            card = CardInPlay(
+                card_type="creature",
+                card_id=card_id,
+                template_slug="test-card",
+                name="Test Card",
+                attack=1,
+                health=1,
+                cost=1,
+            )
+            self.game.state['cards'][card_id] = card.model_dump()
+            self.game.state['decks']['side_a'].append(card_id)
+        self.assertEqual(len(self.game.state['decks']['side_a']), 2)
+        self.game.save()
+
+        initial_hand_size = len(self.game.state['hands']['side_a'])
+
+        command = {'type': 'cmd_play_card', 'card_id': '10', 'position': 0}
         GameService.process_command(self.game.id, command, 'side_a')
         self.game.refresh_from_db()
-        self.assertEqual(len(self.game.queue), 1)
-        self.assertEqual(self.game.queue[0]['type'], 'effect_end_turn')
+        self.assertEqual(len(self.game.state['hands']['side_a']), initial_hand_size + 1)
+        self.assertEqual(len(self.game.queue), 0)
+        self.assertEqual(self.game.state['board']['side_a'], [])
 
 
 class GamePlayTestBase(TestCase):

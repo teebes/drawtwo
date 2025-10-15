@@ -37,17 +37,22 @@ from apps.gameplay.schemas.engine import (
 def draw(effect: DrawEffect, state: GameState) -> Result:
 
     deck = state.decks[effect.side]
-    try:
-        card_id = deck.pop(0)
-    except IndexError:
-        opposing_side = "side_b" if effect.side == "side_a" else "side_a"
-        go_event = GameOverEvent(side=effect.side, winner=opposing_side)
-        return Success(new_state = state, events=[go_event])
+    events = []
 
-    state.hands[effect.side].append(card_id)
+    for _ in range(effect.amount):
+        try:
+            card_id = deck.pop(0)
+        except IndexError:
+            opposing_side = "side_b" if effect.side == "side_a" else "side_a"
+            go_event = GameOverEvent(side=effect.side, winner=opposing_side)
+            return Success(new_state = state, events=[go_event])
+
+        state.hands[effect.side].append(card_id)
+        events.append(DrawEvent(side=effect.side, card_id=card_id))
+
     return Success(
         new_state=state,
-        events=[DrawEvent(side=effect.side, card_id=card_id)]
+        events=events
     )
 
 @register("effect_play")
@@ -83,6 +88,7 @@ def play(effect: PlayEffect, state: GameState) -> Result:
 
 @register("effect_damage")
 def damage(effect: DamageEffect, state: GameState) -> Result:
+    child_effects = []
     events = []
 
     target_type = effect.target_type
@@ -155,10 +161,10 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
                     should_retaliate = False
 
             if should_retaliate:
-                events.append(DamageEvent(
+                child_effects.append(DamageEffect(
                     side=opposing_side,
                     damage_type="physical",
-                    source_type="card",
+                    source_type="creature",
                     source_id=effect.target_id,
                     target_type=effect.source_type,
                     target_id=effect.source_id,
@@ -169,6 +175,7 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
     return Success(
         new_state=state,
         events=events,
+        child_effects=child_effects,
     )
 
 @register("effect_mark_exhausted")
@@ -184,7 +191,7 @@ def attack(effect: AttackEffect, state: GameState) -> Result:
     damage_effect = DamageEffect(
         side=effect.side,
         damage_type="physical",
-        source_type="card",
+        source_type="creature",
         source_id=effect.card_id,
         target_type=effect.target_type,
         target_id=effect.target_id,
@@ -313,5 +320,4 @@ def start_game(effect: StartGameEffect, state: GameState) -> Result:
     ])
     # Start phase
     child_effects.append(NewPhaseEffect(side=effect.side, phase='start'))
-    print('%s child effects' % len(child_effects))
     return Success(new_state=state, child_effects=child_effects)

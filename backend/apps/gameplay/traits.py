@@ -50,7 +50,7 @@ def apply(state: GameState, event: Event) -> Result:
         return Success(new_state=state, events=[], child_effects=[])
 
     # For events that reference a specific card, check that card's traits
-    if getattr(event, 'source_type', None) == 'card':
+    if getattr(event, 'source_type', None) in ['card', 'creature']:
         card = state.cards.get(event.source_id)
         if card:
             for trait in card.traits:

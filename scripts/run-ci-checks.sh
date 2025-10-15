@@ -42,7 +42,7 @@ echo "✅ Django system checks: PASSED"
 echo ""
 
 echo "5️⃣ Running Django tests..."
-docker-compose exec backend python manage.py test --verbosity=1 2>/dev/null
+docker-compose exec backend python manage.py test --settings=config.settings.test --verbosity=1 2>/dev/null
 echo "✅ Django tests: PASSED"
 echo ""
 

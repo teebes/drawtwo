@@ -139,7 +139,7 @@ createsuperuser:
 	docker-compose exec backend python manage.py createsuperuser
 
 test:
-	docker-compose exec backend python manage.py test
+	docker-compose exec backend python manage.py test --settings=config.settings.test
 
 # CI/Code Quality
 ci-check:
