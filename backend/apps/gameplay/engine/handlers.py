@@ -245,9 +245,6 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
     )
     child_effects.append(mark_exhausted_effect)
 
-    print('child effects: %s' % child_effects)
-    print('use hero event: %s' % use_hero_event)
-
     return Success(
         new_state=state,
         child_effects=child_effects,
