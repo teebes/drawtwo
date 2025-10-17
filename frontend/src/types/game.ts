@@ -29,6 +29,17 @@ export interface CardInPlay {
   exhausted: boolean
 }
 
+export interface Creature {
+  creature_id: string
+  card_id: string
+  name: string
+  description: string
+  attack: number
+  health: number
+  traits: Trait[]
+  exhausted: boolean
+}
+
 export interface HeroInPlay {
   hero_id: string
   template_slug: string
@@ -43,6 +54,8 @@ export interface GameState {
   phase: Phase
   event_queue: Event[]
   cards: Record<string, CardInPlay>
+  creatures: Record<string, Creature>
+  last_creature_id: number
   heroes: Record<string, HeroInPlay>
   board: Record<string, string[]>
   hands: Record<string, string[]>

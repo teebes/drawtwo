@@ -1,8 +1,11 @@
+<!-- NOTE: This is an old reference view kept for reference purposes.
+     The active view is Board.vue -->
+
 <template>
   <div
     class="h-screen overflow-hidden bg-gradient-to-b from-emerald-900 via-green-800 to-emerald-900 flex flex-col">
     <!-- Loading State -->
-    <div v-if="loading" class="flex-1 flex items-center justify-center">
+    <div v-if="loading" class="f/lex-1 flex items-center justify-center">
       <div class="text-white text-xl">Loading game...</div>
     </div>
 

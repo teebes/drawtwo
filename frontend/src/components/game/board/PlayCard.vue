@@ -15,12 +15,12 @@
                             @placement-clicked="handleCardPlacement"
                         />
 
-                        <!-- Interleave cards with placement zones -->
-                        <template v-for="(card, index) in ownBoard" :key="`card-${card.card_id}`">
+                        <!-- Interleave creatures with placement zones -->
+                        <template v-for="(creature, index) in ownBoard" :key="`creature-${creature.creature_id}`">
                             <div class="p-1 h-24">
-                                <GameCard v-if="card"
+                                <GameCard v-if="creature"
                                         class="flex-grow-0"
-                                        :card="card"
+                                        :card="creature"
                                         compact in_lane />
                             </div>
                             <PlacementZone
@@ -70,7 +70,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { GameState, CardInPlay } from '@/types/game'
+import type { GameState, Creature } from '@/types/game'
 import { useGameStore } from '@/stores/game'
 import GameCard from '../GameCard.vue'
 import PlacementZone from '../PlacementZone.vue'
@@ -78,7 +78,7 @@ import PlacementZone from '../PlacementZone.vue'
 interface Props {
     gameState: GameState
     selectedHandCard: string | null
-    ownBoard: CardInPlay[] | undefined
+    ownBoard: Creature[] | undefined
     ownEnergy: number | undefined
 }
 

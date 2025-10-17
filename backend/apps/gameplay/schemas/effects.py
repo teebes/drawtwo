@@ -82,13 +82,6 @@ class CastEffect(EffectBase):
     target_id: str
 
 
-class UseCardEffect(EffectBase):
-    type: Literal["effect_use_card"] = "effect_use_card"
-    card_id: str
-    target_type: Literal["card", "hero", "creature"] = "card"
-    target_id: str
-
-
 class UseHeroEffect(ActionSourceEffect):
     type: Literal["effect_use_hero"] = "effect_use_hero"
     source_type: Literal["hero"] = "hero"  # Using hero power
@@ -103,7 +96,7 @@ class CastSpellEffect(ActionSourceEffect):
 
 class MarkExhaustedEffect(EffectBase):
     type: Literal["effect_mark_exhausted"] = "effect_mark_exhausted"
-    target_type: Literal["card", "hero"] = "card"
+    target_type: Literal["card", "creature", "hero"] = "card"
     target_id: str
 
 
@@ -120,7 +113,6 @@ Effect = Annotated[
         NewPhaseEffect,
         PlayEffect,
         StartGameEffect,
-        UseCardEffect,
         UseHeroEffect,
     ],
     Discriminator('type')

@@ -29,13 +29,6 @@ class AttackCommand(CommandBase):
     target_id: str
 
 
-class UseCardCommand(CommandBase):
-    type: Literal["cmd_use_card"] = "cmd_use_card"
-    card_id: str
-    target_type: Literal["card", "creature", "hero"] = "card"
-    target_id: str
-
-
 class UseHeroCommand(CommandBase):
     type: Literal["cmd_use_hero"] = "cmd_use_hero"
     hero_id: str
@@ -51,7 +44,6 @@ Command = Annotated[
         AttackCommand,
         EndTurnCommand,
         PlayCardCommand,
-        UseCardCommand,
         UseHeroCommand,
     ],
     Discriminator('type')]

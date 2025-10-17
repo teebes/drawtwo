@@ -58,10 +58,10 @@
                  <!-- Opponent Board -->
                  <div class="opponent-board flex-1 flex flex-row bg-gray-800 items-center overflow-x-auto">
                     <div class="lane flex flex-row h-24 mx-auto">
-                        <div v-for="card in opposingBoard" :key="card.card_id" class="p-1">
-                            <GameCard v-if="card"
+                        <div v-for="creature in opposingBoard" :key="creature.creature_id" class="p-1">
+                            <GameCard v-if="creature"
                                       class="flex-grow-0"
-                                      :card="card"
+                                      :card="creature"
                                       compact in_lane/>
                         </div>
                     </div>
@@ -86,11 +86,11 @@
                 <!-- Viewer Board-->
                 <div class="viewer-board flex-1 flex flex-row bg-gray-800 items-center overflow-x-auto">
                     <div class="lane flex flex-row h-24 mx-auto">
-                        <div v-for="card in ownBoard" :key="card.card_id" class="p-1">
-                            <GameCard v-if="card"
+                        <div v-for="creature in ownBoard" :key="creature.creature_id" class="p-1">
+                            <GameCard v-if="creature"
                                       class="flex-grow-0 cursor-pointer"
-                                      :card="card"
-                                      @click="handleUseCard(card.card_id)"
+                                      :card="creature"
+                                      @click="handleUseCard(creature.creature_id)"
                                       compact in_lane/>
                         </div>
                     </div>
@@ -218,7 +218,7 @@
 <script setup lang="ts">
 import { watch, computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import type { CardInPlay } from '../types/game'
+import type { CardInPlay, Creature } from '../types/game'
 import { useAuthStore } from '../stores/auth'
 import { useTitleStore } from '../stores/title'
 import { useGameStore } from '../stores/game'

@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import axios from '../config/api'
 import { getBaseUrl } from '../config/api'
 import { makeInitials } from '../utils/index'
-import type { GameState, Side, CardInPlay, HeroInPlay, GameError } from '../types/game'
+import type { GameState, Side, CardInPlay, Creature, HeroInPlay, GameError } from '../types/game'
 import { useNotificationStore } from './notifications'
 
 // WebSocket status type
@@ -34,6 +34,8 @@ function createInitialGameState(): GameState {
     phase: 'start',
     event_queue: [],
     cards: {},
+    creatures: {},
+    last_creature_id: 0,
     heroes: {},
     board: { side_a: [], side_b: [] },
     hands: { side_a: [], side_b: [] },
@@ -73,6 +75,10 @@ export const useGameStore = defineStore('game', {
     // Helper methods
     getCard: (state) => (cardId: string): CardInPlay | undefined => {
       return state.gameState.cards[cardId]
+    },
+
+    getCreature: (state) => (creatureId: string): Creature | undefined => {
+      return state.gameState.creatures[creatureId]
     },
 
     // Viewer perspective
@@ -142,16 +148,16 @@ export const useGameStore = defineStore('game', {
       return state.gameState.mana_used[state.viewer]
     },
 
-    ownBoard: (state): CardInPlay[] => {
+    ownBoard: (state): Creature[] => {
       if (!state.viewer) return []
 
-      const cards = state.gameState.board[state.viewer] || []
-      const board: CardInPlay[] = []
+      const creatureIds = state.gameState.board[state.viewer] || []
+      const board: Creature[] = []
 
-      for (const cardId of cards) {
-        const card = state.gameState.cards[cardId]
-        if (card) {
-          board.push(card)
+      for (const creatureId of creatureIds) {
+        const creature = state.gameState.creatures[creatureId]
+        if (creature) {
+          board.push(creature)
         }
       }
 
@@ -205,17 +211,17 @@ export const useGameStore = defineStore('game', {
       return state.gameState.mana_used[opposingSide]
     },
 
-    opposingBoard: (state): CardInPlay[] => {
+    opposingBoard: (state): Creature[] => {
       if (!state.viewer) return []
 
       const opposingSide = state.viewer === 'side_a' ? 'side_b' : 'side_a'
-      const cards = state.gameState.board[opposingSide] || []
-      const board: CardInPlay[] = []
+      const creatureIds = state.gameState.board[opposingSide] || []
+      const board: Creature[] = []
 
-      for (const cardId of cards) {
-        const card = state.gameState.cards[cardId]
-        if (card) {
-          board.push(card)
+      for (const creatureId of creatureIds) {
+        const creature = state.gameState.creatures[creatureId]
+        if (creature) {
+          board.push(creature)
         }
       }
 

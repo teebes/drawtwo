@@ -39,14 +39,14 @@
             <!-- Opponent Board -->
             <div class="flex w-full bg-gray-800 border-b border-gray-700 py-8 overflow-x-auto">
                 <div v-if="opposingBoard.length > 0" class="flex flex-row h-24 mx-auto">
-                    <div v-for="card in opposingBoard" :key="card.card_id" class="p-1">
+                    <div v-for="creature in opposingBoard" :key="creature.creature_id" class="p-1">
                         <GameCard
                             class="flex-grow-0"
-                            :card="card"
+                            :card="creature"
                             compact
                             in_lane
                             :class="canTargetCreature ? 'cursor-pointer hover:scale-105 transition-transform' : 'opacity-30'"
-                            @click="canTargetCreature && handleCardClick(card.card_id)"
+                            @click="canTargetCreature && handleCreatureClick(creature.creature_id)"
                         />
                     </div>
                 </div>
@@ -75,16 +75,16 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { CardInPlay, HeroInPlay } from '@/types/game'
+import type { CardInPlay, Creature, HeroInPlay } from '@/types/game'
 import GameCard from '../GameCard.vue'
 
 type TargetType = 'creature' | 'hero' | 'both'
 
 interface Props {
-    opposingBoard: CardInPlay[]
+    opposingBoard: Creature[]
     opposingHero: HeroInPlay | null
     allowedTargetTypes: TargetType
-    sourceCard?: CardInPlay | null
+    sourceCard?: CardInPlay | Creature | null
     errorMessage?: string | null
     title?: string
 }
@@ -116,11 +116,11 @@ const handleHeroClick = () => {
     })
 }
 
-const handleCardClick = (cardId: string) => {
+const handleCreatureClick = (creatureId: string) => {
     if (!canTargetCreature.value) return
     emit('target-selected', {
         target_type: 'creature',
-        target_id: cardId
+        target_id: creatureId
     })
 }
 </script>

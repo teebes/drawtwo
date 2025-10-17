@@ -182,9 +182,9 @@ def handle_main_phase(state: GameState, event) -> ResolvedEvent:
 
 def handle_end_turn(state: GameState, event) -> ResolvedEvent:
 
-    # Mark all cards on the board as not exhausted
-    for card_on_board in state.board[event.side]:
-        state.cards[card_on_board].exhausted = False
+    # Mark all creatures on the board as not exhausted
+    for creature_id in state.board[event.side]:
+        state.creatures[creature_id].exhausted = False
     # Mark the hero as not exhausted
     state.heroes[event.side].exhausted = False
 
@@ -471,12 +471,12 @@ def handle_choose_ai_move(state: GameState, event: ChooseAIMoveEvent) -> Resolve
                 errors=[]
             )
 
-    # See if there's a card that can be used to attack, and if there is,
+    # See if there's a creature that can be used to attack, and if there is,
     # attack the hero.
-    for card_id in state.board[state.active]:
-        card = state.cards[card_id]
+    for creature_id in state.board[state.active]:
+        creature = state.creatures[creature_id]
 
-        if card.exhausted: continue
+        if creature.exhausted: continue
 
         if event.script.strategy == "rush":
             target_type = "hero"
@@ -499,7 +499,7 @@ def handle_choose_ai_move(state: GameState, event: ChooseAIMoveEvent) -> Resolve
 
         use_event = UseCardEvent(
             side=state.active,
-            card_id=card_id,
+            card_id=creature_id,
             target_type=target_type,
             target_id=target_id)
         #choose_ai_move = ChooseAIMoveEvent(side=state.active)

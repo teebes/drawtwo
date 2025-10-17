@@ -25,7 +25,7 @@ from apps.gameplay.schemas.events import (
     PlayEvent,
     UseHeroEvent,
 )
-from apps.gameplay.schemas.game import GameState
+from apps.gameplay.schemas.game import GameState, Creature
 from apps.gameplay.schemas.engine import (
     Result,
     Success,
@@ -70,7 +70,25 @@ def play(effect: PlayEffect, state: GameState) -> Result:
     if card.card_type == "spell":
         state.graveyard[effect.side].append(effect.source_id)
     else:
-        state.board[effect.side].insert(effect.position, effect.source_id)
+        # The old way was to add the same card object that was in hand to the board
+        #state.board[effect.side].insert(effect.position, effect.source_id)
+        # Now we create a new creature object and add it to the board
+
+        # Creature being spawned
+        creature_id = str(int(state.last_creature_id) + 1)
+        state.last_creature_id = int(creature_id)
+        creature = Creature(
+            creature_id=creature_id,
+            card_id=effect.source_id,
+            name=card.name,
+            description=card.description,
+            attack=card.attack,
+            health=card.health,
+            traits=card.traits,
+        )
+        state.creatures[creature_id] = creature
+        state.board[effect.side].insert(effect.position, creature_id)
+
 
     state.mana_used[effect.side] += card.cost
 
@@ -100,7 +118,7 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
     elif effect.source_type == "card":
         source = state.cards[effect.source_id]
     elif effect.source_type == "creature":
-        source = state.cards[effect.source_id]
+        source = state.creatures[effect.source_id]
     else:
         raise NotImplementedError
 
@@ -110,7 +128,7 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
     elif effect.target_type == "card":
         target = state.cards[effect.target_id]
     elif effect.target_type == "creature":
-        target = state.cards[effect.target_id]
+        target = state.creatures[effect.target_id]
     else:
         raise NotImplementedError
 
@@ -136,11 +154,13 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
             events.append(GameOverEvent(side=effect.side, winner=effect.side))
 
     if target_type == "card" or target_type == "creature":
-        # target is card
-        target = state.cards[effect.target_id]
+        # Target is a creature on the board (we already fetched it above)
         target.health -= effect.damage
         if target.health <= 0:
             state.board[opposing_side].remove(effect.target_id)
+            # Also remove from creatures dict
+            if target_type == "creature":
+                del state.creatures[effect.target_id]
         else:
             # Determine if we need to retaliate
             should_retaliate = (
@@ -153,9 +173,10 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
             if ((effect.source_type == "card" or effect.source_type == "creature")
             and should_retaliate):
                 has_ranged_trait = lambda trait: trait.type == "ranged"
+                # Source is already fetched above
                 source_has_ranged_trait = any(
                     has_ranged_trait(trait)
-                    for trait in state.cards[effect.source_id].traits
+                    for trait in source.traits
                 )
                 if source_has_ranged_trait:
                     should_retaliate = False
@@ -182,12 +203,17 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
 def mark_exhausted(effect: MarkExhaustedEffect, state: GameState) -> Result:
     if effect.target_type == "card":
         state.cards[effect.target_id].exhausted = True
+    elif effect.target_type == "creature":
+        state.creatures[effect.target_id].exhausted = True
     elif effect.target_type == "hero":
         state.heroes[effect.side].exhausted = True
     return Success(new_state=state)
 
 @register("effect_attack")
 def attack(effect: AttackEffect, state: GameState) -> Result:
+    # effect.card_id is actually a creature_id (on the board)
+    creature = state.creatures[effect.card_id]
+
     damage_effect = DamageEffect(
         side=effect.side,
         damage_type="physical",
@@ -195,11 +221,11 @@ def attack(effect: AttackEffect, state: GameState) -> Result:
         source_id=effect.card_id,
         target_type=effect.target_type,
         target_id=effect.target_id,
-        damage=state.cards[effect.card_id].attack
+        damage=creature.attack
     )
     mark_exhausted_effect = MarkExhaustedEffect(
         side=effect.side,
-        target_type="card",
+        target_type="creature",
         target_id=effect.card_id
     )
     child_effects = [mark_exhausted_effect, damage_effect]
@@ -253,9 +279,9 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
 
 @register("effect_end_turn")
 def end_turn(effect: EndTurnEffect, state: GameState) -> Result:
-    # Mark all cards on the board as not exhausted
-    for card_on_board in state.board[effect.side]:
-        state.cards[card_on_board].exhausted = False
+    # Mark all creatures on the board as not exhausted
+    for creature_id in state.board[effect.side]:
+        state.creatures[creature_id].exhausted = False
 
     # Mark the hero as not exhausted
     state.heroes[effect.side].exhausted = False

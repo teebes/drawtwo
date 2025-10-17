@@ -25,7 +25,7 @@ from apps.gameplay.schemas.effects import (
     UseHeroEffect,
 )
 from apps.gameplay.schemas.events import PlayEvent
-from apps.gameplay.schemas.game import GameState, CardInPlay, HeroInPlay
+from apps.gameplay.schemas.game import GameState, CardInPlay, Creature, HeroInPlay
 from apps.gameplay.services import GameService
 from apps.gameplay import traits
 
@@ -80,15 +80,29 @@ class ServiceTests(ServiceTestsBase):
 class ProcessCommandTests(ServiceTestsBase):
 
     def test_attack_with_retaliation(self):
-        # Put a card from the player's hand onto the board
+        # Create creatures on the board (not cards)
+        self.game.state['creatures'] = {
+            '1': {
+                'creature_id': '1',
+                'card_id': 'card_1',
+                'name': 'Test Creature 1',
+                'attack': 1,
+                'health': 10,
+                'exhausted': False,
+                'traits': []
+            },
+            '5': {
+                'creature_id': '5',
+                'card_id': 'card_5',
+                'name': 'Test Creature 5',
+                'attack': 1,
+                'health': 10,
+                'exhausted': False,
+                'traits': []
+            }
+        }
         self.game.state['board']['side_a'].append('1')
-        # Put a card from the opponent's hand onto the board
         self.game.state['board']['side_b'].append('5')
-        self.game.state['cards']['1']['exhausted'] = False
-        self.game.state['cards']['1']['attack'] = 1
-        self.game.state['cards']['1']['health'] = 10
-        self.game.state['cards']['5']['attack'] = 1
-        self.game.state['cards']['5']['health'] = 10
         self.game.save()
 
         command = {
@@ -99,8 +113,8 @@ class ProcessCommandTests(ServiceTestsBase):
         }
         GameService.process_command(self.game.id, command, 'side_a')
         self.game.refresh_from_db()
-        self.assertEqual(self.game.state['cards']['5']['health'], 9)
-        self.assertEqual(self.game.state['cards']['1']['health'], 9)
+        self.assertEqual(self.game.state['creatures']['5']['health'], 9)
+        self.assertEqual(self.game.state['creatures']['1']['health'], 9)
         self.assertEqual(len(self.game.queue), 0)
 
     def test_end_turn(self):
@@ -124,8 +138,6 @@ class SmokeTests(ServiceTestsBase):
         while self.game.queue:
             GameService.step(self.game.id)
             self.game.refresh_from_db()
-
-
 
     def test_draw_two(self):
         draw_two_card = CardInPlay(
@@ -179,6 +191,8 @@ class GamePlayTestBase(TestCase):
             queue=[],
             event_queue=[],
             cards={},
+            creatures={},
+            last_creature_id=0,
             decks={'side_a': [], 'side_b': []},
             mana_pool={'side_a': 0, 'side_b': 0},
             mana_used={'side_a': 0, 'side_b': 0},
@@ -363,21 +377,20 @@ class EngineTests(GamePlayTestBase):
             ],
         )
 
-        creature_card = CardInPlay(
-            card_type="creature",
-            card_id="2",
-            template_slug="test",
+        # Create a creature on the board (not a card)
+        creature = Creature(
+            creature_id="2",
+            card_id="creature_card_2",
             name="test",
             attack=1,
             health=10,
-            cost=1,
             exhausted=False,
         )
 
         self.game_state.mana_pool["side_a"] = 1
         self.game_state.mana_used["side_a"] = 0
         self.game_state.cards["1"] = spell_card
-        self.game_state.cards["2"] = creature_card
+        self.game_state.creatures["2"] = creature
         self.game_state.hands["side_a"] = ["1"]
         self.game_state.board["side_b"] = ["2"]
 
@@ -409,31 +422,29 @@ class EngineTests(GamePlayTestBase):
         damage_result = resolve(damage_effect, new_state)
         self.assertTrue(isinstance(damage_result, Success))
         # This should work without errors - creature should take 1 damage
-        self.assertEqual(damage_result.new_state.cards["2"].health, 9)
+        self.assertEqual(damage_result.new_state.creatures["2"].health, 9)
 
 
 class TestDamage(GamePlayTestBase):
 
     def setUp(self, *args, **kwargs):
         super().setUp(*args, **kwargs)
-        self.creature = CardInPlay(
-            card_type="creature",
-            card_id="1",
-            template_slug="test",
+        self.creature = Creature(
+            creature_id="1",
+            card_id="card_1",
             name="test",
             attack=1,
             health=1,
-            cost=1,
             exhausted=False,
         )
 
     def test_creature_to_hero_damage(self):
-        self.game_state.cards["1"] = self.creature
+        self.game_state.creatures["1"] = self.creature
         self.game_state.board['side_a'] = ["1"]
         damage_effect = DamageEffect(
             side="side_a",
             damage_type="physical",
-            source_type="card",
+            source_type="creature",
             source_id="1",
             target_type="hero",
             target_id="2",
@@ -452,30 +463,28 @@ class TestDamage(GamePlayTestBase):
         self.assertEqual(result.events[0].type, 'event_damage')
 
         # Attacking creature is exhausted
-        self.assertTrue(new_state.cards["1"].exhausted)
+        self.assertTrue(new_state.creatures["1"].exhausted)
 
     def test_creature_to_creature_damage(self):
-        target_creature = CardInPlay(
-            card_type="creature",
-            card_id="2",
-            template_slug="test",
+        target_creature = Creature(
+            creature_id="2",
+            card_id="card_2",
             name="test",
             attack=2,
             health=10,
-            cost=1,
             exhausted=False,
         )
 
-        self.game_state.cards["1"] = self.creature
-        self.game_state.cards["2"] = target_creature
+        self.game_state.creatures["1"] = self.creature
+        self.game_state.creatures["2"] = target_creature
         self.game_state.board['side_a'] = ["1"]
         self.game_state.board['side_b'] = ["2"]
         damage_effect = DamageEffect(
             side="side_a",
             damage_type="physical",
-            source_type="card",
+            source_type="creature",
             source_id="1",
-            target_type="card",
+            target_type="creature",
             target_id="2",
             damage=1,
             retaliate=True,
@@ -486,50 +495,51 @@ class TestDamage(GamePlayTestBase):
         new_state = result.new_state
 
         # The target creature's health went down
-        self.assertEqual(new_state.cards["2"].health, 9)
+        self.assertEqual(new_state.creatures["2"].health, 9)
 
-        # Two events created: initial damage and retaliation
-        self.assertEqual(len(result.events), 2)
+        # Initial damage event created
+        self.assertEqual(len(result.events), 1)
         self.assertEqual(result.events[0].type, "event_damage")
-        self.assertEqual(result.events[1].type, "event_damage")
-        # Retaliation event is the second one
+
+        # Retaliation is returned as a child effect to be processed
+        self.assertEqual(len(result.child_effects), 1)
+        retaliation_effect = result.child_effects[0]
+        self.assertEqual(retaliation_effect.type, "effect_damage")
         # Retaliation source is the target creature
-        self.assertEqual(result.events[1].source_id, "2")
-        self.assertEqual(result.events[1].source_type, "card")
+        self.assertEqual(retaliation_effect.source_id, "2")
+        self.assertEqual(retaliation_effect.source_type, "creature")
         # Retaliation targets the source creature
-        self.assertEqual(result.events[1].target_id, "1")
-        self.assertEqual(result.events[1].target_type, "card")
+        self.assertEqual(retaliation_effect.target_id, "1")
+        self.assertEqual(retaliation_effect.target_type, "creature")
         # Retaliation damage is the target creature's attack
-        self.assertEqual(result.events[1].damage, 2)
+        self.assertEqual(retaliation_effect.damage, 2)
         # Retaliation doesn't retaliate to avoid an infinite loop
-        self.assertFalse(result.events[1].retaliate)
+        self.assertFalse(retaliation_effect.retaliate)
 
     def test_creature_to_creature_retaliation(self):
         """
         Make sure that a retaliation effect does not generate another
         retaliation event even if it otherwise would.
         """
-        target_creature = CardInPlay(
-            card_type="creature",
-            card_id="2",
-            template_slug="test",
+        target_creature = Creature(
+            creature_id="2",
+            card_id="card_2",
             name="test",
             attack=2,
             health=10,
-            cost=1,
             exhausted=False,
         )
 
-        self.game_state.cards["1"] = self.creature
-        self.game_state.cards["2"] = target_creature
+        self.game_state.creatures["1"] = self.creature
+        self.game_state.creatures["2"] = target_creature
         self.game_state.board['side_a'] = ["1"]
         self.game_state.board['side_b'] = ["2"]
         damage_effect = DamageEffect(
             side="side_a",
             damage_type="physical",
-            source_type="card",
+            source_type="creature",
             source_id="1",
-            target_type="card",
+            target_type="creature",
             target_id="2",
             damage=1,
             retaliate=False,
@@ -544,14 +554,14 @@ class TestDamage(GamePlayTestBase):
 
     def test_hero_to_creature_damage(self):
         self.creature.health = 10
-        self.game_state.cards["1"] = self.creature
+        self.game_state.creatures["1"] = self.creature
         self.game_state.board['side_b'] = ["1"]
         damage_effect = DamageEffect(
             side="side_a",
             damage_type="physical",
             source_type="hero",
             source_id="1",
-            target_type="card",
+            target_type="creature",
             target_id="1",
             damage=1,
         )
@@ -561,18 +571,22 @@ class TestDamage(GamePlayTestBase):
         new_state = result.new_state
 
         # The target creature's health went down
-        self.assertEqual(new_state.cards["1"].health, 9)
+        self.assertEqual(new_state.creatures["1"].health, 9)
 
-        # Two events created: initial damage and retaliation from creature
-        self.assertEqual(len(result.events), 2)
+        # Initial damage event created
+        self.assertEqual(len(result.events), 1)
         self.assertEqual(result.events[0].type, "event_damage")
-        self.assertEqual(result.events[1].type, "event_damage")
+
+        # Retaliation is returned as a child effect to be processed
+        self.assertEqual(len(result.child_effects), 1)
+        retaliation_effect = result.child_effects[0]
+        self.assertEqual(retaliation_effect.type, "effect_damage")
         # Creatures retaliate against heroes
-        self.assertEqual(result.events[1].retaliate, False)
-        self.assertEqual(result.events[1].source_id, "1")
-        self.assertEqual(result.events[1].source_type, "card")
-        self.assertEqual(result.events[1].target_id, "1")
-        self.assertEqual(result.events[1].target_type, "hero")
+        self.assertFalse(retaliation_effect.retaliate)
+        self.assertEqual(retaliation_effect.source_id, "1")
+        self.assertEqual(retaliation_effect.source_type, "creature")
+        self.assertEqual(retaliation_effect.target_id, "1")
+        self.assertEqual(retaliation_effect.target_type, "hero")
 
     def test_hero_to_hero_damage(self):
         self.game_state.heroes['side_a'].health = 10

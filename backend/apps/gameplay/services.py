@@ -25,7 +25,6 @@ from apps.gameplay.schemas.commands import (
     Command,
     PlayCardCommand,
     EndTurnCommand,
-    UseCardCommand,
     UseHeroCommand,
 )
 from apps.gameplay.schemas.effects import (
@@ -36,7 +35,6 @@ from apps.gameplay.schemas.effects import (
     EndTurnEffect,
     PlayEffect,
     StartGameEffect,
-    UseCardEffect,
     UseHeroEffect,
 )
 from apps.gameplay.schemas.engine import Success, Result, Prevented, Rejected, Fault
@@ -377,20 +375,13 @@ class GameService:
             effects.append(EndTurnEffect(
                 side=game_state.active,
             ))
-        elif (isinstance(command, UseCardCommand)
-              or isinstance(command, AttackCommand)):
-              effects.append(AttackEffect(
+        elif isinstance(command, AttackCommand):
+            effects.append(AttackEffect(
                 side=game_state.active,
                 card_id=command.card_id,
                 target_type=target_type,
                 target_id=command.target_id,
-              ))
-            # effects.append(UseCardEffect(
-            #     side=game_state.active,
-            #     card_id=command.card_id,
-            #     target_type=target_type,
-            #     target_id=command.target_id,
-            # ))
+            ))
         elif isinstance(command, UseHeroCommand):
             effects.append(UseHeroEffect(
                 side=game_state.active,
@@ -463,12 +454,12 @@ class GameService:
                     position=0,
                 )
 
-        # See if there's a card that can be used to attack, and if there is,
+        # See if there's a creature that can be used to attack, and if there is,
         # attack the hero.
-        for card_id in state.board[state.active]:
-            card = state.cards[card_id]
+        for creature_id in state.board[state.active]:
+            creature = state.creatures[creature_id]
 
-            if card.exhausted: continue
+            if creature.exhausted: continue
 
             if script.strategy == "rush":
                 target_type = "hero"
@@ -491,7 +482,7 @@ class GameService:
 
             return AttackEffect(
                 side=state.active,
-                card_id=card_id,
+                card_id=creature_id,
                 target_type=target_type,
                 target_id=target_id)
 

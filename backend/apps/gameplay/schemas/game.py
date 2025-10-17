@@ -31,6 +31,17 @@ class CardInPlay(BaseModel):
         return any(trait.type == trait_code for trait in self.traits)
 
 
+class Creature(BaseModel):
+    creature_id: str
+    card_id: str
+    name: str
+    description: str = ''
+    attack: int = 0
+    health: int = 0
+    traits: List[Trait] = Field(default_factory=list)
+    exhausted: bool = True
+
+
 class HeroInPlay(BaseModel):
     hero_id: str # Internal hero ID for that game
     template_slug: str # ID of the hero template
@@ -49,6 +60,8 @@ class GameState(BaseModel):
     queue: list[Effect] = Field(default_factory=list)
     # Centralized storage of all cards in the game by their unique ID
     cards: Dict[str, CardInPlay] = Field(default_factory=dict)
+    creatures: Dict[str, Creature] = Field(default_factory=dict)
+    last_creature_id: int = 0
 
     heroes: Dict[str, HeroInPlay]
 

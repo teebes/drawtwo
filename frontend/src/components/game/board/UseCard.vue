@@ -18,13 +18,13 @@
 
                 <!-- If interactions are allowed (selection mode always allows) -->
                 <div v-if="canInteract" class="flex flex-row w-full h-24 mx-auto">
-                    <div v-for="card in opposingBoard" :key="card.card_id" class="p-1">
-                        <GameCard v-if="card"
+                    <div v-for="creature in opposingBoard" :key="creature.creature_id" class="p-1">
+                        <GameCard v-if="creature"
                                 class="flex-grow-0"
-                                :card="card"
+                                :card="creature"
                                 compact in_lane
                                 :class="canSelectCardTargets ? 'cursor-pointer' : 'opacity-50 pointer-events-none'"
-                                @click="canSelectCardTargets && handleCardClick(card.card_id)"
+                                @click="canSelectCardTargets && handleCardClick(creature.creature_id)"
                                 />
                     </div>
                 </div>
@@ -60,15 +60,15 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { GameState, CardInPlay, HeroInPlay } from '@/types/game'
+import type { GameState, CardInPlay, Creature, HeroInPlay } from '@/types/game'
 import { useGameStore } from '@/stores/game'
 import GameCard from '../GameCard.vue'
 
 interface Props {
     gameState: GameState
-    card: CardInPlay | null
-    ownBoard: CardInPlay[] | []
-    opposingBoard: CardInPlay[] | []
+    card: CardInPlay | Creature | null
+    ownBoard: Creature[] | []
+    opposingBoard: Creature[] | []
     opposingHero: HeroInPlay | null
     opposingHeroInitials: string | null
     mode?: 'use' | 'select'
@@ -124,7 +124,9 @@ const handleHeroClick = () => {
         emit('close-overlay')
         return
     }
-    gameStore.useCardOnHero(props.card.card_id, props.opposingHero.hero_id)
+    // For creatures on board, card will be a Creature with creature_id; for cards in hand, it has card_id
+    const id = 'creature_id' in props.card ? props.card.creature_id : props.card.card_id
+    gameStore.useCardOnHero(id, props.opposingHero.hero_id)
     emit('close-overlay')
 }
 
@@ -135,7 +137,9 @@ const handleCardClick = (cardId: string) => {
         emit('close-overlay')
         return
     }
-    gameStore.useCardOnCard(props.card.card_id, cardId)
+    // For creatures on board, card will be a Creature with creature_id; for cards in hand, it has card_id
+    const id = 'creature_id' in props.card ? props.card.creature_id : props.card.card_id
+    gameStore.useCardOnCard(id, cardId)
     emit('close-overlay')
 }
 </script>

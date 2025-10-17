@@ -3,7 +3,9 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
 from .models import Game, GameUpdate
-from .schemas import GameState, GameUpdate as PydGameUpdate
+#from .schemas import GameState, GameUpdate as PydGameUpdate
+from apps.gameplay.schemas.game import GameState
+from apps.gameplay.schemas.updates import GameUpdate as PydGameUpdate
 from .services import GameService
 from pydantic import TypeAdapter
 
