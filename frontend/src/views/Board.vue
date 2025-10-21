@@ -359,17 +359,48 @@ const isHandCardActive = (card_id: string | number) => {
 // When clicking a card in hand (always owned by player)
 const handleClickHandCard = (card_id: string) => {
     console.log('handleClickHandCard', card_id)
+    const card = get_card(card_id)
+    if (!card) return
+
+    // If it's a spell that requires targeting, go directly to targeting
+    if (card.card_type === 'spell' && requiresTarget(card)) {
+        targetingState.value = {
+            sourceType: 'spell',
+            sourceId: card_id,
+            allowedTypes: convertAllowedTargets(getAllowedTargets(card)),
+            scope: 'enemy', // Most spells target enemies
+            sourceCard: card,
+            errorMessage: null,
+            title: 'Cast Spell'
+        }
+        overlay.value = 'select_target'
+        overlayTitle.value = 'Select Target'
+        return
+    }
+
+    // Otherwise show entity detail (for creatures or non-targeting spells)
     selectedEntity.value = { type: 'card', id: card_id, isOwned: true }
     overlay.value = 'entity_detail'
     overlayTitle.value = 'Card Details'
 }
 
-// When clicking own creature on board
+// When clicking own creature on board - go directly to targeting
 const handleClickOwnCreature = (creature_id: string) => {
     console.log('handleClickOwnCreature', creature_id)
-    selectedEntity.value = { type: 'creature', id: creature_id, isOwned: true }
-    overlay.value = 'entity_detail'
-    overlayTitle.value = 'Creature Details'
+    const creature = get_creature(creature_id)
+    if (!creature) return
+
+    targetingState.value = {
+        sourceType: 'creature',
+        sourceId: creature_id,
+        allowedTypes: 'both',  // Creatures can attack both heroes and other creatures
+        scope: 'enemy',
+        sourceCard: creature,
+        errorMessage: creature.exhausted ? 'Creature is exhausted' : null,
+        title: 'Select Attack Target'
+    }
+    overlay.value = 'select_target'
+    overlayTitle.value = 'Attack'
 }
 
 // When clicking opposing creature (just for info, cannot attack)
