@@ -6,6 +6,10 @@ and returns:
 * events
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 """
 from dataclasses import dataclass
 import random
@@ -64,7 +68,7 @@ def resolve_event(state):
     return
     event = state.event_queue.pop(0)
 
-    print("\033[92m# %s #\033[0m" % event)
+    logger.debug("\033[92m# %s #\033[0m" % event)
 
     events = []
     updates = []
@@ -304,7 +308,7 @@ def handle_use_hero(state: GameState, event: UseHeroEvent) -> ResolvedEvent:
     updates = []
 
     for action in hero.hero_power.actions:
-        print('action: %s' % action)
+        logger.debug('action: %s' % action)
         _events, _updates = handle_card_action(state, hero, action, event)
         events.extend(_events)
         updates.extend(_updates)

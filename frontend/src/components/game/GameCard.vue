@@ -11,7 +11,7 @@
         </div>
         <div class="flex flex-row justify-between" :class="compact ? 'text-xs' : ''">
             <div>{{ card.attack }} | {{ card.health }}</div>
-            <div v-if="!in_lane" class="mr-1">{{ card.cost }}</div>
+            <div v-if="!in_lane && displayCost !== null" class="mr-1">{{ displayCost }}</div>
         </div>
     </div>
 </template>
@@ -19,11 +19,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Card } from '../../types/card'
-import type { CardInPlay } from '../../types/game'
+import type { CardInPlay, Creature } from '../../types/game'
 import { makeInitials } from '../../utils'
 
 interface Props {
-    card: Card | CardInPlay
+    card: Card | CardInPlay | Creature
     compact?: boolean
     in_lane?: boolean
     active?: boolean
@@ -35,16 +35,27 @@ const props = withDefaults(defineProps<Props>(), {
     active: false
 })
 
-// Convert template_slug to display name for CardInPlay, or use name for Card
+// Convert template_slug to display name for CardInPlay, or use name for Card/Creature
 const displayName = computed(() => {
-    // If it's a Card type (has name property)
+    // All types have name property now
     if ('name' in props.card) {
         return props.card.name
     }
-    // It must be CardInPlay type
-    return (props.card as CardInPlay).template_slug
-        .replace(/_/g, ' ')
-        .replace(/\b\w/g, l => l.toUpperCase())
+    // Fallback for CardInPlay with template_slug
+    if ('template_slug' in props.card) {
+        return (props.card as CardInPlay).template_slug
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, (l: string) => l.toUpperCase())
+    }
+    return 'Unknown'
+})
+
+const displayCost = computed(() => {
+    // Only CardInPlay has cost, Creatures don't show cost
+    if ('cost' in props.card) {
+        return props.card.cost
+    }
+    return null
 })
 
 const active_classes = computed(() => {

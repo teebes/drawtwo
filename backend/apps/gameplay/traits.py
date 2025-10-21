@@ -6,6 +6,7 @@ and Deathrattle. It follows an event-driven paradigm where traits respond to
 game events rather than being called directly by effect handlers.
 """
 
+import logging
 from typing import Callable
 from pydantic import TypeAdapter, ValidationError
 
@@ -15,6 +16,8 @@ from apps.gameplay.schemas.effects import DrawEffect, DamageEffect
 from apps.gameplay.schemas.engine import Result, Success
 from apps.gameplay.schemas.events import Event, PlayEvent, DamageEvent
 from apps.gameplay.services import GameService
+
+logger = logging.getLogger(__name__)
 
 
 # Maps event types to trait types that should trigger on those events
@@ -110,7 +113,7 @@ def handle_battlecry_trait(
         try:
             card_action = TypeAdapter(Action).validate_python(card_action)
         except ValidationError:
-            print(f"Invalid card action: {card_action}")
+            logger.warning(f"Invalid card action: {card_action}")
             continue
 
         effect = GameService.compile_action(

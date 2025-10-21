@@ -32,7 +32,7 @@ class AttackCommand(CommandBase):
 class UseHeroCommand(CommandBase):
     type: Literal["cmd_use_hero"] = "cmd_use_hero"
     hero_id: str
-    target_type: Literal["card", "hero"] = "card"
+    target_type: Literal["card", "hero", "creature"] = "card"
     target_id: str
 
 class EndTurnCommand(CommandBase):

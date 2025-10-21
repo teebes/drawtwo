@@ -66,8 +66,12 @@ class DeathRattle(TraitBase):
     type: Literal['deathrattle'] = 'deathrattle'
 
 
+class Stealth(TraitBase):
+    type: Literal['stealth'] = 'stealth'
+
+
 Trait = Annotated[
-    Union[Charge, Ranged, Taunt, Battlecry, DeathRattle],
+    Union[Charge, Ranged, Taunt, Battlecry, DeathRattle, Stealth],
     Discriminator('type')
 ]
 

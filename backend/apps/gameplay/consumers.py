@@ -1,4 +1,5 @@
 import json
+import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
@@ -8,6 +9,8 @@ from apps.gameplay.schemas.game import GameState
 from apps.gameplay.schemas.updates import GameUpdate as PydGameUpdate
 from .services import GameService
 from pydantic import TypeAdapter
+
+logger = logging.getLogger(__name__)
 
 
 class GameConsumer(AsyncWebsocketConsumer):
@@ -77,8 +80,8 @@ class GameConsumer(AsyncWebsocketConsumer):
         data = json.loads(text_data)
         message_type = data.get('type')
 
-        print("#### Consumer received: ####")
-        print(f"received: {data}")
+        logger.debug("#### Consumer received: ####")
+        logger.debug(f"received: {data}")
 
         try:
             await self.process_command(data, side=self.side)
@@ -86,12 +89,19 @@ class GameConsumer(AsyncWebsocketConsumer):
             # Handle validation errors and other exceptions gracefully
             error_message = str(e)
 
-            print(f"Error processing command: {error_message}")
+            logger.warning(f"Error processing command: {error_message}")
 
-            # Send error back to client
+            # Send error back to client in the standard format
+            # (same format as errors from effect processing)
             await self.send(text_data=json.dumps({
-                'type': 'command_error',
-                'errors': [{'message': error_message}],
+                'type': 'game_updates',  # Use same type as regular updates
+                'state': None,  # No state update
+                'updates': [],  # No updates
+                'errors': [{
+                    'type': 'command_validation_error',
+                    'reason': error_message,  # Frontend expects 'reason' field
+                    'details': {},
+                }],
             }))
 
     async def game_updates(self, event):

@@ -105,3 +105,6 @@ dmypy.json
 
 # Security and testing reports
 bandit-report.json
+
+# Claude AI session documentation
+.claude/

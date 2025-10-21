@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs shell migrate makemigrations collectstatic createsuperuser test clean ci-check ci-check-docker lint lint-docker format format-docker cleanup-emails cleanup-emails-dry celery-dev logs-celery logs-redis
+.PHONY: help build up down restart logs shell migrate makemigrations collectstatic createsuperuser test test-verbose test-debug clean ci-check ci-check-docker lint lint-docker format format-docker cleanup-emails cleanup-emails-dry celery-dev logs-celery logs-redis
 
 # Default target
 help:
@@ -23,7 +23,9 @@ help:
 	@echo "  makemigrations - Create Django migrations"
 	@echo "  collectstatic  - Collect static files"
 	@echo "  createsuperuser - Create Django superuser"
-	@echo "  test           - Run backend tests"
+	@echo "  test           - Run backend tests (clean output)"
+	@echo "  test-verbose   - Run backend tests with debug output"
+	@echo "  test-debug     - Run specific test with debug output (use TEST=path.to.test)"
 	@echo ""
 	@echo "Celery Task Queue:"
 	@echo "  celery-dev     - Start backend services with Celery (db + backend + redis + celery)"
@@ -140,6 +142,12 @@ createsuperuser:
 
 test:
 	docker-compose exec backend python manage.py test --settings=config.settings.test
+
+test-verbose:
+	docker-compose exec -e TEST_LOG_LEVEL=DEBUG backend python manage.py test --settings=config.settings.test -v 2
+
+test-debug:
+	docker-compose exec -e TEST_LOG_LEVEL=DEBUG backend python manage.py test $(TEST) --settings=config.settings.test -v 2
 
 # CI/Code Quality
 ci-check:

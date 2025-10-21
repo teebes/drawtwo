@@ -1,9 +1,12 @@
+import logging
 import random
 import traceback
 import uuid
 
 from django.db import transaction, DatabaseError
 from pydantic import TypeAdapter, ValidationError
+
+logger = logging.getLogger(__name__)
 
 from apps.builder.schemas import (
     Action,
@@ -182,10 +185,10 @@ class GameService:
         except DatabaseError:
             return
 
-        print("==== STEP FUNCTION with queue: ====")
+        logger.debug("==== STEP FUNCTION with queue: ====")
         for queue_item in game.queue or []:
-            print(queue_item)
-        print("===================================")
+            logger.debug(queue_item)
+        logger.debug("===================================")
 
         if game.status == Game.GAME_STATUS_ENDED: return
         game.status = Game.GAME_STATUS_IN_PROGRESS
@@ -204,7 +207,7 @@ class GameService:
             try:
                 effect = TypeAdapter(Effect).validate_python(effect)
             except ValidationError:
-                print(f"Invalid effect: {effect}")
+                logger.warning(f"Invalid effect: {effect}")
                 continue
 
             # Wrap the entire effect processing in a try-except to catch any unhandled exceptions
@@ -244,7 +247,7 @@ class GameService:
                 elif isinstance(result, (Prevented, Rejected)):
                     # Domain-level prevention or rejection
                     # State doesn't change, but we send user feedback and emit any events
-                    print(f"Effect {result.type}: {result.reason}")
+                    logger.info(f"Effect {result.type}: {result.reason}")
                     all_events.extend(result.events)
 
                     # Add user-visible error message
@@ -257,7 +260,7 @@ class GameService:
 
                 elif isinstance(result, Fault):
                     # System/engine error - this is a bug
-                    print(f"⚠️  FAULT: {result.reason} (error_id: {result.error_id})")
+                    logger.error(f"⚠️  FAULT: {result.reason} (error_id: {result.error_id})")
                     all_errors.append({
                         'error_id': result.error_id,
                         'reason': result.reason,
@@ -267,15 +270,15 @@ class GameService:
 
                     # If unrecoverable, stop processing to avoid cascading failures
                     if not result.retryable:
-                        print(f"Non-retryable fault encountered, stopping effect processing")
+                        logger.error(f"Non-retryable fault encountered, stopping effect processing")
                         break
                     # Otherwise continue processing (retryable faults)
 
             except Exception as e:
                 # Catch any unhandled exceptions and convert them to Fault responses
                 error_id = str(uuid.uuid4())
-                print(f"⚠️  UNHANDLED EXCEPTION: {str(e)} (error_id: {error_id})")
-                print(traceback.format_exc())
+                logger.error(f"⚠️  UNHANDLED EXCEPTION: {str(e)} (error_id: {error_id})")
+                logger.error(traceback.format_exc())
 
                 # Create a Fault response
                 all_errors.append({
@@ -291,7 +294,7 @@ class GameService:
                 })
 
                 # Stop processing to avoid cascading failures
-                print(f"Stopping effect processing due to unhandled exception")
+                logger.error(f"Stopping effect processing due to unhandled exception")
                 break
 
         # Convert events to updates and persist them
@@ -376,6 +379,26 @@ class GameService:
                 side=game_state.active,
             ))
         elif isinstance(command, AttackCommand):
+            # Validate that the creature belongs to the active player
+            creature = game_state.creatures.get(command.card_id)
+            if not creature:
+                raise ValueError(f"Creature {command.card_id} does not exist")
+
+            # Check if creature is on the active player's board
+            if command.card_id not in game_state.board[game_state.active]:
+                raise ValueError(f"You do not control creature {command.card_id}")
+
+            # Validate that the target belongs to the opponent
+            opposing_side = game_state.opposite_side
+            if target_type == "creature":
+                if command.target_id not in game_state.board[opposing_side]:
+                    raise ValueError(f"Target creature {command.target_id} is not on opponent's board")
+            elif target_type == "hero":
+                # Hero must belong to opposing side
+                opposing_hero = game_state.heroes.get(opposing_side)
+                if not opposing_hero or opposing_hero.hero_id != command.target_id:
+                    raise ValueError(f"Target hero {command.target_id} is not the opponent's hero")
+
             effects.append(AttackEffect(
                 side=game_state.active,
                 card_id=command.card_id,
@@ -383,6 +406,23 @@ class GameService:
                 target_id=command.target_id,
             ))
         elif isinstance(command, UseHeroCommand):
+            # Validate that the hero belongs to the active player
+            active_hero = game_state.heroes.get(game_state.active)
+            if not active_hero or active_hero.hero_id != command.hero_id:
+                raise ValueError(f"You do not control hero {command.hero_id}")
+
+            # Validate that the target belongs to the opponent (if there is a target)
+            if target_type:
+                opposing_side = game_state.opposite_side
+                if target_type == "creature":
+                    if command.target_id not in game_state.board[opposing_side]:
+                        raise ValueError(f"Target creature {command.target_id} is not on opponent's board")
+                elif target_type == "hero":
+                    # Hero must belong to opposing side
+                    opposing_hero = game_state.heroes.get(opposing_side)
+                    if not opposing_hero or opposing_hero.hero_id != command.target_id:
+                        raise ValueError(f"Target hero {command.target_id} is not the opponent's hero")
+
             effects.append(UseHeroEffect(
                 side=game_state.active,
                 source_id=command.hero_id,
@@ -392,7 +432,7 @@ class GameService:
         else:
             raise ValueError(f"Invalid command: {command}")
 
-        print('effects: %s' % effects)
+        logger.debug('effects: %s' % effects)
 
         return effects
 

@@ -17,7 +17,9 @@
                 <!-- Header -->
                  <div class="h-24 flex flex-row justify-between border-b border-gray-700">
                     <!-- Enemy Hero-->
-                    <div class="w-24 flex flex-col items-center justify-center border-r border-gray-700" :class="{ 'bg-yellow-500/20': gameState.active === topSide }">
+                    <div class="w-24 flex flex-col items-center justify-center border-r border-gray-700 cursor-pointer hover:bg-gray-700/50"
+                         :class="{ 'bg-yellow-500/20': gameState.active === topSide }"
+                         @click="handleClickOpposingHero">
                         <div class="">{{ opposingHeroInitials }}</div>
                         <div class="">{{ opposingHero?.health }}</div>
                     </div>
@@ -29,7 +31,7 @@
 
                     <!-- Menu -->
                     <div class="w-24 flex justify-center items-center text-center border-l border-gray-700">
-                        <span class="inline-block" @click="handleMenuClick">
+                        <span class="inline-block cursor-pointer" @click="handleMenuClick">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-label="Menu" xmlns="http://www.w3.org/2000/svg">
                                 <rect y="5" width="24" height="2" rx="1" fill="currentColor"/>
                                 <rect y="11" width="24" height="2" rx="1" fill="currentColor"/>
@@ -60,8 +62,9 @@
                     <div class="lane flex flex-row h-24 mx-auto">
                         <div v-for="creature in opposingBoard" :key="creature.creature_id" class="p-1">
                             <GameCard v-if="creature"
-                                      class="flex-grow-0"
+                                      class="flex-grow-0 cursor-pointer hover:scale-105 transition-transform"
                                       :card="creature"
+                                      @click="handleClickOpposingCreature(creature.creature_id)"
                                       compact in_lane/>
                         </div>
                     </div>
@@ -88,9 +91,9 @@
                     <div class="lane flex flex-row h-24 mx-auto">
                         <div v-for="creature in ownBoard" :key="creature.creature_id" class="p-1">
                             <GameCard v-if="creature"
-                                      class="flex-grow-0 cursor-pointer"
+                                      class="flex-grow-0 cursor-pointer hover:scale-105 transition-transform"
                                       :card="creature"
-                                      @click="handleUseCard(creature.creature_id)"
+                                      @click="handleClickOwnCreature(creature.creature_id)"
                                       compact in_lane/>
                         </div>
                     </div>
@@ -115,12 +118,12 @@
                 <!-- Footer -->
                 <div class="h-24 flex flex-row border-t border-gray-700">
                     <!-- Viewer Hero -->
-                    <div class="hero w-24 h-full border-r border-gray-700 flex flex-col items-center justify-center cursor-pointer"
+                    <div class="hero w-24 h-full border-r border-gray-700 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-700/50"
                          :class="{
                            'bg-yellow-500/20': gameState.active === bottomSide,
                            'opacity-50': !canUseHero
                          }"
-                         @click="handleUseHero()">
+                         @click="handleClickOwnHero">
                         <div class="hero-name">{{ ownHeroInitials }}</div>
                         <div class="hero-health">{{ ownHero?.health }}</div>
                     </div>
@@ -129,10 +132,10 @@
                     <div class="hand overflow-x-auto flex flex-row">
                         <div v-for="card_id in ownHand" :key="card_id" class="p-1">
                             <GameCard v-if="get_card(card_id)"
-                                      class="flex-grow-0 cursor-pointer"
+                                      class="flex-grow-0 cursor-pointer hover:scale-105 transition-transform"
                                       :card="get_card(card_id)!"
                                       :active="isHandCardActive(card_id)"
-                                      @click="handleSelectHandCard(card_id)"
+                                      @click="handleClickHandCard(card_id)"
                                       compact />
                         </div>
                     </div>
@@ -144,45 +147,65 @@
         <!-- Overlay Mode -->
          <main v-else class="board flex-1 flex flex-col max-w-md w-full border-r border-l border-gray-700">
             <!-- Header -->
-            <OverlayHeader :text="overlay_text" @close="overlay = null" />
+            <OverlayHeader :text="overlayTitle" @close="closeOverlay" />
 
-            <!-- Hand Card Board Selection Overlay-->
-            <PlayCard
-                v-if="overlay == 'select_hand_card'"
-                :game-state="gameState"
-                :selected-hand-card="selected_hand_card"
-                :own-board="ownBoard"
-                :own-energy="ownEnergy"
-                @target-required="onPlayTargetRequired"
-                @close-overlay="closeOverlay"
+            <!-- Entity Detail Overlay -->
+            <EntityDetail
+                v-if="overlay === 'entity_detail' && selectedEntity"
+                :entity-type="selectedEntity.type"
+                :entity-id="selectedEntity.id"
+                :is-owned="selectedEntity.isOwned ?? true"
+                :card="selectedEntity.type === 'card' ? get_card(selectedEntity.id) : null"
+                :creature="selectedEntity.type === 'creature' ? get_creature(selectedEntity.id) : null"
+                :hero="selectedEntity.type === 'hero' ? getHero(selectedEntity.id) : null"
+                @close="closeOverlay"
+                @place-creature="handlePlaceCreature"
+                @cast-spell="handleCastSpell"
+                @attack="handleAttack"
+                @use-hero="handleUseHero"
             />
 
-            <!-- Target Selection Overlays -->
+            <!-- Creature Placement Overlay -->
+            <PlaceCreature
+                v-if="overlay === 'place_creature'"
+                :game-state="gameState"
+                :card-id="selectedCardId"
+                :own-board="ownBoard"
+                :own-energy="ownEnergy"
+                @placement-selected="onPlacementSelected"
+                @close="closeOverlay"
+            />
+
+            <!-- Target Selection Overlay -->
             <Target
-                v-if="overlay == 'target_spell' || overlay == 'target_battlecry' || overlay == 'target_attack' || overlay == 'target_hero'"
+                v-if="overlay === 'select_target' && targetingState"
                 :opposing-board="opposingBoard"
                 :opposing-hero="opposingHero"
-                :allowed-target-types="targetingConfig.allowedTypes"
-                :source-card="targetingConfig.sourceCard"
-                :error-message="targetingConfig.errorMessage"
-                :title="targetingConfig.title"
+                :own-board="ownBoard"
+                :own-hero="ownHero"
+                :allowed-target-types="targetingState.allowedTypes"
+                :target-scope="targetingState.scope"
+                :source-card="targetingState.sourceCard"
+                :error-message="targetingState.errorMessage"
+                :title="targetingState.title"
                 @target-selected="onTargetSelected"
                 @cancelled="closeOverlay"
             />
 
             <!-- Menu Overlay -->
-            <div v-if="overlay == 'menu'">
+            <div v-if="overlay === 'menu'">
                 <div class="flex flex-col items-center justify-center space-y-8 my-8">
-                    <div class="text-2xl cursor-pointer" @click="handleClickUpdates">
+                    <div class="text-2xl cursor-pointer hover:text-gray-400" @click="handleClickUpdates">
                         Updates
                     </div>
 
-                    <div v-if="canEditTitle" class="text-2xl cursor-pointer" @click="handleClickDebug">
+                    <div v-if="canEditTitle" class="text-2xl cursor-pointer hover:text-gray-400" @click="handleClickDebug">
                         Debug
                     </div>
 
                     <div class="text-2xl">
-                        <router-link :to="{ name: 'Title', params: { slug: titleStore.titleSlug } }">
+                        <router-link :to="{ name: 'Title', params: { slug: titleStore.titleSlug } }"
+                                     class="hover:text-gray-400">
                             Exit Game
                         </router-link>
                     </div>
@@ -190,7 +213,7 @@
             </div>
 
             <!-- Updates Overlay -->
-            <div v-if="overlay == 'updates'" class="flex-1 min-h-0">
+            <div v-if="overlay === 'updates'" class="flex-1 min-h-0">
                 <div class="flex flex-col h-full border-gray-700 overflow-y-auto">
                     <div class="flex border-gray-700 items-center justify-center py-2" :class="{ 'border-b': update.type === 'update_end_turn' }"
                          v-for="update in displayUpdates" :key="update.timestamp">
@@ -200,7 +223,7 @@
             </div>
 
             <!-- Debug Overlay -->
-            <DebugOverlay v-if="overlay == 'debug'" :game-id="gameId" />
+            <DebugOverlay v-if="overlay === 'debug'" :game-id="gameId" />
 
          </main>
 
@@ -227,7 +250,8 @@ import { storeToRefs } from 'pinia'
 import GameCard from '../components/game/GameCard.vue'
 import GameButton from '../components/ui/GameButton.vue'
 // Board Components
-import PlayCard from '../components/game/board/PlayCard.vue'
+import EntityDetail from '../components/game/board/EntityDetail.vue'
+import PlaceCreature from '../components/game/board/PlaceCreature.vue'
 import Target from '../components/game/board/Target.vue'
 import GameOverOverlay from '../components/game/board/GameOverOverlay.vue'
 import Update from '../components/game/board/Update.vue'
@@ -266,20 +290,37 @@ const {
   canUseHero
 } = storeToRefs(gameStore)
 
-// Local UI state only
-const selected_hand_card = ref<string | null>(null)
-const overlay = ref<'select_hand_card' | 'target_spell' | 'target_battlecry' | 'target_attack' | 'target_hero' | 'menu' | 'updates' | 'debug' | null>(null)
-const overlay_text = ref<string | null>(null)
+// Overlay Types
+type OverlayType = 'entity_detail' | 'place_creature' | 'select_target' | 'menu' | 'updates' | 'debug' | null
+
+// Local UI state
+const overlay = ref<OverlayType>(null)
+const overlayTitle = ref<string>('')
+
+// Entity selection state (for detail view)
+interface SelectedEntity {
+    type: 'card' | 'creature' | 'hero'
+    id: string
+    isOwned?: boolean  // Whether this entity belongs to the current player
+}
+const selectedEntity = ref<SelectedEntity | null>(null)
+
+// Card selection for placement
+const selectedCardId = ref<string | null>(null)
 
 // Targeting state
 interface TargetingState {
-    sourceType: 'creature' | 'hero' | 'spell'
+    sourceType: 'creature' | 'hero' | 'spell' | 'battlecry'
     sourceId: string
     allowedTypes: 'creature' | 'hero' | 'both'
+    scope: 'enemy' | 'friendly' | 'any'
+    sourceCard: CardInPlay | Creature | null
+    errorMessage: string | null
+    title: string
 }
 const targetingState = ref<TargetingState | null>(null)
 
-// Pending play context when a target is required (battlecry/spell)
+// Pending play context when battlecry target is required
 const pendingPlay = ref<{ card_id: string; position: number } | null>(null)
 
 const showingGameOver = ref(false)
@@ -301,162 +342,173 @@ const get_card = (card_id: string | number) => {
     return gameStore.getCard(String(card_id))
 }
 
+const get_creature = (creature_id: string) => {
+    return gameStore.getCreature(String(creature_id))
+}
+
+const getHero = (hero_id: string) => {
+    return gameState.value.heroes[hero_id]
+}
+
 const isHandCardActive = (card_id: string | number) => {
     return gameStore.isHandCardActive(String(card_id))
 }
 
-// Computed targeting configuration
-const targetingConfig = computed(() => {
-    if (!targetingState.value) {
-        return {
-            allowedTypes: 'both' as const,
-            sourceCard: null,
-            errorMessage: null,
-            title: 'Select Target'
-        }
-    }
+/* Click Handlers - Opening Entity Details or Initiating Actions */
 
-    const { sourceType, sourceId, allowedTypes } = targetingState.value
-    let sourceCard: CardInPlay | null = null
-    let errorMessage: string | null = null
-    let title = 'Select Target'
-
-    // Get source card if applicable
-    if (sourceType === 'creature' || sourceType === 'spell') {
-        sourceCard = get_card(sourceId) || null
-    }
-
-    // Validate based on source type
-    if (sourceType === 'creature' && sourceCard) {
-        if (sourceCard.exhausted) {
-            errorMessage = 'Creature is exhausted'
-        }
-        title = 'Attack Target'
-    } else if (sourceType === 'hero') {
-        if (!canUseHero.value) {
-            errorMessage = 'Hero cannot be used'
-        }
-        title = 'Use Hero Power'
-    } else if (sourceType === 'spell' && sourceCard) {
-        const availableEnergy = ownEnergy.value
-        if (sourceCard.cost > availableEnergy) {
-            errorMessage = 'Not enough energy'
-        }
-        title = 'Cast Spell'
-    }
-
-    return {
-        allowedTypes,
-        sourceCard,
-        errorMessage,
-        title
-    }
-})
-
-/* Handlers */
-
-const handleEndTurn = () => {
-    if (gameOver.value.isGameOver) return
-    gameStore.endTurn()
+// When clicking a card in hand (always owned by player)
+const handleClickHandCard = (card_id: string) => {
+    console.log('handleClickHandCard', card_id)
+    selectedEntity.value = { type: 'card', id: card_id, isOwned: true }
+    overlay.value = 'entity_detail'
+    overlayTitle.value = 'Card Details'
 }
 
-const handleSelectHandCard = (card_id: string) => {
-    console.log('handleSelectHandCard', card_id)
+// When clicking own creature on board
+const handleClickOwnCreature = (creature_id: string) => {
+    console.log('handleClickOwnCreature', creature_id)
+    selectedEntity.value = { type: 'creature', id: creature_id, isOwned: true }
+    overlay.value = 'entity_detail'
+    overlayTitle.value = 'Creature Details'
+}
+
+// When clicking opposing creature (just for info, cannot attack)
+const handleClickOpposingCreature = (creature_id: string) => {
+    console.log('handleClickOpposingCreature', creature_id)
+    selectedEntity.value = { type: 'creature', id: creature_id, isOwned: false }
+    overlay.value = 'entity_detail'
+    overlayTitle.value = 'Enemy Creature'
+}
+
+// When clicking own hero
+const handleClickOwnHero = () => {
+    if (!ownHero.value || !viewer.value) return
+    console.log('handleClickOwnHero', ownHero.value.hero_id)
+    // Store the side (viewer) as the ID since heroes are keyed by side in the state
+    selectedEntity.value = { type: 'hero', id: viewer.value, isOwned: true }
+    overlay.value = 'entity_detail'
+    overlayTitle.value = 'Hero Power'
+}
+
+// When clicking opposing hero (just for info, cannot use)
+const handleClickOpposingHero = () => {
+    if (!opposingHero.value || !viewer.value) return
+    console.log('handleClickOpposingHero', opposingHero.value.hero_id)
+    // Store the opposing side as the ID
+    const opposingSide = viewer.value === 'side_a' ? 'side_b' : 'side_a'
+    selectedEntity.value = { type: 'hero', id: opposingSide, isOwned: false }
+    overlay.value = 'entity_detail'
+    overlayTitle.value = 'Enemy Hero'
+}
+
+/* Action Handlers - From EntityDetail Component */
+
+// Place creature card on board
+const handlePlaceCreature = (card_id: string) => {
+    console.log('handlePlaceCreature', card_id)
+    selectedCardId.value = card_id
+    overlay.value = 'place_creature'
+    overlayTitle.value = 'Place Creature'
+}
+
+// Cast spell card
+const handleCastSpell = (card_id: string) => {
+    console.log('handleCastSpell', card_id)
     const card = get_card(card_id)
     if (!card) return
 
-    // Spells require target selection
-    if (card.card_type === 'spell') {
-        selected_hand_card.value = card_id
-        if (requiresTargetOnPlay(card)) {
-            console.log('requiresTargetOnPlay', card)
-            // Open target selection for spells
-            // After target is selected, onTargetSelected() handles the execution
-            // via gameStore.playCard()
-            pendingPlay.value = { card_id, position: 0 }
-            targetingState.value = {
-                sourceType: 'spell',
-                sourceId: card_id,
-                allowedTypes: convertAllowedTargets(getAllowedTargets(card))
-            }
-            overlay.value = 'target_spell'
-            overlay_text.value = 'Cast Spell'
-            return
+    // If spell requires target, open target selector
+    if (requiresTarget(card)) {
+        pendingPlay.value = { card_id, position: 0 }
+        targetingState.value = {
+            sourceType: 'spell',
+            sourceId: card_id,
+            allowedTypes: convertAllowedTargets(getAllowedTargets(card)),
+            scope: 'enemy', // Most spells target enemies
+            sourceCard: card,
+            errorMessage: null,
+            title: 'Cast Spell'
         }
-        // If no target required, just play immediately
-        gameStore.playCard(card_id, 0)
+        overlay.value = 'select_target'
+        overlayTitle.value = 'Select Target'
         return
     }
 
-    // Default: show placement overlay for creatures
-    overlay.value = 'select_hand_card'
-    overlay_text.value = 'Play Card'
-    selected_hand_card.value = card_id
+    // No target required, cast immediately
+    gameStore.playCard(card_id, 0)
+    closeOverlay()
 }
 
-// Creature attack handler
-const handleUseCard = (card_id: string | number) => {
-    const card = get_card(card_id)
-    if (!card) return
+// Creature attack
+const handleAttack = (creature_id: string) => {
+    console.log('handleAttack', creature_id)
+    const creature = get_creature(creature_id)
+    if (!creature) return
 
     targetingState.value = {
         sourceType: 'creature',
-        sourceId: String(card_id),
-        allowedTypes: 'both'  // Creatures can attack both heroes and other creatures
+        sourceId: creature_id,
+        allowedTypes: 'both',  // Creatures can attack both heroes and other creatures
+        scope: 'enemy',
+        sourceCard: creature,
+        errorMessage: creature.exhausted ? 'Creature is exhausted' : null,
+        title: 'Select Attack Target'
     }
-    overlay.value = 'target_attack'
-    overlay_text.value = 'Attack'
+    overlay.value = 'select_target'
+    overlayTitle.value = 'Attack'
 }
 
-// Hero power handler
-const handleUseHero = () => {
-    if (!ownHero.value) return
+// Use hero power
+const handleUseHero = (side_id: string) => {
+    console.log('handleUseHero', side_id)
+    const hero = getHero(side_id)
+    if (!hero) return
 
     targetingState.value = {
         sourceType: 'hero',
-        sourceId: ownHero.value.hero_id,
-        allowedTypes: 'both'  // Heroes can target both creatures and heroes
+        sourceId: hero.hero_id,  // Use the actual hero_id for the backend command
+        allowedTypes: 'both',  // Hero powers can target various things
+        scope: 'enemy', // Most hero powers target enemies
+        sourceCard: null,
+        errorMessage: !canUseHero.value ? 'Cannot use hero power' : null,
+        title: 'Use Hero Power'
     }
-    overlay.value = 'target_hero'
-    overlay_text.value = 'Use Hero Power'
+    overlay.value = 'select_target'
+    overlayTitle.value = 'Hero Power'
 }
 
-const handleMenuClick = () => {
-    overlay.value = 'menu'
-    overlay_text.value = "Menu"
-}
+/* Placement and Targeting Callbacks */
 
-const handleClickUpdates = () => {
-    overlay.value = 'updates'
-    overlay_text.value = "Updates"
-}
+// When placement position is selected from PlaceCreature
+const onPlacementSelected = (payload: { card_id: string; position: number; allowedTargets: Array<'card' | 'hero' | 'any'> }) => {
+    console.log('onPlacementSelected', payload)
 
-const handleClickDebug = () => {
-    overlay.value = 'debug'
-    overlay_text.value = "Debug"
-}
-
-// When PlayCard determines a target is required (battlecry after placement)
-// After target is selected, onTargetSelected() handles the execution via gameStore.playCard()
-const onPlayTargetRequired = (payload: { card_id: string; position: number; allowedTargets: Array<'card' | 'hero' | 'any'> }) => {
+    // If battlecry requires target, open target selector
     pendingPlay.value = { card_id: payload.card_id, position: payload.position }
+
+    const card = get_card(payload.card_id)
     targetingState.value = {
-        sourceType: 'creature',
+        sourceType: 'battlecry',
         sourceId: payload.card_id,
-        allowedTypes: convertAllowedTargets(payload.allowedTargets)
+        allowedTypes: convertAllowedTargets(payload.allowedTargets),
+        scope: 'enemy', // Most battlecries target enemies
+        sourceCard: card || null,
+        errorMessage: null,
+        title: 'Choose Battlecry Target'
     }
-    overlay.value = 'target_battlecry'
-    overlay_text.value = 'Choose Battlecry Target'
+    overlay.value = 'select_target'
+    overlayTitle.value = 'Battlecry Target'
 }
 
-// Receive target from Target component and execute appropriate command
+// When target is selected from Target component
 const onTargetSelected = (target: { target_type: 'creature' | 'hero'; target_id: string }) => {
+    console.log('onTargetSelected', target)
     if (!targetingState.value) return
 
     const { sourceType, sourceId } = targetingState.value
 
-    // Handle battlecry targeting (card being played)
-    if (pendingPlay.value) {
+    // Handle battlecry targeting (card being played with battlecry)
+    if (sourceType === 'battlecry' && pendingPlay.value) {
         const { card_id, position } = pendingPlay.value
         // Convert 'creature' to 'card' for backend compatibility
         const backendTarget = {
@@ -464,6 +516,19 @@ const onTargetSelected = (target: { target_type: 'creature' | 'hero'; target_id:
             target_id: target.target_id
         }
         gameStore.playCard(card_id, position, backendTarget)
+        pendingPlay.value = null
+        closeOverlay()
+        return
+    }
+
+    // Handle spell targeting
+    if (sourceType === 'spell' && pendingPlay.value) {
+        const { card_id } = pendingPlay.value
+        const backendTarget = {
+            target_type: target.target_type === 'creature' ? 'card' as const : target.target_type,
+            target_id: target.target_id
+        }
+        gameStore.playCard(card_id, 0, backendTarget)
         pendingPlay.value = null
         closeOverlay()
         return
@@ -490,17 +555,39 @@ const onTargetSelected = (target: { target_type: 'creature' | 'hero'; target_id:
         closeOverlay()
         return
     }
-
-    // Note: Spell targeting is handled by the pendingPlay check above
-    // since spells always set pendingPlay before opening the target overlay
 }
+
+/* Menu Handlers */
+
+const handleEndTurn = () => {
+    if (gameOver.value.isGameOver) return
+    gameStore.endTurn()
+}
+
+const handleMenuClick = () => {
+    overlay.value = 'menu'
+    overlayTitle.value = "Menu"
+}
+
+const handleClickUpdates = () => {
+    overlay.value = 'updates'
+    overlayTitle.value = "Game Updates"
+}
+
+const handleClickDebug = () => {
+    overlay.value = 'debug'
+    overlayTitle.value = "Debug"
+}
+
+/* Utility Functions */
 
 // Close overlay and clear state
 const closeOverlay = () => {
     overlay.value = null
-    overlay_text.value = null
+    overlayTitle.value = ''
     targetingState.value = null
-    selected_hand_card.value = null
+    selectedEntity.value = null
+    selectedCardId.value = null
     pendingPlay.value = null
 }
 
@@ -509,13 +596,56 @@ const clearLocalState = () => {
     closeOverlay()
 }
 
-// Hero clicking now handled directly by UseCard component
+function requiresTarget(card: CardInPlay): boolean {
+    const traits = card.traits || []
 
+    // Check for spell with targeting
+    if (card.card_type === 'spell') {
+        for (const trait of traits) {
+            const actions = trait.actions || []
+            for (const action of actions) {
+                if (action.action === 'damage') {
+                    return true
+                }
+            }
+        }
+    }
 
-// All computed properties are now handled by the game store
+    return false
+}
 
+function getAllowedTargets(card: CardInPlay): Array<'card' | 'hero' | 'any'> {
+    const allowed = new Set<'card' | 'hero' | 'any'>()
+    const traits = card.traits || []
 
-// All WebSocket and game state management moved to store
+    for (const trait of traits) {
+        const actions = trait.actions || []
+        for (const action of actions) {
+            if (action.action === 'damage') {
+                if (action.target === 'creature' || action.target === 'enemy') {
+                    allowed.add('card')
+                }
+                if (action.target === 'hero' || action.target === 'enemy') {
+                    allowed.add('hero')
+                }
+            }
+        }
+    }
+
+    if (allowed.size === 0) allowed.add('any')
+    return Array.from(allowed)
+}
+
+// Convert old target format to new format
+function convertAllowedTargets(targets: Array<'card' | 'hero' | 'any'>): 'creature' | 'hero' | 'both' {
+    if (targets.includes('any')) return 'both'
+    if (targets.includes('card') && targets.includes('hero')) return 'both'
+    if (targets.includes('card')) return 'creature'
+    if (targets.includes('hero')) return 'hero'
+    return 'both'
+}
+
+/* Lifecycle and Watchers */
 
 watch(title, async (newTitle) => {
     if (newTitle) {
@@ -546,52 +676,6 @@ onUnmounted(() => {
     window.removeEventListener('keydown', handleKeyDown)
     gameStore.disconnect()
 })
-
-function requiresTargetOnPlay(card: any): boolean {
-    const traits = card.traits || []
-    const battlecry = traits.find((t: any) => t.type === 'battlecry')
-    if (!battlecry) return false
-    return hasTargetingActions([battlecry])
-}
-
-function hasTargetingActions(traits: any[]): boolean {
-    for (const trait of traits) {
-        const actions = trait.actions || []
-        for (const action of actions) {
-            if (action.action === 'damage') {
-                return true
-            }
-        }
-    }
-    return false
-}
-
-function getAllowedTargets(card: any): Array<'card' | 'hero' | 'any'> {
-    const allowed = new Set<'card' | 'hero' | 'any'>()
-    const traits = card.traits || []
-    const consider = traits.find((t: any) => t.type === 'battlecry') || { actions: [] }
-    for (const action of consider.actions || []) {
-        if (action.action === 'damage') {
-            if (action.target === 'creature' || action.target === 'enemy') {
-                allowed.add('card')
-            }
-            if (action.target === 'hero' || action.target === 'enemy') {
-                allowed.add('hero')
-            }
-        }
-    }
-    if (allowed.size === 0) allowed.add('any')
-    return Array.from(allowed)
-}
-
-// Convert old target format to new format
-function convertAllowedTargets(targets: Array<'card' | 'hero' | 'any'>): 'creature' | 'hero' | 'both' {
-    if (targets.includes('any')) return 'both'
-    if (targets.includes('card') && targets.includes('hero')) return 'both'
-    if (targets.includes('card')) return 'creature'
-    if (targets.includes('hero')) return 'hero'
-    return 'both'
-}
 </script>
 
 <style scoped>

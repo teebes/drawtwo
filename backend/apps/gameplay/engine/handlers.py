@@ -25,12 +25,29 @@ from apps.gameplay.schemas.events import (
     PlayEvent,
     UseHeroEvent,
 )
-from apps.gameplay.schemas.game import GameState, Creature
+from apps.gameplay.schemas.game import GameState, CardInPlay, Creature
 from apps.gameplay.schemas.engine import (
     Result,
     Success,
     Rejected,
 )
+
+def spawn_creature(card: CardInPlay, state: GameState, side, position: int=0) -> Creature:
+    # Creature being spawned
+    creature_id = str(int(state.last_creature_id) + 1)
+    state.last_creature_id = int(creature_id)
+    creature = Creature(
+        creature_id=creature_id,
+        card_id=card.card_id,
+        name=card.name,
+        description=card.description,
+        attack=card.attack,
+        health=card.health,
+        traits=card.traits,
+    )
+    state.creatures[creature_id] = creature
+    state.board[side].insert(position, creature_id)
+    return creature
 
 
 @register("effect_draw")
@@ -74,6 +91,9 @@ def play(effect: PlayEffect, state: GameState) -> Result:
         #state.board[effect.side].insert(effect.position, effect.source_id)
         # Now we create a new creature object and add it to the board
 
+        spawn_creature(card=card, state=state, side=effect.side)
+
+        """
         # Creature being spawned
         creature_id = str(int(state.last_creature_id) + 1)
         state.last_creature_id = int(creature_id)
@@ -88,6 +108,7 @@ def play(effect: PlayEffect, state: GameState) -> Result:
         )
         state.creatures[creature_id] = creature
         state.board[effect.side].insert(effect.position, creature_id)
+        """
 
 
     state.mana_used[effect.side] += card.cost
@@ -212,7 +233,27 @@ def mark_exhausted(effect: MarkExhaustedEffect, state: GameState) -> Result:
 @register("effect_attack")
 def attack(effect: AttackEffect, state: GameState) -> Result:
     # effect.card_id is actually a creature_id (on the board)
-    creature = state.creatures[effect.card_id]
+    creature = state.creatures.get(effect.card_id)
+    if not creature:
+        return Rejected(reason=f"Creature {effect.card_id} does not exist")
+
+    # Validate that the creature belongs to the attacking side
+    if effect.card_id not in state.board[effect.side]:
+        return Rejected(reason=f"You do not control creature {effect.card_id}")
+
+    # Validate that the target belongs to the opponent
+    opposing_side = state.opposite_side
+    if effect.target_type == "creature":
+        if effect.target_id not in state.board[opposing_side]:
+            return Rejected(reason=f"Target creature is not on opponent's board")
+    elif effect.target_type == "hero":
+        opposing_hero = state.heroes.get(opposing_side)
+        if not opposing_hero or opposing_hero.hero_id != effect.target_id:
+            return Rejected(reason=f"Target is not the opponent's hero")
+
+    # Check if creature is exhausted
+    if creature.exhausted:
+        return Rejected(reason="Creature is exhausted")
 
     damage_effect = DamageEffect(
         side=effect.side,
@@ -237,7 +278,24 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
     # Lazy import to avoid circular dependency
     from apps.gameplay.services import GameService
 
-    hero = state.heroes[effect.side]
+    hero = state.heroes.get(effect.side)
+    if not hero:
+        return Rejected(reason=f"Hero not found for side {effect.side}")
+
+    # Validate that the source_id matches the hero for this side
+    if hero.hero_id != effect.source_id:
+        return Rejected(reason=f"You do not control hero {effect.source_id}")
+
+    # Validate that the target belongs to the opponent (if there is a target)
+    if effect.target_type:
+        opposing_side = state.opposite_side
+        if effect.target_type == "creature":
+            if effect.target_id not in state.board[opposing_side]:
+                return Rejected(reason=f"Target creature is not on opponent's board")
+        elif effect.target_type == "hero":
+            opposing_hero = state.heroes.get(opposing_side)
+            if not opposing_hero or opposing_hero.hero_id != effect.target_id:
+                return Rejected(reason=f"Target is not the opponent's hero")
 
     if hero.exhausted:
         return Rejected(reason="Hero is exhausted")

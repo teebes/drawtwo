@@ -19,25 +19,27 @@
 
         <!-- Target Selection State -->
         <template v-else>
-            <!-- Opponent Hero -->
-            <div v-if="canTargetHero"
+            <!-- Opponent Hero (if targeting enemies) -->
+            <div v-if="showOpposingHero && canTargetHero && opposingHero"
                 class="flex w-full justify-center border-gray-700 border-b cursor-pointer hover:bg-gray-700"
-                @click="handleHeroClick">
+                @click="handleHeroClick(opposingHero.hero_id)">
                 <div class="flex flex-col h-24 items-center justify-center">
+                    <div class="text-xs opacity-75">Opponent</div>
                     <div>{{ opposingHero?.name }}</div>
                     <div>{{ opposingHero?.health }} HP</div>
                 </div>
             </div>
-            <div v-else-if="opposingHero"
+            <div v-else-if="showOpposingHero && opposingHero"
                 class="flex w-full justify-center border-gray-700 border-b opacity-30">
                 <div class="flex flex-col h-24 items-center justify-center">
+                    <div class="text-xs opacity-75">Opponent</div>
                     <div>{{ opposingHero?.name }}</div>
                     <div>{{ opposingHero?.health }} HP</div>
                 </div>
             </div>
 
-            <!-- Opponent Board -->
-            <div class="flex w-full bg-gray-800 border-b border-gray-700 py-8 overflow-x-auto">
+            <!-- Opponent Board (if targeting enemies) -->
+            <div v-if="showOpposingBoard" class="flex w-full bg-gray-800 border-b border-gray-700 py-8 overflow-x-auto">
                 <div v-if="opposingBoard.length > 0" class="flex flex-row h-24 mx-auto">
                     <div v-for="creature in opposingBoard" :key="creature.creature_id" class="p-1">
                         <GameCard
@@ -51,7 +53,45 @@
                     </div>
                 </div>
                 <div v-else class="flex flex-row w-full h-24 items-center justify-center text-gray-500">
-                    No creatures on board
+                    No enemy creatures
+                </div>
+            </div>
+
+            <!-- Own Board (if targeting friendly) -->
+            <div v-if="showOwnBoard" class="flex w-full bg-gray-800 border-b border-gray-700 py-8 overflow-x-auto">
+                <div v-if="ownBoard && ownBoard.length > 0" class="flex flex-row h-24 mx-auto">
+                    <div v-for="creature in ownBoard" :key="creature.creature_id" class="p-1">
+                        <GameCard
+                            class="flex-grow-0"
+                            :card="creature"
+                            compact
+                            in_lane
+                            :class="canTargetCreature ? 'cursor-pointer hover:scale-105 transition-transform' : 'opacity-30'"
+                            @click="canTargetCreature && handleCreatureClick(creature.creature_id)"
+                        />
+                    </div>
+                </div>
+                <div v-else class="flex flex-row w-full h-24 items-center justify-center text-gray-500">
+                    No friendly creatures
+                </div>
+            </div>
+
+            <!-- Own Hero (if targeting friendly) -->
+            <div v-if="showOwnHero && canTargetHero && ownHero"
+                class="flex w-full justify-center border-gray-700 border-b cursor-pointer hover:bg-gray-700"
+                @click="handleHeroClick(ownHero.hero_id)">
+                <div class="flex flex-col h-24 items-center justify-center">
+                    <div class="text-xs opacity-75">Your Hero</div>
+                    <div>{{ ownHero?.name }}</div>
+                    <div>{{ ownHero?.health }} HP</div>
+                </div>
+            </div>
+            <div v-else-if="showOwnHero && ownHero"
+                class="flex w-full justify-center border-gray-700 border-b opacity-30">
+                <div class="flex flex-col h-24 items-center justify-center">
+                    <div class="text-xs opacity-75">Your Hero</div>
+                    <div>{{ ownHero?.name }}</div>
+                    <div>{{ ownHero?.health }} HP</div>
                 </div>
             </div>
 
@@ -79,17 +119,24 @@ import type { CardInPlay, Creature, HeroInPlay } from '@/types/game'
 import GameCard from '../GameCard.vue'
 
 type TargetType = 'creature' | 'hero' | 'both'
+type TargetScope = 'enemy' | 'friendly' | 'any'
 
 interface Props {
     opposingBoard: Creature[]
     opposingHero: HeroInPlay | null
+    ownBoard?: Creature[]
+    ownHero?: HeroInPlay | null
     allowedTargetTypes: TargetType
+    targetScope?: TargetScope  // Default to 'enemy' for backward compatibility
     sourceCard?: CardInPlay | Creature | null
     errorMessage?: string | null
     title?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
+    ownBoard: () => [],
+    ownHero: null,
+    targetScope: 'enemy',
     sourceCard: null,
     errorMessage: null,
     title: 'Select Target'
@@ -108,11 +155,28 @@ const canTargetHero = computed(() => {
     return props.allowedTargetTypes === 'hero' || props.allowedTargetTypes === 'both'
 })
 
-const handleHeroClick = () => {
-    if (!props.opposingHero || !canTargetHero.value) return
+// Determine which boards/heroes to show based on target scope
+const showOpposingBoard = computed(() => {
+    return props.targetScope === 'enemy' || props.targetScope === 'any'
+})
+
+const showOpposingHero = computed(() => {
+    return props.targetScope === 'enemy' || props.targetScope === 'any'
+})
+
+const showOwnBoard = computed(() => {
+    return props.targetScope === 'friendly' || props.targetScope === 'any'
+})
+
+const showOwnHero = computed(() => {
+    return props.targetScope === 'friendly' || props.targetScope === 'any'
+})
+
+const handleHeroClick = (heroId: string) => {
+    if (!canTargetHero.value) return
     emit('target-selected', {
         target_type: 'hero',
-        target_id: props.opposingHero.hero_id
+        target_id: heroId
     })
 }
 
