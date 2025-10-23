@@ -1,11 +1,22 @@
 """
 Tests for trait processing and effects.
 """
-from apps.builder.schemas import Battlecry, DrawAction, DamageAction, Charge
+from apps.builder.schemas import (
+    Battlecry,
+    Charge,
+    DamageAction,
+    DrawAction,
+    DeathRattle,
+)
 from apps.gameplay.engine.dispatcher import resolve
+from apps.gameplay.engine.handlers import spawn_creature
 from apps.gameplay.schemas.engine import Success
 from apps.gameplay.schemas.effects import PlayEffect, DrawEffect
-from apps.gameplay.schemas.events import PlayEvent, EndTurnEvent
+from apps.gameplay.schemas.events import (
+    CreatureDeathEvent,
+    EndTurnEvent,
+    PlayEvent,
+)
 from apps.gameplay.schemas.game import CardInPlay, Creature
 from apps.gameplay.tests import GamePlayTestBase
 from apps.gameplay import traits
@@ -136,22 +147,31 @@ class TestTraitProcessing(GamePlayTestBase):
 
     def test_charge_trait(self):
         """Test that charge trait sets exhausted to False on play."""
+
+        creature = spawn_creature(
+            card=self.game_state.cards["card_1"],
+            state=self.game_state,
+            side="side_a",
+        )
+
         # Create a play event for a card with charge
         play_event = PlayEvent(
             side="side_a",
             source_type="card",
             source_id="card_1",
-            position=0
+            position=0,
+            creature_id=creature.creature_id,
         )
 
-        # Card should start exhausted
-        self.assertTrue(self.game_state.cards["card_1"].exhausted)
-
+        # Creature starts out exhausted
+        self.assertTrue(creature.exhausted)
         # Apply traits
         result = traits.apply(self.game_state, play_event)
 
-        # Card should no longer be exhausted
-        self.assertFalse(self.game_state.cards["card_1"].exhausted)
+        # Creature should no longer be exhausted
+        new_state = result.new_state
+        creature = new_state.creatures[creature.creature_id]
+        self.assertFalse(creature.exhausted)
         self.assertEqual(len(result.child_effects), 0)
 
     def test_damage_battlecry(self):
@@ -192,12 +212,20 @@ class TestTraitProcessing(GamePlayTestBase):
         self.assertEqual(result.child_effects[0].retaliate, False)
 
     def test_battlecry_draw(self):
+
+        creature = spawn_creature(
+            card=self.game_state.cards["card_2"],
+            state=self.game_state,
+            side="side_a",
+        )
+
         # Create a play event for a card with battlecry
         play_event = PlayEvent(
             side="side_a",
             source_type="card",
             source_id="card_2",
-            position=0
+            position=0,
+            creature_id=creature.creature_id,
         )
 
         # Apply traits
@@ -208,3 +236,54 @@ class TestTraitProcessing(GamePlayTestBase):
         self.assertIsInstance(result.child_effects[0], DrawEffect)
         self.assertEqual(result.child_effects[0].amount, 2)
         self.assertEqual(result.child_effects[0].side, "side_a")
+
+    def test_deathrattle_draw(self):
+        killer_card = CardInPlay(
+            card_type="creature",
+            card_id="card_4",
+            template_slug="killer-card",
+            name="Killer Card",
+            attack=1,
+            health=1,
+            cost=1,
+            traits=[],
+        )
+        killer_creature = spawn_creature(
+            card=killer_card,
+            state=self.game_state,
+            side="side_a",
+        )
+
+        rattling_card = CardInPlay(
+            card_type="creature",
+            card_id="card_3",
+            template_slug="rattling-card",
+            name="Rattling Card",
+            attack=1,
+            health=1,
+            cost=1,
+            traits=[DeathRattle(actions=[DrawAction()])],
+        )
+        rattling_creature = spawn_creature(
+            card=rattling_card,
+            state=self.game_state,
+            side="side_b",
+        )
+
+        self.assertEqual(self.game_state.board["side_a"][0], "1")
+        self.assertEqual(self.game_state.board["side_b"][0], "2")
+
+        # event if killer_creature kills rattling_creature
+        death_event = CreatureDeathEvent(
+            side="side_b",
+            creature=rattling_creature,
+            source_type="creature",
+            source_id="1",
+            target_type="creature",
+            target_id="2",
+        )
+        result = traits.apply(self.game_state, death_event)
+        self.assertEqual(len(result.child_effects), 1)
+        self.assertIsInstance(result.child_effects[0], DrawEffect)
+        self.assertEqual(result.child_effects[0].side, "side_b")
+        self.assertEqual(result.child_effects[0].amount, 1)

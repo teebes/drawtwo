@@ -10,11 +10,16 @@ import logging
 from typing import Callable
 from pydantic import TypeAdapter, ValidationError
 
-from apps.gameplay.schemas.game import GameState, CardInPlay
+
 from apps.builder.schemas import Trait, Action, DamageAction, DrawAction
 from apps.gameplay.schemas.effects import DrawEffect, DamageEffect
-from apps.gameplay.schemas.engine import Result, Success
-from apps.gameplay.schemas.events import Event, PlayEvent, DamageEvent
+from apps.gameplay.schemas.engine import Result, Success, Rejected
+from apps.gameplay.schemas.events import (
+    Event,
+    CreatureDeathEvent,
+    PlayEvent,
+)
+from apps.gameplay.schemas.game import GameState, CardInPlay, Creature
 from apps.gameplay.services import GameService
 
 logger = logging.getLogger(__name__)
@@ -23,10 +28,7 @@ logger = logging.getLogger(__name__)
 # Maps event types to trait types that should trigger on those events
 EVENT_TRAIT_TRIGGERS = {
     'event_play': ["charge", "battlecry"],
-    'event_damage': ["deathrattle"],  # When a card takes lethal damage
-    # Add more mappings as needed:
-    # 'event_end_turn': ["end_of_turn_effect"],
-    # 'event_draw': ["when_drawn"],
+    'event_creature_death': ["deathrattle"],
 }
 
 
@@ -52,17 +54,27 @@ def apply(state: GameState, event: Event) -> Result:
     if not triggered_traits:
         return Success(new_state=state, events=[], child_effects=[])
 
-    # For events that reference a specific card, check that card's traits
-    if getattr(event, 'source_type', None) in ['card', 'creature']:
-        card = state.cards.get(event.source_id)
-        if card:
-            for trait in card.traits:
-                if trait.type in triggered_traits:
-                    handler = TRAIT_HANDLERS.get(trait.type)
-                    if handler:
-                        result = handler(state, event, card, trait)
-                        events.extend(result.events)
-                        child_effects.extend(result.child_effects)
+    # The entity which may have a trait (creature, card or hero)
+    entity = None
+    if isinstance(event, CreatureDeathEvent):
+        entity = event.creature
+    elif getattr(event, 'source_type', None) in ['card', 'creature']:
+        entity = state.cards.get(event.source_id)
+    elif getattr(event, 'source_type', None) == 'hero':
+        entity = state.heroes.get(event.source_id)
+    else:
+        raise ValueError("Unable to determine entity for event: %s" % event)
+
+    if entity:
+        for trait in entity.traits:
+            if trait.type in triggered_traits:
+                handler = TRAIT_HANDLERS.get(trait.type)
+                if handler:
+                    result = handler(state, event, entity, trait)
+                    events.extend(result.events)
+                    child_effects.extend(result.child_effects)
+    else:
+        raise ValueError(f"Invalid entity: {entity}")
 
     # For board-wide effects, check all cards on the board
     # (e.g., "whenever ANY creature is played" effects)
@@ -81,7 +93,7 @@ def apply(state: GameState, event: Event) -> Result:
 
 def handle_charge_trait(
     state: GameState,
-    event: Event,
+    event: PlayEvent,
     card: CardInPlay,
     trait: Trait
 ) -> Result:
@@ -91,13 +103,16 @@ def handle_charge_trait(
     Triggers on: PlayEvent
     Effect: Sets the card's exhausted state to False
     """
-    card.exhausted = False
+    creature = state.creatures.get(event.creature_id)
+    if not creature:
+        return Rejected(reason=f"Creature {event.creature_id} does not exist")
+    creature.exhausted = False
     return Success(new_state=state, events=[], child_effects=[])
 
 
 def handle_battlecry_trait(
     state: GameState,
-    event: Event,
+    event: PlayEvent,
     card: CardInPlay,
     trait: Trait
 ) -> Result:
@@ -133,7 +148,7 @@ def handle_battlecry_trait(
 def handle_deathrattle_trait(
     state: GameState,
     event: Event,
-    card: CardInPlay,
+    creature: Creature,
     trait: Trait
 ) -> Result:
     """
@@ -143,20 +158,20 @@ def handle_deathrattle_trait(
     Effect: Executes the trait's card actions
     """
     # Only trigger if the card actually died
-    if isinstance(event, DamageEvent) and card.health <= 0:
-        child_effects = []
+    child_effects = []
 
-        for card_action in trait.actions:
-            result = GameService.compile_action(state, card_action)
-            child_effects.extend(result.child_effects)
+    for card_action in trait.actions:
+        effect = GameService.compile_action(
+            state=state,
+            event=event,
+            action=card_action)
+        child_effects.append(effect)
 
-        return Success(
-            new_state=state,
-            events=[],
-            child_effects=child_effects
-        )
-
-    return Success(new_state=state, events=[], child_effects=[])
+    return Success(
+        new_state=state,
+        events=[],
+        child_effects=child_effects
+    )
 
 
 # Registry mapping trait type codes to their handler functions

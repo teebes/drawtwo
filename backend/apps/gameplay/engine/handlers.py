@@ -17,6 +17,7 @@ from apps.gameplay.schemas.effects import (
     UseHeroEffect,
 )
 from apps.gameplay.schemas.events import (
+    CreatureDeathEvent,
     DamageEvent,
     DrawEvent,
     EndTurnEvent,
@@ -44,6 +45,7 @@ def spawn_creature(card: CardInPlay, state: GameState, side, position: int=0) ->
         attack=card.attack,
         health=card.health,
         traits=card.traits,
+        exhausted=True,
     )
     state.creatures[creature_id] = creature
     state.board[side].insert(position, creature_id)
@@ -84,32 +86,15 @@ def play(effect: PlayEffect, state: GameState) -> Result:
 
     state.hands[effect.side].remove(effect.source_id)
 
+    creature_id = None
     if card.card_type == "spell":
         state.graveyard[effect.side].append(effect.source_id)
     else:
         # The old way was to add the same card object that was in hand to the board
         #state.board[effect.side].insert(effect.position, effect.source_id)
         # Now we create a new creature object and add it to the board
-
-        spawn_creature(card=card, state=state, side=effect.side)
-
-        """
-        # Creature being spawned
-        creature_id = str(int(state.last_creature_id) + 1)
-        state.last_creature_id = int(creature_id)
-        creature = Creature(
-            creature_id=creature_id,
-            card_id=effect.source_id,
-            name=card.name,
-            description=card.description,
-            attack=card.attack,
-            health=card.health,
-            traits=card.traits,
-        )
-        state.creatures[creature_id] = creature
-        state.board[effect.side].insert(effect.position, creature_id)
-        """
-
+        creature = spawn_creature(card=card, state=state, side=effect.side)
+        creature_id = creature.creature_id
 
     state.mana_used[effect.side] += card.cost
 
@@ -122,6 +107,7 @@ def play(effect: PlayEffect, state: GameState) -> Result:
             position=effect.position,
             target_type=effect.target_type,
             target_id=effect.target_id,
+            creature_id=creature_id,
         )]
     )
 
@@ -177,8 +163,22 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
     if target_type == "card" or target_type == "creature":
         # Target is a creature on the board (we already fetched it above)
         target.health -= effect.damage
+
+        # Creature death
         if target.health <= 0:
             state.board[opposing_side].remove(effect.target_id)
+
+            events.append(CreatureDeathEvent(
+                side=opposing_side,
+                source_type=effect.source_type,
+                source_id=effect.source_id,
+                creature=target,
+                # killer_type=effect.source_type,
+                # killer_id=effect.source_id,
+                target_type=effect.target_type,
+                target_id=effect.target_id,
+            ))
+
             # Also remove from creatures dict
             if target_type == "creature":
                 del state.creatures[effect.target_id]

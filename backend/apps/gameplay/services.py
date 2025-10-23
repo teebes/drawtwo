@@ -444,7 +444,7 @@ class GameService:
     ) -> Effect:
         if isinstance(action, DrawAction):
             return DrawEffect(
-                side=state.active,
+                side=event.side,
                 amount=action.amount,
             )
 
@@ -463,7 +463,7 @@ class GameService:
                 target_type = event.target_type
                 target_id = event.target_id
             return DamageEffect(
-                side=state.active,
+                side=event.side,
                 damage_type="physical",
                 source_type=event.source_type,
                 source_id=event.source_id,
