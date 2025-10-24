@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from apps.builder.models import AIPlayer, CardTemplate, HeroTemplate, Title
-from apps.builder.schemas import HeroPower, DamageAction
+from apps.builder.schemas import HeroPower, DamageAction, Taunt
 from apps.collection.models import Deck, DeckCard
 from apps.gameplay.engine.dispatcher import resolve
 from apps.gameplay.schemas.effects import AttackEffect, UseHeroEffect
@@ -568,3 +568,369 @@ class HeroPowerEffectValidationTests(AttackValidationTestBase):
         self.assertEqual(result.type, 'outcome_success')
         # Should have child effects
         self.assertGreater(len(result.child_effects), 0)
+
+
+class TauntMechanicTests(AttackValidationTestBase):
+    """Test the Taunt trait mechanic."""
+
+    def setUp(self):
+        super().setUp()
+        # Add a taunt creature to side_b
+        self.taunt_creature = Creature(
+            creature_id='taunt_b_1',
+            card_id='card_taunt_b_1',
+            name='Taunt Creature',
+            description='Has Taunt',
+            attack=1,
+            health=3,
+            traits=[Taunt()],
+            exhausted=False
+        )
+        self.game_state.creatures['taunt_b_1'] = self.taunt_creature
+        self.game_state.board['side_b'].append('taunt_b_1')
+
+    def test_cannot_attack_hero_with_taunt_on_board(self):
+        """Test that you cannot attack the enemy hero when taunt creatures exist."""
+        hero_b_id = self.game_state.heroes['side_b'].hero_id
+
+        effect = AttackEffect(
+            side='side_a',
+            card_id='creature_a_1',
+            target_type='hero',
+            target_id=hero_b_id,
+        )
+
+        result = resolve(effect, self.game_state)
+        self.assertEqual(result.type, 'outcome_rejected')
+        self.assertIn("taunt", result.reason.lower())
+
+    def test_cannot_attack_non_taunt_creature_with_taunt_on_board(self):
+        """Test that you cannot attack non-taunt creatures when taunt exists."""
+        effect = AttackEffect(
+            side='side_a',
+            card_id='creature_a_1',
+            target_type='creature',
+            target_id='creature_b_1',  # Non-taunt creature
+        )
+
+        result = resolve(effect, self.game_state)
+        self.assertEqual(result.type, 'outcome_rejected')
+        self.assertIn("taunt", result.reason.lower())
+
+    def test_can_attack_taunt_creature(self):
+        """Test that you CAN attack a creature with taunt."""
+        effect = AttackEffect(
+            side='side_a',
+            card_id='creature_a_1',
+            target_type='creature',
+            target_id='taunt_b_1',  # Taunt creature
+        )
+
+        result = resolve(effect, self.game_state)
+        self.assertEqual(result.type, 'outcome_success')
+
+    def test_can_attack_hero_when_no_taunt_on_board(self):
+        """Test that you CAN attack hero when no taunt creatures exist."""
+        # Remove the taunt creature
+        self.game_state.board['side_b'].remove('taunt_b_1')
+        del self.game_state.creatures['taunt_b_1']
+
+        hero_b_id = self.game_state.heroes['side_b'].hero_id
+        effect = AttackEffect(
+            side='side_a',
+            card_id='creature_a_1',
+            target_type='hero',
+            target_id=hero_b_id,
+        )
+
+        result = resolve(effect, self.game_state)
+        self.assertEqual(result.type, 'outcome_success')
+
+    def test_can_attack_any_creature_when_no_taunt_on_board(self):
+        """Test that you CAN attack any creature when no taunt exists."""
+        # Remove the taunt creature
+        self.game_state.board['side_b'].remove('taunt_b_1')
+        del self.game_state.creatures['taunt_b_1']
+
+        effect = AttackEffect(
+            side='side_a',
+            card_id='creature_a_1',
+            target_type='creature',
+            target_id='creature_b_1',  # Non-taunt creature
+        )
+
+        result = resolve(effect, self.game_state)
+        self.assertEqual(result.type, 'outcome_success')
+
+    def test_multiple_taunt_creatures(self):
+        """Test that any taunt creature can be attacked when multiple exist."""
+        # Add another taunt creature
+        taunt_creature_2 = Creature(
+            creature_id='taunt_b_2',
+            card_id='card_taunt_b_2',
+            name='Taunt Creature 2',
+            description='Also has Taunt',
+            attack=2,
+            health=2,
+            traits=[Taunt()],
+            exhausted=False
+        )
+        self.game_state.creatures['taunt_b_2'] = taunt_creature_2
+        self.game_state.board['side_b'].append('taunt_b_2')
+
+        # Can attack first taunt creature
+        effect1 = AttackEffect(
+            side='side_a',
+            card_id='creature_a_1',
+            target_type='creature',
+            target_id='taunt_b_1',
+        )
+        result1 = resolve(effect1, self.game_state)
+        self.assertEqual(result1.type, 'outcome_success')
+
+        # Can attack second taunt creature
+        effect2 = AttackEffect(
+            side='side_a',
+            card_id='creature_a_2',
+            target_type='creature',
+            target_id='taunt_b_2',
+        )
+        result2 = resolve(effect2, self.game_state)
+        self.assertEqual(result2.type, 'outcome_success')
+
+        # Still cannot attack non-taunt creature
+        effect3 = AttackEffect(
+            side='side_a',
+            card_id='creature_a_1',
+            target_type='creature',
+            target_id='creature_b_1',
+        )
+        result3 = resolve(effect3, self.game_state)
+        self.assertEqual(result3.type, 'outcome_rejected')
+
+    def test_taunt_only_affects_opponent_side(self):
+        """Test that taunt on side_a doesn't affect side_a's own attacks."""
+        # Add taunt to side_a
+        taunt_creature_a = Creature(
+            creature_id='taunt_a_1',
+            card_id='card_taunt_a_1',
+            name='Taunt Creature A',
+            description='Has Taunt',
+            attack=1,
+            health=3,
+            traits=[Taunt()],
+            exhausted=False
+        )
+        self.game_state.creatures['taunt_a_1'] = taunt_creature_a
+        self.game_state.board['side_a'].append('taunt_a_1')
+
+        # Side_a can still attack side_b's hero (side_b has taunt, but we check opponent's board)
+        # Actually, side_b still has taunt, so this should fail
+        hero_b_id = self.game_state.heroes['side_b'].hero_id
+        effect = AttackEffect(
+            side='side_a',
+            card_id='creature_a_1',
+            target_type='hero',
+            target_id=hero_b_id,
+        )
+        result = resolve(effect, self.game_state)
+        # Should be rejected because side_b has taunt
+        self.assertEqual(result.type, 'outcome_rejected')
+
+        # Now test side_b attacking - side_a's taunt should matter
+        self.game_state.active = 'side_b'
+        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        effect_b = AttackEffect(
+            side='side_b',
+            card_id='creature_b_1',
+            target_type='hero',
+            target_id=hero_a_id,
+        )
+        result_b = resolve(effect_b, self.game_state)
+        # Should be rejected because side_a has taunt
+        self.assertEqual(result_b.type, 'outcome_rejected')
+        self.assertIn("taunt", result_b.reason.lower())
+
+
+class AITauntTests(TestCase):
+    """Test that AI respects taunt mechanics when choosing moves."""
+
+    def setUp(self):
+        from apps.builder.schemas import DeckScript
+        from apps.gameplay.schemas.game import GameState, Creature, HeroInPlay, CardInPlay
+
+        # Create a basic game state with creatures on both sides
+        self.game_state = GameState(
+            turn=1,
+            active='side_a',
+            phase='main',
+            cards={
+                'card_a_1': CardInPlay(
+                    card_id='card_a_1',
+                    card_type='creature',
+                    name='AI Creature',
+                    description='',
+                    attack=2,
+                    health=2,
+                    cost=1,
+                    traits=[],
+                    template_slug='ai-creature',
+                ),
+                'card_b_1': CardInPlay(
+                    card_id='card_b_1',
+                    card_type='creature',
+                    name='Regular Creature',
+                    description='',
+                    attack=1,
+                    health=1,
+                    cost=1,
+                    traits=[],
+                    template_slug='regular-creature',
+                ),
+            },
+            creatures={
+                'creature_a_1': Creature(
+                    creature_id='creature_a_1',
+                    card_id='card_a_1',
+                    name='AI Creature',
+                    description='',
+                    attack=2,
+                    health=2,
+                    traits=[],
+                    exhausted=False,
+                ),
+                'creature_b_1': Creature(
+                    creature_id='creature_b_1',
+                    card_id='card_b_1',
+                    name='Regular Creature',
+                    description='',
+                    attack=1,
+                    health=1,
+                    traits=[],
+                    exhausted=False,
+                ),
+            },
+            board={
+                'side_a': ['creature_a_1'],
+                'side_b': ['creature_b_1'],
+            },
+            heroes={
+                'side_a': HeroInPlay(
+                    hero_id='hero_a',
+                    template_slug='hero-a',
+                    name='Hero A',
+                    health=30,
+                    hero_power=HeroPower(
+                        actions=[
+                            DamageAction(
+                                amount=1,
+                                target="enemy",
+                            )
+                        ]
+                    ),
+                ),
+                'side_b': HeroInPlay(
+                    hero_id='hero_b',
+                    template_slug='hero-b',
+                    name='Hero B',
+                    health=30,
+                    hero_power=HeroPower(
+                        actions=[
+                            DamageAction(
+                                amount=1,
+                                target="enemy",
+                            )
+                        ]
+                    ),
+                ),
+            },
+            hands={'side_a': [], 'side_b': []},
+            decks={'side_a': [], 'side_b': []},
+            graveyard={'side_a': [], 'side_b': []},
+            mana_pool={'side_a': 10, 'side_b': 10},
+            mana_used={'side_a': 0, 'side_b': 0},
+            ai_sides=['side_a'],
+        )
+
+        self.script_rush = DeckScript(strategy='rush')
+
+    def test_ai_attacks_taunt_creature_instead_of_hero(self):
+        """Test that AI attacks taunt creature instead of hero when taunt exists."""
+        # Add a taunt creature to side_b
+        taunt_creature = Creature(
+            creature_id='taunt_b_1',
+            card_id='card_taunt_b_1',
+            name='Taunt Creature',
+            description='Has Taunt',
+            attack=1,
+            health=3,
+            traits=[Taunt()],
+            exhausted=False
+        )
+        self.game_state.creatures['taunt_b_1'] = taunt_creature
+        self.game_state.board['side_b'].append('taunt_b_1')
+
+        # Test with rush strategy (normally attacks hero)
+        effect = GameService.choose_ai_move(self.game_state, self.script_rush)
+
+        # Verify that the AI chose to attack
+        self.assertIsNotNone(effect)
+        self.assertEqual(effect.type, 'effect_attack')
+
+        # Verify that it attacked a creature (not hero) due to taunt
+        self.assertEqual(effect.target_type, 'creature')
+
+        # Verify that it attacked the taunt creature specifically
+        self.assertEqual(effect.target_id, 'taunt_b_1')
+
+    def test_ai_attacks_hero_when_no_taunt(self):
+        """Test that AI with rush strategy attacks hero when no taunt exists."""
+        # No taunt creatures on board
+        effect = GameService.choose_ai_move(self.game_state, self.script_rush)
+
+        # Verify that the AI chose to attack
+        self.assertIsNotNone(effect)
+        self.assertEqual(effect.type, 'effect_attack')
+
+        # Verify that it attacked the hero (rush strategy)
+        self.assertEqual(effect.target_type, 'hero')
+        self.assertEqual(effect.target_id, 'hero_b')
+
+    def test_ai_attacks_taunt_with_multiple_taunt_creatures(self):
+        """Test that AI attacks one of the taunt creatures when multiple exist."""
+        # Add two taunt creatures to side_b
+        taunt_creature_1 = Creature(
+            creature_id='taunt_b_1',
+            card_id='card_taunt_b_1',
+            name='Taunt Creature 1',
+            description='Has Taunt',
+            attack=1,
+            health=3,
+            traits=[Taunt()],
+            exhausted=False
+        )
+        taunt_creature_2 = Creature(
+            creature_id='taunt_b_2',
+            card_id='card_taunt_b_2',
+            name='Taunt Creature 2',
+            description='Has Taunt',
+            attack=2,
+            health=2,
+            traits=[Taunt()],
+            exhausted=False
+        )
+        self.game_state.creatures['taunt_b_1'] = taunt_creature_1
+        self.game_state.creatures['taunt_b_2'] = taunt_creature_2
+        self.game_state.board['side_b'].extend(['taunt_b_1', 'taunt_b_2'])
+
+        effect = GameService.choose_ai_move(self.game_state, self.script_rush)
+
+        # Verify that the AI chose to attack
+        self.assertIsNotNone(effect)
+        self.assertEqual(effect.type, 'effect_attack')
+
+        # Verify that it attacked a creature (not hero)
+        self.assertEqual(effect.target_type, 'creature')
+
+        # Verify that it attacked one of the taunt creatures
+        self.assertIn(effect.target_id, ['taunt_b_1', 'taunt_b_2'])

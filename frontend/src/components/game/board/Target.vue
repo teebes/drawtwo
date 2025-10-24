@@ -47,8 +47,8 @@
                             :card="creature"
                             compact
                             in_lane
-                            :class="canTargetCreature ? 'cursor-pointer hover:scale-105 transition-transform' : 'opacity-30'"
-                            @click="canTargetCreature && handleCreatureClick(creature.creature_id)"
+                            :class="canTargetSpecificCreature(creature) ? 'cursor-pointer hover:scale-105 transition-transform' : 'opacity-30'"
+                            @click="canTargetSpecificCreature(creature) && handleCreatureClick(creature.creature_id)"
                         />
                     </div>
                 </div>
@@ -152,8 +152,46 @@ const canTargetCreature = computed(() => {
 })
 
 const canTargetHero = computed(() => {
-    return props.allowedTargetTypes === 'hero' || props.allowedTargetTypes === 'both'
+    // Cannot target hero if there are taunt creatures on the opposing board
+    const baseCanTarget = props.allowedTargetTypes === 'hero' || props.allowedTargetTypes === 'both'
+
+    // If targeting enemies, check for taunt creatures
+    if (baseCanTarget && (props.targetScope === 'enemy' || props.targetScope === 'any')) {
+        const hasTauntCreatures = props.opposingBoard.some(creature =>
+            creature.traits?.some((trait: any) => trait.type === 'taunt')
+        )
+        if (hasTauntCreatures) {
+            return false // Cannot target hero while taunt creatures exist
+        }
+    }
+
+    return baseCanTarget
 })
+
+// Helper to check if a creature has taunt
+const hasTaunt = (creature: Creature): boolean => {
+    return creature.traits?.some((trait: any) => trait.type === 'taunt') ?? false
+}
+
+// Get taunt creatures from the opposing board
+const tauntCreatures = computed(() => {
+    if (props.targetScope === 'enemy' || props.targetScope === 'any') {
+        return props.opposingBoard.filter(creature => hasTaunt(creature))
+    }
+    return []
+})
+
+// Check if a specific creature can be targeted
+const canTargetSpecificCreature = (creature: Creature): boolean => {
+    if (!canTargetCreature.value) return false
+
+    // If there are taunt creatures and this isn't one of them, can't target it
+    if (tauntCreatures.value.length > 0) {
+        return hasTaunt(creature)
+    }
+
+    return true
+}
 
 // Determine which boards/heroes to show based on target scope
 const showOpposingBoard = computed(() => {

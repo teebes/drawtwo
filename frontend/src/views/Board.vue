@@ -364,6 +364,7 @@ const handleClickHandCard = (card_id: string) => {
 
     // If it's a spell that requires targeting, go directly to targeting
     if (card.card_type === 'spell' && requiresTarget(card)) {
+        pendingPlay.value = { card_id, position: 0 }  // Set pendingPlay for spell casting
         targetingState.value = {
             sourceType: 'spell',
             sourceId: card_id,

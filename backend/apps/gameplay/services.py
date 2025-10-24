@@ -494,14 +494,21 @@ class GameService:
                     position=0,
                 )
 
-        # See if there's a creature that can be used to attack, and if there is,
-        # attack the hero.
+        # Check for taunt creatures on the opposing board
+        from apps.gameplay.engine.handlers import get_taunt_creatures
+        taunt_creatures = get_taunt_creatures(state, opposing_side)
+
+        # See if there's a creature that can be used to attack
         for creature_id in state.board[state.active]:
             creature = state.creatures[creature_id]
 
             if creature.exhausted: continue
 
-            if script.strategy == "rush":
+            # If there are taunt creatures, we MUST attack one of them
+            if taunt_creatures:
+                target_type = "creature"
+                target_id = random.choice(taunt_creatures)
+            elif script.strategy == "rush":
                 target_type = "hero"
                 target_id = state.heroes[opposing_side].hero_id
             elif script.strategy == "control":

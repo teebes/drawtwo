@@ -230,6 +230,21 @@ def mark_exhausted(effect: MarkExhaustedEffect, state: GameState) -> Result:
         state.heroes[effect.side].exhausted = True
     return Success(new_state=state)
 
+def has_taunt(creature: Creature) -> bool:
+    """Check if a creature has the taunt trait."""
+    return any(trait.type == "taunt" for trait in creature.traits)
+
+
+def get_taunt_creatures(state: GameState, side: str) -> list[str]:
+    """Get all creature IDs with taunt on the given side."""
+    taunt_creatures = []
+    for creature_id in state.board[side]:
+        creature = state.creatures.get(creature_id)
+        if creature and has_taunt(creature):
+            taunt_creatures.append(creature_id)
+    return taunt_creatures
+
+
 @register("effect_attack")
 def attack(effect: AttackEffect, state: GameState) -> Result:
     # effect.card_id is actually a creature_id (on the board)
@@ -254,6 +269,16 @@ def attack(effect: AttackEffect, state: GameState) -> Result:
     # Check if creature is exhausted
     if creature.exhausted:
         return Rejected(reason="Creature is exhausted")
+
+    # TAUNT VALIDATION: If opponent has creatures with taunt, must attack one of them
+    taunt_creatures = get_taunt_creatures(state, opposing_side)
+    if taunt_creatures:
+        # If there are taunt creatures, the target must be one of them
+        if effect.target_type == "hero":
+            return Rejected(reason="Cannot attack hero while enemy has creatures with Taunt")
+        elif effect.target_type == "creature":
+            if effect.target_id not in taunt_creatures:
+                return Rejected(reason="Must attack a creature with Taunt")
 
     damage_effect = DamageEffect(
         side=effect.side,
