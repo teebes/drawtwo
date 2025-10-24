@@ -43,8 +43,11 @@ const updateText = (update: any) => {
 
     if (update.type === "update_damage") {
         let source_name = '';
-        if (update.source_type === "card") {
-            source_name = gameStore.getCard(update.source_id)?.name || 'a card';
+        if (update.source_type === "card" || update.source_type === "creature") {
+            const card = update.source_type === "creature"
+                ? gameStore.getCreature(update.source_id)
+                : gameStore.getCard(update.source_id);
+            source_name = card?.name || 'a unit';
         } else if (update.source_type === "hero") {
             if (update.source_id === hero.hero_id)
                 source_name = hero.name;
@@ -53,8 +56,11 @@ const updateText = (update: any) => {
         }
 
         let target_name = '';
-        if (update.target_type === "card") {
-            target_name = gameStore.getCard(update.target_id)?.name || 'a card';
+        if (update.target_type === "card" || update.target_type === "creature") {
+            const card = update.target_type === "creature"
+                ? gameStore.getCreature(update.target_id)
+                : gameStore.getCard(update.target_id);
+            target_name = card?.name || 'a unit';
         } else if (update.target_type === "hero") {
             if (update.target_id === hero.hero_id)
                 target_name = hero.name;
@@ -62,7 +68,37 @@ const updateText = (update: any) => {
                 target_name = opposite_hero.name;
         }
 
-        return `${side_name} ${source_name} > ${target_name} ( ${update.damage} )`;
+        return `${side_name} ${source_name} > ${target_name} (-${update.damage})`;
+    }
+
+    if (update.type === "update_heal") {
+        let source_name = '';
+        if (update.source_type === "card" || update.source_type === "creature") {
+            const card = update.source_type === "creature"
+                ? gameStore.getCreature(update.source_id)
+                : gameStore.getCard(update.source_id);
+            source_name = card?.name || 'a unit';
+        } else if (update.source_type === "hero") {
+            if (update.source_id === hero.hero_id)
+                source_name = hero.name;
+            else
+                source_name = opposite_hero.name;
+        }
+
+        let target_name = '';
+        if (update.target_type === "card" || update.target_type === "creature") {
+            const card = update.target_type === "creature"
+                ? gameStore.getCreature(update.target_id)
+                : gameStore.getCard(update.target_id);
+            target_name = card?.name || 'a unit';
+        } else if (update.target_type === "hero") {
+            if (update.target_id === hero.hero_id)
+                target_name = hero.name;
+            else
+                target_name = opposite_hero.name;
+        }
+
+        return `${side_name} ${source_name} > ${target_name} (+${update.amount})`;
     }
 
 

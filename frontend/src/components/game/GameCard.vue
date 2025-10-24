@@ -4,9 +4,8 @@
         <div v-if="hasTaunt" class="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold" title="Taunt">
             🛡️
         </div>
-        <div class="text-wrap">
-            <span v-if="compact" class="text-xs">{{ makeInitials(displayName) }}</span>
-            <span v-else>{{ displayName }}</span>
+        <div class="text-wrap break-words leading-tight" :class="compact ? 'text-[0.65rem]' : ''">
+            <span>{{ displayName }}</span>
         </div>
         <div class="flex-1">
             <div v-if="!compact" class="mt-2">
@@ -24,7 +23,6 @@
 import { computed } from 'vue'
 import type { Card } from '../../types/card'
 import type { CardInPlay, Creature } from '../../types/game'
-import { makeInitials } from '../../utils'
 
 interface Props {
     card: Card | CardInPlay | Creature

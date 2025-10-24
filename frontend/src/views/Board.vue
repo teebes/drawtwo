@@ -20,7 +20,7 @@
                     <div class="w-24 flex flex-col items-center justify-center border-r border-gray-700 cursor-pointer hover:bg-gray-700/50"
                          :class="{ 'bg-yellow-500/20': gameState.active === topSide }"
                          @click="handleClickOpposingHero">
-                        <div class="">{{ opposingHeroInitials }}</div>
+                        <div class="text-xs text-center break-words leading-tight px-1">{{ opposingHeroName }}</div>
                         <div class="">{{ opposingHero?.health }}</div>
                     </div>
 
@@ -124,7 +124,7 @@
                            'opacity-50': !canUseHero
                          }"
                          @click="handleClickOwnHero">
-                        <div class="hero-name">{{ ownHeroInitials }}</div>
+                        <div class="hero-name text-xs text-center break-words leading-tight px-1">{{ ownHeroName }}</div>
                         <div class="hero-health">{{ ownHero?.health }}</div>
                     </div>
 
@@ -270,7 +270,7 @@ const {
   gameOver,
   viewer,
   ownHero,
-  ownHeroInitials,
+  ownHeroName,
   ownHandSize,
   ownDeckSize,
   ownHand,
@@ -278,7 +278,7 @@ const {
   ownEnergyPool,
   ownBoard,
   opposingHero,
-  opposingHeroInitials,
+  opposingHeroName,
   opposingHandSize,
   opposingDeckSize,
   opposingEnergy,
@@ -636,7 +636,9 @@ function requiresTarget(card: CardInPlay): boolean {
         for (const trait of traits) {
             const actions = trait.actions || []
             for (const action of actions) {
-                if (action.action === 'damage') {
+                // Actions that require targeting (single and cleave need targets, AOE doesn't)
+                if ((action.action === 'damage' || action.action === 'heal') &&
+                    action.scope !== 'all') {
                     return true
                 }
             }
@@ -658,6 +660,16 @@ function getAllowedTargets(card: CardInPlay): Array<'card' | 'hero' | 'any'> {
                     allowed.add('card')
                 }
                 if (action.target === 'hero' || action.target === 'enemy') {
+                    allowed.add('hero')
+                }
+            }
+            if (action.action === 'heal') {
+                // Heal targets friendlies (same side)
+                // For now, map this to the same targeting system
+                if (action.target === 'creature' || action.target === 'friendly') {
+                    allowed.add('card')
+                }
+                if (action.target === 'hero' || action.target === 'friendly') {
                     allowed.add('hero')
                 }
             }

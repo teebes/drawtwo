@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import axios from '../config/api'
 import { getBaseUrl } from '../config/api'
-import { makeInitials } from '../utils/index'
 import type { GameState, Side, CardInPlay, Creature, HeroInPlay, GameError } from '../types/game'
 import { useNotificationStore } from './notifications'
 
@@ -105,10 +104,10 @@ export const useGameStore = defineStore('game', {
       return state.gameState.heroes[state.viewer]
     },
 
-    ownHeroInitials: (state): string => {
+    ownHeroName: (state): string => {
       if (!state.viewer) return ''
       const hero = state.gameState.heroes[state.viewer]
-      return hero ? makeInitials(hero.name) : ''
+      return hero ? hero.name : ''
     },
 
     ownHandSize: (state): number => {
@@ -171,11 +170,11 @@ export const useGameStore = defineStore('game', {
       return state.gameState.heroes[opposingSide] ?? null
     },
 
-    opposingHeroInitials: (state): string => {
+    opposingHeroName: (state): string => {
       if (!state.viewer) return ''
       const opposingSide = state.viewer === 'side_a' ? 'side_b' : 'side_a'
       const hero = state.gameState.heroes[opposingSide]
-      return hero ? makeInitials(hero.name) : ''
+      return hero ? hero.name : ''
     },
 
     opposingHandSize: (state): number => {

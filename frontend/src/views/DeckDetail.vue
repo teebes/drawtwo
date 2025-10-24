@@ -37,96 +37,78 @@
 
 
         <Panel v-if="deck.cards.length > 0">
-          <div class="">
+          <div class="space-y-2">
             <div
-              v-for="card in deck.cards"
+              v-for="card in sortedCards"
               :key="card.id"
-              class="flex items-center justify-between rounded-lg bg-gray-50 p-1 dark:bg-gray-800"
+              class="flex items-center rounded-lg bg-gray-50 p-3 dark:bg-gray-800 space-x-3"
             >
-              <div class="flex items-center space-x-3 w-full">
-
-                <!-- Edit mode -->
-                <template v-if="editingCardId === card.id">
-
-                  <!--
-                    Because we want to display the actions below the card summary
-                    on low widths, we make two rows. On wider displays the second
-                    row is always empty.
-                   -->
-                  <div class="flex flex-col w-full">
-
-                    <!-- First Row -->
-                    <div class="flex flex-row w-full">
-
-                      <!-- Editable count -->
-                      <div class="flex items-center space-x-2">
-                        <input
-                          v-model.number="editingCount"
-                          type="number"
-                          min="1"
-                          max="10"
-                          class="input-field">
-                        <span class="text-sm text-gray-500">x</span>
-                      </div>
-
-                      <!-- Card cost, name and info -->
-                      <div
-                        class="flex h-8 items-center justify-center rounded bg-primary-100 text-sm font-bold text-primary-600 w-8 ml-3 mr-3"
-                      >
-                        {{ card.cost }}
-                      </div>
-
-                      <div class="card-info flex-1 flex flex-row items-center w-full">
-                        <div class="font-medium">{{ card.name }}</div>
-                        <div class="text-sm text-gray-600 ml-4">
-                          <span v-if="card.card_type === 'creature'">
-                            {{ card.attack }}/{{ card.health }}
-                          </span>
-                          <span v-else>Spell</span>
-                        </div>
-                      </div>
-
-                      <!-- Edit actions on wide displays -->
-                      <div class="flex space-x-2 hidden sm:flex">
-                        <GameButton variant="primary" @click="saveEdit">Save</GameButton>
-                        <GameButton variant="secondary" @click="cancelEdit">Cancel</GameButton>
-                        <GameButton variant="danger" @click="deleteCard(card.id)">Delete</GameButton>
-                      </div>
-                    </div>
-
-                    <!-- Second row, edit actions on narrow displays -->
-                    <div class="flex space-x-2 sm:hidden w-full mt-2 mb-4">
-                      <GameButton variant="primary" @click="saveEdit">Save</GameButton>
-                      <GameButton variant="secondary" @click="cancelEdit">Cancel</GameButton>
-                      <GameButton variant="danger" @click="deleteCard(card.id)">Delete</GameButton>
-                    </div>
-                </div>
-                </template>
-
-                <!-- Normal mode -->
-                <template v-else>
-                  <div class="text-lg font-bold text-gray-500 w-8">{{ card.count }}x</div>
-
-                  <div class="flex h-8 w-8 items-center justify-center rounded bg-primary-100 text-sm font-bold text-primary-600">
-                    {{ card.cost }}
-                  </div>
-
-                  <div class="card-info flex-1 flex flex-row items-center w-full">
-                    <div class="font-medium">{{ card.name }}</div>
-                    <div class="text-sm text-gray-600 ml-4">
-                      <span v-if="card.card_type === 'creature'">
-                        {{ card.attack }}/{{ card.health }}
-                      </span>
-                                              <span v-else>Spell</span>
-                    </div>
-                  </div>
-
-                  <div class="">
-                    <GameButton variant="secondary" @click="startEdit(card)">Edit</GameButton>
-                  </div>
-                </template>
-
+              <!-- Card cost badge -->
+              <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded bg-gray-200 text-sm font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                {{ card.cost }}
               </div>
+
+              <!-- Clickable count -->
+              <div class="relative flex-shrink-0">
+                <input
+                  v-if="editingCardId === card.id"
+                  v-model="editingCount"
+                  @blur="saveCountEdit(card)"
+                  @keyup.enter="saveCountEdit(card)"
+                  @keyup.esc="cancelCountEdit"
+                  type="text"
+                  class="w-12 rounded border border-primary-500 bg-white px-2 py-1 text-center text-sm font-bold dark:bg-gray-900 dark:text-gray-100"
+                  ref="countInput"
+                />
+                <button
+                  v-else
+                  @click="startCountEdit(card)"
+                  class="w-12 rounded px-2 py-1 text-center text-sm font-bold text-gray-700 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors"
+                  title="Click to edit count"
+                >
+                  {{ card.count }}x
+                </button>
+              </div>
+
+              <!-- Up/Down triangle buttons stacked vertically -->
+              <div class="flex flex-col flex-shrink-0">
+                <button
+                  @click="incrementCard(card)"
+                  class="flex h-5 w-8 items-center justify-center rounded-t bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  title="Increase count"
+                >
+                  <span class="text-sm leading-none">▲</span>
+                </button>
+                <button
+                  @click="decrementCard(card)"
+                  class="flex h-5 w-8 items-center justify-center rounded-b bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  title="Decrease count"
+                >
+                  <span class="text-sm leading-none">▼</span>
+                </button>
+              </div>
+
+              <!-- Card name and info -->
+              <div class="card-info flex-1 flex flex-row items-center min-w-0">
+                <div class="font-medium truncate">{{ card.name }}</div>
+                <div class="text-sm text-gray-600 dark:text-gray-400 ml-4 flex-shrink-0">
+                  <span v-if="card.card_type === 'creature'">
+                    {{ card.attack }}/{{ card.health }}
+                  </span>
+                  <span v-else>Spell</span>
+                </div>
+              </div>
+
+              <!-- Delete button -->
+              <button
+                @click="deleteCard(card)"
+                class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-300 transition-colors"
+                title="Remove card"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+              </button>
             </div>
           </div>
         </Panel>
@@ -201,8 +183,10 @@ const deck = ref<DeckData | null>(null)
 const loading = ref<boolean>(true)
 const error = ref<string | null>(null)
 
+// Inline count editing state
 const editingCardId = ref<number | null>(null)
-const editingCount = ref<number>(1)
+const editingCount = ref<string>('1')
+const countInput = ref<HTMLInputElement | null>(null)
 
 // Modal state
 const showCardModal = ref<boolean>(false)
@@ -217,6 +201,19 @@ const averageCost = computed(() => {
 
   const totalCost = deck.value.cards.reduce((sum, card) => sum + (card.cost * card.count), 0)
   return totalCost / deck.value.total_cards
+})
+
+const sortedCards = computed(() => {
+  if (!deck.value || !deck.value.cards) return []
+
+  return [...deck.value.cards].sort((a, b) => {
+    // Sort by cost first
+    if (a.cost !== b.cost) {
+      return a.cost - b.cost
+    }
+    // Then by name alphabetically
+    return a.name.localeCompare(b.name)
+  })
 })
 
 const openCardModal = (): void => {
@@ -258,63 +255,106 @@ const onCardSelected = async (card: Card): Promise<void> => {
     // Show success notification
     notificationStore.handleApiSuccess(response)
     closeCardModal()
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error adding card to deck:', err)
     notificationStore.handleApiError(err)
   }
 }
 
-const startEdit = (card: DeckCard): void => {
-  console.log('starting to edit card')
-  console.log(card)
-  console.log(editingCount.value)
-
-  editingCardId.value = card.id
-  editingCount.value = card.count
-}
-
-const cancelEdit = (): void => {
-  editingCardId.value = null
-  editingCount.value = 1
-}
-
-const saveEdit = async (): Promise<void> => {
-  if (!editingCardId.value || !deck.value) return
+const updateCardCount = async (card: DeckCard, newCount: number): Promise<void> => {
+  if (!deck.value || newCount < 1 || newCount > 10) return
 
   try {
-    const response = await axios.put(`/collection/decks/${deck.value.id}/cards/${editingCardId.value}/`, {
-      count: editingCount.value
+    const response = await axios.put(`/collection/decks/${deck.value.id}/cards/${card.id}/`, {
+      count: newCount
     })
 
     // Update local state
-    const cardIndex = deck.value.cards.findIndex(c => c.id === editingCardId.value)
+    const cardIndex = deck.value.cards.findIndex(c => c.id === card.id)
     if (cardIndex !== -1) {
-      deck.value.cards[cardIndex].count = editingCount.value
+      deck.value.cards[cardIndex].count = newCount
       // Recalculate total cards
       deck.value.total_cards = deck.value.cards.reduce((sum, card) => sum + card.count, 0)
     }
 
     notificationStore.handleApiSuccess(response)
-    cancelEdit()
-  } catch (err) {
-    console.error('Error saving card count:', err)
+  } catch (err: any) {
+    console.error('Error updating card count:', err)
     notificationStore.handleApiError(err)
   }
 }
 
-const deleteCard = async (cardId: number): Promise<void> => {
+const incrementCard = async (card: DeckCard): Promise<void> => {
+  const newCount = Math.min(card.count + 1, 10)
+  if (newCount !== card.count) {
+    await updateCardCount(card, newCount)
+  }
+}
+
+const decrementCard = async (card: DeckCard): Promise<void> => {
+  if (card.count > 1) {
+    await updateCardCount(card, card.count - 1)
+  }
+}
+
+const startCountEdit = (card: DeckCard): void => {
+  editingCardId.value = card.id
+  editingCount.value = card.count.toString()
+
+  // Focus the input on next tick
+  setTimeout(() => {
+    const input = document.querySelector('input[type="text"]') as HTMLInputElement
+    if (input) {
+      input.focus()
+      input.select()
+    }
+  }, 0)
+}
+
+const cancelCountEdit = (): void => {
+  editingCardId.value = null
+  editingCount.value = '1'
+}
+
+const saveCountEdit = async (card: DeckCard): Promise<void> => {
+  const newCount = parseInt(editingCount.value, 10)
+
+  // Validate the input
+  if (isNaN(newCount) || newCount < 1 || newCount > 10) {
+    // Invalid input, just cancel
+    cancelCountEdit()
+    return
+  }
+
+  if (newCount === card.count) {
+    // No change, just cancel
+    cancelCountEdit()
+    return
+  }
+
+  await updateCardCount(card, newCount)
+  cancelCountEdit()
+}
+
+const deleteCard = async (card: DeckCard): Promise<void> => {
   if (!deck.value) return
 
+  // Show confirmation dialog
+  const confirmed = window.confirm(
+    `Remove ${card.name} from deck?`
+  )
+
+  if (!confirmed) return
+
   try {
-    await axios.delete(`/collection/decks/${deck.value.id}/cards/${cardId}/delete/`)
+    await axios.delete(`/collection/decks/${deck.value.id}/cards/${card.id}/delete/`)
 
     // Update local state
-    deck.value.cards = deck.value.cards.filter(c => c.id !== cardId)
+    deck.value.cards = deck.value.cards.filter(c => c.id !== card.id)
     deck.value.total_cards = deck.value.cards.reduce((sum, card) => sum + card.count, 0)
 
     notificationStore.success('Card removed from deck successfully')
-    cancelEdit()
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error deleting card:', err)
     notificationStore.handleApiError(err)
   }
@@ -341,7 +381,7 @@ const deleteDeck = async (): Promise<void> => {
       name: 'Title',
       params: { slug: deck.value.title.slug }
     })
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error deleting deck:', err)
     notificationStore.handleApiError(err)
   }
@@ -352,7 +392,7 @@ const fetchDeck = async (): Promise<void> => {
     const deckId = route.params.id as string
     const response = await axios.get(`/collection/decks/${deckId}/`)
     deck.value = response.data
-  } catch (err) {
+  } catch (err: any) {
     if (err.response?.status === 404) {
       error.value = 'Deck not found'
     } else {
