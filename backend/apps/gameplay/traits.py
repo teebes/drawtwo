@@ -131,12 +131,12 @@ def handle_battlecry_trait(
             logger.warning(f"Invalid card action: {card_action}")
             continue
 
-        effect = GameService.compile_action(
+        effects = GameService.compile_action(
             state=state,
             event=event,
             action=card_action,
         )
-        child_effects.append(effect)
+        child_effects.extend(effects)
 
     return Success(
         new_state=state,
@@ -161,11 +161,11 @@ def handle_deathrattle_trait(
     child_effects = []
 
     for card_action in trait.actions:
-        effect = GameService.compile_action(
+        effects = GameService.compile_action(
             state=state,
             event=event,
             action=card_action)
-        child_effects.append(effect)
+        child_effects.extend(effects)
 
     return Success(
         new_state=state,

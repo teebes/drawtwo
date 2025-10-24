@@ -10,6 +10,7 @@ from apps.gameplay.schemas.effects import (
     DamageEffect,
     EndTurnEffect,
     DrawEffect,
+    HealEffect,
     MarkExhaustedEffect,
     NewPhaseEffect,
     PlayEffect,
@@ -22,6 +23,7 @@ from apps.gameplay.schemas.events import (
     DrawEvent,
     EndTurnEvent,
     GameOverEvent,
+    HealEvent,
     NewPhaseEvent,
     PlayEvent,
     UseHeroEvent,
@@ -93,7 +95,12 @@ def play(effect: PlayEffect, state: GameState) -> Result:
         # The old way was to add the same card object that was in hand to the board
         #state.board[effect.side].insert(effect.position, effect.source_id)
         # Now we create a new creature object and add it to the board
-        creature = spawn_creature(card=card, state=state, side=effect.side)
+        creature = spawn_creature(
+            card=card,
+            state=state,
+            side=effect.side,
+            position=effect.position,
+        )
         creature_id = creature.creature_id
 
     state.mana_used[effect.side] += card.cost
@@ -220,6 +227,53 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
         child_effects=child_effects,
     )
 
+@register("effect_heal")
+def heal(effect: HealEffect, state: GameState) -> Result:
+    """
+    Heal effect handler - restores health to a target.
+    """
+    events = []
+
+    # Determine which side to look for target (heal targets friendlies on same side)
+    target_side = effect.side
+
+    # Get the source
+    if effect.source_type == "hero":
+        source = state.heroes[effect.side]
+    elif effect.source_type == "card":
+        source = state.cards[effect.source_id]
+    elif effect.source_type == "creature":
+        source = state.creatures[effect.source_id]
+    else:
+        raise NotImplementedError(f"Unknown source type: {effect.source_type}")
+
+    # Get the target
+    if effect.target_type == "hero":
+        target = state.heroes[target_side]
+    elif effect.target_type == "card":
+        target = state.cards[effect.target_id]
+    elif effect.target_type == "creature":
+        target = state.creatures[effect.target_id]
+    else:
+        raise NotImplementedError(f"Unknown target type: {effect.target_type}")
+
+    # Apply healing
+    target.health += effect.amount
+
+    events = [HealEvent(
+        side=effect.side,
+        source_type=effect.source_type,
+        source_id=effect.source_id,
+        target_type=effect.target_type,
+        target_id=effect.target_id,
+        amount=effect.amount
+    )]
+
+    return Success(
+        new_state=state,
+        events=events,
+    )
+
 @register("effect_mark_exhausted")
 def mark_exhausted(effect: MarkExhaustedEffect, state: GameState) -> Result:
     if effect.target_type == "card":
@@ -338,7 +392,7 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
     # Parse out hero power actions
     for action in hero.hero_power.actions:
         action = TypeAdapter(Action).validate_python(action)
-        child_effects.append(
+        child_effects.extend(
             GameService.compile_action(
                 state=state,
                 event=use_hero_event,

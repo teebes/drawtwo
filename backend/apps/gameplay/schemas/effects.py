@@ -61,6 +61,15 @@ class DrawEffect(EffectBase):
     amount: int = 1
 
 
+class HealEffect(EffectBase):
+    type: Literal["effect_heal"] = "effect_heal"
+    source_type: Literal["card", "creature", "hero", "board"] = "creature"
+    source_id: str
+    target_type: Literal["card", "hero", "creature"] = "card"
+    target_id: str
+    amount: int
+
+
 class PlayEffect(ActionSourceEffect):
     type: Literal["effect_play"] = "effect_play"
     source_type: Literal["card"] = "card"  # Playing a card
@@ -109,6 +118,7 @@ Effect = Annotated[
         DamageEffect,
         DrawEffect,
         EndTurnEffect,
+        HealEffect,
         MarkExhaustedEffect,
         NewPhaseEffect,
         PlayEffect,

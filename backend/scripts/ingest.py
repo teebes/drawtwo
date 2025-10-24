@@ -30,6 +30,14 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
+def clean(title):
+    from apps.builder.models import CardTemplate
+    from apps.collection.models import Deck
+    for deck in Deck.objects.filter(title=title):
+        deck.deckcard_set.all().delete()
+        deck.delete()
+    CardTemplate.objects.filter(title=title).delete()
+
 
 def main():
     """
@@ -43,6 +51,7 @@ def main():
     from apps.builder.services import TitleService
 
     title = Title.objects.get(pk=3)
+
     service = TitleService(title)
 
     with open('dev_data/archetypes.yaml', 'r') as file:

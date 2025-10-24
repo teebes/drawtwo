@@ -13,6 +13,7 @@ from apps.builder.schemas import (
     DeckScript,
     DrawAction,
     DamageAction,
+    HealAction,
     TitleConfig,
 )
 from apps.core.serializers import serialize_cards_with_traits
@@ -36,6 +37,7 @@ from apps.gameplay.schemas.effects import (
     DrawEffect,
     Effect,
     EndTurnEffect,
+    HealEffect,
     PlayEffect,
     StartGameEffect,
     UseHeroEffect,
@@ -134,6 +136,7 @@ class GameService:
                 health=deck_a.hero.health,
                 name=deck_a.hero.name,
                 hero_power=deck_a.hero.hero_power,
+                exhausted=False,
             ),
             'side_b': HeroInPlay(
                 hero_id=str(deck_b.hero.id),
@@ -141,6 +144,7 @@ class GameService:
                 health=deck_b.hero.health,
                 name=deck_b.hero.name,
                 hero_power=deck_b.hero.hero_power,
+                exhausted=False,
             ),
         }
 
@@ -441,37 +445,143 @@ class GameService:
         state: GameState,
         event: ActionableEvent,
         action: Action
-    ) -> Effect:
+    ) -> list[Effect]:
+        """
+        Compile an action into one or more effects.
+
+        Handles scope parameter for damage and heal actions:
+        - 'single': targets one entity
+        - 'all': targets all valid entities on the target side
+        - 'cleave': targets the selected entity and adjacent entities
+        """
         if isinstance(action, DrawAction):
-            return DrawEffect(
+            return [DrawEffect(
                 side=event.side,
                 amount=action.amount,
-            )
+            )]
 
-        # This can be called by 3 things:
-        # * playing a card with a battlecry
-        # * using a hero power
-        # * dealing damage with a spell
         if isinstance(action, DamageAction):
+            opposing_side = state.opposite_side
+
+            # Determine base target
             if action.target == "hero":
-                target_type = "hero"
-                target_id = state.heroes[state.opposite_side].hero_id
+                base_target_type = "hero"
+                base_target_id = state.heroes[opposing_side].hero_id
             elif action.target == "creature":
-                target_type = "card"
-                target_id = event.target_id or state.board[state.opposite_side][0]
+                base_target_type = "creature"
+                base_target_id = event.target_id or (state.board[opposing_side][0] if state.board[opposing_side] else None)
+            elif action.target == "enemy":
+                # 'enemy' can be hero or creature, use event target
+                base_target_type = event.target_type or "hero"
+                base_target_id = event.target_id or state.heroes[opposing_side].hero_id
             else:
-                target_type = event.target_type
-                target_id = event.target_id
-            return DamageEffect(
-                side=event.side,
-                damage_type="physical",
-                source_type=event.source_type,
-                source_id=event.source_id,
-                target_type=target_type,
-                target_id=target_id,
-                damage=action.amount,
-                retaliate=False,
-            )
+                base_target_type = event.target_type
+                base_target_id = event.target_id
+
+            # Get all targets based on scope
+            targets = []
+
+            if action.scope == 'single':
+                if base_target_id:
+                    targets = [(base_target_type, base_target_id)]
+
+            elif action.scope == 'all':
+                # Hit all enemies (all creatures + hero on opposing side)
+                for creature_id in state.board[opposing_side]:
+                    targets.append(("creature", creature_id))
+                targets.append(("hero", state.heroes[opposing_side].hero_id))
+
+            elif action.scope == 'cleave':
+                # Hit target and adjacent creatures
+                if base_target_type == "creature" and base_target_id in state.board[opposing_side]:
+                    target_index = state.board[opposing_side].index(base_target_id)
+                    # Add the main target
+                    targets.append((base_target_type, base_target_id))
+                    # Add left neighbor
+                    if target_index > 0:
+                        targets.append(("creature", state.board[opposing_side][target_index - 1]))
+                    # Add right neighbor
+                    if target_index < len(state.board[opposing_side]) - 1:
+                        targets.append(("creature", state.board[opposing_side][target_index + 1]))
+                elif base_target_id:
+                    # If not a creature, just hit the single target
+                    targets = [(base_target_type, base_target_id)]
+
+            # Create damage effects for each target
+            effects = []
+            for target_type, target_id in targets:
+                effects.append(DamageEffect(
+                    side=event.side,
+                    damage_type="physical",
+                    source_type=event.source_type,
+                    source_id=event.source_id,
+                    target_type=target_type,
+                    target_id=target_id,
+                    damage=action.amount,
+                    retaliate=False,
+                ))
+            return effects
+
+        if isinstance(action, HealAction):
+            same_side = event.side
+
+            # Determine base target for heal
+            if action.target == "hero":
+                base_target_type = "hero"
+                base_target_id = state.heroes[same_side].hero_id
+            elif action.target == "creature":
+                base_target_type = "creature"
+                base_target_id = event.target_id or (state.board[same_side][0] if state.board[same_side] else None)
+            elif action.target == "friendly":
+                # 'friendly' can be hero or creature, use event target
+                base_target_type = event.target_type or "hero"
+                base_target_id = event.target_id or state.heroes[same_side].hero_id
+            else:
+                base_target_type = event.target_type
+                base_target_id = event.target_id
+
+            # Get all targets based on scope
+            targets = []
+
+            if action.scope == 'single':
+                if base_target_id:
+                    targets = [(base_target_type, base_target_id)]
+
+            elif action.scope == 'all':
+                # Heal all friendlies (all creatures + hero on same side)
+                for creature_id in state.board[same_side]:
+                    targets.append(("creature", creature_id))
+                targets.append(("hero", state.heroes[same_side].hero_id))
+
+            elif action.scope == 'cleave':
+                # Heal target and adjacent creatures
+                if base_target_type == "creature" and base_target_id in state.board[same_side]:
+                    target_index = state.board[same_side].index(base_target_id)
+                    # Add the main target
+                    targets.append((base_target_type, base_target_id))
+                    # Add left neighbor
+                    if target_index > 0:
+                        targets.append(("creature", state.board[same_side][target_index - 1]))
+                    # Add right neighbor
+                    if target_index < len(state.board[same_side]) - 1:
+                        targets.append(("creature", state.board[same_side][target_index + 1]))
+                elif base_target_id:
+                    # If not a creature, just heal the single target
+                    targets = [(base_target_type, base_target_id)]
+
+            # Create heal effects for each target
+            effects = []
+            for target_type, target_id in targets:
+                effects.append(HealEffect(
+                    side=event.side,
+                    source_type=event.source_type,
+                    source_id=event.source_id,
+                    target_type=target_type,
+                    target_id=target_id,
+                    amount=action.amount,
+                ))
+            return effects
+
         raise ValueError(f"Invalid action: {action}")
 
     @staticmethod
@@ -545,6 +655,8 @@ class GameService:
             DrawCardUpdate,
             PlayCardUpdate,
             GameOverUpdate,
+            DamageUpdate,
+            HealUpdate,
         )
 
         updates = []
@@ -562,6 +674,24 @@ class GameService:
                     position=event.position,
                     target_type=event.target_type,
                     target_id=event.target_id,
+                ))
+            elif event.type == "event_damage":
+                updates.append(DamageUpdate(
+                    side=event.side,
+                    source_type=event.source_type,
+                    source_id=event.source_id,
+                    target_type=event.target_type,
+                    target_id=event.target_id,
+                    damage=event.damage,
+                ))
+            elif event.type == "event_heal":
+                updates.append(HealUpdate(
+                    side=event.side,
+                    source_type=event.source_type,
+                    source_id=event.source_id,
+                    target_type=event.target_type,
+                    target_id=event.target_id,
+                    amount=event.amount,
                 ))
             elif event.type == "event_game_over":
                 updates.append(GameOverUpdate(

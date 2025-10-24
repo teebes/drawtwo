@@ -54,6 +54,15 @@ class DamageUpdate(DealDamageUpdate):
     type: Literal["update_damage"] = "update_damage"
 
 
+class HealUpdate(UpdateBase):
+    type: Literal["update_heal"] = "update_heal"
+    source_type: Literal["card", "hero", "board", "creature"] = "card"
+    source_id: str
+    target_type: Literal["card", "hero", "creature"] = "card"
+    target_id: str
+    amount: int
+
+
 class HeroDamageUpdate(UpdateBase):
     type: Literal["update_hero_damage"] = "update_hero_damage"
     hero_id: str
@@ -81,6 +90,7 @@ GameUpdate = Annotated[
         CardDamageUpdate,
         CardDestroyedUpdate,
         DamageUpdate,
+        HealUpdate,
         HeroDamageUpdate,
         DrawPhaseUpdate,
         EndTurnUpdate,

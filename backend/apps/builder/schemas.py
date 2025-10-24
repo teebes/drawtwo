@@ -31,11 +31,19 @@ class DamageAction(ActionBase):
     action: Literal['damage'] = 'damage'
     amount: int
     target: Literal['hero', 'creature', 'enemy'] = 'creature'
+    scope: Literal['single', 'cleave', 'all'] = 'single'
+
+
+class HealAction(ActionBase):
+    action: Literal['heal'] = 'heal'
+    amount: int
+    target: Literal['hero', 'creature', 'friendly'] = 'creature'
+    scope: Literal['single', 'cleave', 'all'] = 'single'
 
 
 
 Action = Annotated[
-    Union[DrawAction, DamageAction],
+    Union[DrawAction, DamageAction, HealAction],
     Discriminator('action')
 ]
 
