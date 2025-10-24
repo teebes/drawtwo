@@ -13,6 +13,11 @@
   ]"
   @click="handleClick"
   :data-card-id="card.card_id">
+    <!-- Stealth Indicator -->
+    <div v-if="hasStealth" class="absolute -top-1 -left-1 w-4 h-4 bg-purple-600 rounded-full flex items-center justify-center" title="Stealth">
+      <span class="text-xs">👁️</span>
+    </div>
+
     <!-- Exhausted Indicator -->
     <div v-if="card.exhausted" class="absolute -top-1 -right-1 w-4 h-4 bg-gray-600 rounded-full flex items-center justify-center">
       <span class="text-white text-xs font-bold">z</span>
@@ -72,6 +77,10 @@ const exhaustedClass = computed(() => {
 
 const attack = computed(() => props.card.attack)
 const health = computed(() => props.card.health)
+
+const hasStealth = computed(() => {
+  return props.card.traits?.some(trait => trait.type === 'stealth') ?? false
+})
 
 const handleClick = () => {
   if (props.isCanAttack || props.isTargetable) {

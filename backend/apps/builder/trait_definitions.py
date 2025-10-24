@@ -14,6 +14,7 @@ TRAIT_DEATHRATTLE = "deathrattle"
 TRAIT_INSPIRE = "inspire"
 TRAIT_LIFESTEAL = "lifesteal"
 TRAIT_RANGED = "ranged"
+TRAIT_STEALTH = "stealth"
 TRAIT_TAUNT = "taunt"
 TRAIT_UNIQUE = "unique"
 
@@ -50,6 +51,10 @@ TRAIT_DEFINITIONS = {
     TRAIT_RANGED: {
         'name': 'Ranged',
         'description': 'Can attack without taking retaliation damage.',
+    },
+    TRAIT_STEALTH: {
+        'name': 'Stealth',
+        'description': 'Cannot be targeted by attacks until this creature attacks.',
     },
     TRAIT_TAUNT: {
         'name': 'Taunt',

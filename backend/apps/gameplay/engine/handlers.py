@@ -324,6 +324,14 @@ def attack(effect: AttackEffect, state: GameState) -> Result:
     if creature.exhausted:
         return Rejected(reason="Creature is exhausted")
 
+    # STEALTH VALIDATION: Cannot directly target stealthed creatures
+    if effect.target_type == "creature":
+        target_creature = state.creatures.get(effect.target_id)
+        if target_creature:
+            has_stealth = any(trait.type == "stealth" for trait in target_creature.traits)
+            if has_stealth:
+                return Rejected(reason="Cannot target stealthed creatures")
+
     # TAUNT VALIDATION: If opponent has creatures with taunt, must attack one of them
     taunt_creatures = get_taunt_creatures(state, opposing_side)
     if taunt_creatures:
@@ -333,6 +341,9 @@ def attack(effect: AttackEffect, state: GameState) -> Result:
         elif effect.target_type == "creature":
             if effect.target_id not in taunt_creatures:
                 return Rejected(reason="Must attack a creature with Taunt")
+
+    # STEALTH REMOVAL: Remove stealth trait when attacking
+    creature.traits = [trait for trait in creature.traits if trait.type != "stealth"]
 
     damage_effect = DamageEffect(
         side=effect.side,

@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from apps.builder.models import AIPlayer, CardTemplate, HeroTemplate, Title
-from apps.builder.schemas import HeroPower, DamageAction, Taunt
+from apps.builder.schemas import HeroPower, DamageAction, Taunt, Stealth
 from apps.collection.models import Deck, DeckCard
 from apps.gameplay.engine.dispatcher import resolve
 from apps.gameplay.schemas.effects import AttackEffect, UseHeroEffect
@@ -934,3 +934,113 @@ class AITauntTests(TestCase):
 
         # Verify that it attacked one of the taunt creatures
         self.assertIn(effect.target_id, ['taunt_b_1', 'taunt_b_2'])
+
+
+class StealthMechanicTests(AttackValidationTestBase):
+    """Test the Stealth trait mechanic."""
+
+    def setUp(self):
+        super().setUp()
+        # Add a stealth creature to side_b
+        self.stealth_creature = Creature(
+            creature_id='stealth_b_1',
+            card_id='card_stealth_b_1',
+            name='Stealth Creature',
+            description='Has Stealth',
+            attack=2,
+            health=2,
+            traits=[Stealth()],
+            exhausted=False
+        )
+        self.game_state.creatures['stealth_b_1'] = self.stealth_creature
+        self.game_state.board['side_b'].append('stealth_b_1')
+
+    def test_cannot_target_stealthed_creature(self):
+        """Test that you cannot directly target a stealthed creature."""
+        effect = AttackEffect(
+            side='side_a',
+            card_id='creature_a_1',
+            target_type='creature',
+            target_id='stealth_b_1',  # Stealth creature
+        )
+
+        result = resolve(effect, self.game_state)
+        self.assertEqual(result.type, 'outcome_rejected')
+        self.assertIn("stealth", result.reason.lower())
+
+    def test_can_attack_non_stealth_creature(self):
+        """Test that you CAN attack non-stealth creatures even when stealth exists."""
+        effect = AttackEffect(
+            side='side_a',
+            card_id='creature_a_1',
+            target_type='creature',
+            target_id='creature_b_1',  # Non-stealth creature
+        )
+
+        result = resolve(effect, self.game_state)
+        self.assertEqual(result.type, 'outcome_success')
+
+    def test_stealth_removed_after_attack(self):
+        """Test that stealth is removed after the creature attacks."""
+        # Make the stealth creature attack
+        effect = AttackEffect(
+            side='side_b',
+            card_id='stealth_b_1',
+            target_type='creature',
+            target_id='creature_a_1',
+        )
+
+        # Change active side to side_b so the attack is valid
+        self.game_state.active = 'side_b'
+
+        result = resolve(effect, self.game_state)
+        self.assertEqual(result.type, 'outcome_success')
+
+        # Check that stealth trait was removed
+        updated_creature = result.new_state.creatures['stealth_b_1']
+        has_stealth = any(trait.type == 'stealth' for trait in updated_creature.traits)
+        self.assertFalse(has_stealth)
+
+    def test_can_attack_creature_after_stealth_removed(self):
+        """Test that a creature can be targeted after its stealth is removed."""
+        # First, have the stealth creature attack to remove stealth
+        self.game_state.active = 'side_b'
+        attack_effect = AttackEffect(
+            side='side_b',
+            card_id='stealth_b_1',
+            target_type='creature',
+            target_id='creature_a_1',
+        )
+
+        result = resolve(attack_effect, self.game_state)
+        self.assertEqual(result.type, 'outcome_success')
+
+        # Update game state
+        new_state = result.new_state
+
+        # Now try to attack the creature that lost stealth
+        new_state.active = 'side_a'
+        counter_attack = AttackEffect(
+            side='side_a',
+            card_id='creature_a_1',
+            target_type='creature',
+            target_id='stealth_b_1',
+        )
+
+        result2 = resolve(counter_attack, new_state)
+        self.assertEqual(result2.type, 'outcome_success')
+
+    def test_can_attack_hero_with_stealth_on_board(self):
+        """Test that you CAN attack hero even when stealth creatures exist (unlike taunt)."""
+        hero_b_id = self.game_state.heroes['side_b'].hero_id
+
+        effect = AttackEffect(
+            side='side_a',
+            card_id='creature_a_1',
+            target_type='hero',
+            target_id=hero_b_id,
+        )
+
+        result = resolve(effect, self.game_state)
+        # Should succeed - stealth doesn't force you to attack it like taunt does
+        self.assertEqual(result.type, 'outcome_success')
