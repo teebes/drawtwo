@@ -108,6 +108,13 @@ class Tag(TimestampedModel):
 
 
 class Trait(TimestampedModel):
+    """
+    DEPRECATED: This model is being phased out.
+
+    Trait definitions are now in trait_definitions.py with sparse overrides
+    via TraitOverride model. This model is kept for backward compatibility
+    and will be removed in a future migration.
+    """
     title = models.ForeignKey(Title, on_delete=models.PROTECT)
 
     # Predefined trait types as constants
@@ -145,28 +152,66 @@ class Trait(TimestampedModel):
         ]
 
 
+class TraitOverride(TimestampedModel):
+    """
+    Title-specific customization of trait names and descriptions.
+
+    Stores only overrides; if no override exists, defaults from
+    trait_definitions.py are used.
+    """
+    title = models.ForeignKey(Title, on_delete=models.CASCADE)
+
+    # Import choices from trait_definitions to avoid duplication
+    from apps.builder.trait_definitions import TRAIT_SLUGS
+    slug = models.SlugField(choices=list_to_choices(TRAIT_SLUGS))
+
+    name = models.CharField(max_length=40)
+    description = models.TextField(blank=True)
+
+    class Meta:
+        unique_together = [['title', 'slug']]
+        indexes = [
+            models.Index(fields=['title', 'slug'], name='trait_override_title_slug_idx'),
+        ]
+        verbose_name = "Trait Override"
+        verbose_name_plural = "Trait Overrides"
+
+    def __str__(self):
+        return f"{self.title.slug}: {self.slug} → {self.name}"
+
+
 class CardTrait(TimestampedModel):
     """Intermediary table for card-trait assignments with optional data"""
     card = models.ForeignKey('CardTemplate', on_delete=models.CASCADE)
-    trait = models.ForeignKey(Trait, on_delete=models.CASCADE)
+
+    # Store trait slug directly instead of FK to Trait
+    from apps.builder.trait_definitions import TRAIT_SLUGS
+    trait_slug = models.SlugField(choices=list_to_choices(TRAIT_SLUGS))
 
     # Unified data storage for all trait-specific information
     # Examples: {"value": 3} for armor, {"targets": 2} for cleave, {} for simple traits
     data = models.JSONField(default=dict, blank=True)
 
     class Meta:
-        unique_together = ['card', 'trait']
+        unique_together = ['card', 'trait_slug']
         indexes = [
             models.Index(fields=['card'], name='cardtrait_card_idx'),
-            models.Index(fields=['trait'], name='cardtrait_trait_idx'),
+            models.Index(fields=['trait_slug'], name='cardtrait_trait_slug_idx'),
         ]
         verbose_name = "Card Trait"
         verbose_name_plural = "Card Traits"
 
     def __str__(self):
+        from apps.builder.trait_definitions import get_trait_info
+        trait_info = get_trait_info(self.card.title, self.trait_slug)
         if self.data:
-            return f"{self.card.name}: {self.trait.name} {self.data}"
-        return f"{self.card.name}: {self.trait.name}"
+            return f"{self.card.name}: {trait_info['name']} {self.data}"
+        return f"{self.card.name}: {trait_info['name']}"
+
+    def get_trait_info(self):
+        """Get the trait name and description (with title-specific overrides)."""
+        from apps.builder.trait_definitions import get_trait_info
+        return get_trait_info(self.card.title, self.trait_slug)
 
 
 class Faction(TimestampedModel):
@@ -233,7 +278,7 @@ class CardTemplate(TemplateBase):
     spec = models.JSONField(default=dict, blank=True)
 
     tags = models.ManyToManyField(Tag, blank=True)
-    traits = models.ManyToManyField(Trait, through='CardTrait', blank=True)
+    # traits field removed - use cardtrait_set to access traits
     faction = models.ForeignKey(Faction, on_delete=models.PROTECT,
                                 null=True, blank=True)
 
@@ -246,32 +291,39 @@ class CardTemplate(TemplateBase):
             models.Index(fields=['title', 'is_latest', 'cost', 'card_type', 'attack', 'health', 'name'], name='card_full_sort_idx'),
         ]
 
-    def add_trait(self, trait, data=None):
-        "Add or update a trait"
+    def add_trait(self, trait_slug, data=None):
+        """
+        Add or update a trait by slug.
+
+        Args:
+            trait_slug: The trait slug (e.g., 'charge', 'taunt')
+            data: Optional dict of trait-specific data
+        """
         if data is None:
-            data = trait.data or {}
+            data = {}
         card_trait, created = CardTrait.objects.get_or_create(
             card=self,
-            trait=trait,
+            trait_slug=trait_slug,
             defaults={'data': data}
         )
         if not created:
             card_trait.data = data
             card_trait.save(update_fields=['data'])
 
-    def get_trait_data(self, trait):
-        """Get the data dict for a trait, or empty dict if no data"""
+    def get_trait_data(self, trait_slug):
+        """Get the data dict for a trait by slug, or empty dict if no data"""
         try:
-            return self.cardtrait_set.get(trait=trait).data
+            return self.cardtrait_set.get(trait_slug=trait_slug).data
         except CardTrait.DoesNotExist:
             return {}
 
     def get_all_traits_with_data(self):
-        """Get all traits as a list of (trait, data) tuples"""
-        return [
-            (card_trait.trait, card_trait.data)
-            for card_trait in self.cardtrait_set.select_related('trait')
-        ]
+        """Get all traits as a list of (trait_info, data) tuples"""
+        result = []
+        for card_trait in self.cardtrait_set.all():
+            trait_info = card_trait.get_trait_info()
+            result.append((trait_info, card_trait.data))
+        return result
 
 
 class AIPlayer(TimestampedModel):

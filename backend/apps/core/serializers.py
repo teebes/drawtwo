@@ -17,7 +17,7 @@ def serialize_cards_with_traits(queryset) -> List[Dict[str, Any]]:
     """
     # Apply efficient prefetching to the queryset
     cards = queryset.select_related('title', 'faction').prefetch_related(
-        'cardtrait_set__trait'  # Prefetch card traits with trait data
+        'cardtrait_set'  # Prefetch card traits
     )
 
     # Transform to Card schema format
@@ -26,9 +26,9 @@ def serialize_cards_with_traits(queryset) -> List[Dict[str, Any]]:
         # Build traits list with data
         traits_list = []
 
-        for card_trait in card.cardtrait_set.all().order_by('trait__name'):
+        for card_trait in card.cardtrait_set.all().order_by('trait_slug'):
             trait_data = {
-                'type': card_trait.trait.slug,
+                'type': card_trait.trait_slug,
                 **card_trait.data
             }
 

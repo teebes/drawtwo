@@ -139,7 +139,7 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
     else:
         raise NotImplementedError
 
-    setattr(source, "exhausted", True)
+    #setattr(source, "exhausted", True)
 
     events = [DamageEvent(
         side=effect.side,

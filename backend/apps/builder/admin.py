@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Title, Tag, Trait, Faction, HeroTemplate, CardTemplate, CardTrait, AIPlayer, Builder
+from .models import Title, Tag, Trait, TraitOverride, Faction, HeroTemplate, CardTemplate, CardTrait, AIPlayer, Builder
 
 
 @admin.register(Title)
@@ -78,6 +78,7 @@ class TagAdmin(admin.ModelAdmin):
 
 @admin.register(Trait)
 class TraitAdmin(admin.ModelAdmin):
+    """DEPRECATED: This model is being phased out."""
     list_display = ('name', 'slug', 'title', 'created_at')
     list_filter = ('title', 'created_at')
     search_fields = ('name', 'slug', 'description', 'title__name')
@@ -88,6 +89,27 @@ class TraitAdmin(admin.ModelAdmin):
     fieldsets = (
         ('Basic Information', {
             'fields': ('title', 'slug', 'name', 'description')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+@admin.register(TraitOverride)
+class TraitOverrideAdmin(admin.ModelAdmin):
+    list_display = ('slug', 'name', 'title', 'created_at')
+    list_filter = ('slug', 'title', 'created_at')
+    search_fields = ('name', 'slug', 'description', 'title__name')
+    readonly_fields = ('created_at', 'updated_at')
+    ordering = ('title', 'slug')
+    raw_id_fields = ('title',)
+
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('title', 'slug', 'name', 'description'),
+            'description': 'Override the default trait name/description for this specific title'
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
@@ -118,24 +140,21 @@ class FactionAdmin(admin.ModelAdmin):
 class CardTraitInline(admin.TabularInline):
     model = CardTrait
     extra = 0
-    fields = ('trait', 'data')
+    fields = ('trait_slug', 'data')
     readonly_fields = ('created_at', 'updated_at')
-
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('trait')
 
 
 @admin.register(CardTrait)
 class CardTraitAdmin(admin.ModelAdmin):
-    list_display = ('card', 'trait', 'get_data_summary', 'created_at')
-    list_filter = ('trait', 'created_at', 'card__title')
-    search_fields = ('card__name', 'trait__name', 'card__slug', 'trait__slug')
+    list_display = ('card', 'trait_slug', 'get_data_summary', 'created_at')
+    list_filter = ('trait_slug', 'created_at', 'card__title')
+    search_fields = ('card__name', 'card__slug', 'trait_slug')
     readonly_fields = ('created_at', 'updated_at')
     ordering = ('-created_at',)
 
     fieldsets = (
         ('Relationship', {
-            'fields': ('card', 'trait')
+            'fields': ('card', 'trait_slug')
         }),
         ('Trait Data', {
             'fields': ('data',),

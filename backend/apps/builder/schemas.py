@@ -33,6 +33,7 @@ class DamageAction(ActionBase):
     target: Literal['hero', 'creature', 'enemy'] = 'creature'
 
 
+
 Action = Annotated[
     Union[DrawAction, DamageAction],
     Discriminator('action')

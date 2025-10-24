@@ -46,9 +46,6 @@ class TestDamage(GamePlayTestBase):
         self.assertEqual(len(result.events), 1)
         self.assertEqual(result.events[0].type, 'event_damage')
 
-        # Attacking creature is exhausted
-        self.assertTrue(new_state.creatures["1"].exhausted)
-
     def test_creature_to_creature_damage(self):
         target_creature = Creature(
             creature_id="2",

@@ -17,20 +17,11 @@ class TitleService:
     def create_title(cls, author: User, slug: str,name: str):
         title = Title.objects.create(name=name, slug=slug, author=author)
         service = cls(title)
-        service.assign_traits()
+        # No longer need to create trait rows - using trait_definitions.py
         return service
 
     def __init__(self, title: Title):
         self.title = title
-
-    def assign_traits(self):
-        trait_slugs = list(
-            dict(builder_models.Trait._meta.get_field('slug').choices).keys()
-        )
-        for trait_slug in trait_slugs:
-            builder_models.Trait.objects.get_or_create(
-                slug=trait_slug,
-                title=self.title)
 
     def ingest_yaml(self, yaml_data: str):
         resource_data = yaml.safe_load(yaml_data)
@@ -93,14 +84,11 @@ class TitleService:
         card_template.health = resource.health
 
         if resource.traits:
+            from apps.builder.trait_definitions import validate_trait_slug
             for trait_data in resource.traits:
-                try:
-                    trait = builder_models.Trait.objects.get(
-                        slug=trait_data.type,
-                        title=self.title)
-                except builder_models.Trait.DoesNotExist:
-                    raise ValueError(f"Trait '{trait_data.type}' not found")
-                card_template.add_trait(trait, data=trait_data.model_dump())
+                if not validate_trait_slug(trait_data.type):
+                    raise ValueError(f"Unknown trait type: '{trait_data.type}'")
+                card_template.add_trait(trait_data.type, data=trait_data.model_dump())
 
         card_template.save()
 
