@@ -284,6 +284,14 @@ def update_deck_card(request, deck_id, card_id):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    # Check if card has Unique trait
+    has_unique = card.cardtrait_set.filter(trait_slug='unique').exists()
+    if has_unique and new_count > 1:
+        return Response(
+            {'error': f'"{card.name}" has the Unique trait and can only have 1 copy in a deck'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     # Update the count
     deck_card.count = new_count
     deck_card.save()
@@ -362,6 +370,14 @@ def add_deck_card(request, deck_id):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    # Check if card has Unique trait
+    has_unique = card.cardtrait_set.filter(trait_slug='unique').exists()
+    if has_unique and count > 1:
+        return Response(
+            {'error': f'"{card.name}" has the Unique trait and can only have 1 copy in a deck'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     # See if the operation would put the deck over the size limit
     if deck.deck_size + count > world_config.deck_size_limit:
         return Response(
@@ -377,10 +393,17 @@ def add_deck_card(request, deck_id):
     )
 
     if not created:
+        # Check if adding more would violate Unique trait
+        new_total = deck_card.count + count
+        if has_unique and new_total > 1:
+            return Response(
+                {'error': f'"{card.name}" has the Unique trait and can only have 1 copy in a deck'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         # Update existing card count
         deck_card.count += count
         deck_card.save()
-        message = f'Updated "{card.name}" count to {count}'
+        message = f'Updated "{card.name}" count to {deck_card.count}'
     else:
         message = f'Added "{card.name}" to deck with count {count}'
 

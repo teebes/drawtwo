@@ -4,6 +4,10 @@
         <div v-if="hasStealth" class="absolute -top-1 -left-1 w-5 h-5 bg-purple-600 text-white rounded-full flex items-center justify-center text-xs font-bold" title="Stealth">
             👁️
         </div>
+        <!-- Unique indicator -->
+        <div v-if="hasUnique" class="absolute top-1 -left-1 w-5 h-5 bg-amber-500 text-white rounded-full flex items-center justify-center text-xs font-bold" title="Unique">
+            ⭐
+        </div>
         <!-- Taunt indicator -->
         <div v-if="hasTaunt" class="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold" title="Taunt">
             🛡️
@@ -68,6 +72,14 @@ const hasStealth = computed(() => {
     // Check if card has stealth trait
     if ('traits' in props.card && Array.isArray(props.card.traits)) {
         return props.card.traits.some((trait: any) => trait.type === 'stealth')
+    }
+    return false
+})
+
+const hasUnique = computed(() => {
+    // Check if card has unique trait
+    if ('traits' in props.card && Array.isArray(props.card.traits)) {
+        return props.card.traits.some((trait: any) => trait.type === 'unique')
     }
     return false
 })

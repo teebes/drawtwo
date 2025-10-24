@@ -18,6 +18,11 @@
       <span class="text-xs">👁️</span>
     </div>
 
+    <!-- Unique Indicator -->
+    <div v-if="hasUnique" class="absolute top-1 -left-1 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center" title="Unique">
+      <span class="text-xs">⭐</span>
+    </div>
+
     <!-- Exhausted Indicator -->
     <div v-if="card.exhausted" class="absolute -top-1 -right-1 w-4 h-4 bg-gray-600 rounded-full flex items-center justify-center">
       <span class="text-white text-xs font-bold">z</span>
@@ -80,6 +85,10 @@ const health = computed(() => props.card.health)
 
 const hasStealth = computed(() => {
   return props.card.traits?.some(trait => trait.type === 'stealth') ?? false
+})
+
+const hasUnique = computed(() => {
+  return props.card.traits?.some(trait => trait.type === 'unique') ?? false
 })
 
 const handleClick = () => {
