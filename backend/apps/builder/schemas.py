@@ -84,8 +84,11 @@ class Stealth(TraitBase):
     type: Literal['stealth'] = 'stealth'
 
 
+class Unique(TraitBase):
+    type: Literal['unique'] = 'unique'
+
 Trait = Annotated[
-    Union[Charge, Ranged, Taunt, Battlecry, DeathRattle, Stealth],
+    Union[Charge, Ranged, Taunt, Battlecry, DeathRattle, Stealth, Unique],
     Discriminator('type')
 ]
 
