@@ -7,11 +7,12 @@ from apps.builder.schemas import (
     DamageAction,
     DrawAction,
     DeathRattle,
+    RemoveAction,
 )
 from apps.gameplay.engine.dispatcher import resolve
 from apps.gameplay.engine.handlers import spawn_creature
 from apps.gameplay.schemas.engine import Success
-from apps.gameplay.schemas.effects import PlayEffect, DrawEffect
+from apps.gameplay.schemas.effects import PlayEffect, DrawEffect, RemoveEffect
 from apps.gameplay.schemas.events import (
     CreatureDeathEvent,
     EndTurnEvent,
@@ -287,3 +288,166 @@ class TestTraitProcessing(GamePlayTestBase):
         self.assertIsInstance(result.child_effects[0], DrawEffect)
         self.assertEqual(result.child_effects[0].side, "side_b")
         self.assertEqual(result.child_effects[0].amount, 1)
+
+
+class TestRemoveAction(GamePlayTestBase):
+    """Tests for the Remove action (removes creature without triggering deathrattle)."""
+
+    def test_remove_action_single(self):
+        """Test that remove action removes a single creature."""
+        # Create a target creature on side_b
+        target_card = CardInPlay(
+            card_type="creature",
+            card_id="target_1",
+            template_slug="target-card",
+            name="Target Card",
+            attack=2,
+            health=3,
+            cost=2,
+            traits=[],
+        )
+        target_creature = spawn_creature(
+            card=target_card,
+            state=self.game_state,
+            side="side_b",
+        )
+
+        # Verify creature is on board
+        self.assertEqual(len(self.game_state.board["side_b"]), 1)
+        self.assertIn(target_creature.creature_id, self.game_state.creatures)
+
+        # Create battlecry card with remove action
+        remove_card = CardInPlay(
+            card_type="creature",
+            card_id="remover_1",
+            template_slug="remover-card",
+            name="Remover Card",
+            attack=1,
+            health=1,
+            cost=1,
+            traits=[Battlecry(actions=[RemoveAction(target="enemy")])],
+        )
+        self.game_state.cards["remover_1"] = remove_card
+
+        # Create play event targeting the creature
+        play_event = PlayEvent(
+            side="side_a",
+            source_type="card",
+            source_id="remover_1",
+            position=0,
+            target_type="creature",
+            target_id=target_creature.creature_id,
+        )
+
+        # Process battlecry
+        result = traits.apply(self.game_state, play_event)
+        self.assertEqual(len(result.child_effects), 1)
+        self.assertIsInstance(result.child_effects[0], RemoveEffect)
+        self.assertEqual(result.child_effects[0].target_id, target_creature.creature_id)
+
+        # Resolve the remove effect
+        remove_result = resolve(result.child_effects[0], self.game_state)
+        self.assertIsInstance(remove_result, Success)
+
+        # Verify creature was removed from board
+        self.assertEqual(len(remove_result.new_state.board["side_b"]), 0)
+        self.assertNotIn(target_creature.creature_id, remove_result.new_state.creatures)
+
+    def test_remove_does_not_trigger_deathrattle(self):
+        """Test that remove does NOT trigger deathrattle effects."""
+        # Create a creature with deathrattle
+        deathrattle_card = CardInPlay(
+            card_type="creature",
+            card_id="rattling_1",
+            template_slug="rattling-card",
+            name="Rattling Card",
+            attack=1,
+            health=1,
+            cost=1,
+            traits=[DeathRattle(actions=[DrawAction(amount=1)])],
+        )
+        rattling_creature = spawn_creature(
+            card=deathrattle_card,
+            state=self.game_state,
+            side="side_b",
+        )
+
+        # Create a remove effect
+        remove_effect = RemoveEffect(
+            side="side_a",
+            source_type="creature",
+            source_id="remover_1",
+            target_type="creature",
+            target_id=rattling_creature.creature_id,
+        )
+
+        # Resolve the remove effect
+        result = resolve(remove_effect, self.game_state)
+        self.assertIsInstance(result, Success)
+
+        # Verify creature was removed
+        self.assertEqual(len(result.new_state.board["side_b"]), 0)
+
+        # Verify RemoveEvent was emitted (not CreatureDeathEvent)
+        self.assertEqual(len(result.events), 1)
+        self.assertEqual(result.events[0].type, "event_remove")
+
+        # Verify no child effects (deathrattle should NOT trigger)
+        self.assertEqual(len(result.child_effects), 0)
+
+    def test_remove_action_all_scope(self):
+        """Test that remove action with 'all' scope removes all enemy creatures."""
+        # Create multiple creatures on side_b
+        for i in range(3):
+            creature_card = CardInPlay(
+                card_type="creature",
+                card_id=f"creature_{i}",
+                template_slug=f"creature-{i}",
+                name=f"Creature {i}",
+                attack=1,
+                health=1,
+                cost=1,
+                traits=[],
+            )
+            spawn_creature(
+                card=creature_card,
+                state=self.game_state,
+                side="side_b",
+            )
+
+        # Verify 3 creatures on board
+        self.assertEqual(len(self.game_state.board["side_b"]), 3)
+
+        # Create battlecry card with remove all action
+        remove_all_card = CardInPlay(
+            card_type="creature",
+            card_id="remover_all",
+            template_slug="remover-all-card",
+            name="Remove All Card",
+            attack=1,
+            health=1,
+            cost=5,
+            traits=[Battlecry(actions=[RemoveAction(target="enemy", scope="all")])],
+        )
+        self.game_state.cards["remover_all"] = remove_all_card
+
+        # Create play event
+        play_event = PlayEvent(
+            side="side_a",
+            source_type="card",
+            source_id="remover_all",
+            position=0,
+        )
+
+        # Process battlecry
+        result = traits.apply(self.game_state, play_event)
+        self.assertEqual(len(result.child_effects), 3)  # Should create 3 remove effects
+
+        # Resolve all remove effects
+        new_state = self.game_state
+        for effect in result.child_effects:
+            resolve_result = resolve(effect, new_state)
+            new_state = resolve_result.new_state
+
+        # Verify all creatures were removed
+        self.assertEqual(len(new_state.board["side_b"]), 0)

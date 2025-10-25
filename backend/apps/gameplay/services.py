@@ -14,6 +14,7 @@ from apps.builder.schemas import (
     DrawAction,
     DamageAction,
     HealAction,
+    RemoveAction,
     TitleConfig,
 )
 from apps.core.serializers import serialize_cards_with_traits
@@ -39,6 +40,7 @@ from apps.gameplay.schemas.effects import (
     EndTurnEffect,
     HealEffect,
     PlayEffect,
+    RemoveEffect,
     StartGameEffect,
     UseHeroEffect,
 )
@@ -579,6 +581,61 @@ class GameService:
                     target_type=target_type,
                     target_id=target_id,
                     amount=action.amount,
+                ))
+            return effects
+
+        if isinstance(action, RemoveAction):
+            opposing_side = state.opposite_side
+
+            # Determine base target
+            if action.target == "creature":
+                base_target_type = "creature"
+                base_target_id = event.target_id or (state.board[opposing_side][0] if state.board[opposing_side] else None)
+            elif action.target == "enemy":
+                # 'enemy' can be creature, use event target (remove doesn't affect heroes)
+                base_target_type = event.target_type or "creature"
+                base_target_id = event.target_id
+            else:
+                base_target_type = event.target_type
+                base_target_id = event.target_id
+
+            # Get all targets based on scope
+            targets = []
+
+            if action.scope == 'single':
+                if base_target_id and base_target_type == "creature":
+                    targets = [(base_target_type, base_target_id)]
+
+            elif action.scope == 'all':
+                # Remove all enemy creatures
+                for creature_id in state.board[opposing_side]:
+                    targets.append(("creature", creature_id))
+
+            elif action.scope == 'cleave':
+                # Remove target and adjacent creatures
+                if base_target_type == "creature" and base_target_id in state.board[opposing_side]:
+                    target_index = state.board[opposing_side].index(base_target_id)
+                    # Add the main target
+                    targets.append((base_target_type, base_target_id))
+                    # Add left neighbor
+                    if target_index > 0:
+                        targets.append(("creature", state.board[opposing_side][target_index - 1]))
+                    # Add right neighbor
+                    if target_index < len(state.board[opposing_side]) - 1:
+                        targets.append(("creature", state.board[opposing_side][target_index + 1]))
+                elif base_target_id:
+                    # If not a creature, just remove the single target
+                    targets = [(base_target_type, base_target_id)]
+
+            # Create remove effects for each target
+            effects = []
+            for target_type, target_id in targets:
+                effects.append(RemoveEffect(
+                    side=event.side,
+                    source_type=event.source_type,
+                    source_id=event.source_id,
+                    target_type=target_type,
+                    target_id=target_id,
                 ))
             return effects
 

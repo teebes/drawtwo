@@ -85,6 +85,17 @@ class CreatureDeathEvent(ActionableEvent):
     creature: Creature
 
 
+class RemoveEvent(EventBase):
+    """
+    A creature is removed from the board without triggering death effects.
+    """
+    type: Literal["event_remove"] = "event_remove"
+    source_type: Literal["card", "hero", "board", "creature"] = "creature"
+    source_id: str
+    target_type: Literal["creature"] = "creature"
+    target_id: str
+
+
 Event = Annotated[
     Union[
         CreatureDeathEvent,
@@ -95,6 +106,7 @@ Event = Annotated[
         HealEvent,
         NewPhaseEvent,
         PlayEvent,
+        RemoveEvent,
         UseHeroEvent,
     ],
     Discriminator('type')

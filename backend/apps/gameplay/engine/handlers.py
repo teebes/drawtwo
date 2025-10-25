@@ -14,6 +14,7 @@ from apps.gameplay.schemas.effects import (
     MarkExhaustedEffect,
     NewPhaseEffect,
     PlayEffect,
+    RemoveEffect,
     StartGameEffect,
     UseHeroEffect,
 )
@@ -26,6 +27,7 @@ from apps.gameplay.schemas.events import (
     HealEvent,
     NewPhaseEvent,
     PlayEvent,
+    RemoveEvent,
     UseHeroEvent,
 )
 from apps.gameplay.schemas.game import GameState, CardInPlay, Creature
@@ -492,3 +494,47 @@ def start_game(effect: StartGameEffect, state: GameState) -> Result:
     # Start phase
     child_effects.append(NewPhaseEffect(side=effect.side, phase='start'))
     return Success(new_state=state, child_effects=child_effects)
+
+
+@register("effect_remove")
+def remove(effect: RemoveEffect, state: GameState) -> Result:
+    """
+    Remove effect handler - removes a creature from the board without triggering deathrattle.
+
+    This is different from damage-based removal which triggers CreatureDeathEvent.
+    Remove is used for effects like "silence and destroy" or "return to hand" style mechanics.
+    """
+    events = []
+
+    # Determine which side the target is on (opposite of the effect side)
+    opposing_side = "side_b" if effect.side == "side_a" else "side_a"
+
+    # Validate that the target exists and is on the board
+    if effect.target_id not in state.board[opposing_side]:
+        return Rejected(reason=f"Target creature {effect.target_id} is not on the board")
+
+    # Get the target creature
+    target_creature = state.creatures.get(effect.target_id)
+    if not target_creature:
+        return Rejected(reason=f"Target creature {effect.target_id} does not exist")
+
+    # Remove the creature from the board
+    state.board[opposing_side].remove(effect.target_id)
+
+    # Remove from creatures dict
+    del state.creatures[effect.target_id]
+
+    # Emit RemoveEvent (does NOT trigger deathrattle)
+    events.append(RemoveEvent(
+        side=effect.side,
+        source_type=effect.source_type,
+        source_id=effect.source_id,
+        target_type=effect.target_type,
+        target_id=effect.target_id,
+    ))
+
+    return Success(
+        new_state=state,
+        events=events,
+        child_effects=[]
+    )

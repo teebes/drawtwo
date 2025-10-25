@@ -41,9 +41,14 @@ class HealAction(ActionBase):
     scope: Literal['single', 'cleave', 'all'] = 'single'
 
 
+class RemoveAction(ActionBase):
+    action: Literal['remove'] = 'remove'
+    target: Literal['creature', 'enemy'] = 'creature'
+    scope: Literal['single', 'cleave', 'all'] = 'single'
+
 
 Action = Annotated[
-    Union[DrawAction, DamageAction, HealAction],
+    Union[DrawAction, DamageAction, HealAction, RemoveAction],
     Discriminator('action')
 ]
 

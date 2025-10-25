@@ -109,6 +109,12 @@ class MarkExhaustedEffect(EffectBase):
     target_id: str
 
 
+class RemoveEffect(EffectBase):
+    type: Literal["effect_remove"] = "effect_remove"
+    source_type: Literal["card", "creature", "hero", "board"] = "creature"
+    source_id: str
+    target_type: Literal["creature"] = "creature"
+    target_id: str
 
 
 Effect = Annotated[
@@ -122,6 +128,7 @@ Effect = Annotated[
         MarkExhaustedEffect,
         NewPhaseEffect,
         PlayEffect,
+        RemoveEffect,
         StartGameEffect,
         UseHeroEffect,
     ],
