@@ -710,6 +710,7 @@ class GameService:
         """
         from apps.gameplay.schemas.updates import (
             DrawCardUpdate,
+            EndTurnUpdate,
             PlayCardUpdate,
             GameOverUpdate,
             DamageUpdate,
@@ -755,6 +756,9 @@ class GameService:
                     side=event.side,
                     winner=event.winner,
                 ))
-            # Add more event-to-update mappings as needed
+            elif event.type == "event_end_turn":
+                updates.append(EndTurnUpdate(
+                    side=event.side,
+                ))
 
         return updates
