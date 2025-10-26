@@ -369,7 +369,7 @@ const handleClickHandCard = (card_id: string) => {
             sourceType: 'spell',
             sourceId: card_id,
             allowedTypes: convertAllowedTargets(getAllowedTargets(card)),
-            scope: 'enemy', // Most spells target enemies
+            scope: getSpellTargetScope(card),
             sourceCard: card,
             errorMessage: null,
             title: 'Cast Spell'
@@ -456,7 +456,7 @@ const handleCastSpell = (card_id: string) => {
             sourceType: 'spell',
             sourceId: card_id,
             allowedTypes: convertAllowedTargets(getAllowedTargets(card)),
-            scope: 'enemy', // Most spells target enemies
+            scope: getSpellTargetScope(card),
             sourceCard: card,
             errorMessage: null,
             title: 'Cast Spell'
@@ -512,7 +512,7 @@ const handleUseHero = (side_id: string) => {
 /* Placement and Targeting Callbacks */
 
 // When placement position is selected from PlaceCreature
-const onPlacementSelected = (payload: { card_id: string; position: number; allowedTargets: Array<'card' | 'hero' | 'any'> }) => {
+const onPlacementSelected = (payload: { card_id: string; position: number; allowedTargets: Array<'card' | 'hero' | 'any'>; targetScope: 'enemy' | 'friendly' }) => {
     console.log('onPlacementSelected', payload)
 
     // If battlecry requires target, open target selector
@@ -523,7 +523,7 @@ const onPlacementSelected = (payload: { card_id: string; position: number; allow
         sourceType: 'battlecry',
         sourceId: payload.card_id,
         allowedTypes: convertAllowedTargets(payload.allowedTargets),
-        scope: 'enemy', // Most battlecries target enemies
+        scope: payload.targetScope,
         sourceCard: card || null,
         errorMessage: null,
         title: 'Choose Battlecry Target'
@@ -678,6 +678,26 @@ function getAllowedTargets(card: CardInPlay): Array<'card' | 'hero' | 'any'> {
 
     if (allowed.size === 0) allowed.add('any')
     return Array.from(allowed)
+}
+
+function getSpellTargetScope(card: CardInPlay): 'enemy' | 'friendly' {
+    const traits = card.traits || []
+
+    for (const trait of traits) {
+        const actions = trait.actions || []
+        for (const action of actions) {
+            // Heal actions target friendly units
+            if (action.action === 'heal') {
+                return 'friendly'
+            }
+            // Damage actions target enemies
+            if (action.action === 'damage') {
+                return 'enemy'
+            }
+        }
+    }
+
+    return 'enemy'
 }
 
 // Convert old target format to new format

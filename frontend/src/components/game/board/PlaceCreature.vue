@@ -86,7 +86,7 @@ const gameStore = useGameStore()
 
 const emit = defineEmits<{
     'close': []
-    'placement-selected': [{ card_id: string; position: number; allowedTargets: Array<'card' | 'hero' | 'any'> }]
+    'placement-selected': [{ card_id: string; position: number; allowedTargets: Array<'card' | 'hero' | 'any'>; targetScope: 'enemy' | 'friendly' }]
 }>()
 
 const card = computed(() => {
@@ -100,10 +100,12 @@ const handlePlacement = (position: number) => {
     // If the card has a battlecry that needs a target, emit with target info
     if (requiresTargetOnPlay(card.value)) {
         const allowedTargets = getAllowedTargets(card.value)
+        const targetScope = getTargetScope(card.value)
         emit('placement-selected', {
             card_id: props.cardId,
             position,
-            allowedTargets
+            allowedTargets,
+            targetScope
         })
         return
     }
@@ -135,7 +137,7 @@ function hasTargetingActions(traits: any[]): boolean {
     for (const trait of traits) {
         const actions = trait.actions || []
         for (const action of actions) {
-            if (action.action === 'damage') {
+            if (action.action === 'damage' || action.action === 'heal') {
                 return true
             }
         }
@@ -158,9 +160,36 @@ function getAllowedTargets(card: any): Array<'card' | 'hero' | 'any'> {
                 allowed.add('hero')
             }
         }
+        if (action.action === 'heal') {
+            if (action.target === 'creature' || action.target === 'friendly') {
+                allowed.add('card')
+            }
+            if (action.target === 'hero' || action.target === 'friendly') {
+                allowed.add('hero')
+            }
+        }
     }
 
     if (allowed.size === 0) allowed.add('any')
     return Array.from(allowed)
+}
+
+function getTargetScope(card: any): 'enemy' | 'friendly' {
+    const traits = card.traits || []
+    const battlecry = traits.find((t: any) => t.type === 'battlecry')
+    if (!battlecry) return 'enemy'
+
+    for (const action of battlecry.actions || []) {
+        // Heal actions target friendly units
+        if (action.action === 'heal') {
+            return 'friendly'
+        }
+        // Damage actions target enemies
+        if (action.action === 'damage') {
+            return 'enemy'
+        }
+    }
+
+    return 'enemy'
 }
 </script>
