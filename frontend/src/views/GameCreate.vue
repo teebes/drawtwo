@@ -26,6 +26,36 @@
       </header>
 
       <main class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 mt-8">
+        <!-- Game Mode Toggle -->
+        <div class="mb-8">
+          <div class="flex justify-center">
+            <div class="inline-flex rounded-lg border border-gray-200 bg-white p-1 dark:border-gray-700 dark:bg-gray-800">
+              <button
+                @click="gameMode = 'pve'"
+                :class="[
+                  'rounded-md px-6 py-2 text-sm font-medium transition-colors',
+                  gameMode === 'pve'
+                    ? 'bg-primary-600 text-white'
+                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+                ]"
+              >
+                🤖 vs AI
+              </button>
+              <button
+                @click="gameMode = 'pvp'"
+                :class="[
+                  'rounded-md px-6 py-2 text-sm font-medium transition-colors',
+                  gameMode === 'pvp'
+                    ? 'bg-primary-600 text-white'
+                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+                ]"
+              >
+                ⚔️ vs Player
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div class="grid gap-8 md:grid-cols-2">
           <!-- Player Deck Selection -->
           <Panel title="Choose Your Deck">
@@ -75,42 +105,87 @@
             </div>
           </Panel>
 
-          <!-- AI/PvE Deck Selection -->
-          <Panel title="Choose AI Opponent">
-            <div v-if="pveDecksLoading" class="text-center py-8">
-              <p class="text-gray-600">Loading AI opponents...</p>
-            </div>
+          <!-- Opponent Deck Selection -->
+          <Panel :title="gameMode === 'pve' ? 'Choose AI Opponent' : 'Choose Player Opponent'">
+            <!-- PvE Mode: AI Decks -->
+            <div v-if="gameMode === 'pve'">
+              <div v-if="pveDecksLoading" class="text-center py-8">
+                <p class="text-gray-600">Loading AI opponents...</p>
+              </div>
 
-            <div v-else-if="pveDecks.length === 0" class="text-center py-8">
-              <p class="text-gray-600">No AI opponents available for this title yet.</p>
-            </div>
+              <div v-else-if="pveDecks.length === 0" class="text-center py-8">
+                <p class="text-gray-600">No AI opponents available for this title yet.</p>
+              </div>
 
-            <div v-else class="space-y-3">
-              <div
-                v-for="deck in pveDecks"
-                :key="deck.id"
-                @click="selectedPveDeck = deck"
-                :class="[
-                  'cursor-pointer rounded-lg border-2 p-4 transition-colors',
-                  selectedPveDeck?.id === deck.id
-                    ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                    : 'border-gray-200 hover:border-green-300 dark:border-gray-700'
-                ]"
-              >
-                <div class="flex items-center space-x-3">
-                  <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 text-sm font-bold text-green-600">
-                    🤖
-                  </div>
-                  <div class="flex-1">
-                    <div class="font-medium text-gray-900 dark:text-white">{{ deck.name }}</div>
-                    <div class="text-sm text-gray-600">
-                      {{ deck.hero.name }} • {{ deck.card_count }} cards
+              <div v-else class="space-y-3">
+                <div
+                  v-for="deck in pveDecks"
+                  :key="deck.id"
+                  @click="selectedOpponentDeck = deck"
+                  :class="[
+                    'cursor-pointer rounded-lg border-2 p-4 transition-colors',
+                    selectedOpponentDeck?.id === deck.id
+                      ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                      : 'border-gray-200 hover:border-green-300 dark:border-gray-700'
+                  ]"
+                >
+                  <div class="flex items-center space-x-3">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 text-sm font-bold text-green-600">
+                      🤖
+                    </div>
+                    <div class="flex-1">
+                      <div class="font-medium text-gray-900 dark:text-white">{{ deck.name }}</div>
+                      <div class="text-sm text-gray-600">
+                        {{ deck.hero.name }} • {{ deck.card_count }} cards
+                      </div>
+                    </div>
+                    <div v-if="selectedOpponentDeck?.id === deck.id" class="text-green-600">
+                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                      </svg>
                     </div>
                   </div>
-                  <div v-if="selectedPveDeck?.id === deck.id" class="text-green-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
+                </div>
+              </div>
+            </div>
+
+            <!-- PvP Mode: Player Decks -->
+            <div v-else>
+              <div v-if="opponentDecksLoading" class="text-center py-8">
+                <p class="text-gray-600">Loading opponent decks...</p>
+              </div>
+
+              <div v-else-if="opponentDecks.length === 0" class="text-center py-8">
+                <p class="text-gray-600">No other players have decks for this title yet.</p>
+              </div>
+
+              <div v-else class="space-y-3">
+                <div
+                  v-for="deck in opponentDecks"
+                  :key="deck.id"
+                  @click="selectedOpponentDeck = deck"
+                  :class="[
+                    'cursor-pointer rounded-lg border-2 p-4 transition-colors',
+                    selectedOpponentDeck?.id === deck.id
+                      ? 'border-secondary-500 bg-secondary-50 dark:bg-secondary-900/20'
+                      : 'border-gray-200 hover:border-secondary-300 dark:border-gray-700'
+                  ]"
+                >
+                  <div class="flex items-center space-x-3">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary-100 text-sm font-bold text-secondary-600">
+                      {{ deck.hero.name.charAt(0) }}
+                    </div>
+                    <div class="flex-1">
+                      <div class="font-medium text-gray-900 dark:text-white">{{ deck.name }}</div>
+                      <div class="text-sm text-gray-600">
+                        {{ deck.hero.name }} • {{ deck.owner?.email }} • {{ deck.card_count }} cards
+                      </div>
+                    </div>
+                    <div v-if="selectedOpponentDeck?.id === deck.id" class="text-secondary-600">
+                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                      </svg>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -143,7 +218,7 @@
             <svg v-else class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M19 4v3a3 3 0 01-3 3h-1m-1 0h-1m1 0V6a1 1 0 00-1-1h-2a1 1 0 00-1 1v3"></path>
             </svg>
-            {{ creating ? 'Creating Game...' : 'Create Game' }}
+            {{ creating ? 'Creating Game...' : `Create ${gameMode === 'pve' ? 'PvE' : 'PvP'} Game` }}
           </button>
         </div>
       </main>
@@ -152,7 +227,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTitleStore } from '../stores/title'
 import { useNotificationStore } from '../stores/notifications'
@@ -168,6 +243,9 @@ interface DeckData {
     name: string
     slug: string
   }
+  owner?: {
+    email: string
+  }
   card_count: number
   created_at: string
   updated_at: string
@@ -177,7 +255,7 @@ interface TitleData {
   id: number
   slug: string
   name: string
-  description: string
+  description?: string
 }
 
 const route = useRoute()
@@ -189,23 +267,26 @@ const notificationStore = useNotificationStore()
 const loading = ref<boolean>(true)
 const error = ref<string | null>(null)
 const creating = ref<boolean>(false)
+const gameMode = ref<'pve' | 'pvp'>('pve')
 
 // Data
 const playerDecks = ref<DeckData[]>([])
 const pveDecks = ref<DeckData[]>([])
+const opponentDecks = ref<DeckData[]>([])
 const playerDecksLoading = ref<boolean>(false)
 const pveDecksLoading = ref<boolean>(false)
+const opponentDecksLoading = ref<boolean>(false)
 
 // Selections
 const selectedPlayerDeck = ref<DeckData | null>(null)
-const selectedPveDeck = ref<DeckData | null>(null)
+const selectedOpponentDeck = ref<DeckData | null>(null)
 
 // Computed
 const title = computed((): TitleData | null => titleStore.currentTitle)
 const titleSlug = computed(() => route.params.slug as string)
 
 const canCreateGame = computed(() => {
-  return selectedPlayerDeck.value && selectedPveDeck.value && !creating.value
+  return selectedPlayerDeck.value && selectedOpponentDeck.value && !creating.value
 })
 
 // Methods
@@ -235,21 +316,40 @@ const fetchPveDecks = async (): Promise<void> => {
   }
 }
 
+const fetchOpponentDecks = async (): Promise<void> => {
+  try {
+    opponentDecksLoading.value = true
+    const response = await axios.get(`/collection/titles/${titleSlug.value}/opponents/`)
+    opponentDecks.value = response.data.decks || []
+  } catch (err) {
+    console.error('Error fetching opponent decks:', err)
+    error.value = 'Failed to load opponent decks'
+  } finally {
+    opponentDecksLoading.value = false
+  }
+}
+
 const createGame = async (): Promise<void> => {
   if (!canCreateGame.value) return
 
   try {
     creating.value = true
 
-    const gameData = {
-      player_deck_id: selectedPlayerDeck.value!.id,
-      ai_deck_id: selectedPveDeck.value!.id
+    // Build game data based on mode
+    const gameData: any = {
+      player_deck_id: selectedPlayerDeck.value!.id
+    }
+
+    if (gameMode.value === 'pve') {
+      gameData.ai_deck_id = selectedOpponentDeck.value!.id
+    } else {
+      gameData.opponent_deck_id = selectedOpponentDeck.value!.id
     }
 
     const response = await axios.post('/gameplay/games/new/', gameData)
     const gameId = response.data.id
 
-    notificationStore.success('Game created successfully!')
+    notificationStore.success(`${gameMode.value === 'pve' ? 'PvE' : 'PvP'} game created successfully!`)
 
     // Redirect to the game board
     router.push({
@@ -261,18 +361,29 @@ const createGame = async (): Promise<void> => {
     })
   } catch (err) {
     console.error('Error creating game:', err)
-    notificationStore.handleApiError(err)
+    notificationStore.handleApiError(err as Error)
   } finally {
     creating.value = false
   }
 }
+
+// Watchers
+watch(gameMode, (newMode) => {
+  // Clear selection when switching modes
+  selectedOpponentDeck.value = null
+
+  // Load opponent decks if switching to PvP and not already loaded
+  if (newMode === 'pvp' && opponentDecks.value.length === 0) {
+    fetchOpponentDecks()
+  }
+})
 
 // Lifecycle
 onMounted(async () => {
   try {
     loading.value = true
 
-    // Fetch both player decks and PvE decks in parallel
+    // Fetch player decks and PvE decks (opponent decks loaded on demand)
     await Promise.all([
       fetchPlayerDecks(),
       fetchPveDecks()

@@ -64,7 +64,7 @@ class GameService:
 
     @staticmethod
     @transaction.atomic
-    def start_game(deck_a, deck_b) -> Game:
+    def start_game(deck_a, deck_b, randomize_starting_player: bool = False) -> Game:
 
         existing_game = Game.objects.filter(
             side_a=deck_a,
@@ -74,6 +74,13 @@ class GameService:
         ).first()
         if existing_game:
             return existing_game
+
+        # Optionally randomize which deck goes first (50/50 chance)
+        # By default, deck_a always goes first for deterministic behavior
+        # This allows for future enhancements like alternating starts between same players
+        if randomize_starting_player and random.random() < 0.5:
+            # Swap the decks so deck_b starts
+            deck_a, deck_b = deck_b, deck_a
 
         deck_a_card_copies = {
             card_copy.card.id: card_copy.count

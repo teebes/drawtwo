@@ -323,6 +323,57 @@ def delete_deck_card(request, deck_id, card_id):
     }, status=status.HTTP_200_OK)
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def opponent_decks_by_title(request, title_slug):
+    """
+    GET: List all other users' decks for a specific title (for PvP matchmaking).
+    Excludes AI decks and the current user's decks.
+    """
+    # Get the title (latest version) or return 404
+    title = get_object_or_404(Title, slug=title_slug, is_latest=True)
+
+    # Get decks for this title from other users (excluding current user and AI)
+    decks = Deck.objects.filter(
+        hero__title=title,
+        user__isnull=False,  # Only human players
+    ).exclude(
+        user=request.user  # Exclude current user
+    ).select_related('hero', 'user').annotate(
+        card_count=Count('deckcard')
+    ).order_by('-updated_at')
+
+    # Serialize the deck data
+    deck_data = []
+    for deck in decks:
+        deck_data.append({
+            'id': deck.id,
+            'name': deck.name,
+            'description': deck.description,
+            'hero': {
+                'id': deck.hero.id,
+                'name': deck.hero.name,
+                'slug': deck.hero.slug,
+            },
+            'owner': {
+                'email': deck.user.email,
+            },
+            'card_count': deck.card_count,
+            'created_at': deck.created_at.isoformat(),
+            'updated_at': deck.updated_at.isoformat(),
+        })
+
+    return Response({
+        'title': {
+            'id': title.id,
+            'slug': title.slug,
+            'name': title.name,
+        },
+        'decks': deck_data,
+        'count': len(deck_data)
+    })
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def add_deck_card(request, deck_id):

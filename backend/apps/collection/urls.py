@@ -13,6 +13,7 @@ urlpatterns = [
 
     # Deck endpoints
     path('titles/<slug:title_slug>/decks/', views.deck_list_by_title, name='deck-list-by-title'),
+    path('titles/<slug:title_slug>/opponents/', views.opponent_decks_by_title, name='opponent-decks-by-title'),
     path('decks/<int:deck_id>/', views.deck_detail, name='deck-detail'),
 
     # Deck card endpoints
