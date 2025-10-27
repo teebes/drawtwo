@@ -21,12 +21,18 @@ def game_detail(request, game_id):
 
     game_data = GameState.model_validate(game.state).model_dump()
 
-    # In addition to the game data, we also have to return who the viewing user
-    # is.
+    # Determine which side the viewing user is on
+    # Verify the user has access to this game
     if game.side_a.user == request.user:
         game_data['viewer'] = 'side_a'
-    else:
+    elif game.side_b.user == request.user:
         game_data['viewer'] = 'side_b'
+    else:
+        # User is not a participant in this game
+        return Response(
+            {'error': 'You do not have access to this game'},
+            status=status.HTTP_403_FORBIDDEN
+        )
 
     game_data['is_vs_ai'] = game.is_vs_ai
 

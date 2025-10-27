@@ -20,12 +20,14 @@ class GameConsumer(AsyncWebsocketConsumer):
 
         # Check if user is authenticated
         if not self.scope["user"].is_authenticated:
+            logger.warning(f"Rejecting unauthenticated WebSocket connection for game {self.game_id}")
             await self.close()
             return
 
         # Verify user has access to this game and fetch game object
         game = await self.user_can_access_game()
         if not game:
+            logger.warning(f"User {self.scope['user']} does not have access to game {self.game_id}")
             await self.close()
             return
 
@@ -120,9 +122,9 @@ class GameConsumer(AsyncWebsocketConsumer):
         try:
             game = Game.objects.get(id=self.game_id)
             user = self.scope["user"]
-            # Check if user is part of the game
-            if (game.side_a.user == user or game.side_b.user == user or
-                    game.side_a.ai_player is not None or game.side_b.ai_player is not None):
+            # Check if user is a participant in the game (either side)
+            # Works for both PvE (one side is user, other is AI) and PvP (both sides are users)
+            if game.side_a.user == user or game.side_b.user == user:
                 return game
             return None
         except Game.DoesNotExist:

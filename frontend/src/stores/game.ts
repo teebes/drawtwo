@@ -3,6 +3,7 @@ import axios from '../config/api'
 import { getBaseUrl } from '../config/api'
 import type { GameState, Side, CardInPlay, Creature, HeroInPlay, GameError } from '../types/game'
 import { useNotificationStore } from './notifications'
+import { useAuthStore } from './auth'
 
 // WebSocket status type
 type WebSocketStatus = 'disconnected' | 'connecting' | 'connected'
@@ -307,11 +308,17 @@ export const useGameStore = defineStore('game', {
     connectWebSocket(gameId: string): void {
       const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
       const baseUrl = getBaseUrl().replace(/^https?:/, protocol + ':')
-      const wsUrl = `${baseUrl}/ws/game/${gameId}/`
+
+      // Get JWT token from auth store and append as query parameter
+      const authStore = useAuthStore()
+      const token = authStore.accessToken
+      const wsUrl = token
+        ? `${baseUrl}/ws/game/${gameId}/?token=${token}`
+        : `${baseUrl}/ws/game/${gameId}/`
 
       this.wsStatus = 'connecting'
 
-      // WebSocket will automatically include cookies for authentication
+      // WebSocket connection with JWT token in query params
       this.socket = new WebSocket(wsUrl)
 
       this.socket.onopen = () => {
