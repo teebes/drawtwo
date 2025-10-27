@@ -21,6 +21,7 @@ import DeckEdit from '../views/DeckEdit.vue'
 import GameBoard from '../views/GameBoard.vue'
 import GameCreate from '../views/GameCreate.vue'
 import Board from '../views/Board.vue'
+import Friends from '../views/Friends.vue'
 
 const routes = [
   {
@@ -45,6 +46,12 @@ const routes = [
     path: '/profile',
     name: 'Profile',
     component: Profile,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/friends',
+    name: 'Friends',
+    component: Friends,
     meta: { requiresAuth: true }
   },
   {

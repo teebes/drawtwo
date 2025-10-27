@@ -34,6 +34,8 @@ def clean(title):
     from apps.builder.models import CardTemplate
     from apps.collection.models import Deck
     for deck in Deck.objects.filter(title=title):
+        deck.games_as_side_a.all().delete()
+        deck.games_as_side_b.all().delete()
         deck.deckcard_set.all().delete()
         deck.delete()
     CardTemplate.objects.filter(title=title).delete()
@@ -51,6 +53,7 @@ def main():
     from apps.builder.services import TitleService
 
     title = Title.objects.get(pk=3)
+    # clean(title)
 
     service = TitleService(title)
 

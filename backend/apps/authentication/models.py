@@ -82,7 +82,7 @@ class User(AbstractUser):
         max_length=20,
         choices=STATUS_CHOICES,
         default=STATUS_PENDING,
-        help_text="User approval status for site access control"
+        help_text="User approval status for site access control",
     )
 
     objects = UserManager()  # Use our custom manager
@@ -113,3 +113,70 @@ class User(AbstractUser):
     def can_login(self):
         """Check if user can log in based on their status."""
         return self.status in [self.STATUS_APPROVED] and self.is_active
+
+
+class Friendship(models.Model):
+    """
+    Model representing a friendship between two users.
+    Uses a bidirectional approach where each friendship creates two records
+    (one for each direction) to simplify queries.
+    """
+
+    STATUS_PENDING = "pending"
+    STATUS_ACCEPTED = "accepted"
+    STATUS_DECLINED = "declined"
+    STATUS_BLOCKED = "blocked"
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_ACCEPTED, "Accepted"),
+        (STATUS_DECLINED, "Declined"),
+        (STATUS_BLOCKED, "Blocked"),
+    ]
+
+    # The user who initiated or is viewing this friendship
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="friendships",
+        help_text="The user who owns this friendship record",
+    )
+
+    # The other user in the friendship
+    friend = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="friend_of",
+        help_text="The friend user",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        help_text="Current status of the friendship",
+    )
+
+    # Track who initiated the friendship request
+    initiated_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="initiated_friendships",
+        help_text="The user who sent the friend request",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "friendships"
+        verbose_name = "Friendship"
+        verbose_name_plural = "Friendships"
+        unique_together = [["user", "friend"]]
+        indexes = [
+            models.Index(fields=["user", "status"]),
+            models.Index(fields=["friend", "status"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.display_name} -> {self.friend.display_name} ({self.status})"

@@ -17,21 +17,25 @@ from .serializers import (
     EmailVerificationSerializer,
     PasswordlessLoginSerializer,
     UserSerializer,
+    FriendshipSerializer,
+    FriendRequestSerializer,
 )
 
 User = get_user_model()
 
 
-@method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(csrf_exempt, name="dispatch")
 class GoogleLogin(SocialLoginView):
     """Google OAuth2 login view."""
 
     adapter_class = GoogleOAuth2Adapter
-    callback_url = settings.FRONTEND_URL + "/auth/callback/google"  # Configurable frontend callback URL
+    callback_url = (
+        settings.FRONTEND_URL + "/auth/callback/google"
+    )  # Configurable frontend callback URL
     client_class = OAuth2Client
 
 
-@method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(csrf_exempt, name="dispatch")
 class PasswordlessLoginView(APIView):
     """Send passwordless login email to user."""
 
@@ -100,7 +104,7 @@ class PasswordlessLoginView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(csrf_exempt, name="dispatch")
 class EmailConfirmationView(APIView):
     """Confirm email and log user in."""
 
@@ -122,6 +126,7 @@ class EmailConfirmationView(APIView):
 
                     # Check if user can login (considering whitelist mode)
                     from apps.control.models import SiteSettings
+
                     site_settings = SiteSettings.get_cached_settings()
 
                     if site_settings.whitelist_mode_enabled and not user.can_login():
@@ -212,7 +217,7 @@ def register_view(request):
         return Response(
             {
                 "error": "User registration is currently disabled. Please contact an administrator.",
-                "signup_disabled": True
+                "signup_disabled": True,
             },
             status=status.HTTP_403_FORBIDDEN,
         )
@@ -244,3 +249,145 @@ def register_view(request):
         )
 
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class FriendshipListView(APIView):
+    """List all friends and pending requests."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        """Get all friendships for the current user."""
+        from .models import Friendship
+
+        # Get all friendships where user is involved
+        friendships = Friendship.objects.filter(user=request.user).select_related(
+            "friend"
+        )
+
+        serializer = FriendshipSerializer(
+            friendships, many=True, context={"request": request}
+        )
+        return Response(serializer.data)
+
+    def post(self, request):
+        """Create a new friend request."""
+        from .models import Friendship
+        from django.db import transaction
+
+        serializer = FriendRequestSerializer(
+            data=request.data, context={"request": request}
+        )
+
+        if serializer.is_valid():
+            username = serializer.validated_data["username"]
+            target_user = User.objects.get(username__iexact=username)
+
+            # Create bidirectional friendship records
+            with transaction.atomic():
+                # Record from requester's perspective (pending)
+                friendship1 = Friendship.objects.create(
+                    user=request.user,
+                    friend=target_user,
+                    status=Friendship.STATUS_PENDING,
+                    initiated_by=request.user,
+                )
+
+                # Record from target's perspective (also pending, waiting for acceptance)
+                friendship2 = Friendship.objects.create(
+                    user=target_user,
+                    friend=request.user,
+                    status=Friendship.STATUS_PENDING,
+                    initiated_by=request.user,
+                )
+
+            return Response(
+                FriendshipSerializer(friendship1, context={"request": request}).data,
+                status=status.HTTP_201_CREATED,
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class FriendshipDetailView(APIView):
+    """Manage individual friendship."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk):
+        """Accept or decline a friend request."""
+        from .models import Friendship
+        from django.db import transaction
+
+        try:
+            # Get the friendship where the current user is the recipient
+            friendship = Friendship.objects.get(pk=pk, user=request.user)
+            # Check that the current user didn't initiate it
+            if friendship.initiated_by == request.user:
+                return Response(
+                    {"error": "Cannot accept your own friend request."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        except Friendship.DoesNotExist:
+            return Response(
+                {"error": "Friendship not found or you are not authorized."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        action = request.data.get("action")
+
+        if action == "accept":
+            # Update both sides of the friendship
+            with transaction.atomic():
+                Friendship.objects.filter(
+                    user=request.user, friend=friendship.friend
+                ).update(status=Friendship.STATUS_ACCEPTED)
+                Friendship.objects.filter(
+                    user=friendship.friend, friend=request.user
+                ).update(status=Friendship.STATUS_ACCEPTED)
+
+            friendship.refresh_from_db()
+            return Response(
+                FriendshipSerializer(friendship, context={"request": request}).data
+            )
+
+        elif action == "decline":
+            # Delete both sides of the friendship
+            with transaction.atomic():
+                Friendship.objects.filter(
+                    user=request.user, friend=friendship.friend
+                ).delete()
+                Friendship.objects.filter(
+                    user=friendship.friend, friend=request.user
+                ).delete()
+
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        return Response(
+            {"error": "Invalid action. Use 'accept' or 'decline'."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    def delete(self, request, pk):
+        """Remove a friend."""
+        from .models import Friendship
+        from django.db import transaction
+
+        try:
+            friendship = Friendship.objects.get(pk=pk, user=request.user)
+        except Friendship.DoesNotExist:
+            return Response(
+                {"error": "Friendship not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Delete both sides of the friendship
+        with transaction.atomic():
+            Friendship.objects.filter(
+                user=request.user, friend=friendship.friend
+            ).delete()
+            Friendship.objects.filter(
+                user=friendship.friend, friend=request.user
+            ).delete()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)

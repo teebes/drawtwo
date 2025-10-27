@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from .models import Friendship
 
 User = get_user_model()
 
@@ -71,3 +72,25 @@ class UserAdmin(BaseUserAdmin):
 
     # Remove username from the form
     username = None
+
+
+@admin.register(Friendship)
+class FriendshipAdmin(admin.ModelAdmin):
+    """Admin interface for Friendship model."""
+
+    list_display = (
+        "user",
+        "friend",
+        "status",
+        "initiated_by",
+        "created_at",
+    )
+    list_filter = ("status", "created_at")
+    search_fields = (
+        "user__email",
+        "user__username",
+        "friend__email",
+        "friend__username",
+    )
+    ordering = ("-created_at",)
+    readonly_fields = ("created_at", "updated_at")

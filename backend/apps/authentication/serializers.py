@@ -4,6 +4,7 @@ from allauth.account.utils import setup_user_email
 from dj_rest_auth.registration.serializers import RegisterSerializer
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
+from .models import Friendship
 
 User = get_user_model()
 
@@ -27,7 +28,14 @@ class UserSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "created_at", "updated_at", "is_email_verified", "is_staff", "status")
+        read_only_fields = (
+            "id",
+            "created_at",
+            "updated_at",
+            "is_email_verified",
+            "is_staff",
+            "status",
+        )
 
 
 class CustomRegisterSerializer(RegisterSerializer):
@@ -114,3 +122,69 @@ class SocialLoginSerializer(serializers.Serializer):
     """
 
     access_token = serializers.CharField(required=True)
+
+
+class FriendUserSerializer(serializers.ModelSerializer):
+    """Simplified user serializer for friend lists."""
+
+    display_name = serializers.ReadOnlyField()
+
+    class Meta:
+        model = User
+        fields = ("id", "email", "username", "display_name", "avatar")
+        read_only_fields = fields
+
+
+class FriendshipSerializer(serializers.ModelSerializer):
+    """Serializer for friendship data."""
+
+    friend_data = FriendUserSerializer(source="friend", read_only=True)
+    is_initiator = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Friendship
+        fields = (
+            "id",
+            "friend",
+            "friend_data",
+            "status",
+            "is_initiator",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_at", "updated_at")
+
+    def get_is_initiator(self, obj):
+        """Check if the current user initiated this friendship."""
+        request = self.context.get("request")
+        if request and request.user:
+            return obj.initiated_by_id == request.user.id
+        return False
+
+
+class FriendRequestSerializer(serializers.Serializer):
+    """Serializer for creating friend requests."""
+
+    username = serializers.CharField(required=True)
+
+    def validate_username(self, username):
+        """Validate that the username exists and is not the current user."""
+        request = self.context.get("request")
+
+        # Check user exists
+        if not User.objects.filter(username__iexact=username).exists():
+            raise serializers.ValidationError("User not found.")
+
+        target_user = User.objects.get(username__iexact=username)
+
+        # Can't friend yourself
+        if request and request.user.id == target_user.id:
+            raise serializers.ValidationError(
+                "You cannot send a friend request to yourself."
+            )
+
+        # Check if friendship already exists
+        if Friendship.objects.filter(user=request.user, friend=target_user).exists():
+            raise serializers.ValidationError("Friendship request already exists.")
+
+        return username

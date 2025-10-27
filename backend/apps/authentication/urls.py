@@ -46,4 +46,7 @@ urlpatterns = [
     path("test/", views.protected_test_view, name="protected_test"),
     # Social authentication
     path("google/", views.GoogleLogin.as_view(), name="google_login"),
+    # Friend system
+    path("friends/", views.FriendshipListView.as_view(), name="friends_list"),
+    path("friends/<int:pk>/", views.FriendshipDetailView.as_view(), name="friends_detail"),
 ]
