@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Game, GameUpdate
+from .models import Game, GameUpdate, ELORatingChange, UserTitleRating
 
 
 @admin.register(Game)
@@ -85,3 +85,40 @@ class GameUpdateAdmin(admin.ModelAdmin):
         except Exception:
             return None
     get_update_type.short_description = "Update Type"
+
+
+@admin.register(UserTitleRating)
+class UserTitleRatingAdmin(admin.ModelAdmin):
+    list_display = ['user', 'title', 'elo_rating', 'updated_at']
+    list_filter = ['title', 'updated_at']
+    search_fields = ['user__username', 'user__email', 'title__name']
+    readonly_fields = ['created_at', 'updated_at']
+    ordering = ['title', '-elo_rating']
+
+
+@admin.register(ELORatingChange)
+class ELORatingChangeAdmin(admin.ModelAdmin):
+    list_display = [
+        'game',
+        'title',
+        'winner',
+        'winner_rating_change',
+        'loser',
+        'loser_rating_change',
+        'created_at',
+    ]
+    list_filter = ['title', 'created_at']
+    search_fields = ['winner__username', 'winner__email', 'loser__username', 'loser__email']
+    readonly_fields = [
+        'game',
+        'title',
+        'winner',
+        'winner_old_rating',
+        'winner_new_rating',
+        'winner_rating_change',
+        'loser',
+        'loser_old_rating',
+        'loser_new_rating',
+        'loser_rating_change',
+        'created_at',
+    ]

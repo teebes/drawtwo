@@ -242,6 +242,9 @@ class GameService:
                             game.save(update_fields=["status", "winner"])
                             game_state.winner = event.winner
                             game_state.queue = []
+
+                            # Calculate and save ELO changes for PvP matches
+                            GameService._update_elo_ratings(game)
                             break
 
                     # Enqueue child effects (depth-first)
@@ -708,6 +711,90 @@ class GameService:
                 target_id=target_id)
 
         return
+
+    @staticmethod
+    def _update_elo_ratings(game):
+        """
+        Calculate and save ELO rating changes for PvP matches.
+        Only processes games between two human players (not vs AI).
+        Updates ratings per-title (each user has a separate rating for each title).
+        """
+        from apps.gameplay.models import ELORatingChange, UserTitleRating
+        from apps.gameplay.elo import ELOCalculator
+
+        # Skip if this is a PvE game (vs AI)
+        if game.is_vs_ai:
+            logger.info(f"Skipping ELO update for PvE game {game.id}")
+            return
+
+        # Skip if no winner (shouldn't happen, but just in case)
+        if not game.winner:
+            logger.warning(f"Game {game.id} ended without a winner")
+            return
+
+        # Skip if ELO change already exists (idempotency)
+        if hasattr(game, 'elo_change') and game.elo_change:
+            logger.info(f"ELO change already exists for game {game.id}")
+            return
+
+        # Get the users and title
+        winner_user = game.winner.user
+        loser_deck = game.side_a if game.winner == game.side_b else game.side_b
+        loser_user = loser_deck.user
+        title = game.title
+
+        # Skip if either player is None (shouldn't happen for non-AI games)
+        if not winner_user or not loser_user:
+            logger.warning(f"Game {game.id} has None user")
+            return
+
+        # Get or create title ratings for both users
+        winner_rating, _ = UserTitleRating.objects.get_or_create(
+            user=winner_user,
+            title=title,
+            defaults={'elo_rating': 1200}
+        )
+        loser_rating, _ = UserTitleRating.objects.get_or_create(
+            user=loser_user,
+            title=title,
+            defaults={'elo_rating': 1200}
+        )
+
+        # Get current ratings
+        winner_old_rating = winner_rating.elo_rating
+        loser_old_rating = loser_rating.elo_rating
+
+        # Calculate new ratings
+        winner_new_rating, loser_new_rating = ELOCalculator.calculate_new_ratings(
+            winner_old_rating,
+            loser_old_rating
+        )
+
+        # Update title ratings
+        winner_rating.elo_rating = winner_new_rating
+        loser_rating.elo_rating = loser_new_rating
+        winner_rating.save(update_fields=['elo_rating'])
+        loser_rating.save(update_fields=['elo_rating'])
+
+        # Create ELO change record
+        ELORatingChange.objects.create(
+            game=game,
+            title=title,
+            winner=winner_user,
+            winner_old_rating=winner_old_rating,
+            winner_new_rating=winner_new_rating,
+            winner_rating_change=winner_new_rating - winner_old_rating,
+            loser=loser_user,
+            loser_old_rating=loser_old_rating,
+            loser_new_rating=loser_new_rating,
+            loser_rating_change=loser_new_rating - loser_old_rating,
+        )
+
+        logger.info(
+            f"ELO updated for game {game.id} ({title.name}): "
+            f"{winner_user.display_name} {winner_old_rating}->{winner_new_rating}, "
+            f"{loser_user.display_name} {loser_old_rating}->{loser_new_rating}"
+        )
 
     @staticmethod
     def _events_to_updates(events):

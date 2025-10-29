@@ -6,6 +6,7 @@
             v-if="showingGameOver"
             :game-over="gameOver"
             :viewer="viewer"
+            :elo-change="gameState.elo_change"
             @close="showingGameOver = false" />
 
         <!-- Normal Mode -->
@@ -385,12 +386,21 @@ const handleClickHandCard = (card_id: string) => {
     overlayTitle.value = 'Card Details'
 }
 
-// When clicking own creature on board - go directly to targeting
+// When clicking own creature on board - show details if not your turn, otherwise go to targeting
 const handleClickOwnCreature = (creature_id: string) => {
     console.log('handleClickOwnCreature', creature_id)
     const creature = get_creature(creature_id)
     if (!creature) return
 
+    // If it's not the player's turn, just show entity details (no attacking)
+    if (gameState.value.active !== bottomSide.value) {
+        selectedEntity.value = { type: 'creature', id: creature_id, isOwned: true }
+        overlay.value = 'entity_detail'
+        overlayTitle.value = 'Your Creature'
+        return
+    }
+
+    // It's the player's turn, allow targeting for attack
     targetingState.value = {
         sourceType: 'creature',
         sourceId: creature_id,

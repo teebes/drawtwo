@@ -135,6 +135,20 @@ class FriendUserSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class LeaderboardUserSerializer(serializers.ModelSerializer):
+    """Serializer for leaderboard entries."""
+
+    display_name = serializers.ReadOnlyField()
+    wins = serializers.IntegerField(read_only=True)
+    losses = serializers.IntegerField(read_only=True)
+    total_games = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = User
+        fields = ("id", "username", "display_name", "avatar", "elo_rating", "wins", "losses", "total_games")
+        read_only_fields = fields
+
+
 class FriendshipSerializer(serializers.ModelSerializer):
     """Serializer for friendship data."""
 

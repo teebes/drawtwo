@@ -49,6 +49,23 @@ export interface HeroInPlay {
   exhausted: boolean
 }
 
+export interface EloChange {
+  winner: {
+    user_id: number
+    display_name: string
+    old_rating: number
+    new_rating: number
+    change: number
+  }
+  loser: {
+    user_id: number
+    display_name: string
+    old_rating: number
+    new_rating: number
+    change: number
+  }
+}
+
 export interface GameState {
   turn: number
   active: Side
@@ -65,6 +82,7 @@ export interface GameState {
   mana_used: Record<string, number>
   winner: Winner
   is_vs_ai: boolean
+  elo_change?: EloChange
 }
 
 // Game error types - matches backend Result types

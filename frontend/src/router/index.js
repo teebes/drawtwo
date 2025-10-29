@@ -55,6 +55,12 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/:slug/leaderboard',
+    name: 'Leaderboard',
+    component: () => import('../views/Leaderboard.vue'),
+    meta: { requiresAuth: false }
+  },
+  {
     path: '/mockup',
     name: 'Mockup',
     component: Mockup,
@@ -172,7 +178,7 @@ const router = createRouter({
 // List of routes that are title-related and use /:slug pattern
 const titleRoutes = [
   'Title', 'TitleCards', 'TitleBriefCards', 'CardCreate', 'CardEdit', 'DeckDetail',
-  'DeckEdit', 'DeckCreate', 'GameCreate', 'Board'
+  'DeckEdit', 'DeckCreate', 'GameCreate', 'Board', 'Leaderboard'
 ]
 
 // Helper function to check if a route is a title route

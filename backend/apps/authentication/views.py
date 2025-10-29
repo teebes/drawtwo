@@ -19,6 +19,7 @@ from .serializers import (
     UserSerializer,
     FriendshipSerializer,
     FriendRequestSerializer,
+    LeaderboardUserSerializer,
 )
 
 User = get_user_model()
@@ -391,3 +392,132 @@ class FriendshipDetailView(APIView):
             ).delete()
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class LeaderboardView(APIView):
+    """Get ELO rating leaderboard for a specific title."""
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, title_slug):
+        """
+        Get top players by ELO rating for a specific title.
+
+        Args:
+            title_slug: The slug of the title to get leaderboard for
+        """
+        from django.db.models import Count, Q
+        from apps.builder.models import Title
+        from apps.gameplay.models import UserTitleRating
+
+        # Get the title
+        try:
+            title = Title.objects.get(slug=title_slug)
+        except Title.DoesNotExist:
+            return Response(
+                {'error': f'Title "{title_slug}" not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Get limit from query params (default 100, max 1000)
+        limit = min(int(request.query_params.get('limit', 100)), 1000)
+
+        # Get all user ratings for this title, annotated with win/loss counts
+        user_ratings = UserTitleRating.objects.filter(
+            title=title
+        ).select_related('user').annotate(
+            wins=Count(
+                'user__elo_wins',
+                filter=Q(user__elo_wins__title=title),
+                distinct=True
+            ),
+            losses=Count(
+                'user__elo_losses',
+                filter=Q(user__elo_losses__title=title),
+                distinct=True
+            )
+        ).filter(
+            # Only include users who have played at least one game
+            Q(wins__gt=0) | Q(losses__gt=0)
+        ).order_by('-elo_rating')[:limit]
+
+        # Build response data
+        leaderboard_data = []
+        for rating in user_ratings:
+            wins = rating.wins
+            losses = rating.losses
+            total_games = wins + losses
+
+            leaderboard_data.append({
+                'id': rating.user.id,
+                'username': rating.user.username,
+                'display_name': rating.user.display_name,
+                'avatar': rating.user.avatar,
+                'elo_rating': rating.elo_rating,
+                'wins': wins,
+                'losses': losses,
+                'total_games': total_games,
+            })
+
+        return Response(leaderboard_data)
+
+
+class UserTitleRatingView(APIView):
+    """Get current user's rating for a specific title."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, title_slug):
+        """Get the authenticated user's rating for a specific title."""
+        from apps.builder.models import Title
+        from apps.gameplay.models import UserTitleRating
+        from django.db.models import Count, Q
+
+        try:
+            title = Title.objects.get(slug=title_slug)
+        except Title.DoesNotExist:
+            return Response(
+                {'error': f'Title "{title_slug}" not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            # Get or create the user's rating for this title
+            user_rating = UserTitleRating.objects.select_related('user').annotate(
+                wins=Count(
+                    'user__elo_wins',
+                    filter=Q(user__elo_wins__title=title),
+                    distinct=True
+                ),
+                losses=Count(
+                    'user__elo_losses',
+                    filter=Q(user__elo_losses__title=title),
+                    distinct=True
+                )
+            ).get(user=request.user, title=title)
+
+            wins = user_rating.wins
+            losses = user_rating.losses
+
+            return Response({
+                'id': request.user.id,
+                'username': request.user.username,
+                'display_name': request.user.display_name,
+                'avatar': request.user.avatar,
+                'elo_rating': user_rating.elo_rating,
+                'wins': wins,
+                'losses': losses,
+                'total_games': wins + losses,
+            })
+        except UserTitleRating.DoesNotExist:
+            # User hasn't played any games for this title yet
+            return Response({
+                'id': request.user.id,
+                'username': request.user.username,
+                'display_name': request.user.display_name,
+                'avatar': request.user.avatar,
+                'elo_rating': 1200,  # Default rating
+                'wins': 0,
+                'losses': 0,
+                'total_games': 0,
+            })

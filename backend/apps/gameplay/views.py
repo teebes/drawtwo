@@ -17,7 +17,14 @@ from apps.gameplay.tasks import step
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def game_detail(request, game_id):
-    game = get_object_or_404(Game, id=game_id)
+    game = get_object_or_404(
+        Game.objects.select_related(
+            'side_a__user',
+            'side_b__user',
+            'winner__user'
+        ).prefetch_related('elo_change'),
+        id=game_id
+    )
 
     game_data = GameState.model_validate(game.state).model_dump()
 
@@ -35,6 +42,26 @@ def game_detail(request, game_id):
         )
 
     game_data['is_vs_ai'] = game.is_vs_ai
+
+    # Include ELO rating changes if available (for completed PvP games)
+    if hasattr(game, 'elo_change') and game.elo_change:
+        elo_change = game.elo_change
+        game_data['elo_change'] = {
+            'winner': {
+                'user_id': elo_change.winner.id,
+                'display_name': elo_change.winner.display_name,
+                'old_rating': elo_change.winner_old_rating,
+                'new_rating': elo_change.winner_new_rating,
+                'change': elo_change.winner_rating_change,
+            },
+            'loser': {
+                'user_id': elo_change.loser.id,
+                'display_name': elo_change.loser.display_name,
+                'old_rating': elo_change.loser_old_rating,
+                'new_rating': elo_change.loser_new_rating,
+                'change': elo_change.loser_rating_change,
+            }
+        }
 
     return Response(game_data)
 
