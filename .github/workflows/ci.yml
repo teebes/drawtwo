@@ -77,11 +77,9 @@ jobs:
     - name: Run tests
       run: |
         cd backend
-        python manage.py test
+        python manage.py test --settings=config.settings.test
       env:
-        DJANGO_SETTINGS_MODULE: config.settings.base
         SECRET_KEY: test-secret-key-for-ci
-        DEBUG: False
         DB_NAME: drawtwo_test
         DB_USER: postgres
         DB_PASSWORD: postgres
