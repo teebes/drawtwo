@@ -20,6 +20,9 @@ CHANNEL_LAYERS = {
 # Celery settings for tests - run tasks synchronously
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
+# Use memory broker to avoid needing Redis in CI
+CELERY_BROKER_URL = 'memory://'
+CELERY_RESULT_BACKEND = 'cache+memory://'
 
 # Email backend for tests (in-memory)
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
