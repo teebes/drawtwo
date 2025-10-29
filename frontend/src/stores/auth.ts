@@ -1,8 +1,50 @@
 import { defineStore } from 'pinia'
-import axios from '../config/api.js'
+import axios from '../config/api'
+
+// Types for API responses
+interface User {
+  id: number
+  email: string
+  username?: string
+  first_name?: string
+  last_name?: string
+  is_active: boolean
+  date_joined: string
+  [key: string]: any // Allow for additional user fields
+}
+
+interface AuthTokenResponse {
+  access: string
+  refresh: string
+  user: User
+}
+
+interface GoogleAuthResponse {
+  access_token: string
+  refresh_token: string
+  user: User
+}
+
+interface ApiResponse<T = any> {
+  success: boolean
+  data?: T
+  error?: {
+    message: string
+    [key: string]: any
+  }
+}
+
+interface AuthState {
+  user: User | null
+  accessToken: string | null
+  refreshToken: string | null
+  isAuthenticated: boolean
+  loading: boolean
+  error: any | null
+}
 
 export const useAuthStore = defineStore('auth', {
-  state: () => ({
+  state: (): AuthState => ({
     user: null,
     accessToken: null,
     refreshToken: null,
@@ -13,7 +55,7 @@ export const useAuthStore = defineStore('auth', {
 
   actions: {
     // Initialize authentication state from localStorage
-    initAuth() {
+    initAuth(): void {
       const accessToken = localStorage.getItem('accessToken')
       const refreshToken = localStorage.getItem('refreshToken')
       const userData = localStorage.getItem('userData')
@@ -21,7 +63,7 @@ export const useAuthStore = defineStore('auth', {
       if (accessToken && refreshToken && userData) {
         this.accessToken = accessToken
         this.refreshToken = refreshToken
-        this.user = JSON.parse(userData)
+        this.user = JSON.parse(userData) as User
         this.isAuthenticated = true
 
         // Set axios authorization header
@@ -30,7 +72,7 @@ export const useAuthStore = defineStore('auth', {
     },
 
     // Store tokens and user data
-    setAuthData(accessToken, refreshToken, user) {
+    setAuthData(accessToken: string, refreshToken: string, user: User): void {
       this.accessToken = accessToken
       this.refreshToken = refreshToken
       this.user = user
@@ -46,7 +88,7 @@ export const useAuthStore = defineStore('auth', {
     },
 
     // Clear authentication data
-    clearAuth() {
+    clearAuth(): void {
       this.user = null
       this.accessToken = null
       this.refreshToken = null
@@ -62,7 +104,7 @@ export const useAuthStore = defineStore('auth', {
     },
 
     // Register a new user (passwordless)
-    async register(userData) {
+    async register(userData: Record<string, any>): Promise<ApiResponse> {
       this.loading = true
       this.error = null
 
@@ -70,7 +112,7 @@ export const useAuthStore = defineStore('auth', {
         const response = await axios.post('/auth/register/', userData)
         this.loading = false
         return { success: true, data: response.data }
-      } catch (error) {
+      } catch (error: any) {
         this.loading = false
         this.error = error.response?.data || { message: 'Registration failed' }
         return { success: false, error: this.error }
@@ -78,7 +120,7 @@ export const useAuthStore = defineStore('auth', {
     },
 
     // Send passwordless login email
-    async sendLoginEmail(email) {
+    async sendLoginEmail(email: string): Promise<ApiResponse> {
       this.loading = true
       this.error = null
 
@@ -86,7 +128,7 @@ export const useAuthStore = defineStore('auth', {
         const response = await axios.post('/auth/passwordless-login/', { email })
         this.loading = false
         return { success: true, data: response.data }
-      } catch (error) {
+      } catch (error: any) {
         this.loading = false
         this.error = error.response?.data || { message: 'Login email failed' }
         return { success: false, error: this.error }
@@ -94,7 +136,7 @@ export const useAuthStore = defineStore('auth', {
     },
 
     // Confirm email and login
-    async confirmEmail(key) {
+    async confirmEmail(key: string): Promise<ApiResponse> {
       this.loading = true
       this.error = null
 
@@ -107,7 +149,7 @@ export const useAuthStore = defineStore('auth', {
 
         this.loading = false
         return { success: true, data: response.data }
-      } catch (error) {
+      } catch (error: any) {
         this.loading = false
         this.error = error.response?.data || { message: 'Email confirmation failed' }
         return { success: false, error: this.error }
@@ -115,7 +157,7 @@ export const useAuthStore = defineStore('auth', {
     },
 
     // Google OAuth login
-    async googleLogin(accessToken) {
+    async googleLogin(accessToken: string): Promise<ApiResponse> {
       this.loading = true
       this.error = null
 
@@ -128,7 +170,7 @@ export const useAuthStore = defineStore('auth', {
 
         this.loading = false
         return { success: true, data: response.data }
-      } catch (error) {
+      } catch (error: any) {
         this.loading = false
         this.error = error.response?.data || { message: 'Google login failed' }
         return { success: false, error: this.error }
@@ -136,7 +178,7 @@ export const useAuthStore = defineStore('auth', {
     },
 
     // Logout
-    async logout() {
+    async logout(): Promise<void> {
       this.loading = true
 
       try {
@@ -147,7 +189,7 @@ export const useAuthStore = defineStore('auth', {
           logoutAxios.defaults.headers.common['Authorization'] = `Bearer ${this.accessToken}`
           await logoutAxios.post('/auth/auth/logout/')
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Logout API call failed:', error)
         // Don't worry if logout fails - clear local auth anyway
       } finally {
@@ -157,7 +199,7 @@ export const useAuthStore = defineStore('auth', {
     },
 
     // Refresh access token
-    async refreshAccessToken() {
+    async refreshAccessToken(): Promise<boolean> {
       if (!this.refreshToken) {
         this.clearAuth()
         return false
@@ -185,7 +227,7 @@ export const useAuthStore = defineStore('auth', {
         }
 
         return true
-      } catch (error) {
+      } catch (error: any) {
         console.error('Token refresh failed:', error)
         this.clearAuth()
         return false
@@ -193,15 +235,15 @@ export const useAuthStore = defineStore('auth', {
     },
 
     // Get current user profile
-    async getCurrentUser() {
+    async getCurrentUser(): Promise<User | null> {
       if (!this.isAuthenticated) return null
 
       try {
         const response = await axios.get('/auth/profile/')
-        this.user = response.data
+        this.user = response.data as User
         localStorage.setItem('userData', JSON.stringify(response.data))
         return response.data
-      } catch (error) {
+      } catch (error: any) {
         console.error('Get current user failed:', error)
         // If unauthorized, try to refresh token
         if (error.response?.status === 401) {
@@ -210,10 +252,10 @@ export const useAuthStore = defineStore('auth', {
             // Retry the request
             try {
               const response = await axios.get('/auth/profile/')
-              this.user = response.data
+              this.user = response.data as User
               localStorage.setItem('userData', JSON.stringify(response.data))
               return response.data
-            } catch (retryError) {
+            } catch (retryError: any) {
               console.error('Retry get current user failed:', retryError)
               this.clearAuth()
             }
@@ -224,11 +266,11 @@ export const useAuthStore = defineStore('auth', {
     },
 
     // Test protected endpoint
-    async testProtectedEndpoint() {
+    async testProtectedEndpoint(): Promise<ApiResponse> {
       try {
         const response = await axios.get('/auth/test/')
         return { success: true, data: response.data }
-      } catch (error) {
+      } catch (error: any) {
         // If unauthorized, try to refresh token
         if (error.response?.status === 401) {
           const refreshed = await this.refreshAccessToken()
@@ -237,7 +279,7 @@ export const useAuthStore = defineStore('auth', {
             try {
               const response = await axios.get('/auth/test/')
               return { success: true, data: response.data }
-            } catch (retryError) {
+            } catch (retryError: any) {
               return { success: false, error: retryError.response?.data || { message: 'Test failed' } }
             }
           }

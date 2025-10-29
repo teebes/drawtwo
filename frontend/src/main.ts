@@ -3,8 +3,8 @@ import { createPinia } from 'pinia'
 import './style.css'
 import App from './App.vue'
 import router from './router'
-import { useAuthStore } from './stores/auth.js'
-import { initializeAuthInterceptor } from './config/api.js'
+import { useAuthStore } from './stores/auth'
+import { initializeAuthInterceptor } from './config/api'
 
 const app = createApp(App)
 const pinia = createPinia()

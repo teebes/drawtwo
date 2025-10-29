@@ -104,7 +104,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getBaseUrl } from '../config/api.js'
+import { getBaseUrl } from '../config/api'
 
 const backendOnline = ref(false)
 const loading = ref(false)

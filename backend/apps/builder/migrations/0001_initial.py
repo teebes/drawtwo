@@ -176,8 +176,8 @@ class Migration(migrations.Migration):
                 (
                     "card_type",
                     models.CharField(
-                        choices=[("minion", "Minion"), ("spell", "Spell")],
-                        default="minion",
+                        choices=[("creature", "Creature"), ("spell", "Spell")],
+                        default="creature",
                         max_length=15,
                     ),
                 ),

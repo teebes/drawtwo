@@ -53,6 +53,7 @@
                   <span class="text-gray-900 dark:text-white">{{ formatDate(authStore.user.created_at) }}</span>
                 </div>
 
+
                 <div v-if="authStore.user.is_staff" class="flex items-center justify-between py-3">
                   <span class="font-medium text-gray-700 dark:text-gray-300">Account Type:</span>
                   <span class="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900 dark:text-purple-200">
@@ -148,7 +149,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '../stores/auth.js'
+import { useAuthStore } from '../stores/auth'
 import ThemeToggle from '../components/ui/ThemeToggle.vue'
 
 const router = useRouter()

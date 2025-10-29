@@ -1,7 +1,21 @@
-import axios from 'axios'
+import axios, { AxiosResponse, AxiosError } from 'axios'
+
+// Types for queue management
+interface QueuedRequest {
+  resolve: (token: string) => void
+  reject: (error: any) => void
+}
+
+// Type for auth store interface
+interface AuthStore {
+  refreshToken: string | null
+  accessToken: string | null
+  clearAuth: () => void
+  refreshAccessToken: () => Promise<boolean>
+}
 
 // API Configuration - Use runtime hostname detection
-const getApiBaseUrl = () => {
+const getApiBaseUrl = (): string => {
   // Check for explicit environment configuration first
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL
@@ -16,7 +30,7 @@ const getApiBaseUrl = () => {
 }
 
 // Get the base URL without the /api suffix - useful for WebSocket connections
-export const getBaseUrl = () => {
+export const getBaseUrl = (): string => {
   // Check for explicit environment configuration first
   if (import.meta.env.VITE_BASE_URL) {
     return import.meta.env.VITE_BASE_URL
@@ -51,29 +65,29 @@ axios.defaults.baseURL = API_BASE_URL
 
 // Setup axios interceptor for automatic token refresh
 // Note: This will be initialized after the auth store is available
-let authStore = null
+let authStore: AuthStore | null = null
 let isRefreshing = false
-let failedQueue = []
+let failedQueue: QueuedRequest[] = []
 
-const processQueue = (error, token = null) => {
+const processQueue = (error: any, token: string | null = null): void => {
   failedQueue.forEach(prom => {
     if (error) {
       prom.reject(error)
     } else {
-      prom.resolve(token)
+      prom.resolve(token!)
     }
   })
 
   failedQueue = []
 }
 
-export const initializeAuthInterceptor = (store) => {
+export const initializeAuthInterceptor = (store: AuthStore): void => {
   authStore = store
 
   axios.interceptors.response.use(
-    (response) => response,
-    async (error) => {
-      const originalRequest = error.config
+    (response: AxiosResponse) => response,
+    async (error: AxiosError) => {
+      const originalRequest = error.config as any
 
       // Don't try to refresh for these conditions:
       // 1. Not a 401 error

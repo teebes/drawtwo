@@ -1,8 +1,11 @@
+<!-- NOTE: This is an old reference view kept for reference purposes.
+     The active view is Board.vue -->
+
 <template>
   <div
     class="h-screen overflow-hidden bg-gradient-to-b from-emerald-900 via-green-800 to-emerald-900 flex flex-col">
     <!-- Loading State -->
-    <div v-if="loading" class="flex-1 flex items-center justify-center">
+    <div v-if="loading" class="f/lex-1 flex items-center justify-center">
       <div class="text-white text-xl">Loading game...</div>
     </div>
 
@@ -252,8 +255,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from '../config/api.js'
-import { getBaseUrl } from '../config/api.js'
+import axios from '../config/api'
+import { getBaseUrl } from '../config/api'
 import type { GameState } from '../types/game'
 import GameHero from '../components/game/GameHero.vue'
 import BoardCard from '../components/game/BoardCard.vue'
@@ -530,10 +533,10 @@ const getCardName = (cardId: string): string => {
   return cardNameMap.value[card.template_slug] || card.template_slug
 }
 
-const getCardType = (cardId: string): 'minion' | 'spell' => {
+const getCardType = (cardId: string): 'creature' | 'spell' => {
   const card = gameState.value?.cards[cardId]
-  // For now, assume all cards with attack/health are minions
-  return (card?.attack !== undefined && card?.health !== undefined) ? 'minion' : 'spell'
+  // For now, assume all cards with attack/health are creatures
+  return (card?.attack !== undefined && card?.health !== undefined) ? 'creature' : 'spell'
 }
 
 const handleCardSelection = (cardId: string | null) => {
@@ -552,7 +555,7 @@ const handleCardPlacement = (position: number) => {
 
   // Send websocket message to play the card
   sendWebSocketMessage({
-    type: 'play_card_action',
+    type: 'action_play_card',
     card_id: selectedCard.value,
     position: position
   })
@@ -651,7 +654,7 @@ const handleCardTarget = async (targetCardId: string) => {
 
   // Send websocket message
   sendWebSocketMessage({
-    type: 'use_card_action',
+    type: 'action_use_card',
     card_id: attackingCard.value,
     target_type: 'card',
     target_id: targetCardId
@@ -695,7 +698,7 @@ const handleHeroTarget = async (heroId: string) => {
 
   // Send websocket message
   sendWebSocketMessage({
-    type: 'use_card_action',
+    type: 'action_use_card',
     card_id: attackingCard.value,
     target_type: 'hero',
     target_id: heroId

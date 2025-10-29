@@ -10,6 +10,76 @@
 
       <!-- Cards Sections -->
       <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-16 space-y-12">
+        <!-- Filters -->
+        <section v-if="!cardsLoading && cards.length > 0" class="sticky top-0 z-10 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-4 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-gray-900/60">
+          <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+            <div class="space-y-2">
+              <div class="text-sm text-gray-600 dark:text-gray-400">
+                Showing {{ filteredCards.length }} of {{ cards.length }} cards
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Type:</span>
+                <div class="inline-flex rounded-md shadow-sm overflow-hidden border border-gray-200 dark:border-gray-700">
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 text-sm font-medium focus:outline-none"
+                    :class="[
+                      typeFilter === 'all' ? 'bg-primary-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700',
+                    ]"
+                    @click="typeFilter = 'all'"
+                  >All</button>
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 text-sm font-medium border-l border-gray-200 dark:border-gray-700 focus:outline-none"
+                    :class="[
+                      typeFilter === 'creature' ? 'bg-primary-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700',
+                    ]"
+                    @click="typeFilter = 'creature'"
+                  >Creatures</button>
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 text-sm font-medium border-l border-gray-200 dark:border-gray-700 focus:outline-none"
+                    :class="[
+                      typeFilter === 'spell' ? 'bg-primary-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700',
+                    ]"
+                    @click="typeFilter = 'spell'"
+                  >Spells</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-end gap-4">
+              <div class="flex flex-col">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Min Cost</label>
+                <select
+                  class="rounded-md border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-primary-600 focus:border-primary-600"
+                  v-model="minCostStr"
+                >
+                  <option value="">Any</option>
+                  <option v-for="n in 11" :key="'min-'+(n-1)" :value="String(n-1)">{{ n-1 }}</option>
+                </select>
+              </div>
+              <div class="flex flex-col">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Max Cost</label>
+                <select
+                  class="rounded-md border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-primary-600 focus:border-primary-600"
+                  v-model="maxCostStr"
+                >
+                  <option value="">Any</option>
+                  <option v-for="n in 11" :key="'max-'+(n-1)" :value="String(n-1)">{{ n-1 }}</option>
+                </select>
+              </div>
+
+              <button
+                type="button"
+                class="inline-flex items-center rounded-md border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                @click="clearFilters"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        </section>
         <div v-if="cardsLoading" class="text-center py-12">
           <p class="text-gray-600 dark:text-gray-400">Loading cards...</p>
         </div>
@@ -100,7 +170,7 @@
       <section v-if="canEditTitle"class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
         <div class="flex items-center justify-between">
           <div class="text-sm text-gray-600 dark:text-gray-400">
-            {{ cards.length }} Cards
+            {{ filteredCards.length }} / {{ cards.length }} Cards
           </div>
 
           <div class="flex items-center space-x-4">
@@ -145,9 +215,9 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '../stores/auth.js'
-import { useTitleStore } from '../stores/title.js'
-import axios from '../config/api.js'
+import { useAuthStore } from '../stores/auth'
+import { useTitleStore } from '../stores/title'
+import axios from '../config/api'
 import CollectionCard from '../components/game/CollectionCard.vue'
 import type { Card } from '../types/card'
 
@@ -180,15 +250,56 @@ const error = computed(() => titleStore.error)
 const cards = ref<Card[]>([])
 const cardsLoading = ref<boolean>(false)
 
+// Filters
+const typeFilter = ref<'all' | 'creature' | 'spell'>('all')
+const minCostStr = ref<string>('')
+const maxCostStr = ref<string>('')
+
+const clearFilters = (): void => {
+  typeFilter.value = 'all'
+  minCostStr.value = ''
+  maxCostStr.value = ''
+}
+
+const minCost = computed<number | null>(() => {
+  if (minCostStr.value === '') return null
+  const val = parseInt(minCostStr.value, 10)
+  return Number.isNaN(val) ? null : val
+})
+const maxCost = computed<number | null>(() => {
+  if (maxCostStr.value === '') return null
+  const val = parseInt(maxCostStr.value, 10)
+  return Number.isNaN(val) ? null : val
+})
+
+const filteredCards = computed<Card[]>(() => {
+  if (minCost.value !== null && maxCost.value !== null && minCost.value > maxCost.value) {
+    return []
+  }
+
+  return cards.value.filter((card) => {
+    if (typeFilter.value !== 'all' && card.card_type !== typeFilter.value) {
+      return false
+    }
+    if (minCost.value !== null && card.cost < minCost.value) {
+      return false
+    }
+    if (maxCost.value !== null && card.cost > maxCost.value) {
+      return false
+    }
+    return true
+  })
+})
+
 // Computed properties for organizing cards by faction
 const commonCards = computed(() => {
-  return cards.value.filter(card => !card.faction)
+  return filteredCards.value.filter(card => !card.faction)
 })
 
 const factionCardGroups = computed(() => {
   const factionGroups = new Map<string, Card[]>()
 
-  cards.value.forEach(card => {
+  filteredCards.value.forEach(card => {
     if (card.faction) {
       if (!factionGroups.has(card.faction)) {
         factionGroups.set(card.faction, [])

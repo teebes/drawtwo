@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 import yaml
-from .models import Title, CardTemplate, Trait, Faction, Tag, CardTrait
+from .models import Title, CardTemplate, Faction, Tag, CardTrait
+from .trait_definitions import get_trait_info, validate_trait_slug
 
 
 User = get_user_model()
@@ -39,10 +40,11 @@ class CardTemplateSerializer(serializers.ModelSerializer):
     def get_traits_with_data(self, obj):
         """Get traits with their associated data."""
         traits_data = []
-        for card_trait in obj.cardtrait_set.all().select_related('trait'):
+        for card_trait in obj.cardtrait_set.all():
+            trait_info = card_trait.get_trait_info()
             traits_data.append({
-                'slug': card_trait.trait.slug,
-                'name': card_trait.trait.name,
+                'slug': trait_info['slug'],
+                'name': trait_info['name'],
                 'data': card_trait.data
             })
         return traits_data
@@ -57,8 +59,8 @@ class CardTemplateSerializer(serializers.ModelSerializer):
             'cost': obj.cost,
         }
 
-        # Add attack/health for minions
-        if obj.card_type == 'minion':
+        # Add attack/health for creatures
+        if obj.card_type == 'creature':
             card_data['attack'] = obj.attack
             card_data['health'] = obj.health
 
@@ -68,8 +70,8 @@ class CardTemplateSerializer(serializers.ModelSerializer):
 
         # Add traits
         traits_list = []
-        for card_trait in obj.cardtrait_set.all().select_related('trait'):
-            trait_entry = {'type': card_trait.trait.slug}
+        for card_trait in obj.cardtrait_set.all():
+            trait_entry = {'type': card_trait.trait_slug}
             if card_trait.data:
                 trait_entry.update(card_trait.data)
             traits_list.append(trait_entry)
@@ -100,8 +102,8 @@ class CardTemplateSerializer(serializers.ModelSerializer):
         instance.card_type = card_data.get('card_type', instance.card_type)
         instance.cost = card_data.get('cost', instance.cost)
 
-        # Update attack/health for minions
-        if instance.card_type == 'minion':
+        # Update attack/health for creatures
+        if instance.card_type == 'creature':
             instance.attack = card_data.get('attack', instance.attack)
             instance.health = card_data.get('health', instance.health)
         else:
@@ -135,16 +137,16 @@ class CardTemplateSerializer(serializers.ModelSerializer):
             if not trait_type:
                 continue
 
-            try:
-                trait = Trait.objects.get(slug=trait_type, title=instance.title)
-                trait_data = {k: v for k, v in trait_entry.items() if k != 'type'}
-                CardTrait.objects.create(
-                    card=instance,
-                    trait=trait,
-                    data=trait_data
-                )
-            except Trait.DoesNotExist:
-                raise serializers.ValidationError(f"Trait '{trait_type}' not found")
+            # Validate trait slug
+            if not validate_trait_slug(trait_type):
+                raise serializers.ValidationError(f"Unknown trait type: '{trait_type}'")
+
+            trait_data = {k: v for k, v in trait_entry.items() if k != 'type'}
+            CardTrait.objects.create(
+                card=instance,
+                trait_slug=trait_type,
+                data=trait_data
+            )
 
         return instance
 
@@ -179,7 +181,7 @@ class CardTemplateSerializer(serializers.ModelSerializer):
                     counter += 1
 
         # Create card instance
-        card_type = card_data.get('card_type', 'minion')
+        card_type = card_data.get('card_type', 'creature')
         cost = card_data.get('cost', 0)
 
         instance = CardTemplate.objects.create(
@@ -189,8 +191,8 @@ class CardTemplateSerializer(serializers.ModelSerializer):
             description=card_data.get('description', ''),
             card_type=card_type,
             cost=cost,
-            attack=card_data.get('attack') if card_type == 'minion' else None,
-            health=card_data.get('health') if card_type == 'minion' else None,
+            attack=card_data.get('attack') if card_type == 'creature' else None,
+            health=card_data.get('health') if card_type == 'creature' else None,
             spec=card_data.get('spec', {}),
             version=1,
             is_latest=True
@@ -213,15 +215,15 @@ class CardTemplateSerializer(serializers.ModelSerializer):
             if not trait_type:
                 continue
 
-            try:
-                trait = Trait.objects.get(slug=trait_type, title=title)
-                trait_data = {k: v for k, v in trait_entry.items() if k != 'type'}
-                CardTrait.objects.create(
-                    card=instance,
-                    trait=trait,
-                    data=trait_data
-                )
-            except Trait.DoesNotExist:
-                raise serializers.ValidationError(f"Trait '{trait_type}' not found")
+            # Validate trait slug
+            if not validate_trait_slug(trait_type):
+                raise serializers.ValidationError(f"Unknown trait type: '{trait_type}'")
+
+            trait_data = {k: v for k, v in trait_entry.items() if k != 'type'}
+            CardTrait.objects.create(
+                card=instance,
+                trait_slug=trait_type,
+                data=trait_data
+            )
 
         return instance

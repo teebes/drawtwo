@@ -1,15 +1,16 @@
 import { defineStore } from 'pinia'
-import axios from '../config/api.js'
-import { getBaseUrl } from '../config/api.js'
-import { makeInitials } from '../utils/index'
-import type { GameState, Side, CardInPlay, HeroInPlay, Winner } from '../types/game'
+import axios from '../config/api'
+import { getBaseUrl } from '../config/api'
+import type { GameState, Side, CardInPlay, Creature, HeroInPlay, GameError } from '../types/game'
+import { useNotificationStore } from './notifications'
+import { useAuthStore } from './auth'
 
 // WebSocket status type
 type WebSocketStatus = 'disconnected' | 'connecting' | 'connected'
 
 // Game store state interface
 interface GameStoreState {
-  gameState: GameState | null
+  gameState: GameState
   viewer: Side | null
   isVsAi: boolean
   loading: boolean
@@ -21,6 +22,29 @@ interface GameStoreState {
   }
   socket: WebSocket | null
   wsStatus: WebSocketStatus
+
+  updates: any[]
+}
+
+// Create a safe default game state so consumers can assume non-null
+function createInitialGameState(): GameState {
+  return {
+    turn: 1,
+    active: 'side_a',
+    phase: 'start',
+    event_queue: [],
+    cards: {},
+    creatures: {},
+    last_creature_id: 0,
+    heroes: {},
+    board: { side_a: [], side_b: [] },
+    hands: { side_a: [], side_b: [] },
+    decks: { side_a: [], side_b: [] },
+    mana_pool: { side_a: 0, side_b: 0 },
+    mana_used: { side_a: 0, side_b: 0 },
+    winner: 'none',
+    is_vs_ai: false
+  }
 }
 
 // WebSocket message type
@@ -31,7 +55,7 @@ interface WebSocketMessage {
 
 export const useGameStore = defineStore('game', {
   state: (): GameStoreState => ({
-    gameState: null,
+    gameState: createInitialGameState(),
     viewer: null,
     isVsAi: false,
     loading: true,
@@ -43,13 +67,18 @@ export const useGameStore = defineStore('game', {
     },
     // WebSocket state
     socket: null,
-    wsStatus: 'disconnected'
+    wsStatus: 'disconnected',
+    updates: []
   }),
 
   getters: {
     // Helper methods
     getCard: (state) => (cardId: string): CardInPlay | undefined => {
-      return state.gameState?.cards[cardId]
+      return state.gameState.cards[cardId]
+    },
+
+    getCreature: (state) => (creatureId: string): Creature | undefined => {
+      return state.gameState.creatures[creatureId]
     },
 
     // Viewer perspective
@@ -72,51 +101,63 @@ export const useGameStore = defineStore('game', {
     },
 
     ownHero: (state): HeroInPlay | undefined => {
-      if (!state.viewer || !state.gameState) return undefined
+      if (!state.viewer) return undefined
       return state.gameState.heroes[state.viewer]
     },
 
-    ownHeroInitials: (state): string => {
-      if (!state.viewer || !state.gameState) return ''
+    ownHeroName: (state): string => {
+      if (!state.viewer) return ''
       const hero = state.gameState.heroes[state.viewer]
-      return hero ? makeInitials(hero.name) : ''
+      return hero ? hero.name : ''
     },
 
     ownHandSize: (state): number => {
-      if (!state.viewer || !state.gameState) return 0
+      if (!state.viewer) return 0
       return state.gameState.hands[state.viewer]?.length || 0
     },
 
     ownDeckSize: (state): number => {
-      if (!state.viewer || !state.gameState) return 0
+      if (!state.viewer) return 0
       return state.gameState.decks[state.viewer]?.length || 0
     },
 
     ownHand: (state): string[] => {
-      if (!state.viewer || !state.gameState) return []
+      if (!state.viewer) return []
       return state.gameState.hands[state.viewer] || []
     },
 
     ownEnergy: (state): number => {
-      if (!state.gameState?.mana_pool || !state.gameState?.mana_used || !state.viewer) {
-        return 0
-      }
+      if (!state.viewer) return 0
       const pool = state.gameState.mana_pool[state.viewer]
       const used = state.gameState.mana_used[state.viewer]
       if (pool === undefined || used === undefined) return 0
       return pool - used
     },
 
-    ownBoard: (state): CardInPlay[] => {
-      if (!state.viewer || !state.gameState) return []
+    ownEnergyPool: (state): number => {
+      if (!state.viewer) {
+        return 0
+      }
+      return state.gameState.mana_pool[state.viewer]
+    },
 
-      const cards = state.gameState.board[state.viewer] || []
-      const board: CardInPlay[] = []
+    ownEnergyUsed: (state): number => {
+      if (!state.viewer) {
+        return 0
+      }
+      return state.gameState.mana_used[state.viewer]
+    },
 
-      for (const cardId of cards) {
-        const card = state.gameState.cards[cardId]
-        if (card) {
-          board.push(card)
+    ownBoard: (state): Creature[] => {
+      if (!state.viewer) return []
+
+      const creatureIds = state.gameState.board[state.viewer] || []
+      const board: Creature[] = []
+
+      for (const creatureId of creatureIds) {
+        const creature = state.gameState.creatures[creatureId]
+        if (creature) {
+          board.push(creature)
         }
       }
 
@@ -125,32 +166,32 @@ export const useGameStore = defineStore('game', {
 
     // Opposing player data
     opposingHero: (state): HeroInPlay | null => {
-      if (!state.viewer || !state.gameState) return null
+      if (!state.viewer) return null
       const opposingSide = state.viewer === 'side_a' ? 'side_b' : 'side_a'
       return state.gameState.heroes[opposingSide] ?? null
     },
 
-    opposingHeroInitials: (state): string => {
-      if (!state.viewer || !state.gameState) return ''
+    opposingHeroName: (state): string => {
+      if (!state.viewer) return ''
       const opposingSide = state.viewer === 'side_a' ? 'side_b' : 'side_a'
       const hero = state.gameState.heroes[opposingSide]
-      return hero ? makeInitials(hero.name) : ''
+      return hero ? hero.name : ''
     },
 
     opposingHandSize: (state): number => {
-      if (!state.viewer || !state.gameState) return 0
+      if (!state.viewer) return 0
       const opposingSide = state.viewer === 'side_a' ? 'side_b' : 'side_a'
       return state.gameState.hands[opposingSide]?.length || 0
     },
 
     opposingDeckSize: (state): number => {
-      if (!state.viewer || !state.gameState) return 0
+      if (!state.viewer) return 0
       const opposingSide = state.viewer === 'side_a' ? 'side_b' : 'side_a'
       return state.gameState.decks[opposingSide]?.length || 0
     },
 
     opposingEnergy: (state): number => {
-      if (!state.viewer || !state.gameState?.mana_pool || !state.gameState?.mana_used) return 0
+      if (!state.viewer) return 0
       const opposingSide = state.viewer === 'side_a' ? 'side_b' : 'side_a'
       const pool = state.gameState.mana_pool[opposingSide]
       const used = state.gameState.mana_used[opposingSide]
@@ -158,17 +199,29 @@ export const useGameStore = defineStore('game', {
       return pool - used
     },
 
-    opposingBoard: (state): CardInPlay[] => {
-      if (!state.viewer || !state.gameState) return []
+    opposingEnergyPool: (state): number => {
+      if (!state.viewer) return 0
+      const opposingSide = state.viewer === 'side_a' ? 'side_b' : 'side_a'
+      return state.gameState.mana_pool[opposingSide]
+    },
+
+    opposingEnergyUsed: (state): number => {
+      if (!state.viewer) return 0
+      const opposingSide = state.viewer === 'side_a' ? 'side_b' : 'side_a'
+      return state.gameState.mana_used[opposingSide]
+    },
+
+    opposingBoard: (state): Creature[] => {
+      if (!state.viewer) return []
 
       const opposingSide = state.viewer === 'side_a' ? 'side_b' : 'side_a'
-      const cards = state.gameState.board[opposingSide] || []
-      const board: CardInPlay[] = []
+      const creatureIds = state.gameState.board[opposingSide] || []
+      const board: Creature[] = []
 
-      for (const cardId of cards) {
-        const card = state.gameState.cards[cardId]
-        if (card) {
-          board.push(card)
+      for (const creatureId of creatureIds) {
+        const creature = state.gameState.creatures[creatureId]
+        if (creature) {
+          board.push(creature)
         }
       }
 
@@ -177,7 +230,7 @@ export const useGameStore = defineStore('game', {
 
     // Helper methods
     isHandCardActive: (state) => (cardId: string): boolean => {
-      if (!state.gameState || !state.viewer) return false
+      if (!state.viewer) return false
 
       const card = state.gameState.cards[cardId]
       if (!card) return false
@@ -188,10 +241,43 @@ export const useGameStore = defineStore('game', {
       const energy = pool - used
 
       return card.cost <= energy
+    },
+
+    canUseHero: (state): boolean => {
+      if (!state.viewer) return false
+      if (state.gameState.active !== state.viewer) return false
+      if (state.gameState.phase !== 'main') return false
+
+      const hero = state.gameState.heroes[state.viewer]
+      if (!hero) return false
+
+      return !hero.exhausted
+    },
+
+    // Filtered updates for display
+    displayUpdates: (state): any[] => {
+      return state.updates.filter((update: any) => {
+        const display_types = [
+          'update_draw_card',
+          'update_play_card',
+          'update_end_turn',
+          'update_damage']
+
+        if (display_types.includes(update.type)) {
+          return true
+        }
+
+        return false
+      })
     }
   },
 
   actions: {
+    // Get notification store instance for use across actions
+    getNotificationStore() {
+      return useNotificationStore()
+    },
+
     async fetchGameState(gameId: string): Promise<void> {
       try {
         this.loading = true
@@ -222,11 +308,17 @@ export const useGameStore = defineStore('game', {
     connectWebSocket(gameId: string): void {
       const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
       const baseUrl = getBaseUrl().replace(/^https?:/, protocol + ':')
-      const wsUrl = `${baseUrl}/ws/game/${gameId}/`
+
+      // Get JWT token from auth store and append as query parameter
+      const authStore = useAuthStore()
+      const token = authStore.accessToken
+      const wsUrl = token
+        ? `${baseUrl}/ws/game/${gameId}/?token=${token}`
+        : `${baseUrl}/ws/game/${gameId}/`
 
       this.wsStatus = 'connecting'
 
-      // WebSocket will automatically include cookies for authentication
+      // WebSocket connection with JWT token in query params
       this.socket = new WebSocket(wsUrl)
 
       this.socket.onopen = () => {
@@ -252,6 +344,15 @@ export const useGameStore = defineStore('game', {
     handleWebSocketMessage(data: any): void {
       console.log('WebSocket message:', data)
 
+      // Handle errors first
+      if (data.errors && Array.isArray(data.errors)) {
+        const notificationStore = this.getNotificationStore()
+        for (const error of data.errors as GameError[]) {
+          // Backend always sends 'reason' for all error types (Rejected, Prevented, Fault)
+          notificationStore.error(error.reason)
+        }
+      }
+
       // Update the game state
       if (data.state) {
         this.gameState = data.state
@@ -265,11 +366,20 @@ export const useGameStore = defineStore('game', {
       // Process any updates that came with the message
       if (data.updates && Array.isArray(data.updates)) {
         for (const update of data.updates) {
-          if (update.type === 'game_over_update') {
+          if (update.type === 'update_game_over') {
             this.setGameOver(update.winner)
             break
           }
         }
+
+        // Only add updates that don't already exist (based on timestamp)
+        for (const update of data.updates) {
+          const existingUpdate = this.updates.find(existing => existing.timestamp === update.timestamp)
+          if (!existingUpdate) {
+            this.updates.push(update)
+          }
+        }
+
       }
     },
 
@@ -306,44 +416,106 @@ export const useGameStore = defineStore('game', {
       console.log('Ending turn')
 
       this.sendWebSocketMessage({
-        type: 'end_turn_action',
+        type: 'cmd_end_turn',
       })
     },
 
-    playCard(cardId: string | number, position: number): void {
+    playCard(
+      cardId: string | number,
+      position?: number,
+      target?: { target_id: string; target_type: 'creature' | 'hero' | 'card' }
+    ): void {
       if (this.gameOver.isGameOver) return
 
-      console.log('Playing card', cardId, 'at position', position)
+      console.log('Playing card', cardId, 'at position', position, 'with target', target)
 
-      this.sendWebSocketMessage({
-        type: 'play_card_action',
+      const message: any = {
+        type: 'cmd_play_card',
         card_id: String(cardId),
-        position: position
-      })
+      }
+
+      if (position !== undefined && position !== null) {
+        message.position = position
+      }
+
+      if (target) {
+        message.target_id = target.target_id
+        message.target_type = target.target_type
+      }
+
+      this.sendWebSocketMessage(message)
+    },
+
+    castSpell(
+      cardId: string,
+      target?: { target_id: string; target_type: 'creature' | 'hero' | 'card' }
+    ): void {
+      if (this.gameOver.isGameOver) return
+
+      console.log('Casting spell card', cardId, 'with target', target)
+
+      const message: any = {
+        type: 'cmd_cast',
+        card_id: String(cardId),
+      }
+
+      if (target) {
+        message.target_id = target.target_id
+        message.target_type = target.target_type
+      }
+
+      this.sendWebSocketMessage(message)
     },
 
     useCardOnCard(cardId: string, targetCardId: string): void {
       if (this.gameOver.isGameOver) return
 
-      console.log('Using card', cardId, 'on card', targetCardId)
+      console.log('Using creature', cardId, 'on creature', targetCardId)
 
       this.sendWebSocketMessage({
-        type: 'use_card_action',
+        // type: 'cmd_use_card',
+        type: 'cmd_attack',
         card_id: cardId,
         target_id: targetCardId,
-        target_type: 'card',
+        target_type: 'creature',
       })
     },
 
     useCardOnHero(cardId: string, heroId: string): void {
       if (this.gameOver.isGameOver) return
 
-      console.log('Using card', cardId, 'on hero', heroId)
+      console.log('Using creature', cardId, 'on hero', heroId)
 
       this.sendWebSocketMessage({
-        type: 'use_card_action',
+        type: 'cmd_attack',
         card_id: cardId,
         target_id: heroId,
+        target_type: 'hero',
+      })
+    },
+
+    useHeroOnCard(heroId: string, targetCardId: string): void {
+      if (this.gameOver.isGameOver) return
+
+      console.log('Using hero', heroId, 'on card', targetCardId)
+
+      this.sendWebSocketMessage({
+        type: 'cmd_use_hero',
+        hero_id: heroId,
+        target_id: targetCardId,
+        target_type: 'card',
+      })
+    },
+
+    useHeroOnHero(heroId: string, targetHeroId: string): void {
+      if (this.gameOver.isGameOver) return
+
+      console.log('Using hero', heroId, 'on hero', targetHeroId)
+
+      this.sendWebSocketMessage({
+        type: 'cmd_use_hero',
+        hero_id: heroId,
+        target_id: targetHeroId,
         target_type: 'hero',
       })
     },
@@ -367,7 +539,7 @@ export const useGameStore = defineStore('game', {
     exitGame(): void {
       this.disconnect()
       // Reset all game state
-      this.gameState = null
+      this.gameState = createInitialGameState()
       this.viewer = null
       this.isVsAi = false
       this.loading = false

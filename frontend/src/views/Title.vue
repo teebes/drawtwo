@@ -1,7 +1,28 @@
 <template>
   <div class="title-page">
+    <!-- Access Denied Message -->
+    <div v-if="accessDenied" class="max-w-2xl mx-auto px-4 py-16 text-center">
+      <div class="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-8">
+        <svg class="w-16 h-16 mx-auto text-red-600 dark:text-red-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+        </svg>
+        <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Access Denied</h2>
+        <p class="text-gray-700 dark:text-gray-300 mb-6">
+          You do not have permission to view this title. This title may be unpublished or in draft status.
+        </p>
+        <router-link
+          to="/"
+          class="inline-flex items-center rounded-lg bg-primary-600 px-6 py-3 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
+        >
+          <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+          </svg>
+          Back to Home
+        </router-link>
+      </div>
+    </div>
 
-    <div v-if="!loading && !error && title">
+    <div v-else-if="!loading && !error && title">
       <section class="bg-gradient-to-br from-primary-600 via-primary-700 to-secondary-700 py-16 text-center">
         <h1 class="font-display text-4xl font-bold">{{ title.name }}</h1>
       </section>
@@ -109,7 +130,7 @@
                 </div>
                 <div class="flex items-center">
                   <router-link
-                    :to="{ name: 'GameBoard', params: { game_id: game.id } }"
+                    :to="{ name: 'Board', params: { game_id: game.id, slug: title.slug } }"
                     class="inline-flex items-center rounded-lg bg-green-600 px-3 py-1 text-sm font-medium text-white hover:bg-green-700 transition-colors"
                   >
                     Join Game
@@ -136,6 +157,84 @@
             </div>
           </Panel>
         </div>
+
+        <!-- ELO Ratings & Leaderboard -->
+        <Panel title="⚔️ PvP Rankings" v-if="isAuthenticated">
+          <div v-if="!leaderboardLoading" class="space-y-4">
+            <!-- User's Rating -->
+            <div v-if="userRating" class="rounded-lg bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 p-4 border border-amber-200 dark:border-amber-800">
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="text-sm font-medium text-gray-600 dark:text-gray-400">Your Rating</div>
+                  <div class="text-3xl font-bold text-amber-600 dark:text-amber-400">
+                    {{ userRating.elo_rating }}
+                  </div>
+                </div>
+                <div class="text-right">
+                  <div class="text-sm text-gray-600 dark:text-gray-400">Record</div>
+                  <div class="text-lg font-semibold text-gray-900 dark:text-white">
+                    {{ userRating.wins }}W - {{ userRating.losses }}L
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div v-else class="rounded-lg bg-gray-50 dark:bg-gray-800 p-4 text-center">
+              <p class="text-sm text-gray-600 dark:text-gray-400">
+                No rating yet. Play your first PvP match to get ranked!
+              </p>
+            </div>
+
+            <!-- Top 3 Players -->
+            <div class="space-y-2">
+              <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Top Players</h3>
+              <div
+                v-for="(player, index) in topPlayers"
+                :key="player.id"
+                class="flex items-center justify-between p-3 rounded-lg transition-colors"
+                :class="{
+                  'bg-amber-50 dark:bg-amber-900/20': index === 0,
+                  'bg-gray-50 dark:bg-gray-800': index === 1,
+                  'bg-orange-50 dark:bg-orange-900/20': index === 2
+                }"
+              >
+                <div class="flex items-center gap-3">
+                  <span class="text-2xl">
+                    {{ index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉' }}
+                  </span>
+                  <div>
+                    <div class="font-medium text-gray-900 dark:text-white">
+                      {{ player.display_name }}
+                      <span v-if="player.id === authStore.user?.id" class="ml-1 text-xs text-blue-600 dark:text-blue-400">(You)</span>
+                    </div>
+                    <div class="text-sm text-gray-600 dark:text-gray-400">
+                      {{ player.wins }}W - {{ player.losses }}L
+                    </div>
+                  </div>
+                </div>
+                <div class="text-lg font-bold text-amber-600 dark:text-amber-400">
+                  {{ player.elo_rating }}
+                </div>
+              </div>
+            </div>
+
+            <!-- View Full Leaderboard Link -->
+            <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
+              <router-link
+                :to="{ name: 'Leaderboard', params: { slug: title.slug } }"
+                class="flex items-center justify-center w-full rounded-lg bg-amber-100 dark:bg-amber-900/30 p-3 text-sm font-medium text-amber-900 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
+              >
+                🏆 View Full Leaderboard
+                <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+              </router-link>
+            </div>
+          </div>
+
+          <div v-else class="text-center py-4">
+            <p class="text-gray-600 dark:text-gray-400">Loading rankings...</p>
+          </div>
+        </Panel>
       </main>
     </div>
 
@@ -145,24 +244,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { useTitleStore } from '../stores/title.js'
-import axios from '../config/api.js'
+import { useTitleStore } from '../stores/title'
+import { useAuthStore } from '../stores/auth'
+import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
-
-interface TitleData {
-  id: number
-  slug: string
-  version: number
-  is_latest: boolean
-  name: string
-  description: string
-  author: number
-  author_username: string
-  status: 'draft' | 'published' | 'archived'
-  published_at: string | null
-  created_at: string
-  updated_at: string
-}
 
 interface DeckData {
   id: number
@@ -183,18 +268,37 @@ interface GameData {
   name: string
 }
 
+interface LeaderboardPlayer {
+  id: number
+  username?: string
+  display_name: string
+  avatar?: string
+  elo_rating: number
+  wins: number
+  losses: number
+  total_games: number
+}
+
 const route = useRoute()
 const titleStore = useTitleStore()
+const authStore = useAuthStore()
 
 // Use the title from the store instead of local state
-const title = computed((): TitleData | null => titleStore.currentTitle)
+const title = computed(() => titleStore.currentTitle)
 const loading = computed(() => titleStore.loading)
 const error = computed(() => titleStore.error)
+const isAuthenticated = computed(() => authStore.isAuthenticated)
+
+// Check if access is denied (403 error)
+const accessDenied = computed(() => titleStore.errorStatus === 403)
 
 const decks = ref<DeckData[]>([])
 const games = ref<GameData[]>([])
+const topPlayers = ref<LeaderboardPlayer[]>([])
+const userRating = ref<LeaderboardPlayer | null>(null)
 const decksLoading = ref<boolean>(false)
 const gamesLoading = ref<boolean>(false)
+const leaderboardLoading = ref<boolean>(false)
 
 // Title data now comes from the store via router preloading
 
@@ -230,6 +334,31 @@ const fetchGames = async (): Promise<void> => {
   }
 }
 
+const fetchLeaderboard = async (): Promise<void> => {
+  if (!title.value || !isAuthenticated.value) return
+
+  try {
+    leaderboardLoading.value = true
+    const slug = route.params.slug as string
+
+    // Fetch top players and user's rating in parallel
+    const [leaderboardResponse, userRatingResponse] = await Promise.all([
+      axios.get(`/gameplay/${slug}/leaderboard/`, {
+        params: { limit: 3 } // Only need top 3 for display
+      }),
+      axios.get(`/gameplay/${slug}/my-rating/`)
+    ])
+
+    topPlayers.value = leaderboardResponse.data as LeaderboardPlayer[]
+    userRating.value = userRatingResponse.data as LeaderboardPlayer
+  } catch (err) {
+    console.error('Error fetching leaderboard:', err)
+    // Don't show error, just log it
+  } finally {
+    leaderboardLoading.value = false
+  }
+}
+
 const formatDate = (dateString: string): string => {
   return new Date(dateString).toLocaleDateString('en-US', {
     year: 'numeric',
@@ -243,6 +372,7 @@ watch(title, async (newTitle) => {
   if (newTitle) {
     await fetchDecks()
     await fetchGames()
+    await fetchLeaderboard()
   }
 }, { immediate: true })
 

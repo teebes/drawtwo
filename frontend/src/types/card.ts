@@ -1,7 +1,12 @@
+// export interface Trait {
+//   slug: string
+//   name: string
+//   data: Record<string, any>
+// }
+
 export interface Trait {
-  slug: string
-  name: string
-  data: Record<string, any>
+  type: string
+  actions: {}[]
 }
 
 export interface Card {
@@ -9,7 +14,7 @@ export interface Card {
   slug: string
   name: string
   description: string
-  card_type: 'minion' | 'spell'
+  card_type: 'creature' | 'spell'
   cost: number
   attack: number
   health: number

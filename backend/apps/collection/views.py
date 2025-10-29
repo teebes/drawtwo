@@ -93,7 +93,8 @@ def deck_list_by_title(request, title_slug):
             user=request.user,
             name=name,
             description=description,
-            hero=hero
+            hero=hero,
+            title=title,
         )
 
         return Response({
@@ -283,6 +284,14 @@ def update_deck_card(request, deck_id, card_id):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    # Check if card has Unique trait
+    has_unique = card.cardtrait_set.filter(trait_slug='unique').exists()
+    if has_unique and new_count > 1:
+        return Response(
+            {'error': f'"{card.name}" has the Unique trait and can only have 1 copy in a deck'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     # Update the count
     deck_card.count = new_count
     deck_card.save()
@@ -314,6 +323,57 @@ def delete_deck_card(request, deck_id, card_id):
     }, status=status.HTTP_200_OK)
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def opponent_decks_by_title(request, title_slug):
+    """
+    GET: List all other users' decks for a specific title (for PvP matchmaking).
+    Excludes AI decks and the current user's decks.
+    """
+    # Get the title (latest version) or return 404
+    title = get_object_or_404(Title, slug=title_slug, is_latest=True)
+
+    # Get decks for this title from other users (excluding current user and AI)
+    decks = Deck.objects.filter(
+        hero__title=title,
+        user__isnull=False,  # Only human players
+    ).exclude(
+        user=request.user  # Exclude current user
+    ).select_related('hero', 'user').annotate(
+        card_count=Count('deckcard')
+    ).order_by('-updated_at')
+
+    # Serialize the deck data
+    deck_data = []
+    for deck in decks:
+        deck_data.append({
+            'id': deck.id,
+            'name': deck.name,
+            'description': deck.description,
+            'hero': {
+                'id': deck.hero.id,
+                'name': deck.hero.name,
+                'slug': deck.hero.slug,
+            },
+            'owner': {
+                'email': deck.user.email,
+            },
+            'card_count': deck.card_count,
+            'created_at': deck.created_at.isoformat(),
+            'updated_at': deck.updated_at.isoformat(),
+        })
+
+    return Response({
+        'title': {
+            'id': title.id,
+            'slug': title.slug,
+            'name': title.name,
+        },
+        'decks': deck_data,
+        'count': len(deck_data)
+    })
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def add_deck_card(request, deck_id):
@@ -324,15 +384,15 @@ def add_deck_card(request, deck_id):
     deck = get_object_or_404(Deck, id=deck_id, user=request.user)
 
     # Get card_id from request data
-    card_id = request.data.get('card_id')
-    if not card_id:
+    card_slug = request.data.get('card_slug')
+    if not card_slug:
         return Response(
-            {'error': 'card_id is required'},
+            {'error': 'card_slug is required'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
     # Get the card and verify it belongs to the same title as the deck's hero
-    card = get_object_or_404(CardTemplate, id=card_id)
+    card = get_object_or_404(CardTemplate, slug=card_slug, is_latest=True)
     if card.title != deck.hero.title:
         return Response(
             {'error': 'Card does not belong to the same title as the deck'},
@@ -361,6 +421,14 @@ def add_deck_card(request, deck_id):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    # Check if card has Unique trait
+    has_unique = card.cardtrait_set.filter(trait_slug='unique').exists()
+    if has_unique and count > 1:
+        return Response(
+            {'error': f'"{card.name}" has the Unique trait and can only have 1 copy in a deck'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     # See if the operation would put the deck over the size limit
     if deck.deck_size + count > world_config.deck_size_limit:
         return Response(
@@ -376,10 +444,17 @@ def add_deck_card(request, deck_id):
     )
 
     if not created:
+        # Check if adding more would violate Unique trait
+        new_total = deck_card.count + count
+        if has_unique and new_total > 1:
+            return Response(
+                {'error': f'"{card.name}" has the Unique trait and can only have 1 copy in a deck'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         # Update existing card count
         deck_card.count += count
         deck_card.save()
-        message = f'Updated "{card.name}" count to {count}'
+        message = f'Updated "{card.name}" count to {deck_card.count}'
     else:
         message = f'Added "{card.name}" to deck with count {count}'
 

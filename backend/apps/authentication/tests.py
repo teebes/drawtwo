@@ -287,18 +287,18 @@ class AuthenticationAPITestCase(APITestCase):
         ).first()
         self.assertIsNotNone(confirmation)
 
-        # Print debug info (will be visible when running with -v 2)
-        print(f"Debug - Confirmation key: {confirmation.key}")
-        print(f"Debug - Key length: {len(confirmation.key)}")
-        print(f"Debug - Key type: {type(confirmation.key)}")
+        # Debug info - uncomment if needed for debugging test failures
+        # print(f"Debug - Confirmation key: {confirmation.key}")
+        # print(f"Debug - Key length: {len(confirmation.key)}")
+        # print(f"Debug - Key type: {type(confirmation.key)}")
 
         # Try the exact same request as frontend
         confirm_data = {"key": confirmation.key}
-        print(f"Debug - Request data: {confirm_data}")
+        # print(f"Debug - Request data: {confirm_data}")
 
         response = self.client.post(self.email_confirm_url, confirm_data, format="json")
-        print(f"Debug - Response status: {response.status_code}")
-        print(f"Debug - Response data: {response.data}")
+        # print(f"Debug - Response status: {response.status_code}")
+        # print(f"Debug - Response data: {response.data}")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("access", response.data)

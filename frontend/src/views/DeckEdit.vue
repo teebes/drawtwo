@@ -106,9 +106,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useTitleStore } from '../stores/title.js'
-import { useNotificationStore } from '../stores/notifications.js'
-import axios from '../config/api.js'
+import { useTitleStore } from '../stores/title'
+import { useNotificationStore } from '../stores/notifications'
+import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
 import GameButton from '../components/ui/GameButton.vue'
 

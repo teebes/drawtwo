@@ -7,13 +7,18 @@ export interface Event {
   player: Side
 }
 
+export type CardAction =
+  | { action: 'draw'; amount: number }
+  | { action: 'damage'; amount: number; target: 'hero' | 'creature' | 'enemy'; scope?: 'single' | 'cleave' | 'all' }
+  | { action: 'heal'; amount: number; target: 'hero' | 'creature' | 'friendly'; scope?: 'single' | 'cleave' | 'all' }
+
 export interface Trait {
-  slug: string
-  name: string
-  data: Record<string, any>
+  type: string
+  actions: CardAction[]
 }
 
 export interface CardInPlay {
+  card_type?: 'creature' | 'spell'
   card_id: string
   template_slug: string
   name: string
@@ -25,11 +30,40 @@ export interface CardInPlay {
   exhausted: boolean
 }
 
+export interface Creature {
+  creature_id: string
+  card_id: string
+  name: string
+  description: string
+  attack: number
+  health: number
+  traits: Trait[]
+  exhausted: boolean
+}
+
 export interface HeroInPlay {
   hero_id: string
   template_slug: string
   health: number
   name: string
+  exhausted: boolean
+}
+
+export interface EloChange {
+  winner: {
+    user_id: number
+    display_name: string
+    old_rating: number
+    new_rating: number
+    change: number
+  }
+  loser: {
+    user_id: number
+    display_name: string
+    old_rating: number
+    new_rating: number
+    change: number
+  }
 }
 
 export interface GameState {
@@ -38,6 +72,8 @@ export interface GameState {
   phase: Phase
   event_queue: Event[]
   cards: Record<string, CardInPlay>
+  creatures: Record<string, Creature>
+  last_creature_id: number
   heroes: Record<string, HeroInPlay>
   board: Record<string, string[]>
   hands: Record<string, string[]>
@@ -46,4 +82,16 @@ export interface GameState {
   mana_used: Record<string, number>
   winner: Winner
   is_vs_ai: boolean
+  elo_change?: EloChange
+}
+
+// Game error types - matches backend Result types
+export type GameErrorType = 'outcome_rejected' | 'outcome_prevented' | 'outcome_fault'
+
+export interface GameError {
+  type: GameErrorType
+  reason: string  // User-visible error message
+  details?: Record<string, any>
+  error_id?: string  // Only present for Fault
+  effect?: any  // Only present for Fault (for debugging)
 }

@@ -93,7 +93,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
-import axios from '../../config/api.js'
+import axios from '../../config/api'
 import CollectionCard from '../game/CollectionCard.vue'
 import type { Card } from '../../types/card'
 

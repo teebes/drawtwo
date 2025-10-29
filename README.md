@@ -362,6 +362,115 @@ def your_custom_task(param1, param2):
 - Use separate queues for different task types if needed
 - Consider using `CELERY_TASK_ROUTES` for task routing
 
+## Game Engine Architecture
+
+DrawTwo uses an event-driven game engine based on a Command-Effect-Result pattern. This architecture provides a robust, testable, and extensible way to handle game logic.
+
+### Core Concepts
+
+#### 1. Commands
+Player actions that enter the system (e.g., "Play Card", "Use Hero Power", "End Turn").
+
+```python
+# Commands are validated at the entry point
+PlayCardCommand(card_id="card_123", position=0, target_id="hero_1")
+```
+
+#### 2. Effects
+Internal game operations that mutate state. Commands are compiled into Effects, which are then queued and processed.
+
+```python
+# Effects are the atomic units of game state change
+PlayEffect(side="side_a", source_id="card_123", position=0)
+DamageEffect(target_id="hero_1", amount=3)
+```
+
+#### 3. Results
+Every Effect resolution returns one of four Result types:
+
+**Success** ✅
+- The effect resolved normally and state was mutated
+- Domain events are emitted (e.g., "CardPlayed", "DamageDealt")
+- Child effects may be enqueued (e.g., Battlecry triggers)
+- System continues processing the queue
+
+**Rejected** 🚫
+- The effect violated domain rules (at enqueue OR resolution time)
+- Examples: not enough mana, target is exhausted, invalid target
+- User receives feedback: "Not enough energy", "Target is exhausted"
+- No state change, queue continues processing
+- This is **not** a bug - it's valid domain behavior
+
+**Prevented** 🛡️
+- An active game effect intervened (e.g., immunity, counter-spell)
+- Examples: "Immune to damage", "Divine Shield absorbed damage"
+- Domain event emitted for UI feedback
+- No state change, queue continues processing
+
+**Fault** ⚠️
+- The engine itself failed (bug, unhandled exception, data corruption)
+- **NOT** for validation failures - use Rejected for those
+- System logs error, may retry if recoverable
+- Generic error shown to user: "Something went wrong"
+- This **is** a bug that needs fixing
+
+### Processing Flow
+
+```
+1. Player Action (WebSocket)
+   ↓
+2. Command validated & compiled to Effects
+   ↓
+3. Effects enqueued
+   ↓
+4. Celery task processes queue (async)
+   ↓
+5. Each Effect resolved → Result
+   ↓
+6. Updates sent to clients (WebSocket)
+   ↓
+7. Frontend displays changes
+```
+
+### Example: Playing a Card
+
+```python
+# 1. Frontend sends command
+ws.send({"type": "cmd_play_card", "card_id": "card_123"})
+
+# 2. Backend compiles to effect
+effect = PlayEffect(side="side_a", source_id="card_123", position=0)
+
+# 3. Effect handler validates and resolves
+if card.cost > available_mana:
+    return Rejected(reason="Not enough energy to play the card")
+
+# 4. Success: state mutates, events emitted
+return Success(
+    new_state=updated_state,
+    events=[PlayEvent(card_id="card_123")],
+    child_effects=[BattlecryEffect(...)]  # Triggers queued
+)
+```
+
+### Why This Architecture?
+
+- **Separation of concerns**: Commands (player intent) vs Effects (game operations)
+- **Testability**: Pure functions that take state and return new state
+- **Robustness**: Backend validates everything, frontend can't cheat
+- **Extensibility**: New card abilities = new Effects + handlers
+- **Debuggability**: Full event history for replay/debugging
+- **Async processing**: Celery handles complex AI and game logic without blocking
+
+### Key Files
+
+- `backend/apps/gameplay/schemas/commands.py` - Command definitions
+- `backend/apps/gameplay/schemas/effects.py` - Effect definitions
+- `backend/apps/gameplay/schemas/engine.py` - Result types
+- `backend/apps/gameplay/engine/handlers.py` - Effect resolution logic
+- `backend/apps/gameplay/services.py` - Game service layer
+- `backend/apps/gameplay/consumers.py` - WebSocket handling
+
 ## Code Quality
 
 The project includes several code quality tools:

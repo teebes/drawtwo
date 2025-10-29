@@ -17,21 +17,26 @@ from .serializers import (
     EmailVerificationSerializer,
     PasswordlessLoginSerializer,
     UserSerializer,
+    FriendshipSerializer,
+    FriendRequestSerializer,
+    LeaderboardUserSerializer,
 )
 
 User = get_user_model()
 
 
-@method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(csrf_exempt, name="dispatch")
 class GoogleLogin(SocialLoginView):
     """Google OAuth2 login view."""
 
     adapter_class = GoogleOAuth2Adapter
-    callback_url = settings.FRONTEND_URL + "/auth/callback/google"  # Configurable frontend callback URL
+    callback_url = (
+        settings.FRONTEND_URL + "/auth/callback/google"
+    )  # Configurable frontend callback URL
     client_class = OAuth2Client
 
 
-@method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(csrf_exempt, name="dispatch")
 class PasswordlessLoginView(APIView):
     """Send passwordless login email to user."""
 
@@ -100,7 +105,7 @@ class PasswordlessLoginView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(csrf_exempt, name="dispatch")
 class EmailConfirmationView(APIView):
     """Confirm email and log user in."""
 
@@ -122,6 +127,7 @@ class EmailConfirmationView(APIView):
 
                     # Check if user can login (considering whitelist mode)
                     from apps.control.models import SiteSettings
+
                     site_settings = SiteSettings.get_cached_settings()
 
                     if site_settings.whitelist_mode_enabled and not user.can_login():
@@ -212,7 +218,7 @@ def register_view(request):
         return Response(
             {
                 "error": "User registration is currently disabled. Please contact an administrator.",
-                "signup_disabled": True
+                "signup_disabled": True,
             },
             status=status.HTTP_403_FORBIDDEN,
         )
@@ -244,3 +250,274 @@ def register_view(request):
         )
 
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class FriendshipListView(APIView):
+    """List all friends and pending requests."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        """Get all friendships for the current user."""
+        from .models import Friendship
+
+        # Get all friendships where user is involved
+        friendships = Friendship.objects.filter(user=request.user).select_related(
+            "friend"
+        )
+
+        serializer = FriendshipSerializer(
+            friendships, many=True, context={"request": request}
+        )
+        return Response(serializer.data)
+
+    def post(self, request):
+        """Create a new friend request."""
+        from .models import Friendship
+        from django.db import transaction
+
+        serializer = FriendRequestSerializer(
+            data=request.data, context={"request": request}
+        )
+
+        if serializer.is_valid():
+            username = serializer.validated_data["username"]
+            target_user = User.objects.get(username__iexact=username)
+
+            # Create bidirectional friendship records
+            with transaction.atomic():
+                # Record from requester's perspective (pending)
+                friendship1 = Friendship.objects.create(
+                    user=request.user,
+                    friend=target_user,
+                    status=Friendship.STATUS_PENDING,
+                    initiated_by=request.user,
+                )
+
+                # Record from target's perspective (also pending, waiting for acceptance)
+                friendship2 = Friendship.objects.create(
+                    user=target_user,
+                    friend=request.user,
+                    status=Friendship.STATUS_PENDING,
+                    initiated_by=request.user,
+                )
+
+            return Response(
+                FriendshipSerializer(friendship1, context={"request": request}).data,
+                status=status.HTTP_201_CREATED,
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class FriendshipDetailView(APIView):
+    """Manage individual friendship."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk):
+        """Accept or decline a friend request."""
+        from .models import Friendship
+        from django.db import transaction
+
+        try:
+            # Get the friendship where the current user is the recipient
+            friendship = Friendship.objects.get(pk=pk, user=request.user)
+            # Check that the current user didn't initiate it
+            if friendship.initiated_by == request.user:
+                return Response(
+                    {"error": "Cannot accept your own friend request."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        except Friendship.DoesNotExist:
+            return Response(
+                {"error": "Friendship not found or you are not authorized."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        action = request.data.get("action")
+
+        if action == "accept":
+            # Update both sides of the friendship
+            with transaction.atomic():
+                Friendship.objects.filter(
+                    user=request.user, friend=friendship.friend
+                ).update(status=Friendship.STATUS_ACCEPTED)
+                Friendship.objects.filter(
+                    user=friendship.friend, friend=request.user
+                ).update(status=Friendship.STATUS_ACCEPTED)
+
+            friendship.refresh_from_db()
+            return Response(
+                FriendshipSerializer(friendship, context={"request": request}).data
+            )
+
+        elif action == "decline":
+            # Delete both sides of the friendship
+            with transaction.atomic():
+                Friendship.objects.filter(
+                    user=request.user, friend=friendship.friend
+                ).delete()
+                Friendship.objects.filter(
+                    user=friendship.friend, friend=request.user
+                ).delete()
+
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        return Response(
+            {"error": "Invalid action. Use 'accept' or 'decline'."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    def delete(self, request, pk):
+        """Remove a friend."""
+        from .models import Friendship
+        from django.db import transaction
+
+        try:
+            friendship = Friendship.objects.get(pk=pk, user=request.user)
+        except Friendship.DoesNotExist:
+            return Response(
+                {"error": "Friendship not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Delete both sides of the friendship
+        with transaction.atomic():
+            Friendship.objects.filter(
+                user=request.user, friend=friendship.friend
+            ).delete()
+            Friendship.objects.filter(
+                user=friendship.friend, friend=request.user
+            ).delete()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class LeaderboardView(APIView):
+    """Get ELO rating leaderboard for a specific title."""
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, title_slug):
+        """
+        Get top players by ELO rating for a specific title.
+
+        Args:
+            title_slug: The slug of the title to get leaderboard for
+        """
+        from django.db.models import Count, Q
+        from apps.builder.models import Title
+        from apps.gameplay.models import UserTitleRating
+
+        # Get the title
+        try:
+            title = Title.objects.get(slug=title_slug)
+        except Title.DoesNotExist:
+            return Response(
+                {'error': f'Title "{title_slug}" not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Get limit from query params (default 100, max 1000)
+        limit = min(int(request.query_params.get('limit', 100)), 1000)
+
+        # Get all user ratings for this title, annotated with win/loss counts
+        user_ratings = UserTitleRating.objects.filter(
+            title=title
+        ).select_related('user').annotate(
+            wins=Count(
+                'user__elo_wins',
+                filter=Q(user__elo_wins__title=title),
+                distinct=True
+            ),
+            losses=Count(
+                'user__elo_losses',
+                filter=Q(user__elo_losses__title=title),
+                distinct=True
+            )
+        ).filter(
+            # Only include users who have played at least one game
+            Q(wins__gt=0) | Q(losses__gt=0)
+        ).order_by('-elo_rating')[:limit]
+
+        # Build response data
+        leaderboard_data = []
+        for rating in user_ratings:
+            wins = rating.wins
+            losses = rating.losses
+            total_games = wins + losses
+
+            leaderboard_data.append({
+                'id': rating.user.id,
+                'username': rating.user.username,
+                'display_name': rating.user.display_name,
+                'avatar': rating.user.avatar,
+                'elo_rating': rating.elo_rating,
+                'wins': wins,
+                'losses': losses,
+                'total_games': total_games,
+            })
+
+        return Response(leaderboard_data)
+
+
+class UserTitleRatingView(APIView):
+    """Get current user's rating for a specific title."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, title_slug):
+        """Get the authenticated user's rating for a specific title."""
+        from apps.builder.models import Title
+        from apps.gameplay.models import UserTitleRating
+        from django.db.models import Count, Q
+
+        try:
+            title = Title.objects.get(slug=title_slug)
+        except Title.DoesNotExist:
+            return Response(
+                {'error': f'Title "{title_slug}" not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            # Get or create the user's rating for this title
+            user_rating = UserTitleRating.objects.select_related('user').annotate(
+                wins=Count(
+                    'user__elo_wins',
+                    filter=Q(user__elo_wins__title=title),
+                    distinct=True
+                ),
+                losses=Count(
+                    'user__elo_losses',
+                    filter=Q(user__elo_losses__title=title),
+                    distinct=True
+                )
+            ).get(user=request.user, title=title)
+
+            wins = user_rating.wins
+            losses = user_rating.losses
+
+            return Response({
+                'id': request.user.id,
+                'username': request.user.username,
+                'display_name': request.user.display_name,
+                'avatar': request.user.avatar,
+                'elo_rating': user_rating.elo_rating,
+                'wins': wins,
+                'losses': losses,
+                'total_games': wins + losses,
+            })
+        except UserTitleRating.DoesNotExist:
+            # User hasn't played any games for this title yet
+            return Response({
+                'id': request.user.id,
+                'username': request.user.username,
+                'display_name': request.user.display_name,
+                'avatar': request.user.avatar,
+                'elo_rating': 1200,  # Default rating
+                'wins': 0,
+                'losses': 0,
+                'total_games': 0,
+            })

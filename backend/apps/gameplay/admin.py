@@ -1,10 +1,10 @@
 from django.contrib import admin
-from .models import Game
+from .models import Game, GameUpdate, ELORatingChange, UserTitleRating
 
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
-    list_display = ['__str__', 'status', 'get_game_type', 'get_winner', 'created_at']
+    list_display = ['id', '__str__', 'status', 'get_game_type', 'get_winner', 'created_at']
     list_filter = ['status', 'created_at']
     search_fields = [
         'side_a__name',
@@ -22,6 +22,10 @@ class GameAdmin(admin.ModelAdmin):
         }),
         ('Game State', {
             'fields': ('state',),
+            'classes': ('collapse',)
+        }),
+        ('Game Queue', {
+            'fields': ('queue',),
             'classes': ('collapse',)
         }),
         ('Results', {
@@ -47,3 +51,74 @@ class GameAdmin(admin.ModelAdmin):
                 return f"👤 {obj.winner.name}"
         return "No winner yet"
     get_winner.short_description = "Winner"
+
+
+@admin.register(GameUpdate)
+class GameUpdateAdmin(admin.ModelAdmin):
+    list_display = ['id', 'game', 'get_update_type', 'created_at']
+    list_filter = ['created_at']
+    search_fields = [
+        'game__side_a__name',
+        'game__side_b__name',
+        'game__side_a__user__email',
+        'game__side_b__user__email',
+    ]
+    readonly_fields = ['created_at', 'updated_at']
+    raw_id_fields = ['game']
+
+    fieldsets = (
+        ('Game', {
+            'fields': ('game',)
+        }),
+        ('Update', {
+            'fields': ('update',)
+        }),
+        ('Info', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def get_update_type(self, obj):
+        try:
+            return obj.update.get('type')
+        except Exception:
+            return None
+    get_update_type.short_description = "Update Type"
+
+
+@admin.register(UserTitleRating)
+class UserTitleRatingAdmin(admin.ModelAdmin):
+    list_display = ['user', 'title', 'elo_rating', 'updated_at']
+    list_filter = ['title', 'updated_at']
+    search_fields = ['user__username', 'user__email', 'title__name']
+    readonly_fields = ['created_at', 'updated_at']
+    ordering = ['title', '-elo_rating']
+
+
+@admin.register(ELORatingChange)
+class ELORatingChangeAdmin(admin.ModelAdmin):
+    list_display = [
+        'game',
+        'title',
+        'winner',
+        'winner_rating_change',
+        'loser',
+        'loser_rating_change',
+        'created_at',
+    ]
+    list_filter = ['title', 'created_at']
+    search_fields = ['winner__username', 'winner__email', 'loser__username', 'loser__email']
+    readonly_fields = [
+        'game',
+        'title',
+        'winner',
+        'winner_old_rating',
+        'winner_new_rating',
+        'winner_rating_change',
+        'loser',
+        'loser_old_rating',
+        'loser_new_rating',
+        'loser_rating_change',
+        'created_at',
+    ]

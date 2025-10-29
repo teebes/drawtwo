@@ -1,10 +1,16 @@
 import json
+import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
-from .models import Game
-from .schemas import GameState, GameUpdates
+from .models import Game, GameUpdate
+#from .schemas import GameState, GameUpdate as PydGameUpdate
+from apps.gameplay.schemas.game import GameState
+from apps.gameplay.schemas.updates import GameUpdate as PydGameUpdate
 from .services import GameService
+from pydantic import TypeAdapter
+
+logger = logging.getLogger(__name__)
 
 
 class GameConsumer(AsyncWebsocketConsumer):
@@ -13,151 +19,161 @@ class GameConsumer(AsyncWebsocketConsumer):
         self.game_group_name = f'game_{self.game_id}'
 
         # Check if user is authenticated
-        if self.scope["user"] == AnonymousUser():
+        if not self.scope["user"].is_authenticated:
+            logger.warning(f"Rejecting unauthenticated WebSocket connection for game {self.game_id}")
             await self.close()
             return
 
-        # Verify user has access to this game
-        if not await self.user_can_access_game():
+        # Verify user has access to this game and fetch game object
+        game = await self.user_can_access_game()
+        if not game:
+            logger.warning(f"User {self.scope['user']} does not have access to game {self.game_id}")
             await self.close()
             return
 
-        # Join game group
+        # Determine which side this user is on
+        self.side = await self.get_user_side(game)
+        self.side_group_name = f'game_{self.game_id}_{self.side}'
+
+        # Join both the general game group and the side-specific group
         await self.channel_layer.group_add(
             self.game_group_name,
+            self.channel_name
+        )
+        await self.channel_layer.group_add(
+            self.side_group_name,
             self.channel_name
         )
 
         await self.accept()
 
-        # Send current game state
-        game_state = await self.get_game_state()
-        await self.send(text_data=json.dumps(
-            GameUpdates(
-                state=GameState.model_validate(game_state),
-                updates=[],
-            ).model_dump()
-        ))
+        # Send current game state using already-fetched game object
+        # Filter the state for this player's side
+        from apps.gameplay.notifications import filter_state_for_side, filter_updates_for_side
 
-        return
+        game_state = GameState.model_validate(game.state)
+        filtered_state = filter_state_for_side(game_state, self.side)
+
+        raw_updates = await self.get_game_updates()
+        updates = TypeAdapter(list[PydGameUpdate]).validate_python(raw_updates)
+        filtered_updates = filter_updates_for_side(updates, self.side)
+
         await self.send(text_data=json.dumps({
-            'type': 'game_state',
-            'state': game_state
+            'type': 'game_updates',
+            'state': filtered_state,
+            'updates': filtered_updates,
         }))
 
+        return
+
     async def disconnect(self, close_code):
-        # Leave game group
+        # Leave both groups
         await self.channel_layer.group_discard(
             self.game_group_name,
             self.channel_name
         )
+        if hasattr(self, 'side_group_name'):
+            await self.channel_layer.group_discard(
+                self.side_group_name,
+                self.channel_name
+            )
 
     async def receive(self, text_data):
         data = json.loads(text_data)
         message_type = data.get('type')
 
-        print("#########################")
-        print(f"received: {data}")
-        print("#########################")
+        logger.debug("#### Consumer received: ####")
+        logger.debug(f"received: {data}")
 
-        result = await self.process_game_action(data)
+        try:
+            await self.process_command(data, side=self.side)
+        except Exception as e:
+            # Handle validation errors and other exceptions gracefully
+            error_message = str(e)
 
-        # await self.channel_layer.group_send(
-        #     self.game_group_name,
-        #     {
-        #         'type': 'game_updates',
-        #         'updates': result['updates'],
-        #         'state': result['state']
-        #     }
-        # )
+            logger.warning(f"Error processing command: {error_message}")
 
-        return
-
-        if message_type == 'action':
-            # Handle game action
-            action = data.get('action')
-            if action:
-                print(f"Processing action: {action}")
-                result = await self.process_game_action(action)
-                print(f"Action result: {result}")
-
-                # Broadcast update to all players in the game
-                await self.channel_layer.group_send(
-                    self.game_group_name,
-                    {
-                        'type': 'game_update',
-                        'update': result
-                    }
-                )
-    """
-    async def game_update(self, event):
-        # Send game update to WebSocket
-        await self.send(text_data=json.dumps({
-            'type': 'game_update',
-            'update': event['update']
-        }))
-    """
+            # Send error back to client in the standard format
+            # (same format as errors from effect processing)
+            await self.send(text_data=json.dumps({
+                'type': 'game_updates',  # Use same type as regular updates
+                'state': None,  # No state update
+                'updates': [],  # No updates
+                'errors': [{
+                    'type': 'command_validation_error',
+                    'reason': error_message,  # Frontend expects 'reason' field
+                    'details': {},
+                }],
+            }))
 
     async def game_updates(self, event):
         # Send game updates to WebSocket
         await self.send(text_data=json.dumps({
             'type': 'game_updates',
             'updates': event['updates'],
+            'errors': event['errors'],
             'state': event['state']
         }))
 
     @database_sync_to_async
     def user_can_access_game(self):
         if not self.game_id:
-            return False
+            return None
         try:
             game = Game.objects.get(id=self.game_id)
             user = self.scope["user"]
-            # Check if user is part of the game
-            return (game.side_a.user == user or game.side_b.user == user or
-                    game.side_a.ai_player is not None or game.side_b.ai_player is not None)
+            # Check if user is a participant in the game (either side)
+            # Works for both PvE (one side is user, other is AI) and PvP (both sides are users)
+            if game.side_a.user == user or game.side_b.user == user:
+                return game
+            return None
         except Game.DoesNotExist:
-            return False
+            return None
 
     @database_sync_to_async
-    def get_game_state(self):
-        game = Game.objects.get(id=self.game_id)
-        return game.state
+    def get_user_side(self, game):
+        """
+        Determine which side of the game this user is on.
+        Returns 'side_a' or 'side_b'.
+        """
+        user = self.scope["user"]
+
+        # Check if user owns side_a's deck
+        if game.side_a.user == user:
+            return 'side_a'
+        # Check if user owns side_b's deck
+        elif game.side_b.user == user:
+            return 'side_b'
+        # If AI game, assign human player to their side
+        elif game.side_a.is_ai_deck:
+            return 'side_b'  # User is on side_b, AI on side_a
+        elif game.side_b.is_ai_deck:
+            return 'side_a'  # User is on side_a, AI on side_b
+        else:
+            # Default to side_a if we can't determine
+            return 'side_a'
+
+    @database_sync_to_async
+    def get_game_updates(self):
+        # Evaluate queryset in sync context and return list of raw update dicts
+        return list(
+            GameUpdate.objects
+            .filter(game_id=self.game_id)
+            .order_by('created_at')
+            .values_list('update', flat=True)
+        )
+
+    @database_sync_to_async
+    def process_command(self, command, side):
+        return GameService.process_command(
+            game_id=self.game_id,
+            command=command,
+            side=side,
+        )
 
     @database_sync_to_async
     def process_game_action(self, action):
-
         return GameService.submit_action(
             game_id=self.game_id,
             action=action,
         )
-
-        game = Game.objects.get(id=self.game_id)
-
-        # Parse current state to get active player
-        current_state = GameState.model_validate(game.state)
-
-        # Add player field if not present
-        if 'player' not in action:
-            action['player'] = current_state.active
-
-        # Apply action to game state
-        new_state = apply_action(game.state, action)
-        game.state = json.loads(new_state)
-        game.save()
-
-        # Parse the state to check for specific updates
-        state = GameState.model_validate(game.state)
-
-        # Determine what type of update this is
-        update_type = 'state_change'
-
-        # Check if a card was drawn
-        if action.get('type') == 'phase_transition' and state.phase == 'draw':
-            update_type = 'draw_card'
-
-        return {
-            'type': update_type,
-            'state': game.state,
-            'action': action
-        }

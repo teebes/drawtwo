@@ -15,7 +15,7 @@ class Card(BaseModel):
     slug: str
     name: str
     description: str
-    card_type: Literal['minion', 'spell']
+    card_type: Literal['creature', 'spell']
     cost: int
     attack: int
     health: int

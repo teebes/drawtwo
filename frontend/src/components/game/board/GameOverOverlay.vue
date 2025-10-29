@@ -13,18 +13,53 @@
                 </p>
             </div>
 
+            <!-- ELO Rating Changes (only for PvP games) -->
+            <div v-if="eloChange" class="mb-6 p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                    ⚔️ Rating Changes
+                </h3>
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between p-2 bg-green-50 dark:bg-green-900/20 rounded">
+                        <span class="font-medium text-gray-900 dark:text-white">
+                            🏆 {{ eloChange.winner.display_name }}
+                        </span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-gray-600 dark:text-gray-400">{{ eloChange.winner.old_rating }}</span>
+                            <span class="text-green-600 dark:text-green-400 font-bold">
+                                {{ eloChange.winner.change > 0 ? '+' : '' }}{{ eloChange.winner.change }}
+                            </span>
+                            <span class="font-bold text-amber-600 dark:text-amber-400">{{ eloChange.winner.new_rating }}</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between p-2 bg-red-50 dark:bg-red-900/20 rounded">
+                        <span class="font-medium text-gray-900 dark:text-white">
+                            {{ eloChange.loser.display_name }}
+                        </span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-gray-600 dark:text-gray-400">{{ eloChange.loser.old_rating }}</span>
+                            <span class="text-red-600 dark:text-red-400 font-bold">
+                                {{ eloChange.loser.change }}
+                            </span>
+                            <span class="font-bold text-amber-600 dark:text-amber-400">{{ eloChange.loser.new_rating }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="space-y-3">
+                <router-link :to="{ name: 'Title', params: { slug: titleStore.titleSlug } }">
+                    <button
+                        class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+                    >
+                        Exit Game
+                    </button>
+                </router-link>
+
                 <button
-                    @click="handleReturnToLobby"
-                    class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-                >
-                    Return to Lobby
-                </button>
-                <button
-                    @click="handlePlayAgain"
+                    @click="handleReturnToGame"
                     class="w-full px-4 py-3 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors"
                 >
-                    Play Again
+                    Return to Game
                 </button>
             </div>
         </div>
@@ -32,8 +67,10 @@
 </template>
 
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
-import type { Side } from '../../../types/game'
+import { useTitleStore } from '@/stores/title'
+import type { Side, EloChange } from '../../../types/game'
+
+const titleStore = useTitleStore()
 
 interface GameOverState {
     isGameOver: boolean
@@ -43,16 +80,16 @@ interface GameOverState {
 interface Props {
     gameOver: GameOverState
     viewer: Side | null
+    eloChange?: EloChange
 }
 
 const props = defineProps<Props>()
-const router = useRouter()
 
-const handleReturnToLobby = () => {
-    router.push('/lobby')
-}
+const emit = defineEmits<{
+    'close': []
+}>()
 
-const handlePlayAgain = () => {
-    window.location.reload()
+const handleReturnToGame = () => {
+    emit('close')
 }
 </script>

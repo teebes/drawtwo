@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { useAuthStore } from '../stores/auth.js'
-import { useTitleStore } from '../stores/title.js'
+import { useAuthStore } from '../stores/auth'
+import { useTitleStore } from '../stores/title'
 import Home from '../views/Home.vue'
 import Login from '../views/Login.vue'
 import Dashboard from '../views/Dashboard.vue'
@@ -21,6 +21,7 @@ import DeckEdit from '../views/DeckEdit.vue'
 import GameBoard from '../views/GameBoard.vue'
 import GameCreate from '../views/GameCreate.vue'
 import Board from '../views/Board.vue'
+import Friends from '../views/Friends.vue'
 
 const routes = [
   {
@@ -46,6 +47,18 @@ const routes = [
     name: 'Profile',
     component: Profile,
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/friends',
+    name: 'Friends',
+    component: Friends,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/:slug/leaderboard',
+    name: 'Leaderboard',
+    component: () => import('../views/Leaderboard.vue'),
+    meta: { requiresAuth: false }
   },
   {
     path: '/mockup',
@@ -165,7 +178,7 @@ const router = createRouter({
 // List of routes that are title-related and use /:slug pattern
 const titleRoutes = [
   'Title', 'TitleCards', 'TitleBriefCards', 'CardCreate', 'CardEdit', 'DeckDetail',
-  'DeckEdit', 'DeckCreate', 'GameCreate', 'Board'
+  'DeckEdit', 'DeckCreate', 'GameCreate', 'Board', 'Leaderboard'
 ]
 
 // Helper function to check if a route is a title route
