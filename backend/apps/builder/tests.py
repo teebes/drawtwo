@@ -5,7 +5,7 @@ from django.urls import reverse
 from rest_framework.test import APITestCase
 from rest_framework import status
 
-from .models import Title, CardTemplate, CardTrait
+from .models import Title, CardTemplate, CardTrait, Builder
 from .services import IngestionService
 
 
@@ -26,6 +26,149 @@ class BuilderTestCase(TestCase):
         """Test that the builder app is properly configured."""
         # This test will pass if the app is properly installed
         self.assertTrue(True)
+
+
+class TestTitlePermissions(TestCase):
+    """Test cases for Title permission methods."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.author = User.objects.create_user(
+            email="author@example.com",
+            username="author"
+        )
+        self.builder = User.objects.create_user(
+            email="builder@example.com",
+            username="builder"
+        )
+        self.other_user = User.objects.create_user(
+            email="other@example.com",
+            username="other"
+        )
+
+        # Create a draft title
+        self.draft_title = Title.objects.create(
+            slug="draft-title",
+            name="Draft Title",
+            author=self.author,
+            status=Title.STATUS_DRAFT
+        )
+
+        # Create a published title
+        self.published_title = Title.objects.create(
+            slug="published-title",
+            name="Published Title",
+            author=self.author,
+            status=Title.STATUS_PUBLISHED
+        )
+
+        # Add builder to draft title
+        Builder.objects.create(
+            title=self.draft_title,
+            user=self.builder,
+            added_by=self.author
+        )
+
+    def test_published_title_viewable_by_anyone(self):
+        """Published titles should be viewable by anyone, including anonymous users."""
+        self.assertTrue(self.published_title.can_be_viewed_by(self.author))
+        self.assertTrue(self.published_title.can_be_viewed_by(self.builder))
+        self.assertTrue(self.published_title.can_be_viewed_by(self.other_user))
+        self.assertTrue(self.published_title.can_be_viewed_by(None))  # Anonymous
+
+    def test_draft_title_viewable_by_author(self):
+        """Draft titles should be viewable by the author."""
+        self.assertTrue(self.draft_title.can_be_viewed_by(self.author))
+
+    def test_draft_title_viewable_by_builder(self):
+        """Draft titles should be viewable by builders."""
+        self.assertTrue(self.draft_title.can_be_viewed_by(self.builder))
+
+    def test_draft_title_not_viewable_by_others(self):
+        """Draft titles should not be viewable by other users."""
+        self.assertFalse(self.draft_title.can_be_viewed_by(self.other_user))
+
+    def test_draft_title_not_viewable_by_anonymous(self):
+        """Draft titles should not be viewable by anonymous users."""
+        self.assertFalse(self.draft_title.can_be_viewed_by(None))
+
+
+class TestTitleAPIPermissions(APITestCase):
+    """Test cases for Title API endpoint permissions."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.author = User.objects.create_user(
+            email="author@example.com",
+            username="author"
+        )
+        self.builder = User.objects.create_user(
+            email="builder@example.com",
+            username="builder"
+        )
+        self.other_user = User.objects.create_user(
+            email="other@example.com",
+            username="other"
+        )
+
+        # Create a draft title
+        self.draft_title = Title.objects.create(
+            slug="draft-title",
+            name="Draft Title",
+            author=self.author,
+            status=Title.STATUS_DRAFT
+        )
+
+        # Create a published title
+        self.published_title = Title.objects.create(
+            slug="published-title",
+            name="Published Title",
+            author=self.author,
+            status=Title.STATUS_PUBLISHED
+        )
+
+        # Add builder to draft title
+        Builder.objects.create(
+            title=self.draft_title,
+            user=self.builder,
+            added_by=self.author
+        )
+
+    def test_published_title_accessible_by_anonymous(self):
+        """Published titles should be accessible by anonymous users."""
+        url = reverse('core:title-by-slug', kwargs={'slug': self.published_title.slug})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['name'], 'Published Title')
+
+    def test_draft_title_forbidden_for_anonymous(self):
+        """Draft titles should return 403 for anonymous users."""
+        url = reverse('core:title-by-slug', kwargs={'slug': self.draft_title.slug})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_draft_title_accessible_by_author(self):
+        """Draft titles should be accessible by the author."""
+        self.client.force_authenticate(user=self.author)
+        url = reverse('core:title-by-slug', kwargs={'slug': self.draft_title.slug})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['name'], 'Draft Title')
+
+    def test_draft_title_accessible_by_builder(self):
+        """Draft titles should be accessible by builders."""
+        self.client.force_authenticate(user=self.builder)
+        url = reverse('core:title-by-slug', kwargs={'slug': self.draft_title.slug})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['name'], 'Draft Title')
+
+    def test_draft_title_forbidden_for_other_users(self):
+        """Draft titles should return 403 for other authenticated users."""
+        self.client.force_authenticate(user=self.other_user)
+        url = reverse('core:title-by-slug', kwargs={'slug': self.draft_title.slug})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class TestIngestion(TestCase):

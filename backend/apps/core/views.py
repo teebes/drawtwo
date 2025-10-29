@@ -4,6 +4,8 @@ from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.exceptions import PermissionDenied
 
 from apps.collection.models import Deck
 from apps.builder.models import Title, CardTemplate, HeroTemplate
@@ -13,13 +15,32 @@ from apps.gameplay.schemas import GameSummary, GameList
 from .schemas import Hero, Deck as DeckSchema
 from .serializers import serialize_cards_with_traits, serialize_decks
 
+
+def get_title_or_403(slug, user):
+    """
+    Get a title by slug and check if the user has permission to view it.
+
+    Raises:
+        Http404: If the title doesn't exist
+        PermissionDenied: If the user doesn't have permission to view the title
+
+    Returns:
+        Title: The title object if user has permission
+    """
+    title = get_object_or_404(Title, slug=slug, is_latest=True)
+    if not title.can_be_viewed_by(user):
+        raise PermissionDenied("You do not have permission to view this title.")
+    return title
+
 def health_check(request):
     """Simple health check endpoint"""
     return JsonResponse({"status": "healthy"})
 
 @api_view(['GET'])
 def titles(request):
-    titles = Title.objects.order_by('-published_at')
+    titles = Title.objects.filter(
+        status=Title.STATUS_PUBLISHED
+    ).order_by('-published_at')
     serializer = TitleSerializer(titles, many=True)
     return Response(serializer.data)
 
@@ -28,7 +49,8 @@ def titles(request):
 @permission_classes([AllowAny])
 def title_by_slug(request, slug):
     """Get the latest version of a title by its slug."""
-    title = get_object_or_404(Title, slug=slug, is_latest=True)
+    title = get_title_or_403(slug, request.user)
+
     serializer = TitleSerializer(title)
     data = serializer.data
 
@@ -47,8 +69,7 @@ def title_cards(request, slug):
     Get all cards for a title, ordered by cost then name.
     Returns data in the Card schema format with efficient trait fetching.
     """
-    # Get the title (latest version) or return 404
-    title = get_object_or_404(Title, slug=slug, is_latest=True)
+    title = get_title_or_403(slug, request.user)
 
     # Build the queryset with filtering and ordering
     cards_queryset = (CardTemplate.objects
@@ -65,7 +86,8 @@ def title_cards(request, slug):
 @permission_classes([AllowAny])
 def title_heroes(request, slug):
     """Get all heroes for a title."""
-    title = get_object_or_404(Title, slug=slug, is_latest=True)
+    title = get_title_or_403(slug, request.user)
+
     heroes = HeroTemplate.objects.filter(
         title=title, is_latest=True
     ).order_by('name')
@@ -85,9 +107,7 @@ def title_heroes(request, slug):
 @permission_classes([AllowAny])
 def title_games(request, slug):
     """Get all games for a title."""
-
-    # Get the title (latest version) or return 404
-    title = get_object_or_404(Title, slug=slug, is_latest=True)
+    title = get_title_or_403(slug, request.user)
 
     games = Game.objects.filter(
         side_a__title=title,
@@ -117,7 +137,8 @@ def title_games(request, slug):
 @permission_classes([AllowAny])
 def title_decks(request, slug):
     """Get all decks for a title."""
-    title = get_object_or_404(Title, slug=slug, is_latest=True)
+    title = get_title_or_403(slug, request.user)
+
     decks = Deck.objects.filter(
         user=request.user,
         title=title
@@ -129,7 +150,8 @@ def title_decks(request, slug):
 @permission_classes([AllowAny])
 def title_pve(request, slug):
     """Get all PvE / Scenario decks for a title."""
-    title = get_object_or_404(Title, slug=slug, is_latest=True)
+    title = get_title_or_403(slug, request.user)
+
     decks = Deck.objects.filter(
         ai_player__isnull=False,
         title=title,

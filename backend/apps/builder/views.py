@@ -3,6 +3,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.exceptions import PermissionDenied
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
@@ -16,11 +17,29 @@ from .serializers import TitleSerializer, CardTemplateSerializer
 User = get_user_model()
 
 
+def get_title_or_403(slug, user):
+    """
+    Get a title by slug and check if the user has permission to view it.
+
+    Raises:
+        Http404: If the title doesn't exist
+        PermissionDenied: If the user doesn't have permission to view the title
+
+    Returns:
+        Title: The title object if user has permission
+    """
+    title = get_object_or_404(Title, slug=slug, is_latest=True)
+    if not title.can_be_viewed_by(user):
+        raise PermissionDenied("You do not have permission to view this title.")
+    return title
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def title_by_slug(request, slug):
     """Get the latest version of a title by its slug."""
-    title = get_object_or_404(Title, slug=slug, is_latest=True)
+    title = get_title_or_403(slug, request.user)
+
     serializer = TitleSerializer(title)
     data = serializer.data
 

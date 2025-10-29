@@ -1,7 +1,28 @@
 <template>
   <div class="title-page">
+    <!-- Access Denied Message -->
+    <div v-if="accessDenied" class="max-w-2xl mx-auto px-4 py-16 text-center">
+      <div class="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-8">
+        <svg class="w-16 h-16 mx-auto text-red-600 dark:text-red-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+        </svg>
+        <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Access Denied</h2>
+        <p class="text-gray-700 dark:text-gray-300 mb-6">
+          You do not have permission to view this title. This title may be unpublished or in draft status.
+        </p>
+        <router-link
+          to="/"
+          class="inline-flex items-center rounded-lg bg-primary-600 px-6 py-3 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
+        >
+          <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+          </svg>
+          Back to Home
+        </router-link>
+      </div>
+    </div>
 
-    <div v-if="!loading && !error && title">
+    <div v-else-if="!loading && !error && title">
       <section class="bg-gradient-to-br from-primary-600 via-primary-700 to-secondary-700 py-16 text-center">
         <h1 class="font-display text-4xl font-bold">{{ title.name }}</h1>
       </section>
@@ -267,6 +288,9 @@ const title = computed(() => titleStore.currentTitle)
 const loading = computed(() => titleStore.loading)
 const error = computed(() => titleStore.error)
 const isAuthenticated = computed(() => authStore.isAuthenticated)
+
+// Check if access is denied (403 error)
+const accessDenied = computed(() => titleStore.errorStatus === 403)
 
 const decks = ref<DeckData[]>([])
 const games = ref<GameData[]>([])

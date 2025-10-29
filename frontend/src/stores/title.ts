@@ -16,13 +16,15 @@ interface TitleState {
   currentTitle: Title | null
   loading: boolean
   error: string | null
+  errorStatus: number | null
 }
 
 export const useTitleStore = defineStore('title', {
   state: (): TitleState => ({
     currentTitle: null,
     loading: false,
-    error: null
+    error: null,
+    errorStatus: null
   }),
 
   getters: {
@@ -40,6 +42,7 @@ export const useTitleStore = defineStore('title', {
 
       this.loading = true
       this.error = null
+      this.errorStatus = null
 
       try {
         // const response = await axios.get(`/builder/titles/${slug}/`)
@@ -47,7 +50,8 @@ export const useTitleStore = defineStore('title', {
         this.currentTitle = response.data as Title
         return this.currentTitle
       } catch (error: any) {
-        this.error = error.response?.data?.message || error.message || 'Failed to load title'
+        this.error = error.response?.data?.detail || error.response?.data?.message || error.message || 'Failed to load title'
+        this.errorStatus = error.response?.status || null
         this.currentTitle = null
         throw error
       } finally {
@@ -63,6 +67,7 @@ export const useTitleStore = defineStore('title', {
     clearCurrentTitle(): void {
       this.currentTitle = null
       this.error = null
+      this.errorStatus = null
       this.loading = false
     }
   }

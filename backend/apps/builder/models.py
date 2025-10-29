@@ -59,6 +59,19 @@ class Title(TimestampedModel):
         # Check if user is a builder for this title
         return self.builders.filter(user=user).exists()
 
+    def can_be_viewed_by(self, user):
+        """Check if a user can view this title."""
+        # Published titles can be viewed by anyone
+        if self.status == self.STATUS_PUBLISHED:
+            return True
+
+        # Unpublished titles require authentication
+        if not user or not user.is_authenticated:
+            return False
+
+        # Author and builders can view unpublished titles
+        return self.can_be_edited_by(user)
+
 
 class Builder(TimestampedModel):
     """
