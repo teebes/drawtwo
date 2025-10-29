@@ -209,7 +209,7 @@ const fetchLeaderboard = async () => {
   error.value = null
 
   try {
-    const response = await axios.get(`/api/gameplay/${titleSlug.value}/leaderboard/`)
+    const response = await axios.get(`/gameplay/${titleSlug.value}/leaderboard/`)
     players.value = response.data
   } catch (err: any) {
     console.error('Error fetching leaderboard:', err)

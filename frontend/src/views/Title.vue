@@ -319,10 +319,10 @@ const fetchLeaderboard = async (): Promise<void> => {
 
     // Fetch top players and user's rating in parallel
     const [leaderboardResponse, userRatingResponse] = await Promise.all([
-      axios.get(`/api/gameplay/${slug}/leaderboard/`, {
+      axios.get(`/gameplay/${slug}/leaderboard/`, {
         params: { limit: 3 } // Only need top 3 for display
       }),
-      axios.get(`/api/gameplay/${slug}/my-rating/`)
+      axios.get(`/gameplay/${slug}/my-rating/`)
     ])
 
     topPlayers.value = leaderboardResponse.data as LeaderboardPlayer[]
