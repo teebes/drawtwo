@@ -20,6 +20,7 @@ export interface Card {
   health: number
   traits: Trait[]
   faction?: string | null
+  art_url?: string | null  // For future user-uploaded art
 }
 
 export interface DeckCard extends Card {

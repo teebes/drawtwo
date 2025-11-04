@@ -57,10 +57,9 @@
       <div v-else :class="isCreating ? 'max-w-6xl mx-auto': 'w-full flex-1 flex flex-col-reverse md:flex-row md:space-x-8'">
 
         <!-- Card Preview-->
-        <div class="w-full flex justify-start sm:justify-center items-start" v-if="!isCreating">
-          <Section title="Card Preview">
+        <div class="w-full flex-grow flex justify-start sm:justify-center items-start" v-if="!isCreating">
+          <Section title="Card Preview" class="w-full max-w-xs">
             <CollectionCard
-              class="sm:max-w-sm"
               v-if="card && cardForDisplay"
               :card="cardForDisplay"
             />
@@ -211,6 +210,7 @@ interface CardTemplate {
   yaml_definition: string
   created_at: string
   updated_at: string
+  art_url: string | null
 }
 
 const route = useRoute()
@@ -258,7 +258,8 @@ const cardForDisplay = computed((): Card | null => {
       name: t.name,
       data: t.data
     })),
-    faction: card.value.faction_slug
+    faction: card.value.faction_slug,
+    art_url: card.value.art_url
   }
 })
 

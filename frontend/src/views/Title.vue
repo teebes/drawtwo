@@ -23,8 +23,9 @@
     </div>
 
     <div v-else-if="!loading && !error && title">
-      <section class="bg-gradient-to-br from-primary-600 via-primary-700 to-secondary-700 py-16 text-center">
-        <h1 class="font-display text-4xl font-bold">{{ title.name }}</h1>
+      <section class="py-16 text-center bg-gray-300" :style="{ backgroundImage: `url(${getBackgroundImage()})`, backgroundSize: 'auto 100%', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }">
+        <!-- <h1 class="font-display text-4xl font-bold">{{ title.name }}</h1> -->
+         <h1 class="font-display text-4xl font-bold"></h1>
       </section>
 
       <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8 mt-8">
@@ -145,9 +146,9 @@
                 :to="{ name: 'GameCreate', params: { slug: title.slug } }"
                 class="inline-flex items-center rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
               >
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <!-- <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M19 4v3a3 3 0 01-3 3h-1m-1 0h-1m1 0V6a1 1 0 00-1-1h-2a1 1 0 00-1 1v3"></path>
-                </svg>
+                </svg> -->
                 Create Game
               </router-link>
             </div>
@@ -365,6 +366,10 @@ const formatDate = (dateString: string): string => {
     month: 'long',
     day: 'numeric'
   })
+}
+
+const getBackgroundImage = (): string => {
+  return '/ArchetypeBanner2.png'
 }
 
 // Watch for title to be loaded and then fetch related data

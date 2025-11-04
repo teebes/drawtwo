@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 from .schemas import Deck, Hero
 from apps.builder.schemas import Card, Trait
 from pydantic import TypeAdapter
+from .card_assets import get_card_art_url
 
 
 def serialize_cards_with_traits(queryset) -> List[Dict[str, Any]]:
@@ -48,7 +49,8 @@ def serialize_cards_with_traits(queryset) -> List[Dict[str, Any]]:
             attack=card.attack or 0,  # Handle null values for spells
             health=card.health or 0,  # Handle null values for spells
             traits=traits_list,
-            faction=card.faction.slug if card.faction else None
+            faction=card.faction.slug if card.faction else None,
+            art_url=get_card_art_url(card.title.slug, card.slug)
         )
 
         card_data.append(card_obj.model_dump())

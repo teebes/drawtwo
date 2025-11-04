@@ -46,6 +46,7 @@ export interface HeroInPlay {
   template_slug: string
   health: number
   name: string
+  description: string
   exhausted: boolean
 }
 

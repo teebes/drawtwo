@@ -18,12 +18,14 @@
                 <!-- Header -->
                  <div class="h-24 flex flex-row justify-between border-b border-gray-700">
                     <!-- Enemy Hero-->
-                    <div class="w-24 flex flex-col items-center justify-center border-r border-gray-700 cursor-pointer hover:bg-gray-700/50"
-                         :class="{ 'bg-yellow-500/20': gameState.active === topSide }"
-                         @click="handleClickOpposingHero">
-                        <div class="text-xs text-center break-words leading-tight px-1">{{ opposingHeroName }}</div>
-                        <div class="">{{ opposingHero?.health }}</div>
-                    </div>
+                    <Hero
+                        :hero="opposingHero"
+                        :hero-art-url="opposingHeroArtUrl"
+                        :hero-name="opposingHeroName"
+                        :health="opposingHero?.health"
+                        :active="gameState.active === topSide"
+                        @click="handleClickOpposingHero"
+                    />
 
                     <!-- Recent Updates -->
                     <div class="flex flex-1 flex-col p-2 justify-center items-center cursor-pointer" @click="handleClickUpdates">
@@ -65,6 +67,7 @@
                             <GameCard v-if="creature"
                                       class="flex-grow-0 cursor-pointer hover:scale-105 transition-transform"
                                       :card="creature"
+                                      :title-slug="titleStore.titleSlug ?? undefined"
                                       @click="handleClickOpposingCreature(creature.creature_id)"
                                       compact in_lane/>
                         </div>
@@ -119,15 +122,15 @@
                 <!-- Footer -->
                 <div class="h-24 flex flex-row border-t border-gray-700">
                     <!-- Viewer Hero -->
-                    <div class="hero w-24 h-full border-r border-gray-700 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-700/50"
-                         :class="{
-                           'bg-yellow-500/20': gameState.active === bottomSide,
-                           'opacity-50': !canUseHero
-                         }"
-                         @click="handleClickOwnHero">
-                        <div class="hero-name text-xs text-center break-words leading-tight px-1">{{ ownHeroName }}</div>
-                        <div class="hero-health">{{ ownHero?.health }}</div>
-                    </div>
+                    <Hero
+                        :hero="ownHero"
+                        :hero-art-url="ownHeroArtUrl"
+                        :hero-name="ownHeroName"
+                        :health="ownHero?.health"
+                        :active="gameState.active === bottomSide"
+                        :opacity="!canUseHero"
+                        @click="handleClickOwnHero"
+                    />
 
                     <!-- Hand -->
                     <div class="hand overflow-x-auto flex flex-row">
@@ -135,6 +138,7 @@
                             <GameCard v-if="get_card(card_id)"
                                       class="flex-grow-0 cursor-pointer hover:scale-105 transition-transform"
                                       :card="get_card(card_id)!"
+                                      :title-slug="titleStore.titleSlug ?? undefined"
                                       :active="isHandCardActive(card_id)"
                                       @click="handleClickHandCard(card_id)"
                                       compact />
@@ -159,6 +163,7 @@
                 :card="selectedEntity.type === 'card' ? get_card(selectedEntity.id) : null"
                 :creature="selectedEntity.type === 'creature' ? get_creature(selectedEntity.id) : null"
                 :hero="selectedEntity.type === 'hero' ? getHero(selectedEntity.id) : null"
+                :title-slug="titleStore.titleSlug ?? undefined"
                 @close="closeOverlay"
                 @place-creature="handlePlaceCreature"
                 @cast-spell="handleCastSpell"
@@ -173,6 +178,7 @@
                 :card-id="selectedCardId"
                 :own-board="ownBoard"
                 :own-energy="ownEnergy"
+                :title-slug="titleStore.titleSlug ?? undefined"
                 @placement-selected="onPlacementSelected"
                 @close="closeOverlay"
             />
@@ -189,6 +195,7 @@
                 :source-card="targetingState.sourceCard"
                 :error-message="targetingState.errorMessage"
                 :title="targetingState.title"
+                :title-slug="titleStore.titleSlug ?? undefined"
                 @target-selected="onTargetSelected"
                 @cancelled="closeOverlay"
             />
@@ -258,6 +265,7 @@ import GameOverOverlay from '../components/game/board/GameOverOverlay.vue'
 import Update from '../components/game/board/Update.vue'
 import OverlayHeader from '../components/game/board/OverlayHeader.vue'
 import DebugOverlay from '../components/game/board/DebugOverlay.vue'
+import Hero from '../components/game/board/Hero.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -290,6 +298,30 @@ const {
   displayUpdates,
   canUseHero
 } = storeToRefs(gameStore)
+
+// Get hero art URLs
+const ownHeroArtUrl = computed(() => {
+    if (!ownHero.value) {
+        return null
+    }
+    const hero = ownHero.value as any
+    if (hero.art_url) {
+        return hero.art_url as string
+    }
+    return null
+})
+
+const opposingHeroArtUrl = computed(() => {
+    if (!opposingHero.value) {
+        return null
+    }
+    const hero = opposingHero.value as any
+    if (hero.art_url) {
+        return hero.art_url as string
+    }
+    return null
+})
+
 
 // Overlay Types
 type OverlayType = 'entity_detail' | 'place_creature' | 'select_target' | 'menu' | 'updates' | 'debug' | null

@@ -50,6 +50,7 @@ def spawn_creature(card: CardInPlay, state: GameState, side, position: int=0) ->
         health=card.health,
         traits=card.traits,
         exhausted=True,
+        art_url=card.art_url,
     )
     state.creatures[creature_id] = creature
     state.board[side].insert(position, creature_id)

@@ -19,6 +19,7 @@
                                 <GameCard v-if="creature"
                                         class="flex-grow-0"
                                         :card="creature"
+                                        :title-slug="props.titleSlug"
                                         compact in_lane />
                             </div>
                             <PlacementZone

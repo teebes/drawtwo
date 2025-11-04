@@ -58,6 +58,7 @@ from apps.gameplay.schemas.events import (
 
 from apps.gameplay.schemas.game import GameState
 from apps.gameplay.notifications import send_game_updates_to_clients
+from apps.core.card_assets import get_hero_art_url
 
 
 class GameService:
@@ -113,6 +114,7 @@ class GameService:
                     health=card["health"],
                     cost=card["cost"],
                     traits=card["traits"],
+                    art_url=card["art_url"],
                 )
                 decks['side_a'].append(str(card_id))
 
@@ -131,6 +133,7 @@ class GameService:
                     health=card["health"],
                     cost=card["cost"],
                     traits=card["traits"],
+                    art_url=card["art_url"],
                 )
                 decks['side_b'].append(str(card_id))
 
@@ -144,16 +147,20 @@ class GameService:
                 template_slug=deck_a.hero.slug,
                 health=deck_a.hero.health,
                 name=deck_a.hero.name,
+                description=deck_a.hero.description,
                 hero_power=deck_a.hero.hero_power,
                 exhausted=False,
+                art_url=get_hero_art_url(deck_a.title.slug, deck_a.hero.slug),
             ),
             'side_b': HeroInPlay(
                 hero_id=str(deck_b.hero.id),
                 template_slug=deck_b.hero.slug,
                 health=deck_b.hero.health,
                 name=deck_b.hero.name,
+                description=deck_a.hero.description,
                 hero_power=deck_b.hero.hero_power,
                 exhausted=False,
+                art_url=get_hero_art_url(deck_b.title.slug, deck_b.hero.slug),
             ),
         }
 

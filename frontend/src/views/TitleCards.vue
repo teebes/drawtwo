@@ -9,7 +9,7 @@
 
 
       <!-- Cards Sections -->
-      <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-16 space-y-12">
+      <main class="mx-auto w-full px-4 sm:px-6 lg:px-8 pb-16 space-y-12">
         <!-- Filters -->
         <section v-if="!cardsLoading && cards.length > 0" class="sticky top-0 z-10 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-4 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-gray-900/60">
           <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
@@ -94,7 +94,7 @@
             <h2 class="font-display text-2xl font-bold text-gray-900 dark:text-white mb-6">
               Common Cards
             </h2>
-            <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div class="grid gap-6 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               <div
                 v-for="card in commonCards"
                 :key="card.slug"
@@ -102,9 +102,8 @@
               >
                 <CollectionCard
                   :card="card"
-                  heightMode="fixed"
-                  height="md"
-                  :class="canEditTitle ? 'cursor-pointer transition-transform group-hover:scale-105' : ''"
+                  :title-slug="title?.slug"
+                  :class="canEditTitle ? 'cursor-pointer' : ''"
                   @click="canEditTitle ? navigateToEdit(card.slug) : null"
                 />
                 <div
@@ -134,7 +133,7 @@
             <h2 class="font-display text-2xl font-bold text-gray-900 dark:text-white capitalize">
               {{ factionName }} Cards
             </h2>
-            <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div class="grid gap-6 grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               <div
                 v-for="card in factionCards"
                 :key="card.slug"
@@ -142,7 +141,7 @@
               >
                 <CollectionCard
                   :card="card"
-                  heightMode="auto"
+                  :title-slug="title?.slug"
                   :class="canEditTitle ? 'cursor-pointer transition-transform group-hover:scale-105' : ''"
                   @click="canEditTitle ? navigateToEdit(card.slug) : null"
                 />
@@ -167,7 +166,7 @@
       </main>
 
       <!-- Bottom Bar -->
-      <section v-if="canEditTitle"class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+      <section v-if="canEditTitle"class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-1 fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
         <div class="flex items-center justify-between">
           <div class="text-sm text-gray-600 dark:text-gray-400">
             {{ filteredCards.length }} / {{ cards.length }} Cards

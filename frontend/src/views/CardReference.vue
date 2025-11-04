@@ -2,7 +2,7 @@
   <div class="template-page flex flex-col">
     <main class="flex-1 flex items-center justify-center">
         <div style="width: 200px">
-          <GameCard :card="card"/>
+          <GameCard :card="card" title-slug="archetype"/>
         </div>
     </main>
   </div>

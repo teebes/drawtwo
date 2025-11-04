@@ -26,6 +26,7 @@ class CardInPlay(BaseModel):
     cost: int = 0
     traits: List[Trait] = Field(default_factory=list)
     exhausted: bool = True
+    art_url: Optional[str] = None
 
     def has_trait(self, trait_code: str) -> bool:
         return any(trait.type == trait_code for trait in self.traits)
@@ -40,6 +41,7 @@ class Creature(BaseModel):
     health: int = 0
     traits: List[Trait] = Field(default_factory=list)
     exhausted: bool = True
+    art_url: Optional[str] = None
 
 
 class HeroInPlay(BaseModel):
@@ -47,9 +49,11 @@ class HeroInPlay(BaseModel):
     template_slug: str # ID of the hero template
     health: int
     name: str
+    description: str = ''
     exhausted: bool = True
     actions: List[Action] = Field(default_factory=list)
     hero_power: HeroPower
+    art_url: Optional[str] = None
 
 
 class GameState(BaseModel):
