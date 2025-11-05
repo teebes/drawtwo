@@ -2,13 +2,20 @@
   <div class="deck-detail-page">
 
     <div v-if="!loading && !error && deck">
-      <section class="page-banner">
-        <h1 class="font-display text-4xl font-bold">{{ deck.name }}</h1>
-        <p class="mt-4 text-lg text-gray-200" v-if="deck.description">{{ deck.description }}</p>
-        <div class="mt-4 flex items-center justify-center space-x-6 text-sm text-gray-200">
-          <span>{{ deck.hero.name }}</span>
-          <span>•</span>
-          <span>{{ deck.total_cards }} cards</span>
+      <section class="relative bg-white overflow-hidden h-24">
+        <!-- Hero Art (centered and fitted vertically) -->
+        <img
+          v-if="deck.hero.art_url && !heroImageError"
+          :src="deck.hero.art_url"
+          :alt="`${deck.hero.name} artwork`"
+          class="absolute inset-0 w-full h-full object-contain object-center"
+          @error="onHeroImageError"
+        />
+        <!-- 70% opacity overlay -->
+        <div class="absolute flex items-center justify-center inset-0 bg-black/70 z-10"></div>
+        <!-- Deck name in white -->
+        <div class="relative z-20 flex items-center justify-center h-full">
+          <h1 class="font-display text-4xl font-bold text-white">{{ deck.name }}</h1>
         </div>
       </section>
 
@@ -169,6 +176,7 @@ interface DeckData {
     name: string
     slug: string
     health: number
+    art_url?: string | null
   }
   cards: DeckCard[]
   total_cards: number
@@ -187,6 +195,9 @@ const error = ref<string | null>(null)
 const editingCardId = ref<number | null>(null)
 const editingCount = ref<string>('1')
 const countInput = ref<HTMLInputElement | null>(null)
+
+// Hero image error handling
+const heroImageError = ref(false)
 
 // Modal state
 const showCardModal = ref<boolean>(false)
@@ -215,6 +226,10 @@ const sortedCards = computed(() => {
     return a.name.localeCompare(b.name)
   })
 })
+
+const onHeroImageError = (): void => {
+  heroImageError.value = true
+}
 
 const openCardModal = (): void => {
   showCardModal.value = true
