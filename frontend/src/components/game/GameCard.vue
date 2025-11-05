@@ -2,51 +2,63 @@
     <div class="game-card border-2 border-gray-900 bg-gray-300 text-gray-900 rounded-xl flex-1 relative overflow-visible" :class="active_classes">
         <!-- Trait indicator (only one shown, priority order) -->
         <!-- Stealth indicator -->
-        <div v-if="hasStealth" :class="['absolute bg-white text-white rounded-full flex items-center justify-center font-bold z-20 border border-gray-900 shadow-lg', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeTextSizeClasses]" title="Stealth">
+        <div v-if="hasStealth" :class="['card-badge bg-white text-white', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Stealth">
             👁️
         </div>
         <!-- Unique indicator -->
-        <div v-else-if="hasUnique" :class="['absolute bg-white text-white rounded-full flex items-center justify-center font-bold z-20 border border-gray-900 shadow-lg', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeTextSizeClasses]" title="Unique">
+        <div v-else-if="hasUnique" :class="['card-badge bg-white text-white', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Unique">
             ⭐
         </div>
         <!-- Taunt indicator -->
-        <div v-else-if="hasTaunt" :class="['absolute bg-white text-gray-900 rounded-full flex items-center justify-center font-bold z-20 border border-gray-900 shadow-lg', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeTextSizeClasses]" title="Taunt">
+        <div v-else-if="hasTaunt" :class="['card-badge bg-white text-gray-900', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Taunt">
             🛡️
         </div>
         <!-- Charge indicator -->
-        <div v-else-if="hasCharge" :class="['absolute bg-white text-white rounded-full flex items-center justify-center font-bold z-10 border border-gray-900 shadow-lg', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeTextSizeClasses]" title="Charge">
+        <div v-else-if="hasCharge" :class="['card-badge bg-white text-white', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Charge">
             ⚔️
         </div>
         <!-- Deathrattle indicator -->
-        <div v-else-if="hasDeathrattle" :class="['absolute bg-white text-white rounded-full flex items-center justify-center font-bold z-20 border border-gray-900 shadow-lg', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeTextSizeClasses]" title="Deathrattle">
+        <div v-else-if="hasDeathrattle" :class="['card-badge bg-white text-white', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Deathrattle">
             💀
         </div>
         <!-- Battlecry indicator -->
-        <div v-else-if="hasBattlecry" :class="['absolute bg-white text-white rounded-full flex items-center justify-center font-bold z-20 border border-gray-900 shadow-lg', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeTextSizeClasses]" title="Battlecry">
+        <div v-else-if="hasBattlecry" :class="['card-badge bg-white text-white', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Battlecry">
             📣
+        </div>
+        <!-- Ranged indicator -->
+        <div v-else-if="hasRanged" :class="['card-badge bg-white text-white', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Ranged">
+            🏹
+        </div>
+
+
+        <div v-if="details" class="card-name absolute bg-black/80 text-white px-8 py-2 flex items-center justify-center gap-2 z-[15] text-lg font-bold">
+            {{ card.name }}
+        </div>
+
+        <div v-if="details" class="absolute bottom-3 left-3 right-3 p-3 bg-black/80 rounded-xl text-xs text-white z-[15]">
+            {{ card.description}}
         </div>
 
         <!-- Card Art (now fills whole card) -->
         <img
             :src="cardArtUrl"
-            :alt="`${displayName} artwork`"
-            class="absolute inset-0 w-full h-full object-cover rounded-[0.625rem]"
+            :alt="`${displayName}`"
+            class="card-art"
             @error="onImageError"
         />
 
         <!-- Attack Badge (lower left corner, extends beyond) -->
-        <div v-if="!isSpell" :class="['card-badge bg-red-600', badgeSizeClasses, badgePositionClasses.bottom, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]">
+        <div v-if="!isSpell" :class="['card-badge bg-red-500', badgeSizeClasses, badgePositionClasses.bottom, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]">
             {{ card.attack }}
         </div>
 
         <!-- Health Badge (lower right corner, extends beyond) -->
-        <div v-if="!isSpell" :class="['card-badge bg-green-600', badgeSizeClasses, badgePositionClasses.bottom, badgePositionClasses.right, badgeFontClasses, badgeTextSizeClasses]">
+        <div v-if="!isSpell" :class="['card-badge bg-green-500', badgeSizeClasses, badgePositionClasses.bottom, badgePositionClasses.right, badgeFontClasses, badgeTextSizeClasses]">
             {{ card.health }}
         </div>
 
         <!-- Cost Badge (upper right corner, only when in hand, extends beyond) -->
-        <!-- absolute -top-3 -right-3 bg-blue-600 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg border-2 border-gray-900 z-20 shadow-lg -->
-        <div v-if="!in_lane && displayCost !== null" :class="['card-badge bg-blue-600', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.right, badgeFontClasses, badgeTextSizeClasses]">
+        <div v-if="!in_lane && displayCost !== null" :class="['card-badge bg-blue-500', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.right, badgeFontClasses, badgeTextSizeClasses]">
             {{ displayCost }}
         </div>
 
@@ -68,12 +80,14 @@ interface Props {
     compact?: boolean
     in_lane?: boolean
     active?: boolean
+    details?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
     compact: false,
     in_lane: false,
-    active: false
+    active: false,
+    details: false
 })
 
 const imageError = ref(false)
@@ -182,6 +196,14 @@ const hasBattlecry = computed(() => {
     return false
 })
 
+const hasRanged = computed(() => {
+    // Check if card has ranged trait
+    if ('traits' in props.card && Array.isArray(props.card.traits)) {
+        return props.card.traits.some((trait: any) => trait.type === 'ranged')
+    }
+    return false
+})
+
 const active_classes = computed(() => {
 
     const classes: string[] = []
@@ -200,7 +222,7 @@ const active_classes = computed(() => {
 })
 
 const badgeSizeClasses = computed(() => {
-    return props.compact ? 'w-5 h-5' : 'w-10 h-10'
+    return props.compact ? 'w-5 h-5' : 'w-8 h-8'
 })
 
 const badgePositionClasses = computed(() => {
@@ -226,7 +248,7 @@ const badgeFontClasses = computed(() => {
 })
 
 const badgeTextSizeClasses = computed(() => {
-    return props.compact ? 'text-xs' : 'text-base'
+    return props.compact ? 'text-xs' : 'text-sm'
 })
 </script>
 
@@ -239,6 +261,21 @@ const badgeTextSizeClasses = computed(() => {
 
 .card-badge {
     @apply absolute text-white rounded-full flex items-center justify-center border border-gray-900 z-20 shadow-lg;
+}
 
+.card-name {
+    /* Extend slightly to cover parent's border gap */
+    left: -2px;
+    right: -2px;
+    border-radius: 0.75rem 0.75rem 0 0;
+    top: -2px;
+}
+
+.card-art {
+    @apply absolute w-full h-full object-cover;
+    /* Position inside the 2px border */
+    inset: 2px;
+    /* Match inner border radius (parent radius - border width) */
+    border-radius: calc(0.75rem - 2px);
 }
 </style>

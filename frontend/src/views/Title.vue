@@ -23,9 +23,8 @@
     </div>
 
     <div v-else-if="!loading && !error && title">
-      <section class="py-16 text-center bg-gray-300" :style="{ backgroundImage: `url(${getBackgroundImage()})`, backgroundSize: 'auto 100%', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }">
-        <!-- <h1 class="font-display text-4xl font-bold">{{ title.name }}</h1> -->
-         <h1 class="font-display text-4xl font-bold"></h1>
+      <section class="text-center bg-gray-300 h-24 flex items-center justify-center">
+        <h1 class="font-display text-4xl font-bold text-gray-900 dark:text-gray-900">{{ title.name }}</h1>
       </section>
 
       <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8 mt-8">
@@ -362,10 +361,6 @@ const formatDate = (dateString: string): string => {
     month: 'long',
     day: 'numeric'
   })
-}
-
-const getBackgroundImage = (): string => {
-  return '/ArchetypeBanner2.png'
 }
 
 // Watch for title to be loaded and then fetch related data

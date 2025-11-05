@@ -20,10 +20,10 @@
     </div>
 
     <div v-else>
-      <header class="bg-gradient-to-br from-primary-600 via-primary-700 to-secondary-700 py-16 text-center">
-        <h1 class="font-display text-4xl font-bold text-white">Create New Game</h1>
-        <p class="text-primary-100 mt-2">{{ title?.name }}</p>
-      </header>
+
+      <section class="text-center bg-gray-300 h-24 flex items-center justify-center">
+        <h1 class="font-display text-4xl font-bold text-gray-900 dark:text-gray-900">CREATE GAME</h1>
+      </section>
 
       <main class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 mt-8">
         <!-- Game Mode Toggle -->

@@ -2,20 +2,17 @@
   <div class="deck-detail-page">
 
     <div v-if="!loading && !error && deck">
-      <section class="relative bg-white overflow-hidden h-24">
-        <!-- Hero Art (centered and fitted vertically) -->
+      <section class="relative bg-gray-300 overflow-hidden h-24 flex items-center justify-center space-x-6">
         <img
           v-if="deck.hero.art_url && !heroImageError"
           :src="deck.hero.art_url"
           :alt="`${deck.hero.name} artwork`"
-          class="absolute inset-0 w-full h-full object-contain object-center"
+          class="inset-0 h-full object-contain object-center border-gray-600 border-2 rounded-lg"
           @error="onHeroImageError"
         />
-        <!-- 70% opacity overlay -->
-        <div class="absolute flex items-center justify-center inset-0 bg-black/70 z-10"></div>
-        <!-- Deck name in white -->
-        <div class="relative z-20 flex items-center justify-center h-full">
-          <h1 class="font-display text-4xl font-bold text-white">{{ deck.name }}</h1>
+
+        <div class="">
+          <h1 class="font-display text-4xl font-bold dark:text-gray-900">{{ deck.name }}</h1>
         </div>
       </section>
 
@@ -41,14 +38,12 @@
           </div>
         </Panel>
 
-
-
         <Panel v-if="deck.cards.length > 0">
           <div class="space-y-2">
             <div
               v-for="card in sortedCards"
               :key="card.id"
-              class="flex items-center rounded-lg bg-gray-50 p-3 dark:bg-gray-800 space-x-3"
+              class="flex items-center rounded-lg bg-gray-50 dark:bg-gray-800 space-x-2"
             >
               <!-- Card cost badge -->
               <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded bg-gray-200 text-sm font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-300">
@@ -64,13 +59,13 @@
                   @keyup.enter="saveCountEdit(card)"
                   @keyup.esc="cancelCountEdit"
                   type="text"
-                  class="w-12 rounded border border-primary-500 bg-white px-2 py-1 text-center text-sm font-bold dark:bg-gray-900 dark:text-gray-100"
+                  class="w-10 rounded border border-primary-500 bg-white px-2 py-1 text-center text-sm font-bold dark:bg-gray-900 dark:text-gray-100"
                   ref="countInput"
                 />
                 <button
                   v-else
                   @click="startCountEdit(card)"
-                  class="w-12 rounded px-2 py-1 text-center text-sm font-bold text-gray-700 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors"
+                  class="w-10 rounded px-2 py-1 text-center text-sm font-bold text-gray-700 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors"
                   title="Click to edit count"
                 >
                   {{ card.count }}x
