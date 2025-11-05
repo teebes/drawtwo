@@ -11,6 +11,7 @@ from apps.gameplay.engine.dispatcher import resolve
 from apps.gameplay.schemas.effects import AttackEffect, UseHeroEffect
 from apps.gameplay.schemas.game import GameState, Creature, HeroInPlay
 from apps.gameplay.services import GameService
+from apps.gameplay.ai import AIMoveChooser
 from apps.gameplay.tests import ServiceTestsBase
 
 User = get_user_model()
@@ -570,6 +571,86 @@ class HeroPowerEffectValidationTests(AttackValidationTestBase):
         self.assertGreater(len(result.child_effects), 0)
 
 
+class HealingHeroPowerTests(AttackValidationTestBase):
+    """Test healing hero powers that target friendly units."""
+
+    def setUp(self):
+        super().setUp()
+        # Override hero A with a healing hero power in the game state
+        from apps.builder.schemas import HeroPower, HealAction
+        self.game_state.heroes['side_a'].hero_power = HeroPower(
+            name='Heal',
+            actions=[
+                HealAction(
+                    amount=2,
+                    target='friendly',
+                    scope='single'
+                )
+            ]
+        )
+
+    def test_can_target_own_hero_with_healing_power(self):
+        """Test that you can target your own hero with a healing hero power."""
+        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        command = {
+            'type': 'cmd_use_hero',
+            'hero_id': hero_a_id,
+            'target_type': 'hero',
+            'target_id': hero_a_id,  # Own hero
+        }
+
+        # Should not raise an exception
+        effects = GameService.compile_cmd(self.game_state, command, 'side_a')
+        self.assertEqual(len(effects), 1)
+        self.assertIsInstance(effects[0], UseHeroEffect)
+
+    def test_can_target_own_creature_with_healing_power(self):
+        """Test that you can target your own creature with a healing hero power."""
+        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        command = {
+            'type': 'cmd_use_hero',
+            'hero_id': hero_a_id,
+            'target_type': 'creature',
+            'target_id': 'creature_a_1',  # Own creature
+        }
+
+        # Should not raise an exception
+        effects = GameService.compile_cmd(self.game_state, command, 'side_a')
+        self.assertEqual(len(effects), 1)
+        self.assertIsInstance(effects[0], UseHeroEffect)
+
+    def test_cannot_target_enemy_hero_with_healing_power(self):
+        """Test that you cannot target enemy hero with a healing hero power."""
+        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        hero_b_id = self.game_state.heroes['side_b'].hero_id
+        command = {
+            'type': 'cmd_use_hero',
+            'hero_id': hero_a_id,
+            'target_type': 'hero',
+            'target_id': hero_b_id,  # Enemy hero
+        }
+
+        with self.assertRaises(ValueError) as context:
+            GameService.compile_cmd(self.game_state, command, 'side_a')
+
+        self.assertIn("not your hero", str(context.exception).lower())
+
+    def test_cannot_target_enemy_creature_with_healing_power(self):
+        """Test that you cannot target enemy creature with a healing hero power."""
+        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        command = {
+            'type': 'cmd_use_hero',
+            'hero_id': hero_a_id,
+            'target_type': 'creature',
+            'target_id': 'creature_b_1',  # Enemy creature
+        }
+
+        with self.assertRaises(ValueError) as context:
+            GameService.compile_cmd(self.game_state, command, 'side_a')
+
+        self.assertIn("not on your board", str(context.exception).lower())
+
+
 class TauntMechanicTests(AttackValidationTestBase):
     """Test the Taunt trait mechanic."""
 
@@ -871,7 +952,7 @@ class AITauntTests(TestCase):
         self.game_state.board['side_b'].append('taunt_b_1')
 
         # Test with rush strategy (normally attacks hero)
-        effect = GameService.choose_ai_move(self.game_state, self.script_rush)
+        effect = AIMoveChooser.choose_move(self.game_state, self.script_rush)
 
         # Verify that the AI chose to attack
         self.assertIsNotNone(effect)
@@ -886,7 +967,7 @@ class AITauntTests(TestCase):
     def test_ai_attacks_hero_when_no_taunt(self):
         """Test that AI with rush strategy attacks hero when no taunt exists."""
         # No taunt creatures on board
-        effect = GameService.choose_ai_move(self.game_state, self.script_rush)
+        effect = AIMoveChooser.choose_move(self.game_state, self.script_rush)
 
         # Verify that the AI chose to attack
         self.assertIsNotNone(effect)
@@ -923,7 +1004,7 @@ class AITauntTests(TestCase):
         self.game_state.creatures['taunt_b_2'] = taunt_creature_2
         self.game_state.board['side_b'].extend(['taunt_b_1', 'taunt_b_2'])
 
-        effect = GameService.choose_ai_move(self.game_state, self.script_rush)
+        effect = AIMoveChooser.choose_move(self.game_state, self.script_rush)
 
         # Verify that the AI chose to attack
         self.assertIsNotNone(effect)

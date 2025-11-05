@@ -38,7 +38,9 @@ class Creature(BaseModel):
     name: str
     description: str = ''
     attack: int = 0
+    attack_max: int
     health: int = 0
+    health_max: int
     traits: List[Trait] = Field(default_factory=list)
     exhausted: bool = True
     art_url: Optional[str] = None
@@ -48,6 +50,7 @@ class HeroInPlay(BaseModel):
     hero_id: str # Internal hero ID for that game
     template_slug: str # ID of the hero template
     health: int
+    health_max: int
     name: str
     description: str = ''
     exhausted: bool = True

@@ -60,7 +60,7 @@
                     </div>
                  </div>
 
-                 <!-- Opponent Board -->
+                 <!-- OPPONENT BOARD -->
                  <div class="opponent-board flex-1 flex flex-row bg-gray-800 items-center overflow-x-auto">
                     <div class="lane flex flex-row h-24 mx-auto">
                         <div v-for="creature in opposingBoard" :key="creature.creature_id" class="p-1">
@@ -90,7 +90,7 @@
 
             <!-- Viewer Side-->
             <div class="side-a flex-1 flex flex-col">
-                <!-- Viewer Board-->
+                <!-- VIEWER BOARD -->
                 <div class="viewer-board flex-1 flex flex-row bg-gray-800 items-center overflow-x-auto">
                     <div class="lane flex flex-row h-24 mx-auto">
                         <div v-for="creature in ownBoard" :key="creature.creature_id" class="p-1">
@@ -542,7 +542,7 @@ const handleUseHero = (side_id: string) => {
         sourceType: 'hero',
         sourceId: hero.hero_id,  // Use the actual hero_id for the backend command
         allowedTypes: 'both',  // Hero powers can target various things
-        scope: 'enemy', // Most hero powers target enemies
+        scope: getHeroPowerTargetScope(hero), // Determine scope based on hero power actions
         sourceCard: null,
         errorMessage: !canUseHero.value ? 'Cannot use hero power' : null,
         title: 'Use Hero Power'
@@ -736,6 +736,26 @@ function getSpellTargetScope(card: CardInPlay): 'enemy' | 'friendly' {
             if (action.action === 'damage') {
                 return 'enemy'
             }
+        }
+    }
+
+    return 'enemy'
+}
+
+function getHeroPowerTargetScope(hero: any): 'enemy' | 'friendly' {
+    if (!hero.hero_power || !hero.hero_power.actions) {
+        return 'enemy'
+    }
+
+    const actions = hero.hero_power.actions || []
+    for (const action of actions) {
+        // Heal actions target friendly units
+        if (action.action === 'heal') {
+            return 'friendly'
+        }
+        // Damage actions target enemies
+        if (action.action === 'damage') {
+            return 'enemy'
         }
     }
 

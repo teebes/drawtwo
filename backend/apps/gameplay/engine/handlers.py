@@ -47,7 +47,9 @@ def spawn_creature(card: CardInPlay, state: GameState, side, position: int=0) ->
         name=card.name,
         description=card.description,
         attack=card.attack,
+        attack_max=card.attack,
         health=card.health,
+        health_max=card.health,
         traits=card.traits,
         exhausted=True,
         art_url=card.art_url,
@@ -263,6 +265,9 @@ def heal(effect: HealEffect, state: GameState) -> Result:
     # Apply healing
     target.health += effect.amount
 
+    if target.health > target.health_max:
+        target.health = target.health_max
+
     events = [HealEvent(
         side=effect.side,
         source_type=effect.source_type,
@@ -370,6 +375,7 @@ def attack(effect: AttackEffect, state: GameState) -> Result:
 def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
     # Lazy import to avoid circular dependency
     from apps.gameplay.services import GameService
+    from apps.builder.schemas import HealAction
 
     hero = state.heroes.get(effect.side)
     if not hero:
@@ -379,16 +385,33 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
     if hero.hero_id != effect.source_id:
         return Rejected(reason=f"You do not control hero {effect.source_id}")
 
-    # Validate that the target belongs to the opponent (if there is a target)
+    # Determine if this hero power targets friendlies or enemies
+    targets_friendly = any(
+        isinstance(action, HealAction) and action.target == 'friendly'
+        for action in hero.hero_power.actions
+    )
+
+    # Validate that the target belongs to the correct side (if there is a target)
     if effect.target_type:
-        opposing_side = state.opposite_side
-        if effect.target_type == "creature":
-            if effect.target_id not in state.board[opposing_side]:
-                return Rejected(reason=f"Target creature is not on opponent's board")
-        elif effect.target_type == "hero":
-            opposing_hero = state.heroes.get(opposing_side)
-            if not opposing_hero or opposing_hero.hero_id != effect.target_id:
-                return Rejected(reason=f"Target is not the opponent's hero")
+        if targets_friendly:
+            # For healing/friendly powers, target must be on own side
+            if effect.target_type == "creature":
+                if effect.target_id not in state.board[effect.side]:
+                    return Rejected(reason=f"Target creature is not on your board")
+            elif effect.target_type == "hero":
+                own_hero = state.heroes.get(effect.side)
+                if not own_hero or own_hero.hero_id != effect.target_id:
+                    return Rejected(reason=f"Target is not your hero")
+        else:
+            # For damage/enemy powers, target must be on opponent's side
+            opposing_side = state.opposite_side
+            if effect.target_type == "creature":
+                if effect.target_id not in state.board[opposing_side]:
+                    return Rejected(reason=f"Target creature is not on opponent's board")
+            elif effect.target_type == "hero":
+                opposing_hero = state.heroes.get(opposing_side)
+                if not opposing_hero or opposing_hero.hero_id != effect.target_id:
+                    return Rejected(reason=f"Target is not the opponent's hero")
 
     if hero.exhausted:
         return Rejected(reason="Hero is exhausted")

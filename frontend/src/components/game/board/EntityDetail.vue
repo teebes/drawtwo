@@ -160,7 +160,8 @@ const displayCard = computed(() => {
             cost: 0, // Creatures on board don't have cost
             traits: props.creature.traits,
             exhausted: props.creature.exhausted,
-            card_type: 'creature' as const
+            card_type: 'creature' as const,
+            art_url: props.creature.art_url
         }
     }
     return null

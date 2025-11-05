@@ -2,15 +2,15 @@
     <div class="game-card border-2 border-gray-900 bg-gray-300 text-gray-900 rounded-xl flex-1 relative overflow-visible" :class="active_classes">
         <!-- Trait indicator (only one shown, priority order) -->
         <!-- Stealth indicator -->
-        <div v-if="hasStealth" :class="['absolute bg-white text-white rounded-full flex items-center justify-center font-bold z-10 border border-gray-900 shadow-lg', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeTextSizeClasses]" title="Stealth">
+        <div v-if="hasStealth" :class="['absolute bg-white text-white rounded-full flex items-center justify-center font-bold z-20 border border-gray-900 shadow-lg', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeTextSizeClasses]" title="Stealth">
             👁️
         </div>
         <!-- Unique indicator -->
-        <div v-else-if="hasUnique" :class="['absolute bg-white text-white rounded-full flex items-center justify-center font-bold z-10 border border-gray-900 shadow-lg', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeTextSizeClasses]" title="Unique">
+        <div v-else-if="hasUnique" :class="['absolute bg-white text-white rounded-full flex items-center justify-center font-bold z-20 border border-gray-900 shadow-lg', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeTextSizeClasses]" title="Unique">
             ⭐
         </div>
         <!-- Taunt indicator -->
-        <div v-else-if="hasTaunt" :class="['absolute bg-white text-gray-900 rounded-full flex items-center justify-center font-bold z-10 border border-gray-900 shadow-lg', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeTextSizeClasses]" title="Taunt">
+        <div v-else-if="hasTaunt" :class="['absolute bg-white text-gray-900 rounded-full flex items-center justify-center font-bold z-20 border border-gray-900 shadow-lg', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeTextSizeClasses]" title="Taunt">
             🛡️
         </div>
         <!-- Charge indicator -->
@@ -18,11 +18,11 @@
             ⚔️
         </div>
         <!-- Deathrattle indicator -->
-        <div v-else-if="hasDeathrattle" :class="['absolute bg-white text-white rounded-full flex items-center justify-center font-bold z-10 border border-gray-900 shadow-lg', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeTextSizeClasses]" title="Deathrattle">
+        <div v-else-if="hasDeathrattle" :class="['absolute bg-white text-white rounded-full flex items-center justify-center font-bold z-20 border border-gray-900 shadow-lg', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeTextSizeClasses]" title="Deathrattle">
             💀
         </div>
         <!-- Battlecry indicator -->
-        <div v-else-if="hasBattlecry" :class="['absolute bg-white text-white rounded-full flex items-center justify-center font-bold z-10 border border-gray-900 shadow-lg', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeTextSizeClasses]" title="Battlecry">
+        <div v-else-if="hasBattlecry" :class="['absolute bg-white text-white rounded-full flex items-center justify-center font-bold z-20 border border-gray-900 shadow-lg', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeTextSizeClasses]" title="Battlecry">
             📣
         </div>
 
@@ -194,12 +194,6 @@ const active_classes = computed(() => {
     if (hasStealth.value && props.in_lane) {
         classes.push('!border-purple-500')
         classes.push('opacity-70')
-    }
-
-    // Add special border for taunt creatures
-    if (hasTaunt.value && props.in_lane) {
-        classes.push('!border-blue-500')
-        classes.push('!border-4')
     }
 
     return classes.join(' ')

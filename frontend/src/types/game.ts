@@ -39,6 +39,13 @@ export interface Creature {
   health: number
   traits: Trait[]
   exhausted: boolean
+  art_url?: string | null
+}
+
+export interface HeroPower {
+  name: string
+  actions: CardAction[]
+  description: string
 }
 
 export interface HeroInPlay {
@@ -48,6 +55,8 @@ export interface HeroInPlay {
   name: string
   description: string
   exhausted: boolean
+  hero_power?: HeroPower
+  art_url?: string | null
 }
 
 export interface EloChange {

@@ -146,6 +146,7 @@ class GameService:
                 hero_id=str(deck_a.hero.id),
                 template_slug=deck_a.hero.slug,
                 health=deck_a.hero.health,
+                health_max=deck_a.hero.health,
                 name=deck_a.hero.name,
                 description=deck_a.hero.description,
                 hero_power=deck_a.hero.hero_power,
@@ -156,6 +157,7 @@ class GameService:
                 hero_id=str(deck_b.hero.id),
                 template_slug=deck_b.hero.slug,
                 health=deck_b.hero.health,
+                health_max=deck_b.hero.health,
                 name=deck_b.hero.name,
                 description=deck_a.hero.description,
                 hero_power=deck_b.hero.hero_power,
@@ -349,7 +351,8 @@ class GameService:
             and game.state['active'] in game.state['ai_sides']):
             deck = getattr(game, game.state['active'])
             script=DeckScript.model_validate(deck.script or {})
-            ai_event = GameService.choose_ai_move(game_state, script)
+            from apps.gameplay.ai import AIMoveChooser
+            ai_event = AIMoveChooser.choose_move(game_state, script)
             if ai_event:
                 game.enqueue([ai_event], trigger=False)
             else:
@@ -429,22 +432,40 @@ class GameService:
                 target_id=command.target_id,
             ))
         elif isinstance(command, UseHeroCommand):
+            from apps.builder.schemas import HealAction
+
             # Validate that the hero belongs to the active player
             active_hero = game_state.heroes.get(game_state.active)
             if not active_hero or active_hero.hero_id != command.hero_id:
                 raise ValueError(f"You do not control hero {command.hero_id}")
 
-            # Validate that the target belongs to the opponent (if there is a target)
+            # Determine if this hero power targets friendlies or enemies
+            targets_friendly = any(
+                isinstance(action, HealAction) and action.target == 'friendly'
+                for action in active_hero.hero_power.actions
+            )
+
+            # Validate that the target belongs to the correct side (if there is a target)
             if target_type:
-                opposing_side = game_state.opposite_side
-                if target_type == "creature":
-                    if command.target_id not in game_state.board[opposing_side]:
-                        raise ValueError(f"Target creature {command.target_id} is not on opponent's board")
-                elif target_type == "hero":
-                    # Hero must belong to opposing side
-                    opposing_hero = game_state.heroes.get(opposing_side)
-                    if not opposing_hero or opposing_hero.hero_id != command.target_id:
-                        raise ValueError(f"Target hero {command.target_id} is not the opponent's hero")
+                if targets_friendly:
+                    # For healing/friendly powers, target must be on own side
+                    if target_type == "creature":
+                        if command.target_id not in game_state.board[game_state.active]:
+                            raise ValueError(f"Target creature {command.target_id} is not on your board")
+                    elif target_type == "hero":
+                        if not active_hero or active_hero.hero_id != command.target_id:
+                            raise ValueError(f"Target hero {command.target_id} is not your hero")
+                else:
+                    # For damage/enemy powers, target must be on opponent's side
+                    opposing_side = game_state.opposite_side
+                    if target_type == "creature":
+                        if command.target_id not in game_state.board[opposing_side]:
+                            raise ValueError(f"Target creature {command.target_id} is not on opponent's board")
+                    elif target_type == "hero":
+                        # Hero must belong to opposing side
+                        opposing_hero = game_state.heroes.get(opposing_side)
+                        if not opposing_hero or opposing_hero.hero_id != command.target_id:
+                            raise ValueError(f"Target hero {command.target_id} is not the opponent's hero")
 
             effects.append(UseHeroEffect(
                 side=game_state.active,
@@ -658,66 +679,6 @@ class GameService:
 
         raise ValueError(f"Invalid action: {action}")
 
-    @staticmethod
-    def choose_ai_move(state: GameState, script: DeckScript) -> Effect | None:
-
-        mana_pool = state.mana_pool[state.active]
-        mana_used = state.mana_used[state.active]
-        mana_available = mana_pool - mana_used
-
-        opposing_side = "side_b" if state.active == "side_a" else "side_a"
-
-        # See if there's a card that can be played from hand to board
-        for card_id in state.hands[state.active]:
-            card = state.cards[card_id]
-            if card.cost <= mana_available and card.card_type == 'creature':
-                card_id_to_play = card_id
-                return PlayEffect(
-                    side=state.active,
-                    source_id=card_id_to_play,
-                    position=0,
-                )
-
-        # Check for taunt creatures on the opposing board
-        from apps.gameplay.engine.handlers import get_taunt_creatures
-        taunt_creatures = get_taunt_creatures(state, opposing_side)
-
-        # See if there's a creature that can be used to attack
-        for creature_id in state.board[state.active]:
-            creature = state.creatures[creature_id]
-
-            if creature.exhausted: continue
-
-            # If there are taunt creatures, we MUST attack one of them
-            if taunt_creatures:
-                target_type = "creature"
-                target_id = random.choice(taunt_creatures)
-            elif script.strategy == "rush":
-                target_type = "hero"
-                target_id = state.heroes[opposing_side].hero_id
-            elif script.strategy == "control":
-                target_type = "creature"
-                target_id = random.choice(state.board[opposing_side])
-            else:
-                # 50/50 chance to attack hero or card
-                if random.random() < 0.5:
-                    target_type = "hero"
-                    target_id = state.heroes[opposing_side].hero_id
-                else:
-                    target_type = "creature"
-                    try:
-                        target_id = random.choice(state.board[opposing_side])
-                    except IndexError:
-                        target_type = "hero"
-                        target_id = state.heroes[opposing_side].hero_id
-
-            return AttackEffect(
-                side=state.active,
-                card_id=creature_id,
-                target_type=target_type,
-                target_id=target_id)
-
-        return
 
     @staticmethod
     def _update_elo_ratings(game):
