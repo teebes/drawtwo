@@ -17,7 +17,7 @@ import { computed } from 'vue'
 
 interface Props {
   variant?: 'primary' | 'secondary' | 'danger' | 'gradient'
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'xs' | 'sm' | 'md' | 'lg'
   customClass?: string
 }
 
@@ -28,6 +28,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const sizeClass = computed(() => {
   const sizeMap = {
+    xs: 'px-2 py-1 text-xs rounded-md',
     sm: 'px-3 py-1.5 text-sm rounded-md',
     md: 'px-4 py-2 text-sm rounded-lg',
     lg: 'px-6 py-3 text-base rounded-xl'

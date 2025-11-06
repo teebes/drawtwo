@@ -103,19 +103,17 @@
                 <GameCard
                   :card="card"
                   :details="true"
-                  :class="canEditTitle ? 'cursor-pointer' : ''"
-                  @click="canEditTitle ? navigateToEdit(card.slug) : null" />
-                <div
-                  v-if="canEditTitle"
-                  class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
+                  class="cursor-pointer"
+                  @click="navigateToDetails(card.slug)" />
+                <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
-                    @click.stop="navigateToEdit(card.slug)"
+                    @click.stop
                     class="inline-flex items-center rounded-full bg-white dark:bg-gray-800 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 shadow-sm hover:shadow-md transition-all"
-                    title="Edit card"
+                    title="View card details"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1.458 12C2.732 7.943 6.73 5 12 5s9.268 2.943 10.542 7c-1.274 4.057-5.272 7-10.542 7S2.732 16.057 1.458 12z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
                     </svg>
                   </button>
                 </div>
@@ -316,9 +314,9 @@ const canEditTitle = computed(() => {
          title.value.can_edit === true
 })
 
-const navigateToEdit = (cardSlug: string): void => {
+const navigateToDetails = (cardSlug: string): void => {
   router.push({
-    name: 'CardEdit',
+    name: 'CardDetails',
     params: {
       slug: title.value?.slug,
       cardSlug

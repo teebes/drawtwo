@@ -1,7 +1,7 @@
 <template>
-  <div id="app" class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+  <div id="app" class="h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 flex flex-col overflow-hidden">
     <AppHeader v-if="!shouldHideHeader" />
-    <div :class="{ 'pt-16': !shouldHideHeader }" class="min-h-screen">
+    <div :class="{ 'pt-16': !shouldHideHeader }" class="flex-1 overflow-y-auto">
       <router-view />
     </div>
     <ToastNotifications />
