@@ -139,7 +139,9 @@ class AttackValidationTestBase(TestCase):
             name='Side A Creature 1',
             description='',
             attack=3,
+            attack_max=3,
             health=5,
+            health_max=5,
             traits=[],
             exhausted=False
         )
@@ -149,7 +151,9 @@ class AttackValidationTestBase(TestCase):
             name='Side A Creature 2',
             description='',
             attack=2,
+            attack_max=2,
             health=4,
+            health_max=4,
             traits=[],
             exhausted=False
         )
@@ -161,7 +165,9 @@ class AttackValidationTestBase(TestCase):
             name='Side B Creature 1',
             description='',
             attack=3,
+            attack_max=3,
             health=5,
+            health_max=5,
             traits=[],
             exhausted=False
         )
@@ -171,7 +177,9 @@ class AttackValidationTestBase(TestCase):
             name='Side B Creature 2',
             description='',
             attack=2,
+            attack_max=2,
             health=4,
+            health_max=4,
             traits=[],
             exhausted=False
         )
@@ -289,7 +297,9 @@ class AttackCommandValidationTests(AttackValidationTestBase):
             name='Orphan Creature',
             description='',
             attack=5,
+            attack_max=5,
             health=5,
+            health_max=5,
             traits=[],
             exhausted=False
         )
@@ -663,7 +673,9 @@ class TauntMechanicTests(AttackValidationTestBase):
             name='Taunt Creature',
             description='Has Taunt',
             attack=1,
+            attack_max=1,
             health=3,
+            health_max=3,
             traits=[Taunt()],
             exhausted=False
         )
@@ -752,7 +764,9 @@ class TauntMechanicTests(AttackValidationTestBase):
             name='Taunt Creature 2',
             description='Also has Taunt',
             attack=2,
+            attack_max=2,
             health=2,
+            health_max=2,
             traits=[Taunt()],
             exhausted=False
         )
@@ -798,7 +812,9 @@ class TauntMechanicTests(AttackValidationTestBase):
             name='Taunt Creature A',
             description='Has Taunt',
             attack=1,
+            attack_max=1,
             health=3,
+            health_max=3,
             traits=[Taunt()],
             exhausted=False
         )
@@ -876,7 +892,9 @@ class AITauntTests(TestCase):
                     name='AI Creature',
                     description='',
                     attack=2,
+                    attack_max=2,
                     health=2,
+                    health_max=2,
                     traits=[],
                     exhausted=False,
                 ),
@@ -886,7 +904,9 @@ class AITauntTests(TestCase):
                     name='Regular Creature',
                     description='',
                     attack=1,
+                    attack_max=1,
                     health=1,
+                    health_max=1,
                     traits=[],
                     exhausted=False,
                 ),
@@ -901,6 +921,7 @@ class AITauntTests(TestCase):
                     template_slug='hero-a',
                     name='Hero A',
                     health=30,
+                    health_max=30,
                     hero_power=HeroPower(
                         actions=[
                             DamageAction(
@@ -915,6 +936,7 @@ class AITauntTests(TestCase):
                     template_slug='hero-b',
                     name='Hero B',
                     health=30,
+                    health_max=30,
                     hero_power=HeroPower(
                         actions=[
                             DamageAction(
@@ -944,7 +966,9 @@ class AITauntTests(TestCase):
             name='Taunt Creature',
             description='Has Taunt',
             attack=1,
+            attack_max=1,
             health=3,
+            health_max=3,
             traits=[Taunt()],
             exhausted=False
         )
@@ -986,7 +1010,9 @@ class AITauntTests(TestCase):
             name='Taunt Creature 1',
             description='Has Taunt',
             attack=1,
+            attack_max=1,
             health=3,
+            health_max=3,
             traits=[Taunt()],
             exhausted=False
         )
@@ -996,7 +1022,9 @@ class AITauntTests(TestCase):
             name='Taunt Creature 2',
             description='Has Taunt',
             attack=2,
+            attack_max=2,
             health=2,
+            health_max=2,
             traits=[Taunt()],
             exhausted=False
         )
@@ -1029,7 +1057,9 @@ class StealthMechanicTests(AttackValidationTestBase):
             name='Stealth Creature',
             description='Has Stealth',
             attack=2,
+            attack_max=2,
             health=2,
+            health_max=2,
             traits=[Stealth()],
             exhausted=False
         )

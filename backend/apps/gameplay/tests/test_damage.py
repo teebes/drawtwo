@@ -18,7 +18,9 @@ class TestDamage(GamePlayTestBase):
             card_id="card_1",
             name="test",
             attack=1,
+            attack_max=1,
             health=1,
+            health_max=1,
             exhausted=False,
         )
 
@@ -52,7 +54,9 @@ class TestDamage(GamePlayTestBase):
             card_id="card_2",
             name="test",
             attack=2,
+            attack_max=2,
             health=10,
+            health_max=10,
             exhausted=False,
         )
 
@@ -107,7 +111,9 @@ class TestDamage(GamePlayTestBase):
             card_id="card_2",
             name="test",
             attack=2,
+            attack_max=2,
             health=10,
+            health_max=10,
             exhausted=False,
         )
 
