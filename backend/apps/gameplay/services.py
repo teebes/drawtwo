@@ -501,7 +501,7 @@ class GameService:
             )]
 
         if isinstance(action, DamageAction):
-            opposing_side = state.opposite_side
+            opposing_side = "side_b" if event.side == "side_a" else "side_a"
 
             # Determine base target
             if action.target == "hero":
@@ -623,7 +623,7 @@ class GameService:
             return effects
 
         if isinstance(action, RemoveAction):
-            opposing_side = state.opposite_side
+            opposing_side = "side_b" if event.side == "side_a" else "side_a"
 
             # Determine base target
             if action.target == "creature":
