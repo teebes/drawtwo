@@ -91,6 +91,8 @@ def title_card_detail(request, slug, card_slug):
         serialize_cards_with_traits(
             CardTemplate.objects.filter(pk=card.id))[0])
 
+@api_view(['GET'])
+@permission_classes([AllowAny])
 def title_heroes(request, slug):
     """Get all heroes for a title."""
     title = get_title_or_403(slug, request.user)
