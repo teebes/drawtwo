@@ -1,56 +1,55 @@
 <template>
-  <div class="group transform transition-all duration-300 hover:-translate-y-2 hover:shadow-xl">
+  <!-- group transform transition-all duration-300 hover:-translate-y-2 hover:shadow-xl -->
+  <div class="group">
     <div :class="[
-      'w-full max-w-lg mx-auto overflow-hidden rounded-xl border-2 p-1',
-      heightClass,
-      borderClass,
-      backgroundClass
+      'w-full mx-auto overflow-hidden rounded-xl border-8 border-gray-600 relative',
+      containerClass,
+
     ]">
-      <div class="flex h-full flex-col rounded-lg bg-white p-4 dark:bg-gray-900">
-        <!-- Header with name and cost -->
-        <div class="flex items-center justify-between mb-3">
-          <h4 class="font-display text-lg font-bold text-gray-900 dark:text-white truncate mr-2">
-            {{ card.name }}
-          </h4>
-          <div :class="[
-            'flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-white shrink-0',
-            costBgClass
-          ]">
-            {{ card.cost }}
-          </div>
-        </div>
+      <!-- Full Card Art Background -->
+      <img
+        :src="cardArtUrl"
+        :alt="`${card.name} artwork`"
+        class="absolute inset-0 w-full h-full object-cover"
+        @error="onImageError"
+      />
 
-        <!-- Type line -->
-        <div class="text-sm text-gray-600 dark:text-gray-400 mb-3 capitalize">
-          {{ card.card_type }}
-          <span v-if="card.card_type === 'creature'" class="text-gray-500">Creature</span>
-        </div>
+      <!-- Top panel: Name and Cost -->
+  <!-- absolute top-0 left-0 right-0 bg-black/50 backdrop-blur-sm p-3 flex items-center justify-between gap-2 -->
+      <div class="absolute top-0 left-0 right-0 bg-black/50 backdrop-blur-sm px-2 py-1 flex items-center justify-between gap-2">
+        <!-- Name -->
+        <h4 class="font-display text-base font-bold text-white truncate">
+          {{ card.name }}
+        </h4>
 
-        <!-- Card text -->
-        <div class="text-sm text-gray-800 dark:text-gray-200 flex-1 mb-3">
+        <!-- Cost (always blue) -->
+        <div class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white bg-blue-500 shrink-0">
+          {{ card.cost }}
+        </div>
+      </div>
+
+      <!-- Bottom panel: Description and Stats -->
+      <div class="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm px-2 py-1 flex flex-col gap-2">
+        <!-- Description -->
+        <p class="text-xs text-gray-200 line-clamp-2">
           {{ card.description }}
-        </div>
+        </p>
 
-        <!-- Traits -->
-        <div v-if="card.traits && card.traits.length > 0" class="mb-3">
-          <div class="flex flex-wrap gap-1">
-            <span
-              v-for="trait in card.traits"
-              :key="trait.type"
-              class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
-            >
-              {{ trait.type }}
-              <span v-if="getTraitValue(trait)" class="ml-1 font-bold">{{ getTraitValue(trait) }}</span>
-            </span>
-          </div>
-        </div>
-
-        <!-- Stats (for creatures) -->
-        <div v-if="card.card_type === 'creature'" class="flex justify-between items-center">
-          <div class="text-sm text-gray-600 dark:text-gray-400">Attack / Health</div>
-          <div class="rounded bg-gray-200 px-3 py-1 text-sm font-bold text-gray-800 dark:bg-gray-700 dark:text-gray-200">
-            {{ card.attack }}/{{ card.health }}
-          </div>
+        <!-- Stats row: Attack/Health for creatures, lightning for spells -->
+        <div class="flex items-center gap-2 text-sm h-5">
+          <template v-if="card.card_type === 'creature'">
+            <div class="flex items-center gap-1">
+              <span class="text-red-300 font-bold">⚔️</span>
+              <span class="text-white font-bold">{{ card.attack }}</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="text-green-300 font-bold">❤️</span>
+              <span class="text-white font-bold">{{ card.health }}</span>
+            </div>
+          </template>
+          <template v-else>
+            <span class="text-yellow-300 text-lg">🔮</span>
+          </template>
         </div>
       </div>
     </div>
@@ -58,22 +57,49 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { Card } from '../../types/card'
 
 interface Props {
   card: Card
-  heightMode?: 'fixed' | 'min' | 'auto'
+  heightMode?: 'fixed' | 'min' | 'auto' | 'aspect-ratio'
   height?: 'sm' | 'md' | 'lg' | 'xl'
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  heightMode: 'fixed',
+  heightMode: 'aspect-ratio',
   height: 'lg'
 })
 
-const heightClass = computed(() => {
+const imageError = ref(false)
 
+const cardArtUrl = computed(() => {
+
+  // If image failed to load, use placeholder
+  if (imageError.value) {
+    return '/card_backs/placeholder.svg'
+  }
+
+  // If card has a custom art URL from backend (user-uploaded), use it
+  if (props.card.art_url) {
+    return props.card.art_url
+  }
+
+  // Default fallback for other titles without custom art
+  return '/card_backs/placeholder.svg'
+})
+
+const onImageError = () => {
+  imageError.value = true
+}
+
+const containerClass = computed(() => {
+  // If using aspect ratio mode, use aspect-[5/7] (card ratio: 5 width : 7 height)
+  if (props.heightMode === 'aspect-ratio') {
+    return 'aspect-[5/7]'
+  }
+
+  // Otherwise use the old height-based approach
   const heightSizes = {
     sm: 'h-72',     // 18rem (288px)
     md: 'h-80',     // 20rem (320px)
@@ -107,36 +133,4 @@ const borderClass = computed(() => {
   }
   return borderMap[props.card.card_type]
 })
-
-const backgroundClass = computed(() => {
-  const bgMap = {
-    spell: 'bg-gradient-to-b from-blue-50 to-blue-100 dark:from-blue-900/50 dark:to-blue-800/50',
-    creature: 'bg-gradient-to-b from-yellow-50 to-yellow-100 dark:from-yellow-900/50 dark:to-yellow-800/50'
-  }
-  return bgMap[props.card.card_type]
-})
-
-const costBgClass = computed(() => {
-  const costMap = {
-    spell: 'bg-blue-500',
-    creature: 'bg-red-500'
-  }
-  return costMap[props.card.card_type]
-})
-
-const getTraitValue = (trait: Card['traits'][0]) => {
-  return trait.type;
-  // Check for common value patterns in the data object
-  if (trait.data.value !== undefined) {
-    return trait.data.value
-  }
-  if (trait.data.armor !== undefined) {
-    return trait.data.armor
-  }
-  if (trait.data.amount !== undefined) {
-    return trait.data.amount
-  }
-  // Return null if no displayable value found
-  return null
-}
 </script>

@@ -8,7 +8,8 @@ from django.db.models import Count
 
 from apps.builder.models import Title, CardTemplate, HeroTemplate
 from apps.builder.schemas import TitleConfig
-from .models import Deck, DeckCard
+from apps.collection.models import Deck, DeckCard
+from apps.core.card_assets import get_hero_art_url
 
 
 
@@ -161,6 +162,7 @@ def deck_detail(request, deck_id):
                 'name': deck.hero.name,
                 'slug': deck.hero.slug,
                 'health': deck.hero.health,
+                'art_url': get_hero_art_url(deck.hero.title.slug, deck.hero.slug),
             },
             'cards': card_data,
             'total_cards': sum(card['count'] for card in card_data),

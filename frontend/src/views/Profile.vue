@@ -103,6 +103,25 @@
                   </div>
                 </div>
 
+                <!-- Friends Link -->
+                <div class="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
+                  <h3 class="font-medium text-gray-900 dark:text-white mb-2">
+                    👥 Friends
+                  </h3>
+                  <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    Manage your friends and view your friend list.
+                  </p>
+                  <router-link
+                    to="/friends"
+                    class="inline-flex items-center rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                  >
+                    View Friends
+                    <svg class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                  </router-link>
+                </div>
+
                 <!-- Theme Toggle -->
                 <div class="rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
                   <h3 class="font-medium text-gray-900 dark:text-white mb-2">

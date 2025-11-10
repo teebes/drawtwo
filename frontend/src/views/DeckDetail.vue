@@ -2,13 +2,17 @@
   <div class="deck-detail-page">
 
     <div v-if="!loading && !error && deck">
-      <section class="page-banner">
-        <h1 class="font-display text-4xl font-bold">{{ deck.name }}</h1>
-        <p class="mt-4 text-lg text-gray-200" v-if="deck.description">{{ deck.description }}</p>
-        <div class="mt-4 flex items-center justify-center space-x-6 text-sm text-gray-200">
-          <span>{{ deck.hero.name }}</span>
-          <span>•</span>
-          <span>{{ deck.total_cards }} cards</span>
+      <section class="relative bg-gray-300 overflow-hidden h-24 flex items-center justify-center space-x-6">
+        <img
+          v-if="deck.hero.art_url && !heroImageError"
+          :src="deck.hero.art_url"
+          :alt="`${deck.hero.name} artwork`"
+          class="inset-0 h-full object-contain object-center border-gray-600 border-2 rounded-lg"
+          @error="onHeroImageError"
+        />
+
+        <div class="">
+          <h1 class="font-display text-4xl font-bold dark:text-gray-900">{{ deck.name }}</h1>
         </div>
       </section>
 
@@ -34,63 +38,85 @@
           </div>
         </Panel>
 
-
-
-        <Panel v-if="deck.cards.length > 0">
-          <div class="space-y-2">
+        <transition name="panel-fade" mode="out-in">
+          <Panel v-if="displayCards.length > 0" :key="isAddCardMode ? 'add-mode' : 'normal-mode'">
+            <transition-group
+              name="card-list"
+              tag="div"
+              class="space-y-2"
+            >
             <div
-              v-for="card in sortedCards"
+              v-for="card in displayCards"
               :key="card.id"
-              class="flex items-center rounded-lg bg-gray-50 p-3 dark:bg-gray-800 space-x-3"
+              class="card-item flex items-center rounded-lg bg-gray-50 dark:bg-gray-800 space-x-2"
             >
               <!-- Card cost badge -->
               <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded bg-gray-200 text-sm font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-300">
                 {{ card.cost }}
               </div>
 
-              <!-- Clickable count -->
-              <div class="relative flex-shrink-0">
-                <input
-                  v-if="editingCardId === card.id"
-                  v-model="editingCount"
-                  @blur="saveCountEdit(card)"
-                  @keyup.enter="saveCountEdit(card)"
-                  @keyup.esc="cancelCountEdit"
-                  type="text"
-                  class="w-12 rounded border border-primary-500 bg-white px-2 py-1 text-center text-sm font-bold dark:bg-gray-900 dark:text-gray-100"
-                  ref="countInput"
-                />
-                <button
-                  v-else
-                  @click="startCountEdit(card)"
-                  class="w-12 rounded px-2 py-1 text-center text-sm font-bold text-gray-700 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors"
-                  title="Click to edit count"
-                >
-                  {{ card.count }}x
-                </button>
-              </div>
+              <!-- For cards in deck: show count and up/down controls -->
+              <template v-if="isCardInDeck(card)">
+                <!-- Clickable count -->
+                <div class="relative flex-shrink-0">
+                  <input
+                    v-if="editingCardId === card.id"
+                    v-model="editingCount"
+                    @blur="saveCountEdit(card as DeckCard)"
+                    @keyup.enter="saveCountEdit(card as DeckCard)"
+                    @keyup.esc="cancelCountEdit"
+                    type="text"
+                    class="w-10 rounded border border-primary-500 bg-white px-2 py-1 text-center text-sm font-bold dark:bg-gray-900 dark:text-gray-100"
+                    ref="countInput"
+                  />
+                  <button
+                    v-else
+                    @click="startCountEdit(card as DeckCard)"
+                    class="w-10 rounded px-2 py-1 text-center text-sm font-bold text-gray-700 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors"
+                    title="Click to edit count"
+                  >
+                    {{ (card as DeckCard).count }}x
+                  </button>
+                </div>
 
-              <!-- Up/Down triangle buttons stacked vertically -->
-              <div class="flex flex-col flex-shrink-0">
-                <button
-                  @click="incrementCard(card)"
-                  class="flex h-5 w-8 items-center justify-center rounded-t bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 transition-colors"
-                  title="Increase count"
+                <!-- Up/Down triangle buttons stacked vertically -->
+                <div class="flex flex-col flex-shrink-0">
+                  <button
+                    @click="incrementCard(card as DeckCard)"
+                    class="flex h-4 w-8 items-center justify-center rounded-t bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 transition-colors"
+                    title="Increase count"
+                  >
+                    <span class="text-sm leading-none">▲</span>
+                  </button>
+                  <button
+                    @click="decrementCard(card as DeckCard)"
+                    class="flex h-4 w-8 items-center justify-center rounded-b bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 transition-colors"
+                    title="Decrease count"
+                  >
+                    <span class="text-sm leading-none">▼</span>
+                  </button>
+                </div>
+              </template>
+
+              <!-- For cards not in deck: show Add Card button -->
+              <template v-else>
+                <GameButton
+                  variant="primary"
+                  @click="addCardToDeck(card)"
+                  class="flex-shrink-0"
                 >
-                  <span class="text-sm leading-none">▲</span>
-                </button>
-                <button
-                  @click="decrementCard(card)"
-                  class="flex h-5 w-8 items-center justify-center rounded-b bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 transition-colors"
-                  title="Decrease count"
-                >
-                  <span class="text-sm leading-none">▼</span>
-                </button>
-              </div>
+                  Add Card
+                </GameButton>
+              </template>
 
               <!-- Card name and info -->
               <div class="card-info flex-1 flex flex-row items-center min-w-0">
-                <div class="font-medium truncate">{{ card.name }}</div>
+                <div class="font-medium truncate ml-4">
+                  <!-- {{ card.name }} -->
+                  <router-link :to="{ name: 'CardDetails', params: { slug: deck.title.slug, cardSlug: card.slug } }">
+                    {{ card.name }}
+                  </router-link>
+                </div>
                 <div class="text-sm text-gray-600 dark:text-gray-400 ml-4 flex-shrink-0">
                   <span v-if="card.card_type === 'creature'">
                     {{ card.attack }}/{{ card.health }}
@@ -99,9 +125,10 @@
                 </div>
               </div>
 
-              <!-- Delete button -->
+              <!-- Delete button (only for cards in deck) -->
               <button
-                @click="deleteCard(card)"
+                v-if="isCardInDeck(card) && !isAddCardMode"
+                @click="deleteCard(card as DeckCard)"
                 class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-300 transition-colors"
                 title="Remove card"
               >
@@ -110,8 +137,9 @@
                 </svg>
               </button>
             </div>
-          </div>
-        </Panel>
+          </transition-group>
+          </Panel>
+        </transition>
 
         <Panel>
           <div class="grid grid-cols-3 space-x-2">
@@ -119,7 +147,12 @@
             <router-link :to="{ name: 'DeckEdit', params: { slug: deck.title.slug, id: deck.id } }">
               <GameButton variant="secondary" class="w-full">Edit Deck</GameButton>
             </router-link>
-            <GameButton variant="primary" @click="openCardModal">Add Card</GameButton>
+            <GameButton
+              :variant="isAddCardMode ? 'secondary' : 'primary'"
+              @click="toggleAddCardMode"
+            >
+              {{ isAddCardMode ? 'Cancel Add Card' : 'Add Card' }}
+            </GameButton>
           </div>
         </Panel>
 
@@ -135,13 +168,6 @@
       <p class="text-gray-600">Loading deck...</p>
     </div>
 
-    <!-- Card Selection Modal -->
-    <CardSelectionModal
-      :is-open="showCardModal"
-      :title-slug="titleSlug"
-      @close="closeCardModal"
-      @card-selected="onCardSelected"
-    />
   </div>
 </template>
 
@@ -150,7 +176,6 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
-import CardSelectionModal from '../components/ui/CardSelectionModal.vue'
 import type { DeckCard, Card } from '../types/card'
 import GameButton from '../components/ui/GameButton.vue'
 import { useNotificationStore } from '../stores/notifications'
@@ -169,6 +194,7 @@ interface DeckData {
     name: string
     slug: string
     health: number
+    art_url?: string | null
   }
   cards: DeckCard[]
   total_cards: number
@@ -188,8 +214,14 @@ const editingCardId = ref<number | null>(null)
 const editingCount = ref<string>('1')
 const countInput = ref<HTMLInputElement | null>(null)
 
-// Modal state
-const showCardModal = ref<boolean>(false)
+// Hero image error handling
+const heroImageError = ref(false)
+
+// Add Card mode state
+const isAddCardMode = ref<boolean>(false)
+const allCards = ref<Card[]>([])
+const allCardsLoading = ref<boolean>(false)
+const allCardsError = ref<string | null>(null)
 
 // Computed property to get title slug from deck
 const titleSlug = computed(() => {
@@ -216,20 +248,78 @@ const sortedCards = computed(() => {
   })
 })
 
-const openCardModal = (): void => {
-  showCardModal.value = true
+// Create a map of deck cards by card id for quick lookup
+const deckCardsMap = computed(() => {
+  if (!deck.value || !deck.value.cards) return new Map<number, DeckCard>()
+
+  const map = new Map<number, DeckCard>()
+  deck.value.cards.forEach(card => {
+    map.set(card.id, card)
+  })
+  return map
+})
+
+// Display cards: when in Add Card mode, show all cards; otherwise show only deck cards
+const displayCards = computed(() => {
+  if (isAddCardMode.value) {
+    // Merge all cards with deck cards
+    // For cards in deck, use the deck card data (with count)
+    // For cards not in deck, use the card data
+    return allCards.value.map(card => {
+      const deckCard = deckCardsMap.value.get(card.id)
+      return deckCard || card
+    }).sort((a, b) => {
+      // Sort by cost first
+      if (a.cost !== b.cost) {
+        return a.cost - b.cost
+      }
+      // Then by name alphabetically
+      return a.name.localeCompare(b.name)
+    })
+  } else {
+    // Normal mode: show only deck cards
+    return sortedCards.value
+  }
+})
+
+// Helper function to check if a card is in the deck
+const isCardInDeck = (card: Card | DeckCard): boolean => {
+  return deckCardsMap.value.has(card.id)
 }
 
-const closeCardModal = (): void => {
-  showCardModal.value = false
+const onHeroImageError = (): void => {
+  heroImageError.value = true
 }
 
-const onCardSelected = async (card: Card): Promise<void> => {
+const toggleAddCardMode = (): void => {
+  isAddCardMode.value = !isAddCardMode.value
+  if (isAddCardMode.value && allCards.value.length === 0) {
+    fetchAllCards()
+  }
+}
+
+const fetchAllCards = async (): Promise<void> => {
+  if (!titleSlug.value) return
+
+  try {
+    allCardsLoading.value = true
+    allCardsError.value = null
+    const response = await axios.get(`/titles/${titleSlug.value}/cards/`)
+    allCards.value = response.data || []
+  } catch (err: any) {
+    console.error('Error fetching all cards:', err)
+    allCardsError.value = err.response?.data?.message || err.message || 'Failed to load cards'
+    notificationStore.handleApiError(err)
+  } finally {
+    allCardsLoading.value = false
+  }
+}
+
+const addCardToDeck = async (card: Card): Promise<void> => {
   if (!deck.value) return
 
   try {
     const response = await axios.post(`/collection/decks/${deck.value.id}/cards/add/`, {
-      // card_id: card.id,
       card_slug: card.slug,
       count: 1
     })
@@ -254,7 +344,6 @@ const onCardSelected = async (card: Card): Promise<void> => {
 
     // Show success notification
     notificationStore.handleApiSuccess(response)
-    closeCardModal()
   } catch (err: any) {
     console.error('Error adding card to deck:', err)
     notificationStore.handleApiError(err)
@@ -419,8 +508,48 @@ onMounted(() => {
 
 <style scoped>
 .deck-detail-page {
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+/* Panel fade transition for mode switching */
+.panel-fade-enter-active,
+.panel-fade-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.panel-fade-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.panel-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+/* Card list transition animations */
+.card-list-enter-active,
+.card-list-leave-active {
+  transition: all 0.3s ease;
+}
+
+.card-list-enter-from {
+  opacity: 0;
+  transform: translateX(-20px);
+}
+
+.card-list-leave-to {
+  opacity: 0;
+  transform: translateX(20px);
+}
+
+.card-list-move {
+  transition: transform 0.3s ease;
+}
+
+/* Ensure smooth transitions for card item content */
+.card-item {
+  transition: background-color 0.2s ease;
 }
 </style>

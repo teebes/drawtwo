@@ -11,6 +11,8 @@ export type CardAction =
   | { action: 'draw'; amount: number }
   | { action: 'damage'; amount: number; target: 'hero' | 'creature' | 'enemy'; scope?: 'single' | 'cleave' | 'all' }
   | { action: 'heal'; amount: number; target: 'hero' | 'creature' | 'friendly'; scope?: 'single' | 'cleave' | 'all' }
+  | { action: 'remove'; target: 'creature' | 'enemy'; scope?: 'single' | 'cleave' | 'all' }
+
 
 export interface Trait {
   type: string
@@ -39,6 +41,13 @@ export interface Creature {
   health: number
   traits: Trait[]
   exhausted: boolean
+  art_url?: string | null
+}
+
+export interface HeroPower {
+  name: string
+  actions: CardAction[]
+  description: string
 }
 
 export interface HeroInPlay {
@@ -46,7 +55,10 @@ export interface HeroInPlay {
   template_slug: string
   health: number
   name: string
+  description: string
   exhausted: boolean
+  hero_power?: HeroPower
+  art_url?: string | null
 }
 
 export interface EloChange {

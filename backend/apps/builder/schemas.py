@@ -115,6 +115,7 @@ class Card(ResourceBase):
     health: int = 0
     traits: List[Trait] = Field(default_factory=list)
     faction: Optional[str] = None
+    art_url: Optional[str] = None  # For future user-uploaded art
 
 
 class Deck(ResourceBase):

@@ -149,6 +149,19 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# Cloudflare R2 Configuration for Card Assets
+# Public URL for serving card assets (e.g., https://assets.drawtwo.com)
+CARD_ASSETS_BASE_URL = os.environ.get("CARD_ASSETS_BASE_URL", "")
+
+# R2 credentials (optional - only needed for uploading/managing assets)
+R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID", "")
+R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "")
+R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY", "")
+R2_BUCKET_NAME = os.environ.get("R2_BUCKET_NAME", "drawtwo-assets")
+
+# If CARD_ASSETS_BASE_URL is not set, fall back to serving from local media
+USE_R2_FOR_CARDS = bool(CARD_ASSETS_BASE_URL)
+
 # Default primary key field type (Django 5.x)
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

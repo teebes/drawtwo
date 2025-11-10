@@ -81,6 +81,15 @@ def title_cards(request, slug):
 
     return Response(card_data)
 
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def title_card_detail(request, slug, card_slug):
+    """Get a specific card by title and card slug."""
+    title = get_title_or_403(slug, request.user)
+    card = get_object_or_404(CardTemplate, title=title, slug=card_slug, is_latest=True)
+    return Response(
+        serialize_cards_with_traits(
+            CardTemplate.objects.filter(pk=card.id))[0])
 
 @api_view(['GET'])
 @permission_classes([AllowAny])

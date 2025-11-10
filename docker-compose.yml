@@ -40,6 +40,12 @@ services:
       - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      # Cloudflare R2 Configuration (optional for local dev)
+      - CARD_ASSETS_BASE_URL=${CARD_ASSETS_BASE_URL:-}
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME:-drawtwo-assets}
     volumes:
       - ./backend:/app
       - static_volume:/app/staticfiles

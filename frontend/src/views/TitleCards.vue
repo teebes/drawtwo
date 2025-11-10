@@ -3,13 +3,13 @@
 
     <div v-if="!loading && !error && title" class="relative flex flex-col h-full">
       <!-- Hero Section -->
-      <section class="page-banner">
-        <h1 class="font-display text-4xl font-bold text-white">Collection</h1>
+      <section class="bg-gray-300 h-24 flex items-center justify-center">
+        <h1 class="font-display text-4xl font-bold dark:text-gray-900">Collection</h1>
       </section>
 
 
       <!-- Cards Sections -->
-      <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-16 space-y-12">
+      <main class="mx-auto w-full px-4 sm:px-6 lg:px-8 pb-16 space-y-12">
         <!-- Filters -->
         <section v-if="!cardsLoading && cards.length > 0" class="sticky top-0 z-10 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-4 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-gray-900/60">
           <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
@@ -94,30 +94,26 @@
             <h2 class="font-display text-2xl font-bold text-gray-900 dark:text-white mb-6">
               Common Cards
             </h2>
-            <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div class="grid md:gap-12 sm:gap-10 gap-8 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               <div
                 v-for="card in commonCards"
                 :key="card.slug"
                 class="relative group"
               >
-                <CollectionCard
+                <GameCard
                   :card="card"
-                  heightMode="fixed"
-                  height="md"
-                  :class="canEditTitle ? 'cursor-pointer transition-transform group-hover:scale-105' : ''"
-                  @click="canEditTitle ? navigateToEdit(card.slug) : null"
-                />
-                <div
-                  v-if="canEditTitle"
-                  class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
+                  :details="true"
+                  class="cursor-pointer"
+                  @click="navigateToDetails(card.slug)" />
+                <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
-                    @click.stop="navigateToEdit(card.slug)"
+                    @click.stop
                     class="inline-flex items-center rounded-full bg-white dark:bg-gray-800 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 shadow-sm hover:shadow-md transition-all"
-                    title="Edit card"
+                    title="View card details"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1.458 12C2.732 7.943 6.73 5 12 5s9.268 2.943 10.542 7c-1.274 4.057-5.272 7-10.542 7S2.732 16.057 1.458 12z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
                     </svg>
                   </button>
                 </div>
@@ -134,21 +130,19 @@
             <h2 class="font-display text-2xl font-bold text-gray-900 dark:text-white capitalize">
               {{ factionName }} Cards
             </h2>
-            <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div class="grid md:gap-12 sm:gap-10 gap-8 grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               <div
                 v-for="card in factionCards"
                 :key="card.slug"
                 class="relative group"
               >
-                <CollectionCard
+                <GameCard
                   :card="card"
-                  heightMode="auto"
-                  :class="canEditTitle ? 'cursor-pointer transition-transform group-hover:scale-105' : ''"
-                  @click="canEditTitle ? navigateToEdit(card.slug) : null"
-                />
+                  :class="canEditTitle ? 'cursor-pointer' : ''"
+                  @click="canEditTitle ? navigateToEdit(card.slug) : null" />
                 <div
                   v-if="canEditTitle"
-                  class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                  class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   <button
                     @click.stop="navigateToEdit(card.slug)"
@@ -167,7 +161,7 @@
       </main>
 
       <!-- Bottom Bar -->
-      <section v-if="canEditTitle"class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+      <section v-if="canEditTitle"class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-1 fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-40">
         <div class="flex items-center justify-between">
           <div class="text-sm text-gray-600 dark:text-gray-400">
             {{ filteredCards.length }} / {{ cards.length }} Cards
@@ -219,6 +213,7 @@ import { useAuthStore } from '../stores/auth'
 import { useTitleStore } from '../stores/title'
 import axios from '../config/api'
 import CollectionCard from '../components/game/CollectionCard.vue'
+import GameCard from '../components/game/GameCard.vue'
 import type { Card } from '../types/card'
 
 interface TitleData {
@@ -319,9 +314,9 @@ const canEditTitle = computed(() => {
          title.value.can_edit === true
 })
 
-const navigateToEdit = (cardSlug: string): void => {
+const navigateToDetails = (cardSlug: string): void => {
   router.push({
-    name: 'CardEdit',
+    name: 'CardDetails',
     params: {
       slug: title.value?.slug,
       cardSlug

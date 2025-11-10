@@ -1,5 +1,5 @@
 from typing import Literal, List, Dict, Union, Annotated, Literal, Optional
-from pydantic import BaseModel, Field, Discriminator
+from pydantic import BaseModel, Field, Discriminator, model_validator
 
 from apps.builder.schemas import (
     Action,
@@ -26,6 +26,7 @@ class CardInPlay(BaseModel):
     cost: int = 0
     traits: List[Trait] = Field(default_factory=list)
     exhausted: bool = True
+    art_url: Optional[str] = None
 
     def has_trait(self, trait_code: str) -> bool:
         return any(trait.type == trait_code for trait in self.traits)
@@ -37,19 +38,39 @@ class Creature(BaseModel):
     name: str
     description: str = ''
     attack: int = 0
+    attack_max: Optional[int] = None
     health: int = 0
+    health_max: Optional[int] = None
     traits: List[Trait] = Field(default_factory=list)
     exhausted: bool = True
+    art_url: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _set_max_stats(self) -> 'Creature':
+        if self.attack_max is None:
+            self.attack_max = self.attack
+        if self.health_max is None:
+            self.health_max = self.health
+        return self
 
 
 class HeroInPlay(BaseModel):
     hero_id: str # Internal hero ID for that game
     template_slug: str # ID of the hero template
     health: int
+    health_max: Optional[int] = None
     name: str
+    description: str = ''
     exhausted: bool = True
     actions: List[Action] = Field(default_factory=list)
     hero_power: HeroPower
+    art_url: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _set_health_max(self) -> 'HeroInPlay':
+        if self.health_max is None:
+            self.health_max = self.health
+        return self
 
 
 class GameState(BaseModel):

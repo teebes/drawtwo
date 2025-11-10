@@ -72,6 +72,7 @@ class GamePlayTestBase(TestCase):
                     hero_id="1",
                     template_slug="hero_a",
                     health=10,
+                    health_max=10,
                     name="Hero A",
                     hero_power=HeroPower(
                         actions=[
@@ -86,6 +87,7 @@ class GamePlayTestBase(TestCase):
                     hero_id="2",
                     template_slug="hero_b",
                     health=10,
+                    health_max=10,
                     name="Hero B",
                     hero_power=HeroPower(
                         actions=[

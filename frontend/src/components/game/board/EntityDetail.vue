@@ -9,18 +9,32 @@
 
                     <!-- Display Hero -->
                     <div v-else-if="entityType === 'hero' && hero"
-                         class="border-2 border-gray-900 bg-gray-300 text-gray-900 rounded-xl flex flex-col p-4 w-48">
-                        <div class="text-xl font-bold mb-2">{{ hero.name }}</div>
-                        <div class="flex-1 text-sm">Hero Power</div>
-                        <div class="text-lg mt-2">Health: {{ hero.health }}</div>
+                         class="game-card border-2 border-gray-900 bg-gray-300 text-gray-900 rounded-xl flex-1 relative overflow-visible">
+                        <!-- Hero Art (fills whole card) -->
+                        <img
+                            :src="heroArtUrl"
+                            :alt="`${hero.name} artwork`"
+                            class="absolute inset-0 w-full h-full object-cover rounded-[0.625rem]"
+                            @error="onHeroImageError"
+                        />
+
+                        <!-- Health Badge (lower right corner, extends beyond) -->
+                        <div class="card-badge -bottom-3 -right-3 bg-green-600">
+                            {{ hero.health }}
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
+        <!-- Entity Information -->
+        <div class="text-center border-t border-gray-700 py-4">
+            <div class="text-lg mb-4">{{ entityName }}</div>
+            <div>{{  entityDescription }}</div>
+        </div>
+
         <!-- Action Section -->
         <div class="text-center w-full border-t border-gray-700 py-4">
-            <div class="text-lg mb-4">{{ entityName }}</div>
 
             <!-- Error Message -->
             <div v-if="errorMessage" class="text-red-400 text-sm mb-4">
@@ -85,7 +99,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { CardInPlay, Creature, HeroInPlay } from '@/types/game'
 import { useGameStore } from '@/stores/game'
 import GameCard from '../GameCard.vue'
@@ -101,6 +115,25 @@ interface Props {
 
 const props = defineProps<Props>()
 const gameStore = useGameStore()
+
+const heroImageError = ref(false)
+
+// Get hero art URL
+const heroArtUrl = computed(() => {
+    if (!props.hero || heroImageError.value) {
+        return '/card_backs/placeholder.svg'
+    }
+
+    if ('art_url' in props.hero && props.hero.art_url) {
+        return props.hero.art_url
+    }
+
+    return '/card_backs/placeholder.svg'
+})
+
+const onHeroImageError = () => {
+    heroImageError.value = true
+}
 
 const emit = defineEmits<{
     'close': []
@@ -127,7 +160,8 @@ const displayCard = computed(() => {
             cost: 0, // Creatures on board don't have cost
             traits: props.creature.traits,
             exhausted: props.creature.exhausted,
-            card_type: 'creature' as const
+            card_type: 'creature' as const,
+            art_url: props.creature.art_url
         }
     }
     return null
@@ -138,6 +172,13 @@ const entityName = computed(() => {
     if (props.creature) return props.creature.name || 'Creature'
     if (props.hero) return props.hero.name || 'Hero'
     return 'Entity'
+})
+
+const entityDescription = computed(() => {
+    if (props.card) return props.card.description || 'No description'
+    if (props.creature) return props.creature.description || 'No description'
+    if (props.hero) return props.hero.description || 'No description'
+    return 'No description'
 })
 
 const canPlayCard = computed(() => {
@@ -240,3 +281,15 @@ function handleUseHero() {
     }
 }
 </script>
+
+<style scoped>
+.game-card {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: 5 / 7;
+}
+
+.card-badge {
+    @apply absolute text-white rounded-full w-10 h-10 flex font-bold items-center justify-center text-xs border border-gray-900 z-20 shadow-lg;
+}
+</style>

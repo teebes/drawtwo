@@ -18,12 +18,14 @@
                 <!-- Header -->
                  <div class="h-24 flex flex-row justify-between border-b border-gray-700">
                     <!-- Enemy Hero-->
-                    <div class="w-24 flex flex-col items-center justify-center border-r border-gray-700 cursor-pointer hover:bg-gray-700/50"
-                         :class="{ 'bg-yellow-500/20': gameState.active === topSide }"
-                         @click="handleClickOpposingHero">
-                        <div class="text-xs text-center break-words leading-tight px-1">{{ opposingHeroName }}</div>
-                        <div class="">{{ opposingHero?.health }}</div>
-                    </div>
+                    <Hero
+                        :hero="opposingHero"
+                        :hero-art-url="opposingHeroArtUrl"
+                        :hero-name="opposingHeroName"
+                        :health="opposingHero?.health"
+                        :active="gameState.active === topSide"
+                        @click="handleClickOpposingHero"
+                    />
 
                     <!-- Recent Updates -->
                     <div class="flex flex-1 flex-col p-2 justify-center items-center cursor-pointer" @click="handleClickUpdates">
@@ -45,26 +47,27 @@
                  <!-- Stats -->
                  <div class="flex flex-row justify-around border-b border-gray-700 p-2">
                     <div class="flex flex-col text-center">
-                        <div>Deck</div>
+                        <div class="text-gray-500">Deck</div>
                         <div>{{ opposingDeckSize }}</div>
                     </div>
                     <div class="flex flex-col text-center">
-                        <div>Hand</div>
+                        <div class="text-gray-500">Hand</div>
                         <div>{{ opposingHandSize }}</div>
                     </div>
                     <div class="flex flex-col text-center">
-                        <div>Energy</div>
+                        <div class="text-gray-500">Energy</div>
                         <div>{{ opposingEnergy }}/{{ opposingEnergyPool }}</div>
                     </div>
                  </div>
 
-                 <!-- Opponent Board -->
+                 <!-- OPPONENT BOARD -->
                  <div class="opponent-board flex-1 flex flex-row bg-gray-800 items-center overflow-x-auto">
                     <div class="lane flex flex-row h-24 mx-auto">
                         <div v-for="creature in opposingBoard" :key="creature.creature_id" class="p-1">
                             <GameCard v-if="creature"
                                       class="flex-grow-0 cursor-pointer hover:scale-105 transition-transform"
                                       :card="creature"
+                                      :title-slug="titleStore.titleSlug ?? undefined"
                                       @click="handleClickOpposingCreature(creature.creature_id)"
                                       compact in_lane/>
                         </div>
@@ -75,7 +78,7 @@
             <!-- Mid Section -->
             <div class="flex flex-row justify-between border-gray-700 border-t border-b min-h-14">
                 <div class="flex items-center justify-center ml-2">
-                    Turn {{ gameState.turn }} <span class="text-gray-400 ml-2">[ {{ gameState.phase }} ]</span>
+                    Turn {{ gameState.turn }} <span class="text-gray-500 ml-2">[ {{ gameState.phase }} ]</span>
                 </div>
                 <GameButton
                     v-if="gameState.winner === 'none'"
@@ -87,7 +90,7 @@
 
             <!-- Viewer Side-->
             <div class="side-a flex-1 flex flex-col">
-                <!-- Viewer Board-->
+                <!-- VIEWER BOARD -->
                 <div class="viewer-board flex-1 flex flex-row bg-gray-800 items-center overflow-x-auto">
                     <div class="lane flex flex-row h-24 mx-auto">
                         <div v-for="creature in ownBoard" :key="creature.creature_id" class="p-1">
@@ -103,15 +106,15 @@
                 <!-- Stats -->
                  <div class="flex flex-row justify-around border-t border-gray-700 p-2">
                     <div class="flex flex-col text-center">
-                        <div>Deck</div>
+                        <div class="text-gray-500">Deck</div>
                         <div>{{ ownDeckSize }}</div>
                     </div>
                     <div class="flex flex-col text-center">
-                        <div>Hand</div>
+                        <div class="text-gray-500">Hand</div>
                         <div>{{ ownHandSize }}</div>
                     </div>
                     <div class="flex flex-col text-center">
-                        <div>Energy</div>
+                        <div class="text-gray-500">Energy</div>
                         <div>{{ ownEnergy }}/{{ ownEnergyPool }}</div>
                     </div>
                  </div>
@@ -119,15 +122,15 @@
                 <!-- Footer -->
                 <div class="h-24 flex flex-row border-t border-gray-700">
                     <!-- Viewer Hero -->
-                    <div class="hero w-24 h-full border-r border-gray-700 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-700/50"
-                         :class="{
-                           'bg-yellow-500/20': gameState.active === bottomSide,
-                           'opacity-50': !canUseHero
-                         }"
-                         @click="handleClickOwnHero">
-                        <div class="hero-name text-xs text-center break-words leading-tight px-1">{{ ownHeroName }}</div>
-                        <div class="hero-health">{{ ownHero?.health }}</div>
-                    </div>
+                    <Hero
+                        :hero="ownHero"
+                        :hero-art-url="ownHeroArtUrl"
+                        :hero-name="ownHeroName"
+                        :health="ownHero?.health"
+                        :active="gameState.active === bottomSide"
+                        :opacity="!canUseHero"
+                        @click="handleClickOwnHero"
+                    />
 
                     <!-- Hand -->
                     <div class="hand overflow-x-auto flex flex-row">
@@ -135,6 +138,7 @@
                             <GameCard v-if="get_card(card_id)"
                                       class="flex-grow-0 cursor-pointer hover:scale-105 transition-transform"
                                       :card="get_card(card_id)!"
+                                      :title-slug="titleStore.titleSlug ?? undefined"
                                       :active="isHandCardActive(card_id)"
                                       @click="handleClickHandCard(card_id)"
                                       compact />
@@ -159,6 +163,7 @@
                 :card="selectedEntity.type === 'card' ? get_card(selectedEntity.id) : null"
                 :creature="selectedEntity.type === 'creature' ? get_creature(selectedEntity.id) : null"
                 :hero="selectedEntity.type === 'hero' ? getHero(selectedEntity.id) : null"
+                :title-slug="titleStore.titleSlug ?? undefined"
                 @close="closeOverlay"
                 @place-creature="handlePlaceCreature"
                 @cast-spell="handleCastSpell"
@@ -173,6 +178,7 @@
                 :card-id="selectedCardId"
                 :own-board="ownBoard"
                 :own-energy="ownEnergy"
+                :title-slug="titleStore.titleSlug ?? undefined"
                 @placement-selected="onPlacementSelected"
                 @close="closeOverlay"
             />
@@ -189,6 +195,7 @@
                 :source-card="targetingState.sourceCard"
                 :error-message="targetingState.errorMessage"
                 :title="targetingState.title"
+                :title-slug="titleStore.titleSlug ?? undefined"
                 @target-selected="onTargetSelected"
                 @cancelled="closeOverlay"
             />
@@ -258,6 +265,7 @@ import GameOverOverlay from '../components/game/board/GameOverOverlay.vue'
 import Update from '../components/game/board/Update.vue'
 import OverlayHeader from '../components/game/board/OverlayHeader.vue'
 import DebugOverlay from '../components/game/board/DebugOverlay.vue'
+import Hero from '../components/game/board/Hero.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -290,6 +298,30 @@ const {
   displayUpdates,
   canUseHero
 } = storeToRefs(gameStore)
+
+// Get hero art URLs
+const ownHeroArtUrl = computed(() => {
+    if (!ownHero.value) {
+        return null
+    }
+    const hero = ownHero.value as any
+    if (hero.art_url) {
+        return hero.art_url as string
+    }
+    return null
+})
+
+const opposingHeroArtUrl = computed(() => {
+    if (!opposingHero.value) {
+        return null
+    }
+    const hero = opposingHero.value as any
+    if (hero.art_url) {
+        return hero.art_url as string
+    }
+    return null
+})
+
 
 // Overlay Types
 type OverlayType = 'entity_detail' | 'place_creature' | 'select_target' | 'menu' | 'updates' | 'debug' | null
@@ -359,7 +391,6 @@ const isHandCardActive = (card_id: string | number) => {
 
 // When clicking a card in hand (always owned by player)
 const handleClickHandCard = (card_id: string) => {
-    console.log('handleClickHandCard', card_id)
     const card = get_card(card_id)
     if (!card) return
 
@@ -510,7 +541,7 @@ const handleUseHero = (side_id: string) => {
         sourceType: 'hero',
         sourceId: hero.hero_id,  // Use the actual hero_id for the backend command
         allowedTypes: 'both',  // Hero powers can target various things
-        scope: 'enemy', // Most hero powers target enemies
+        scope: getHeroPowerTargetScope(hero), // Determine scope based on hero power actions
         sourceCard: null,
         errorMessage: !canUseHero.value ? 'Cannot use hero power' : null,
         title: 'Use Hero Power'
@@ -647,7 +678,7 @@ function requiresTarget(card: CardInPlay): boolean {
             const actions = trait.actions || []
             for (const action of actions) {
                 // Actions that require targeting (single and cleave need targets, AOE doesn't)
-                if ((action.action === 'damage' || action.action === 'heal') &&
+                if ((action.action === 'damage' || action.action === 'heal' || action.action === 'remove') &&
                     action.scope !== 'all') {
                     return true
                 }
@@ -704,6 +735,26 @@ function getSpellTargetScope(card: CardInPlay): 'enemy' | 'friendly' {
             if (action.action === 'damage') {
                 return 'enemy'
             }
+        }
+    }
+
+    return 'enemy'
+}
+
+function getHeroPowerTargetScope(hero: any): 'enemy' | 'friendly' {
+    if (!hero.hero_power || !hero.hero_power.actions) {
+        return 'enemy'
+    }
+
+    const actions = hero.hero_power.actions || []
+    for (const action of actions) {
+        // Heal actions target friendly units
+        if (action.action === 'heal') {
+            return 'friendly'
+        }
+        // Damage actions target enemies
+        if (action.action === 'damage') {
+            return 'enemy'
         }
     }
 

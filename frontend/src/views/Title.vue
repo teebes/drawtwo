@@ -23,8 +23,8 @@
     </div>
 
     <div v-else-if="!loading && !error && title">
-      <section class="bg-gradient-to-br from-primary-600 via-primary-700 to-secondary-700 py-16 text-center">
-        <h1 class="font-display text-4xl font-bold">{{ title.name }}</h1>
+      <section class="text-center bg-gray-300 h-24 flex items-center justify-center">
+        <h1 class="font-display text-4xl font-bold text-gray-900 dark:text-gray-900">{{ title.name }}</h1>
       </section>
 
       <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8 mt-8">
@@ -39,7 +39,7 @@
             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
             </svg>
-            View Full Collection
+            View Cards
           </router-link>
         </div>
 
@@ -139,15 +139,11 @@
               </div>
             </div>
 
-            <div v-else-if="!gamesLoading" class="text-center py-8">
-              <p class="text-gray-600 mb-4">No active games at the moment.</p>
+            <div v-if="!gamesLoading" class="text-center py-8">
               <router-link
                 :to="{ name: 'GameCreate', params: { slug: title.slug } }"
                 class="inline-flex items-center rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
               >
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M19 4v3a3 3 0 01-3 3h-1m-1 0h-1m1 0V6a1 1 0 00-1-1h-2a1 1 0 00-1 1v3"></path>
-                </svg>
                 Create Game
               </router-link>
             </div>

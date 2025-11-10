@@ -1,10 +1,12 @@
 <template>
     <div class="flex-1 flex flex-col">
 
+        <!-- Target Selection State -->
+
         <!-- Error State -->
         <template v-if="errorMessage">
             <div class="flex flex-col flex-1 items-center justify-center"
-                 @click="emit('cancelled')">
+                @click="emit('cancelled')">
                 <div class="text-red-400 text-center cursor-pointer">
                     <div class="text-lg">Cannot Select Target</div>
                     <div class="text-sm opacity-75 mt-2">
@@ -17,8 +19,8 @@
             </div>
         </template>
 
-        <!-- Target Selection State -->
         <template v-else>
+
             <!-- Opponent Hero (if targeting enemies) -->
             <div v-if="showOpposingHero && canTargetHero && opposingHero"
                 class="flex w-full justify-center border-gray-700 border-b cursor-pointer hover:bg-gray-700"
@@ -96,19 +98,21 @@
             </div>
 
             <!-- Header -->
-            <div class="text-center w-full border-b border-gray-700 py-2">
+            <div class="text-center w-full py-2">
                 {{ title }}
             </div>
 
-            <!-- Source Card Display (if provided) -->
-            <div class="flex flex-1 justify-center items-center">
-                <div v-if="sourceCard" class="flex h-72 my-4 w-full">
-                    <div class="p-1 mx-auto">
-                        <GameCard :card="sourceCard" />
-                    </div>
+        </template>
+
+        <!-- Source Card Display (if provided) -->
+        <div class="flex flex-1 justify-center items-center border-t border-gray-700">
+            <div v-if="sourceCard" class="flex h-72 my-4 w-full">
+                <div class="p-1 mx-auto">
+                    <GameCard :card="sourceCard" />
                 </div>
             </div>
-        </template>
+        </div>
+
 
     </div>
 </template>

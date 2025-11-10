@@ -20,10 +20,10 @@
     </div>
 
     <div v-else>
-      <header class="bg-gradient-to-br from-primary-600 via-primary-700 to-secondary-700 py-16 text-center">
-        <h1 class="font-display text-4xl font-bold text-white">Create New Game</h1>
-        <p class="text-primary-100 mt-2">{{ title?.name }}</p>
-      </header>
+
+      <section class="text-center bg-gray-300 h-24 flex items-center justify-center">
+        <h1 class="font-display text-4xl font-bold text-gray-900 dark:text-gray-900">CREATE GAME</h1>
+      </section>
 
       <main class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 mt-8">
         <!-- Game Mode Toggle -->
@@ -212,12 +212,6 @@
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             ]"
           >
-            <svg v-if="creating" class="w-5 h-5 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-            </svg>
-            <svg v-else class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M19 4v3a3 3 0 01-3 3h-1m-1 0h-1m1 0V6a1 1 0 00-1-1h-2a1 1 0 00-1 1v3"></path>
-            </svg>
             {{ creating ? 'Creating Game...' : `Create ${gameMode === 'pve' ? 'PvE' : 'PvP'} Game` }}
           </button>
         </div>

@@ -273,14 +273,22 @@ npm run dev
 
 ## Environment Variables
 
-Key environment variables (see `.env.example` for full list):
+Key environment variables (see `local.env.template` or `production.env.template` for full list):
 
+### Core Settings
 - `SECRET_KEY`: Django secret key
 - `DEBUG`: Enable/disable debug mode
 - `DB_NAME`, `DB_USER`, `DB_PASSWORD`: Database configuration
 - `ALLOWED_HOSTS`: Allowed hosts for production
 - `CELERY_BROKER_URL`: Redis URL for Celery message broker (default: redis://localhost:6379/0)
 - `CELERY_RESULT_BACKEND`: Redis URL for Celery result backend (default: redis://localhost:6379/0)
+
+### Card Assets (Cloudflare R2)
+- `CARD_ASSETS_BASE_URL`: Public URL for card assets (e.g., https://assets.drawtwo.com)
+- `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`: R2 API credentials (optional for local dev)
+- `R2_BUCKET_NAME`: R2 bucket name (default: drawtwo-assets)
+
+See `docs/R2_SETUP.md` for detailed configuration instructions.
 
 ## API Endpoints
 

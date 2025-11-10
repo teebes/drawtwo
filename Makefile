@@ -65,10 +65,8 @@ build:
 	docker-compose build
 
 build-prod:
-	docker build -t teebes/drawtwo-backend:latest ./backend
-	docker build -t teebes/drawtwo-frontend:latest -f frontend/Dockerfile.production ./frontend
-	docker push teebes/drawtwo-backend:latest
-	docker push teebes/drawtwo-frontend:latest
+	docker buildx build --platform linux/amd64,linux/arm64 -t teebes/drawtwo-backend:latest ./backend --push
+	docker buildx build --platform linux/amd64,linux/arm64 -t teebes/drawtwo-frontend:latest -f frontend/Dockerfile.production ./frontend --push
 
 up:
 	docker-compose up

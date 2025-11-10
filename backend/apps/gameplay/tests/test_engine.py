@@ -166,7 +166,9 @@ class EngineTests(GamePlayTestBase):
             card_id="creature_card_2",
             name="test",
             attack=1,
+            attack_max=1,
             health=10,
+            health_max=10,
             exhausted=False,
         )
 
