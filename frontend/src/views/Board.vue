@@ -47,15 +47,15 @@
                  <!-- Stats -->
                  <div class="flex flex-row justify-around border-b border-gray-700 p-2">
                     <div class="flex flex-col text-center">
-                        <div>Deck</div>
+                        <div class="text-gray-500">Deck</div>
                         <div>{{ opposingDeckSize }}</div>
                     </div>
                     <div class="flex flex-col text-center">
-                        <div>Hand</div>
+                        <div class="text-gray-500">Hand</div>
                         <div>{{ opposingHandSize }}</div>
                     </div>
                     <div class="flex flex-col text-center">
-                        <div>Energy</div>
+                        <div class="text-gray-500">Energy</div>
                         <div>{{ opposingEnergy }}/{{ opposingEnergyPool }}</div>
                     </div>
                  </div>
@@ -78,7 +78,7 @@
             <!-- Mid Section -->
             <div class="flex flex-row justify-between border-gray-700 border-t border-b min-h-14">
                 <div class="flex items-center justify-center ml-2">
-                    Turn {{ gameState.turn }} <span class="text-gray-400 ml-2">[ {{ gameState.phase }} ]</span>
+                    Turn {{ gameState.turn }} <span class="text-gray-500 ml-2">[ {{ gameState.phase }} ]</span>
                 </div>
                 <GameButton
                     v-if="gameState.winner === 'none'"
@@ -106,15 +106,15 @@
                 <!-- Stats -->
                  <div class="flex flex-row justify-around border-t border-gray-700 p-2">
                     <div class="flex flex-col text-center">
-                        <div>Deck</div>
+                        <div class="text-gray-500">Deck</div>
                         <div>{{ ownDeckSize }}</div>
                     </div>
                     <div class="flex flex-col text-center">
-                        <div>Hand</div>
+                        <div class="text-gray-500">Hand</div>
                         <div>{{ ownHandSize }}</div>
                     </div>
                     <div class="flex flex-col text-center">
-                        <div>Energy</div>
+                        <div class="text-gray-500">Energy</div>
                         <div>{{ ownEnergy }}/{{ ownEnergyPool }}</div>
                     </div>
                  </div>
@@ -391,7 +391,6 @@ const isHandCardActive = (card_id: string | number) => {
 
 // When clicking a card in hand (always owned by player)
 const handleClickHandCard = (card_id: string) => {
-    console.log('handleClickHandCard', card_id)
     const card = get_card(card_id)
     if (!card) return
 
@@ -679,7 +678,7 @@ function requiresTarget(card: CardInPlay): boolean {
             const actions = trait.actions || []
             for (const action of actions) {
                 // Actions that require targeting (single and cleave need targets, AOE doesn't)
-                if ((action.action === 'damage' || action.action === 'heal') &&
+                if ((action.action === 'damage' || action.action === 'heal' || action.action === 'remove') &&
                     action.scope !== 'all') {
                     return true
                 }

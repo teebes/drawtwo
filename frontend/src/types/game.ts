@@ -11,6 +11,8 @@ export type CardAction =
   | { action: 'draw'; amount: number }
   | { action: 'damage'; amount: number; target: 'hero' | 'creature' | 'enemy'; scope?: 'single' | 'cleave' | 'all' }
   | { action: 'heal'; amount: number; target: 'hero' | 'creature' | 'friendly'; scope?: 'single' | 'cleave' | 'all' }
+  | { action: 'remove'; target: 'creature' | 'enemy'; scope?: 'single' | 'cleave' | 'all' }
+
 
 export interface Trait {
   type: string

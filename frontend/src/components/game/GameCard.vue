@@ -64,7 +64,7 @@
 
         <!-- Exhausted overlay -->
         <div v-if="props.in_lane && 'exhausted' in props.card && props.card.exhausted"
-             class="absolute inset-0 bg-gray-900/70 z-10 pointer-events-none">
+             class="exhausted-overlay">
         </div>
 
     </div>
@@ -277,5 +277,14 @@ const badgeTextSizeClasses = computed(() => {
     inset: 2px;
     /* Match inner border radius (parent radius - border width) */
     border-radius: calc(0.75rem - 2px);
+}
+
+.exhausted-overlay {
+    @apply absolute bg-gray-900/70 pointer-events-none rounded-xl;
+    /* Cover the entire card including border */
+    inset: 0;
+    /* Match card border radius */
+    /* Above card art but below badges */
+    z-index: 10;
 }
 </style>
