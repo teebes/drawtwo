@@ -1,21 +1,13 @@
 <template>
-    <div class="game-card border-2 border-gray-900 bg-gray-300 text-gray-900 rounded-xl flex-1 relative overflow-visible" :class="active_classes">
+    <div class="game-card border-2 border-gray-900 bg-gray-300 text-gray-900 rounded-xl relative" :class="active_classes">
         <!-- Trait indicator (only one shown, priority order) -->
         <!-- Stealth indicator -->
         <div v-if="hasStealth" :class="['card-badge bg-white text-white', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Stealth">
             👁️
         </div>
-        <!-- Unique indicator -->
-        <div v-else-if="hasUnique" :class="['card-badge bg-white text-white', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Unique">
-            ⭐
-        </div>
         <!-- Taunt indicator -->
         <div v-else-if="hasTaunt" :class="['card-badge bg-white text-gray-900', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Taunt">
             🛡️
-        </div>
-        <!-- Charge indicator -->
-        <div v-else-if="hasCharge" :class="['card-badge bg-white text-white', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Charge">
-            ⚔️
         </div>
         <!-- Deathrattle indicator -->
         <div v-else-if="hasDeathrattle" :class="['card-badge bg-white text-white', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Deathrattle">
@@ -29,7 +21,14 @@
         <div v-else-if="hasRanged" :class="['card-badge bg-white text-white', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Ranged">
             🏹
         </div>
-
+        <!-- Charge indicator -->
+        <div v-else-if="hasCharge" :class="['card-badge bg-white text-white', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Charge">
+            ⚔️
+        </div>
+        <!-- Unique indicator -->
+        <div v-else-if="hasUnique" :class="['card-badge bg-white text-white', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Unique">
+            ⭐
+        </div>
 
         <div v-if="details" class="card-name absolute bg-black/80 text-white px-8 py-2 flex items-center justify-center gap-2 z-[15] text-lg font-bold">
             {{ card.name }}
@@ -43,7 +42,7 @@
         <img
             :src="cardArtUrl"
             :alt="`${displayName}`"
-            class="card-art"
+            class="absolute w-full h-full object-cover rounded-xl"
             @error="onImageError"
         />
 
@@ -64,7 +63,7 @@
 
         <!-- Exhausted overlay -->
         <div v-if="props.in_lane && 'exhausted' in props.card && props.card.exhausted"
-             class="exhausted-overlay">
+             class="absolute top-0 left-0 right-0 bottom-0 z-index-10 bg-gray-900/70 rounded-lg">
         </div>
 
     </div>
@@ -254,9 +253,12 @@ const badgeTextSizeClasses = computed(() => {
 
 <style scoped>
 .game-card {
-    width: 100%;
-    height: 100%;
+    /* Use aspect-ratio as primary constraint - card will size from parent's width OR height */
     aspect-ratio: 5 / 7;
+    /* If parent sets width, height will compute from ratio. If parent sets height, width will compute. */
+    /* If parent sets neither, max-width/max-height ensure we fill available space while maintaining ratio */
+    max-width: 100%;
+    max-height: 100%;
 }
 
 .card-badge {
@@ -269,22 +271,5 @@ const badgeTextSizeClasses = computed(() => {
     right: -2px;
     border-radius: 0.75rem 0.75rem 0 0;
     top: -2px;
-}
-
-.card-art {
-    @apply absolute w-full h-full object-cover;
-    /* Position inside the 2px border */
-    inset: 2px;
-    /* Match inner border radius (parent radius - border width) */
-    border-radius: calc(0.75rem - 2px);
-}
-
-.exhausted-overlay {
-    @apply absolute bg-gray-900/70 pointer-events-none rounded-xl;
-    /* Cover the entire card including border */
-    inset: 0;
-    /* Match card border radius */
-    /* Above card art but below badges */
-    z-index: 10;
 }
 </style>

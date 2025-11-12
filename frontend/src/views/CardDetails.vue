@@ -1,8 +1,15 @@
 <template>
-  <div v-if="!loading && card" class="card-edit-page bg-gray-50 dark:bg-gray-900 flex flex-col h-full">
+  <div v-if="!loading && card" class="card-details bg-gray-50 dark:bg-gray-900 flex flex-col h-full">
 
     <!-- Card Name -->
     <section class="relative bg-gray-300 overflow-hidden h-24 flex flex-shrink-0 items-center justify-center space-x-6">
+      <button
+        type="button"
+        @click="handleBack"
+        class="absolute left-2 top-4 -translate-y-1/2 inline-flex items-center text-sm font-medium text-gray-600 hover:text-gray-800 dark:text-gray-700 dark:hover:text-gray-500"
+      >
+        ← Back
+      </button>
       <h1 class="font-display text-4xl font-bold dark:text-gray-900">{{ card.name }}</h1>
       <router-link
         v-if="canEditTitle"
@@ -51,7 +58,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import axios from '../config/api'
 import GameCard from '../components/game/GameCard.vue'
 import GameButton from '../components/ui/GameButton.vue'
@@ -60,6 +67,7 @@ import { useTitleStore } from '../stores/title'
 import type { Card } from '../types/card'
 
 const route = useRoute()
+const router = useRouter()
 const titleSlug = route.params.slug as string
 const cardSlug = route.params.cardSlug as string
 
@@ -78,6 +86,15 @@ const canEditTitle = computed(() => {
 })
 
 // Methods
+const handleBack = (): void => {
+  const historyState = window.history.state as { back?: string | null } | null
+  if (historyState?.back) {
+    router.back()
+  } else {
+    router.push({ name: 'TitleCards', params: { slug: titleSlug } })
+  }
+}
+
 const fetchCard = async (): Promise<void> => {
   try {
     const response = await axios.get(`/titles/${titleSlug}/cards/${cardSlug}/`)
@@ -96,11 +113,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.card-edit-page {
-  display: flex;
-  flex-direction: column;
-}
-
 .stats {
   display: grid;
   grid-template-columns: auto max-content; /* label grows, value hugs content */

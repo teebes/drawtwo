@@ -1,5 +1,5 @@
 <template>
-    <div class="min-h-screen flex flex-row justify-center relative" v-if="!loading">
+    <div class="h-[100svh] flex flex-row justify-center relative" v-if="!loading">
 
         <!-- Game Over Overlay -->
         <GameOverOverlay
@@ -62,10 +62,13 @@
 
                  <!-- OPPONENT BOARD -->
                  <div class="opponent-board flex-1 flex flex-row bg-gray-800 items-center overflow-x-auto">
-                    <div class="lane flex flex-row h-24 mx-auto">
-                        <div v-for="creature in opposingBoard" :key="creature.creature_id" class="p-1">
+                    <div class="lane flex flex-row h-24 mx-auto space-x-2">
+                        <div
+                            v-for="creature in opposingBoard"
+                            :key="creature.creature_id"
+                            class="w-14">
                             <GameCard v-if="creature"
-                                      class="flex-grow-0 cursor-pointer hover:scale-105 transition-transform"
+                                      class="cursor-pointer"
                                       :card="creature"
                                       :title-slug="titleStore.titleSlug ?? undefined"
                                       @click="handleClickOpposingCreature(creature.creature_id)"
@@ -92,10 +95,13 @@
             <div class="side-a flex-1 flex flex-col">
                 <!-- VIEWER BOARD -->
                 <div class="viewer-board flex-1 flex flex-row bg-gray-800 items-center overflow-x-auto">
-                    <div class="lane flex flex-row h-24 mx-auto">
-                        <div v-for="creature in ownBoard" :key="creature.creature_id" class="p-1">
+                    <div class="lane flex flex-row h-24 mx-auto space-x-2">
+                        <div
+                            v-for="creature in ownBoard"
+                            :key="creature.creature_id"
+                            class="w-14">
                             <GameCard v-if="creature"
-                                      class="flex-grow-0 cursor-pointer hover:scale-105 transition-transform"
+                                      class="cursor-pointer"
                                       :card="creature"
                                       @click="handleClickOwnCreature(creature.creature_id)"
                                       compact in_lane/>
@@ -133,15 +139,17 @@
                     />
 
                     <!-- Hand -->
-                    <div class="hand overflow-x-auto flex flex-row">
-                        <div v-for="card_id in ownHand" :key="card_id" class="p-1">
+                    <div class="hand overflow-x-auto flex flex-row flex-nowrap flex-grow items-center space-x-2 ml-2">
+                        <div v-for="card_id in ownHand"
+                             :key="card_id+'else'"
+                             class="w-14">
                             <GameCard v-if="get_card(card_id)"
-                                      class="flex-grow-0 cursor-pointer hover:scale-105 transition-transform"
-                                      :card="get_card(card_id)!"
-                                      :title-slug="titleStore.titleSlug ?? undefined"
-                                      :active="isHandCardActive(card_id)"
-                                      @click="handleClickHandCard(card_id)"
-                                      compact />
+                                class="cursor-pointer"
+                                :card="get_card(card_id)!"
+                                :title-slug="titleStore.titleSlug ?? undefined"
+                                :active="isHandCardActive(card_id)"
+                                @click="handleClickHandCard(card_id)"
+                                compact />
                         </div>
                     </div>
                 </div>
@@ -805,6 +813,6 @@ onUnmounted(() => {
 
 <style scoped>
 .board {
-    height: 100vh;
+    height: 100svh;
 }
 </style>

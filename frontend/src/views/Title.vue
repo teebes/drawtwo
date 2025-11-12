@@ -44,33 +44,73 @@
         </div>
 
         <div class="grid gap-8 sm:grid-cols-2">
-          <Panel title="Decks">
-            <div v-if="decks.length > 0" class="space-y-3">
-              <div
-                v-for="deck in decks"
-                :key="deck.id"
+
+          <Panel title="Games" class="sm:order-2">
+            <div v-if="games.length > 0" class="space-y-3 flex-grow">
+              <router-link
+                v-for="game in games"
+                :key="game.id"
+                :to="{ name: 'Board', params: { game_id: game.id, slug: title.slug } }"
                 class="flex items-center justify-between rounded-lg bg-gray-50 p-3 hover:bg-gray-100 transition-colors dark:bg-gray-800 dark:hover:bg-gray-700"
               >
                 <div class="flex items-center space-x-3">
-                  <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-100 text-sm font-bold text-primary-600">
-                    {{ deck.hero.name.charAt(0) }}
+                  <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 text-sm font-bold text-green-600">
+                    VS
+                  </div>
+                  <div class="font-medium text-gray-900 hover:text-green-600 dark:text-white">
+                    {{ game.name }}
+                  </div>
+                </div>
+              </router-link>
+            </div>
+
+            <div v-if="!gamesLoading" class="pt-2 border-t border-gray-200 dark:border-gray-700">
+              <router-link
+                :to="{ name: 'GameCreate', params: { slug: title.slug } }"
+                class="flex items-center justify-center w-full rounded-lg border-2 border-dashed border-green-300 p-3 text-sm font-medium text-green-600 hover:border-green-400 hover:text-green-700 transition-colors"
+              >
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg>
+                Create New Game
+              </router-link>
+            </div>
+
+            <div v-if="gamesLoading" class="text-center py-4">
+              <p class="text-gray-600">Loading games...</p>
+            </div>
+          </Panel>
+
+          <Panel title="Decks" class="sm:order-1">
+            <div v-if="decks.length > 0" class="space-y-3 flex-grow">
+              <router-link
+                v-for="deck in decks"
+                :key="deck.id"
+                :to="{ name: 'DeckDetail', params: { id: deck.id } }"
+                class="flex items-center justify-between rounded-lg bg-gray-50 p-3 hover:bg-gray-100 transition-colors dark:bg-gray-800 dark:hover:bg-gray-700"
+              >
+                <div class="flex items-center space-x-3">
+                  <div
+                    class="relative w-10 max-w-[4rem] rounded-lg overflow-hidden shadow-md bg-gray-200 dark:bg-gray-700 flex items-center justify-center border border-gray-200 dark:border-gray-600"
+                    style="aspect-ratio: 5 / 7;"
+                  >
+                    <img
+                      v-if="deck.hero.art_url"
+                      :src="deck.hero.art_url"
+                      :alt="`${deck.hero.name} hero art`"
+                      class="inset-0 h-full object-contain object-center border-gray-600 border-2 rounded-lg"
+                    />
+                    <span v-else class="text-lg font-semibold text-primary-600">
+                      {{ deck.hero.name.charAt(0) }}
+                    </span>
                   </div>
                   <div>
-                    <router-link
-                      :to="{ name: 'DeckDetail', params: { id: deck.id } }"
-                      class="font-medium text-gray-900 hover:text-primary-600 dark:text-white"
-                    >
+                    <div class="font-medium text-gray-900 hover:text-primary-600 dark:text-white">
                       {{ deck.name }}
-                    </router-link>
-                    <div class="text-sm text-gray-600">
-                      {{ deck.hero.name }} • {{ deck.card_count }} cards
                     </div>
                   </div>
                 </div>
-                <div class="text-sm text-gray-500">
-                  {{ formatDate(deck.updated_at) }}
-                </div>
-              </div>
+              </router-link>
 
               <div class="pt-2 border-t border-gray-200 dark:border-gray-700">
                 <router-link
@@ -80,7 +120,7 @@
                   <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
                   </svg>
-                  Create New Deck
+                  New Deck
                 </router-link>
               </div>
             </div>
@@ -100,56 +140,6 @@
 
             <div v-if="decksLoading" class="text-center py-4">
               <p class="text-gray-600">Loading decks...</p>
-            </div>
-          </Panel>
-
-          <Panel title="Games">
-            <div v-if="games.length > 0" class="space-y-3">
-              <div
-                v-for="game in games"
-                :key="game.id"
-                class="flex items-center justify-between rounded-lg bg-gray-50 p-3 hover:bg-gray-100 transition-colors dark:bg-gray-800 dark:hover:bg-gray-700"
-              >
-                <div class="flex items-center space-x-3">
-                  <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 text-sm font-bold text-green-600">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M19 4v3a3 3 0 01-3 3h-1m-1 0h-1m1 0V6a1 1 0 00-1-1h-2a1 1 0 00-1 1v3"></path>
-                    </svg>
-                  </div>
-                  <div>
-                    <router-link
-                      :to="{ name: 'GameBoard', params: { game_id: game.id } }"
-                      class="font-medium text-gray-900 hover:text-green-600 dark:text-white"
-                    >
-                      {{ game.name }}
-                    </router-link>
-                    <div class="text-sm text-gray-600">
-                      Game ID: {{ game.id }}
-                    </div>
-                  </div>
-                </div>
-                <div class="flex items-center">
-                  <router-link
-                    :to="{ name: 'Board', params: { game_id: game.id, slug: title.slug } }"
-                    class="inline-flex items-center rounded-lg bg-green-600 px-3 py-1 text-sm font-medium text-white hover:bg-green-700 transition-colors"
-                  >
-                    Join Game
-                  </router-link>
-                </div>
-              </div>
-            </div>
-
-            <div v-if="!gamesLoading" class="text-center py-8">
-              <router-link
-                :to="{ name: 'GameCreate', params: { slug: title.slug } }"
-                class="inline-flex items-center rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
-              >
-                Create Game
-              </router-link>
-            </div>
-
-            <div v-if="gamesLoading" class="text-center py-4">
-              <p class="text-gray-600">Loading games...</p>
             </div>
           </Panel>
         </div>
@@ -245,7 +235,7 @@ import { useAuthStore } from '../stores/auth'
 import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
 
-interface DeckData {
+interface DeckApiData {
   id: number
   name: string
   description: string
@@ -253,10 +243,15 @@ interface DeckData {
     id: number
     name: string
     slug: string
+    art_url?: string | null
   }
   card_count: number
   created_at: string
   updated_at: string
+}
+
+interface DeckData extends DeckApiData {
+  formattedUpdatedAt: string
 }
 
 interface GameData {
@@ -305,7 +300,11 @@ const fetchDecks = async (): Promise<void> => {
     decksLoading.value = true
     const slug = route.params.slug as string
     const response = await axios.get(`/collection/titles/${slug}/decks/`)
-    decks.value = response.data.decks || []
+    const deckList: DeckData[] = (response.data.decks || []).map((deck: DeckApiData) => ({
+      ...deck,
+      formattedUpdatedAt: formatDate(deck.updated_at)
+    }))
+    decks.value = deckList
   } catch (err) {
     console.error('Error fetching decks:', err)
     // Don't show error for decks if title loaded successfully

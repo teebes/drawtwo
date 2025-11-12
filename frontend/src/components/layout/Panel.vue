@@ -1,6 +1,6 @@
 <template>
   <div :class="[
-    'rounded-xl p-6 shadow-sm',
+    'rounded-xl p-6 shadow-sm flex flex-col',
     variantClass,
     paddingClass,
     customClass

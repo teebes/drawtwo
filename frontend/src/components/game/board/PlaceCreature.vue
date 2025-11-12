@@ -60,7 +60,7 @@
         <!-- Selected Card Display -->
         <div class="flex flex-1 justify-center items-center">
             <div v-if="cardId && card" class="flex h-72 my-4">
-                <div class="p-1 mx-auto">
+                <div class="p-1 w-48 mx-auto">
                     <GameCard class="" :card="card"/>
                 </div>
             </div>

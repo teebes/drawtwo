@@ -1,20 +1,20 @@
 <template>
-  <header class="fixed top-0 left-0 right-0 z-50 border-b border-gray-200 bg-white/80 backdrop-blur-sm dark:border-gray-700 dark:bg-gray-900/80">
+  <header class="border-b border-gray-200 bg-white/80 backdrop-blur-sm dark:border-gray-700 dark:bg-gray-900/80">
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div class="flex h-16 items-center justify-between">
         <div class="flex items-center">
           <router-link to="/" class="flex items-center">
-            <h1 class="font-display text-2xl font-bold text-gray-900 dark:text-white hidden sm:block">
-              DrawTwo
-            </h1>
             <img
               src="/drawtwo_logo.png"
               alt="DrawTwo Logo"
-              class="ml-2 h-8 w-8 rounded-lg object-contain"
+              class="sm:mr-2 h-8 w-8 rounded-lg object-contain relative bottom-[2px]"
             />
+            <h1 class="font-display text-2xl font-bold text-gray-900 dark:text-white hidden sm:block">
+              DrawTwo
+            </h1>
           </router-link>
           <!-- Show title name when viewing a title -->
-          <div v-if="titleStore.isViewingTitle" class="ml-4 flex items-center">
+          <div v-if="titleStore.isViewingTitle" class="flex items-center">
             <span class="text-gray-400 dark:text-gray-500 mx-2">/</span>
             <router-link
               :to="{ name: 'Title', params: { slug: titleStore.titleSlug } }"

@@ -7,16 +7,12 @@
         <h1 class="font-display text-4xl font-bold dark:text-gray-900">Collection</h1>
       </section>
 
-
       <!-- Cards Sections -->
       <main class="mx-auto w-full px-4 sm:px-6 lg:px-8 pb-16 space-y-12">
         <!-- Filters -->
-        <section v-if="!cardsLoading && cards.length > 0" class="sticky top-0 z-10 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-4 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-gray-900/60">
+        <section v-if="!cardsLoading && cards.length > 0" class="top-0 z-10 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-4 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-gray-900/60">
           <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
             <div class="space-y-2">
-              <div class="text-sm text-gray-600 dark:text-gray-400">
-                Showing {{ filteredCards.length }} of {{ cards.length }} cards
-              </div>
               <div class="flex flex-wrap items-center gap-2">
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Type:</span>
                 <div class="inline-flex rounded-md shadow-sm overflow-hidden border border-gray-200 dark:border-gray-700">
@@ -48,7 +44,7 @@
               </div>
             </div>
 
-            <div class="flex flex-wrap items-end gap-4">
+            <!-- <div class="flex flex-wrap items-end gap-4">
               <div class="flex flex-col">
                 <label class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Min Cost</label>
                 <select
@@ -77,7 +73,7 @@
               >
                 Clear
               </button>
-            </div>
+            </div> -->
           </div>
         </section>
         <div v-if="cardsLoading" class="text-center py-12">
@@ -105,9 +101,9 @@
                   :details="true"
                   class="cursor-pointer"
                   @click="navigateToDetails(card.slug)" />
-                <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div v-if="0" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
-                    @click.stop
+                    @click.stop="navigateToDetails(card.slug)"
                     class="inline-flex items-center rounded-full bg-white dark:bg-gray-800 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 shadow-sm hover:shadow-md transition-all"
                     title="View card details"
                   >
@@ -160,8 +156,20 @@
         </div>
       </main>
 
+      <section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-1 mb-8">
+        <router-link
+              :to="{ name: 'CardCreate', params: { slug: title.slug } }"
+              class="inline-flex items-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
+            >
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+              </svg>
+              Create New Card
+            </router-link>
+      </section>
+
       <!-- Bottom Bar -->
-      <section v-if="canEditTitle"class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-1 fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-40">
+      <section v-if="0 && canEditTitle"class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-1 fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-40">
         <div class="flex items-center justify-between">
           <div class="text-sm text-gray-600 dark:text-gray-400">
             {{ filteredCards.length }} / {{ cards.length }} Cards

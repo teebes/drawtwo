@@ -25,7 +25,7 @@
         <h1 class="font-display text-4xl font-bold text-gray-900 dark:text-gray-900">CREATE GAME</h1>
       </section>
 
-      <main class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 mt-8">
+      <main class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 my-8">
         <!-- Game Mode Toggle -->
         <div class="mb-8">
           <div class="flex justify-center">

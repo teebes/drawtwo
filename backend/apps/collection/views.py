@@ -43,6 +43,7 @@ def deck_list_by_title(request, title_slug):
                     'id': deck.hero.id,
                     'name': deck.hero.name,
                     'slug': deck.hero.slug,
+                    'art_url': get_hero_art_url(title.slug, deck.hero.slug),
                 },
                 'card_count': deck.card_count,
                 'created_at': deck.created_at.isoformat(),
@@ -107,6 +108,7 @@ def deck_list_by_title(request, title_slug):
                 'name': hero.name,
                 'slug': hero.slug,
                 'health': hero.health,
+                'art_url': get_hero_art_url(title.slug, hero.slug),
             },
             'title': {
                 'id': title.id,

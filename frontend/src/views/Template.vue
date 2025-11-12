@@ -1,36 +1,30 @@
 <template>
   <div class="template-page flex flex-col">
-    <main class="flex-1 flex items-center justify-center">
-      <!-- Content goes here -->
-      <section class="py-16">
-        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div class="text-center">
-            <CollectionCard
-              :card="card"
-              heightMode="fixed"
-              height="md"
-            />
-          </div>
-        </div>
-      </section>
-    </main>
+    <!-- <div class="w-12">
+    <GameCard :card="card" title-slug="archetype" compact in_lane/>
+    </div> -->
+     <div class="w-20 h-28 border-2 border-gray-900 bg-gray-300 text-gray-900 rounded-xl relative">
+      <div class="absolute top-0 left-0 right-0 bottom-0 z-index-10 bg-gray-900/70"></div>
+      C
+     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import CollectionCard from '../components/game/CollectionCard.vue'
+import GameCard from '../components/game/GameCard.vue'
 import type { Card } from '../types/card'
 
 const card: Card = {
   id: 1,
-  slug: 'test-card',
-  name: 'Test Card',
+  slug: 'mongoose',
+  name: 'Mongoose',
   description: 'This is a test card',
   card_type: 'creature',
   cost: 1,
   attack: 1,
   health: 1,
-  traits: []
+  traits: [],
+  art_url: 'https://assets.drawtwo.com/titles/archetype/cards/grenade.webp'
 }
 
 
@@ -38,7 +32,6 @@ const card: Card = {
 
 <style scoped>
 .template-page {
-  height: calc(100vh - 4rem); /* Subtract header height (64px/4rem) */
   display: flex;
   flex-direction: column;
 }

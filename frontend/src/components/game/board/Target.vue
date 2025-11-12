@@ -107,7 +107,7 @@
         <!-- Source Card Display (if provided) -->
         <div class="flex flex-1 justify-center items-center border-t border-gray-700">
             <div v-if="sourceCard" class="flex h-72 my-4 w-full">
-                <div class="p-1 mx-auto">
+                <div class="p-1 w-48 mx-auto">
                     <GameCard :card="sourceCard" />
                 </div>
             </div>

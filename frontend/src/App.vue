@@ -1,9 +1,9 @@
 <template>
-  <div id="app" class="h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 flex flex-col overflow-hidden">
+  <div class="min-h-[100svh] bg-gray-50 dark:bg-gray-900 transition-colors duration-300 flex flex-col">
     <AppHeader v-if="!shouldHideHeader" />
-    <div :class="{ 'pt-16': !shouldHideHeader }" class="flex-1 overflow-y-auto">
+    <main>
       <router-view />
-    </div>
+    </main>
     <ToastNotifications />
   </div>
 </template>

@@ -3,7 +3,7 @@
         <!-- Entity Display -->
         <div class="flex flex-1 justify-center items-center">
             <div class="flex h-72 my-4 w-full">
-                <div class="p-1 mx-auto">
+                <div class="p-1 w-48 mx-auto">
                     <!-- Display Card or Creature -->
                     <GameCard v-if="displayCard" :card="displayCard" />
 

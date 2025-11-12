@@ -36,19 +36,31 @@ export const getBaseUrl = (): string => {
     return import.meta.env.VITE_BASE_URL
   }
 
-  const hostname = window.location.hostname
-  const isDev = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.includes('localhost')
+  const { protocol, hostname, port } = window.location
+  const isLocalhostLike =
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname.includes('localhost') ||
+    hostname.endsWith('.local')
+
+  // If the frontend is being served from Vite's dev server (port 3000),
+  // assume the backend is reachable on the same host at port 8000.
+  if (port === '3000') {
+    const basePort = '8000'
+    return `${protocol}//${hostname}:${basePort}`
+  }
 
   // Debug logging to help identify the issue
   console.log('getBaseUrl debug:', {
     hostname,
     origin: window.location.origin,
-    isDev,
+    port,
+    isLocalhostLike,
     href: window.location.href
   })
 
   // If we're in development mode (localhost), use the dev server
-  if (isDev) {
+  if (isLocalhostLike) {
     return 'http://localhost:8000'
   }
 
