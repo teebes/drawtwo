@@ -140,11 +140,11 @@
                   >
                     <div class="flex items-center space-x-3">
                       <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary-100 text-sm font-bold text-secondary-600">
-                        {{ (friend.friend.username || friend.friend.email).charAt(0).toUpperCase() }}
+                        {{ getFriendDisplayName(friend).charAt(0).toUpperCase() }}
                       </div>
                       <div>
                         <div class="font-medium text-gray-900 dark:text-white">
-                          {{ friend.friend.username || friend.friend.email }}
+                          {{ getFriendDisplayName(friend) }}
                         </div>
                       </div>
                     </div>
@@ -184,6 +184,7 @@ import { matchmakingApi } from '../services/matchmaking'
 import { friendsApi } from '../services/friends'
 import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
+import type { Friendship } from '../types/auth'
 
 interface DeckData {
   id: number
@@ -209,21 +210,6 @@ interface TitleData {
   description?: string
 }
 
-interface FriendData {
-  id: number
-  user: {
-    id: number
-    email: string
-    username?: string
-  }
-  friend: {
-    id: number
-    email: string
-    username?: string
-  }
-  status: string
-}
-
 const route = useRoute()
 const router = useRouter()
 const titleStore = useTitleStore()
@@ -236,7 +222,7 @@ const queuingForRanked = ref<boolean>(false)
 
 // Data
 const playerDecks = ref<DeckData[]>([])
-const friends = ref<FriendData[]>([])
+const friends = ref<Friendship[]>([])
 const playerDecksLoading = ref<boolean>(false)
 const friendsLoading = ref<boolean>(false)
 
@@ -266,7 +252,7 @@ const fetchFriends = async (): Promise<void> => {
     friendsLoading.value = true
     const response = await friendsApi.getFriendships()
     // Filter only accepted friendships
-    friends.value = response.filter((f: FriendData) => f.status === 'accepted')
+    friends.value = response.filter((f: Friendship) => f.status === 'accepted')
   } catch (err) {
     console.error('Error fetching friends:', err)
     error.value = 'Failed to load friends'
@@ -299,11 +285,19 @@ const queueForRanked = async (): Promise<void> => {
   }
 }
 
-const challengeFriend = (friend: FriendData): void => {
+const challengeFriend = (friend: Friendship): void => {
   // TODO: Implement friend challenge functionality
   // This will be implemented in a future task
-  notificationStore.info(`Challenge feature coming soon! You want to challenge ${friend.friend.username || friend.friend.email}`)
+  notificationStore.info(`Challenge feature coming soon! You want to challenge ${getFriendDisplayName(friend)}`)
   console.log('Challenge friend:', friend)
+}
+
+const getFriendDisplayName = (friend: Friendship): string => {
+  // Use friend_data which contains the actual user information
+  if (friend.friend_data?.display_name) return friend.friend_data.display_name
+  if (friend.friend_data?.username) return friend.friend_data.username
+  if (friend.friend_data?.email) return friend.friend_data.email
+  return 'Friend'
 }
 
 // Lifecycle
