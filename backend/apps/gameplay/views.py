@@ -7,11 +7,12 @@ from rest_framework import status
 
 
 from apps.collection.models import Deck
-from apps.gameplay.models import Game
+from apps.gameplay.models import Game, MatchmakingQueue, UserTitleRating
 from apps.gameplay.schemas import GameSummary, GameList
 from apps.gameplay.schemas.game import GameState
 from apps.gameplay.services import GameService
 from apps.gameplay.tasks import step
+from apps.builder.models import Title
 
 
 @api_view(['GET'])
@@ -225,5 +226,111 @@ def create_game(request):
         logger.exception(f"Error creating game: {str(e)}")
         return Response(
             {'error': f'Failed to create game: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def queue_for_ranked_match(request):
+    """
+    Queue a player for a ranked match.
+    Creates a matchmaking queue entry for the player with their selected deck.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.debug(f"queue_for_ranked_match called with data: {request.data}")
+
+    title_slug = request.data.get('title_slug')
+    deck_id = request.data.get('deck_id')
+
+    # Validate input
+    if not title_slug:
+        logger.error("title_slug is missing")
+        return Response(
+            {'error': 'title_slug is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if not deck_id:
+        logger.error("deck_id is missing")
+        return Response(
+            {'error': 'deck_id is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        # Get the title
+        title = get_object_or_404(Title, slug=title_slug)
+        logger.debug(f"Found title: {title}")
+
+        # Get the deck and verify ownership
+        deck = get_object_or_404(Deck, id=deck_id, user=request.user)
+        logger.debug(f"Found deck: {deck}")
+
+        # Verify the deck is for the correct title
+        if deck.title != title:
+            logger.error(f"Deck title mismatch: deck title {deck.title} != requested title {title}")
+            return Response(
+                {'error': 'The selected deck does not belong to this title'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check if the user is already in queue for this title
+        existing_queue = MatchmakingQueue.objects.filter(
+            user=request.user,
+            title=title,
+            status=MatchmakingQueue.STATUS_QUEUED
+        ).first()
+
+        if existing_queue:
+            logger.info(f"User already in queue: {existing_queue}")
+            return Response(
+                {
+                    'error': 'You are already in queue for this title',
+                    'queue_entry_id': existing_queue.id
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get or create the user's rating for this title
+        user_rating, created = UserTitleRating.objects.get_or_create(
+            user=request.user,
+            title=title,
+            defaults={'elo_rating': 1200}
+        )
+        logger.debug(f"User rating: {user_rating.elo_rating}")
+
+        # Create the matchmaking queue entry
+        queue_entry = MatchmakingQueue.objects.create(
+            user=request.user,
+            title=title,
+            deck=deck,
+            elo_rating=user_rating.elo_rating,
+            status=MatchmakingQueue.STATUS_QUEUED
+        )
+        logger.debug(f"Queue entry created: {queue_entry}")
+
+        return Response({
+            'id': queue_entry.id,
+            'status': queue_entry.status,
+            'title': {
+                'slug': title.slug,
+                'name': title.name
+            },
+            'deck': {
+                'id': deck.id,
+                'name': deck.name,
+                'hero': deck.hero.name
+            },
+            'elo_rating': user_rating.elo_rating,
+            'message': f'Successfully queued for ranked match in {title.name}'
+        }, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        logger.exception(f"Error queueing for ranked match: {str(e)}")
+        return Response(
+            {'error': f'Failed to queue for match: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
