@@ -178,3 +178,69 @@ class ELORatingChange(TimestampedModel):
             f"{self.title.name}: {self.winner.display_name} ({self.winner_rating_change:+d}) "
             f"vs {self.loser.display_name} ({self.loser_rating_change:+d})"
         )
+
+
+class MatchmakingQueue(TimestampedModel):
+    """
+    Tracks players queuing for ranked matchmaking.
+    Players are matched based on their ELO rating and queue time.
+    """
+    STATUS_QUEUED = 'queued'
+    STATUS_MATCHED = 'matched'
+    STATUS_CANCELLED = 'cancelled'
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='matchmaking_queue_entries',
+        help_text="The user queuing for a match"
+    )
+
+    deck = models.ForeignKey(
+        Deck,
+        on_delete=models.CASCADE,
+        related_name='matchmaking_queue_entries',
+        help_text="The deck the user will use for the match"
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=list_to_choices([STATUS_QUEUED, STATUS_MATCHED, STATUS_CANCELLED]),
+        default=STATUS_QUEUED,
+        help_text="Current status of the queue entry"
+    )
+
+    elo_rating = models.IntegerField(
+        help_text="User's ELO rating at the time of queueing (for matchmaking)"
+    )
+
+    matched_with = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='match_partner',
+        help_text="The queue entry this user was matched with"
+    )
+
+    game = models.ForeignKey(
+        Game,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='matchmaking_queue_entries',
+        help_text="The game created from this matchmaking"
+    )
+
+    class Meta:
+        db_table = 'gameplay_matchmaking_queue'
+        verbose_name = 'Matchmaking Queue Entry'
+        verbose_name_plural = 'Matchmaking Queue Entries'
+        indexes = [
+            models.Index(fields=['status', 'elo_rating']),
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.display_name} - {self.title.name} ({self.status})"

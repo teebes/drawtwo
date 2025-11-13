@@ -41,6 +41,8 @@ interface AuthState {
   isAuthenticated: boolean
   loading: boolean
   error: any | null
+  userSocket: WebSocket | null
+  userWsStatus: 'disconnected' | 'connecting' | 'connected'
 }
 
 export const useAuthStore = defineStore('auth', {
@@ -50,7 +52,9 @@ export const useAuthStore = defineStore('auth', {
     refreshToken: null,
     isAuthenticated: false,
     loading: false,
-    error: null
+    error: null,
+    userSocket: null,
+    userWsStatus: 'disconnected'
   }),
 
   actions: {
@@ -285,6 +289,74 @@ export const useAuthStore = defineStore('auth', {
           }
         }
         return { success: false, error: error.response?.data || { message: 'Test failed' } }
+      }
+    },
+
+    // Connect to user websocket for real-time notifications
+    connectUserWebSocket(): void {
+      if (!this.isAuthenticated || !this.accessToken) {
+        console.warn('Cannot connect user websocket: not authenticated')
+        return
+      }
+
+      if (this.userSocket && this.userWsStatus === 'connected') {
+        console.log('User websocket already connected')
+        return
+      }
+
+      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+      const baseUrl = axios.defaults.baseURL || ''
+      const wsBaseUrl = baseUrl.replace(/^https?:/, protocol + ':')
+      const wsUrl = `${wsBaseUrl}/ws/user/?token=${this.accessToken}`
+
+      this.userWsStatus = 'connecting'
+      this.userSocket = new WebSocket(wsUrl)
+
+      this.userSocket.onopen = () => {
+        console.log('User websocket connected')
+        this.userWsStatus = 'connected'
+      }
+
+      this.userSocket.onmessage = (event: MessageEvent) => {
+        const data = JSON.parse(event.data)
+        this.handleUserWebSocketMessage(data)
+      }
+
+      this.userSocket.onerror = (error: Event) => {
+        console.error('User websocket error:', error)
+      }
+
+      this.userSocket.onclose = () => {
+        console.log('User websocket disconnected')
+        this.userWsStatus = 'disconnected'
+      }
+    },
+
+    // Disconnect user websocket
+    disconnectUserWebSocket(): void {
+      if (this.userSocket) {
+        this.userSocket.close()
+        this.userSocket = null
+        this.userWsStatus = 'disconnected'
+      }
+    },
+
+    // Handle user websocket messages
+    handleUserWebSocketMessage(data: any): void {
+      console.log('User websocket message:', data)
+
+      if (data.type === 'matchmaking_success') {
+        // Navigate to the game board
+        const router = (window as any).vueRouter
+        if (router) {
+          router.push({
+            name: 'Board',
+            params: {
+              slug: data.title_slug,
+              game_id: data.game_id
+            }
+          })
+        }
       }
     }
   }

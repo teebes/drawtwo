@@ -824,3 +824,114 @@ class GameService:
                 ))
 
         return updates
+
+    @staticmethod
+    @transaction.atomic
+    def process_matchmaking(title_id: int):
+        """
+        Process matchmaking for a specific title.
+        Finds two queued players with similar ELO and creates a game for them.
+
+        Uses a simple ELO-based matchmaking algorithm:
+        1. Find all queued players for this title
+        2. Sort by ELO rating
+        3. Match players with closest ratings
+        4. Create game and notify both players
+        """
+        from apps.gameplay.models import MatchmakingQueue, Game
+        from apps.builder.models import Title
+
+        logger.info(f"Processing matchmaking for title_id={title_id}")
+
+        # Get all queued entries for this title, ordered by ELO
+        queued_entries = list(
+            MatchmakingQueue.objects.filter(
+                title_id=title_id,
+                status=MatchmakingQueue.STATUS_QUEUED
+            )
+            .select_related('user', 'deck', 'deck__hero', 'title')
+            .order_by('elo_rating')
+        )
+
+        if len(queued_entries) < 2:
+            logger.info(f"Not enough players in queue ({len(queued_entries)}), skipping matchmaking")
+            return
+
+        # Simple matchmaking: pair closest ELO ratings
+        # More sophisticated algorithms could consider wait time, rank tiers, etc.
+        matched_pairs = []
+        used_indices = set()
+
+        for i in range(len(queued_entries)):
+            if i in used_indices:
+                continue
+
+            entry_a = queued_entries[i]
+            best_match = None
+            best_diff = float('inf')
+            best_index = None
+
+            # Find closest ELO opponent
+            for j in range(len(queued_entries)):
+                if i == j or j in used_indices:
+                    continue
+
+                entry_b = queued_entries[j]
+
+                # Don't match users against themselves
+                if entry_a.user_id == entry_b.user_id:
+                    continue
+
+                elo_diff = abs(entry_a.elo_rating - entry_b.elo_rating)
+                if elo_diff < best_diff:
+                    best_diff = elo_diff
+                    best_match = entry_b
+                    best_index = j
+
+            if best_match:
+                matched_pairs.append((entry_a, best_match))
+                used_indices.add(i)
+                used_indices.add(best_index)
+                logger.info(
+                    f"Matched {entry_a.user.display_name} (ELO: {entry_a.elo_rating}) "
+                    f"with {best_match.user.display_name} (ELO: {best_match.elo_rating}), "
+                    f"diff: {best_diff}"
+                )
+
+        # Create games for each matched pair
+        for entry_a, entry_b in matched_pairs:
+            try:
+                # Create the game
+                game = GameService.start_game(
+                    entry_a.deck,
+                    entry_b.deck,
+                    randomize_starting_player=True
+                )
+
+                # Update both queue entries
+                entry_a.status = MatchmakingQueue.STATUS_MATCHED
+                entry_a.matched_with = entry_b
+                entry_a.game = game
+                entry_a.save(update_fields=['status', 'matched_with', 'game'])
+
+                entry_b.status = MatchmakingQueue.STATUS_MATCHED
+                entry_b.matched_with = entry_a
+                entry_b.game = game
+                entry_b.save(update_fields=['status', 'matched_with', 'game'])
+
+                logger.info(f"Created ranked game {game.id} for matched players")
+
+                # Notify both players via websocket
+                from apps.gameplay.notifications import send_matchmaking_success
+                send_matchmaking_success(entry_a.user_id, game.id, entry_a.title.slug)
+                send_matchmaking_success(entry_b.user_id, game.id, entry_b.title.slug)
+
+            except Exception as e:
+                logger.error(f"Failed to create game for matched pair: {e}")
+                # Reset queue entries on failure
+                entry_a.status = MatchmakingQueue.STATUS_QUEUED
+                entry_a.save(update_fields=['status'])
+                entry_b.status = MatchmakingQueue.STATUS_QUEUED
+                entry_b.save(update_fields=['status'])
+
+        logger.info(f"Matchmaking complete: created {len(matched_pairs)} games")

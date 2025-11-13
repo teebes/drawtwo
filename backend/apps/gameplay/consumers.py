@@ -177,3 +177,50 @@ class GameConsumer(AsyncWebsocketConsumer):
             game_id=self.game_id,
             action=action,
         )
+
+
+class UserConsumer(AsyncWebsocketConsumer):
+    """
+    WebSocket consumer for user-level notifications (matchmaking, friend requests, etc.).
+    Each authenticated user connects to their own channel for real-time updates.
+    """
+
+    async def connect(self):
+        # Check if user is authenticated
+        if not self.scope["user"].is_authenticated:
+            logger.warning("Rejecting unauthenticated WebSocket connection for user channel")
+            await self.close()
+            return
+
+        self.user_id = self.scope["user"].id
+        self.user_group_name = f'user_{self.user_id}'
+
+        # Join user-specific group
+        await self.channel_layer.group_add(
+            self.user_group_name,
+            self.channel_name
+        )
+
+        await self.accept()
+        logger.info(f"User {self.user_id} connected to user channel")
+
+    async def disconnect(self, close_code):
+        # Leave user group
+        if hasattr(self, 'user_group_name'):
+            await self.channel_layer.group_discard(
+                self.user_group_name,
+                self.channel_name
+            )
+            logger.info(f"User {self.user_id} disconnected from user channel")
+
+    async def matchmaking_success(self, event):
+        """
+        Handle matchmaking success notification.
+        Sends game_id and title_slug to frontend so it can navigate to the game.
+        """
+        await self.send(text_data=json.dumps({
+            'type': 'matchmaking_success',
+            'game_id': event['game_id'],
+            'title_slug': event['title_slug'],
+        }))
+        logger.info(f"Sent matchmaking success to user {self.user_id} for game {event['game_id']}")
