@@ -288,6 +288,10 @@ Key environment variables (see `local.env.template` or `production.env.template`
 - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`: R2 API credentials (optional for local dev)
 - `R2_BUCKET_NAME`: R2 bucket name (default: drawtwo-assets)
 
+### Google Authentication
+- `GOOGLE_OAUTH2_CLIENT_ID` / `GOOGLE_OAUTH2_CLIENT_SECRET`: OAuth credentials used by Django/allauth.
+- `VITE_GOOGLE_CLIENT_ID`: Exposed to the frontend build (usually the same value as `GOOGLE_OAUTH2_CLIENT_ID`).
+
 See `docs/R2_SETUP.md` for detailed configuration instructions.
 
 ## API Endpoints

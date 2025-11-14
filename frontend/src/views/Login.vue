@@ -97,7 +97,7 @@
           <!-- Google Login -->
           <button
             @click="handleGoogleLogin"
-            :disabled="authStore.loading"
+            :disabled="authStore.loading || !googleReady"
             class="mt-6 flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition-all hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:focus:ring-offset-gray-900"
           >
             <svg class="mr-2 h-5 w-5" viewBox="0 0 24 24">
@@ -106,8 +106,11 @@
               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
             </svg>
-            Continue with Google
+            {{ googleReady ? 'Continue with Google' : 'Google login unavailable' }}
           </button>
+          <p v-if="googleError" class="mt-2 text-center text-xs text-red-500 dark:text-red-400">
+            {{ googleError }}
+          </p>
 
           <!-- Toggle between Login/Register -->
           <div class="mt-6 text-center">
@@ -138,19 +141,38 @@
   </div>
 </template>
 
-<script setup>
-import { ref } from 'vue'
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
+declare global {
+  interface Window {
+    google?: any
+  }
+}
+
+type GoogleTokenClient = {
+  requestAccessToken: (options?: { prompt?: string }) => void
+}
+
 const authStore = useAuthStore()
+const router = useRouter()
+const route = useRoute()
 
 const email = ref('')
 const username = ref('')
 const isSignUp = ref(false)
 const message = ref('')
-const messageType = ref('info')
+const messageType = ref<'info' | 'success' | 'error'>('info')
+const googleReady = ref(false)
+const googleError = ref('')
 
-const showMessage = (text, type = 'info') => {
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
+let tokenClient: GoogleTokenClient | null = null
+let googleScriptPromise: Promise<void> | null = null
+
+const showMessage = (text: string, type: 'info' | 'success' | 'error' = 'info') => {
   message.value = text
   messageType.value = type
   setTimeout(() => {
@@ -162,6 +184,83 @@ const toggleMode = () => {
   isSignUp.value = !isSignUp.value
   message.value = ''
 }
+
+const loadGoogleScript = (): Promise<void> => {
+  if (window.google?.accounts?.oauth2) {
+    return Promise.resolve()
+  }
+
+  if (googleScriptPromise) {
+    return googleScriptPromise
+  }
+
+  googleScriptPromise = new Promise((resolve, reject) => {
+    const existingScript = document.querySelector<HTMLScriptElement>('script[data-google-identity="true"]')
+
+    if (existingScript) {
+      existingScript.addEventListener('load', () => resolve(), { once: true })
+      existingScript.addEventListener('error', () => reject(new Error('Failed to load Google OAuth script')), { once: true })
+      return
+    }
+
+    const script = document.createElement('script')
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.defer = true
+    script.dataset.googleIdentity = 'true'
+    script.onload = () => resolve()
+    script.onerror = () => reject(new Error('Failed to load Google OAuth script'))
+    document.head.appendChild(script)
+  })
+
+  return googleScriptPromise
+}
+
+const initGoogleClient = async () => {
+  if (!googleClientId) {
+    googleError.value = 'Google client ID is not configured.'
+    googleReady.value = false
+    return
+  }
+
+  try {
+    await loadGoogleScript()
+
+    tokenClient = window.google?.accounts?.oauth2?.initTokenClient({
+      client_id: googleClientId,
+      scope: 'profile email',
+      callback: async (tokenResponse: { access_token?: string }) => {
+        if (!tokenResponse?.access_token) {
+          showMessage('Google did not return an access token. Please try again.', 'error')
+          return
+        }
+
+        const result = await authStore.googleLogin(tokenResponse.access_token)
+        if (result.success) {
+          showMessage('Google login successful! Redirecting...', 'success')
+          const redirect = (route.query.redirect as string) || '/play'
+          setTimeout(() => {
+            router.push(redirect)
+          }, 800)
+        } else {
+          const errorMsg = result.error?.message || 'Google login failed'
+          showMessage(errorMsg, 'error')
+        }
+      }
+    }) as GoogleTokenClient
+
+    googleReady.value = true
+    googleError.value = ''
+  } catch (error) {
+    console.error('Failed to initialize Google login:', error)
+    googleError.value = 'Unable to load Google login. Please refresh and try again.'
+    googleReady.value = false
+  }
+}
+
+onMounted(() => {
+  initGoogleClient()
+})
 
 const handleSubmit = async () => {
   try {
@@ -199,10 +298,22 @@ const handleSubmit = async () => {
   }
 }
 
-const handleGoogleLogin = () => {
-  // For now, show a placeholder message
-  // In a real implementation, you'd integrate with Google OAuth
-  showMessage('Google login will be implemented with Google OAuth setup.', 'info')
+const handleGoogleLogin = async () => {
+  if (!googleReady.value || !tokenClient) {
+    if (googleError.value) {
+      showMessage(googleError.value, 'error')
+    } else {
+      showMessage('Google login is not ready yet. Please try again shortly.', 'info')
+    }
+    return
+  }
+
+  try {
+    tokenClient.requestAccessToken({ prompt: 'consent' })
+  } catch (error) {
+    console.error('Google login failed to start:', error)
+    showMessage('Unable to start Google login. Please try again.', 'error')
+  }
 }
 </script>
 
