@@ -66,7 +66,9 @@ build:
 
 build-prod:
 	docker buildx build --platform linux/amd64,linux/arm64 -t teebes/drawtwo-backend:latest ./backend --push
-	docker buildx build --platform linux/amd64,linux/arm64 -t teebes/drawtwo-frontend:latest -f frontend/Dockerfile.production ./frontend --push
+	docker buildx build --platform linux/amd64,linux/arm64 -t teebes/drawtwo-frontend:latest -f frontend/Dockerfile.production \
+		--build-arg VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID} \
+		./frontend --push
 
 up:
 	docker-compose up

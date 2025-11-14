@@ -3,19 +3,25 @@
 
 ## Build
 
-In the repo, build each project:
+The frontend bundle needs the public Google client ID at build time (Vite inlines
+`VITE_GOOGLE_CLIENT_ID`). Export it in your shell before kicking off the build:
 
+```bash
+export VITE_GOOGLE_CLIENT_ID="1234567890-abcdef.apps.googleusercontent.com"
+make build-prod
 ```
+
+If you prefer to run the `docker build` commands manually, pass the build arg:
+
+```bash
 docker build -t teebes/drawtwo-backend:latest ./backend
-docker build -t teebes/drawtwo-frontend:latest -f frontend/Dockerfile.production ./frontend
+docker build -t teebes/drawtwo-frontend:latest \
+  -f frontend/Dockerfile.production \
+  --build-arg VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID \
+  ./frontend
 
 docker push teebes/drawtwo-backend:latest
 docker push teebes/drawtwo-frontend:latest
-```
-
-Or simply
-```
-make build-prod
 ```
 
 ## Bring up everything

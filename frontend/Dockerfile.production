@@ -12,9 +12,15 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Set production environment variables for build
-ENV VITE_BASE_URL=https://drawtwo.com
-ENV VITE_API_BASE_URL=https://drawtwo.com/api
+# Build-time configuration (can be overridden with --build-arg)
+ARG VITE_BASE_URL=https://drawtwo.com
+ARG VITE_API_BASE_URL=https://drawtwo.com/api
+ARG VITE_GOOGLE_CLIENT_ID=
+
+# Expose args to the build so Vite can read them
+ENV VITE_BASE_URL=${VITE_BASE_URL}
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+ENV VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
 
 # Build for production
 RUN npm run build
