@@ -13,6 +13,7 @@
 
           <div class="mt-16">
             <button
+              @click="handlePlayClick"
               class="inline-flex items-center justify-center rounded-xl bg-gray-900 px-12 py-5 text-lg font-medium text-white shadow-lg transition-all hover:bg-gray-800 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-4 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 dark:focus:ring-white sm:text-xl"
             >
               Play
@@ -30,13 +31,19 @@
 
           <div class="mt-8 space-y-6 text-lg leading-relaxed text-gray-700 dark:text-gray-300">
             <p>
-              Draw Two is a game engine designed for building online trading card games.
-              Think Hearthstone or Magic: The Gathering Online, but open source and extensible.
+              Draw Two is a game engine designed for building online trading card games—open source and extensible.
             </p>
 
             <p>
-              The first playable title built on Draw Two is <span class="font-semibold text-gray-900 dark:text-white">Archetype</span>,
-              a strategic card game where every decision matters.
+              The first playable title built on Draw Two is
+              <router-link
+                to="/archetype"
+                class="font-semibold text-gray-900 underline decoration-2 underline-offset-2 transition-colors hover:text-gray-700 dark:text-white dark:hover:text-gray-300"
+              >
+                Archetype
+              </router-link>,
+              a prototypical trading card game that serves as both a full game in its own right
+              and a template for builders to create other games.
             </p>
 
             <p>
@@ -65,6 +72,19 @@
 </template>
 
 <script setup>
+import { useAuthStore } from '../stores/auth'
+import { useRouter } from 'vue-router'
+
+const authStore = useAuthStore()
+const router = useRouter()
+
+const handlePlayClick = () => {
+  if (authStore.isAuthenticated) {
+    router.push({ name: 'Play' })
+  } else {
+    console.log('Play button clicked - user not authenticated')
+  }
+}
 </script>
 
 <style scoped>

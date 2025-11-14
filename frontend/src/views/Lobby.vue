@@ -6,7 +6,7 @@
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div class="text-center">
             <h1 class="font-display text-4xl font-bold text-white sm:text-5xl">
-              DrawTwo Lobby
+              Play
             </h1>
           </div>
         </div>

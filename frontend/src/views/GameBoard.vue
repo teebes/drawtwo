@@ -33,10 +33,10 @@
 
           <div class="space-y-3">
             <button
-              @click="$router.push('/lobby')"
+              @click="$router.push('/play')"
               class="w-full px-4 py-3 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors"
             >
-              Return to Lobby
+              Return to Play
             </button>
             <button
               @click="reloadPage"
@@ -719,7 +719,7 @@ const reloadPage = () => {
 const handleExitGame = () => {
   if (confirm('Are you sure you want to exit the game?')) {
     socket.value?.close()
-    router.push('/lobby')
+    router.push('/play')
   }
 }
 
