@@ -164,8 +164,13 @@ export const useAuthStore = defineStore('auth', {
       try {
         const response = await axios.post('/auth/google/', { access_token: accessToken })
 
-        if (response.data.access_token && response.data.refresh_token && response.data.user) {
-          this.setAuthData(response.data.access_token, response.data.refresh_token, response.data.user)
+        // dj-rest-auth returns 'access' and 'refresh', not 'access_token' and 'refresh_token'
+        const access = response.data.access_token || response.data.access
+        const refresh = response.data.refresh_token || response.data.refresh
+        const user = response.data.user
+
+        if (access && refresh && user) {
+          this.setAuthData(access, refresh, user)
         }
 
         this.loading = false
