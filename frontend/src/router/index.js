@@ -23,12 +23,26 @@ import GameBoard from '../views/GameBoard.vue'
 import GameCreate from '../views/GameCreate.vue'
 import Board from '../views/Board.vue'
 import Friends from '../views/Friends.vue'
+import PrivacyPolicy from '../views/PrivacyPolicy.vue'
+import TermsOfService from '../views/TermsOfService.vue'
 
 const routes = [
   {
     path: '/',
     name: 'Home',
     component: Home,
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/privacy',
+    name: 'PrivacyPolicy',
+    component: PrivacyPolicy,
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/terms',
+    name: 'TermsOfService',
+    component: TermsOfService,
     meta: { requiresAuth: false }
   },
   {

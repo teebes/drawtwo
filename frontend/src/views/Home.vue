@@ -67,6 +67,32 @@
           </div>
         </div>
       </section>
+
+      <!-- Footer -->
+      <footer class="border-t border-gray-200 bg-white px-6 py-12 dark:border-gray-800 dark:bg-gray-950 sm:px-8 lg:px-12">
+        <div class="mx-auto max-w-2xl">
+          <div class="flex flex-col items-center justify-center gap-6 sm:flex-row sm:gap-8">
+            <router-link
+              to="/privacy"
+              class="text-sm font-medium text-gray-600 transition-colors hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+            >
+              Privacy Policy
+            </router-link>
+            <span class="hidden text-gray-300 dark:text-gray-700 sm:inline">|</span>
+            <router-link
+              to="/terms"
+              class="text-sm font-medium text-gray-600 transition-colors hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+            >
+              Terms of Service
+            </router-link>
+          </div>
+          <div class="mt-6 text-center">
+            <p class="text-sm text-gray-500 dark:text-gray-500">
+              &copy; {{ currentYear }} Morel Software, LLC. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </footer>
     </main>
   </div>
 </template>
@@ -74,9 +100,12 @@
 <script setup>
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
+import { computed } from 'vue'
 
 const authStore = useAuthStore()
 const router = useRouter()
+
+const currentYear = computed(() => new Date().getFullYear())
 
 const handlePlayClick = () => {
   if (authStore.isAuthenticated) {
