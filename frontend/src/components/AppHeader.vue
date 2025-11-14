@@ -3,7 +3,7 @@
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div class="flex h-16 items-center justify-between">
         <div class="flex items-center">
-          <router-link to="/" class="flex items-center">
+          <router-link :to="authStore.isAuthenticated ? '/play' : '/'" class="flex items-center">
             <img
               src="/drawtwo_logo.png"
               alt="DrawTwo Logo"
@@ -29,10 +29,10 @@
           <!-- Show different navigation based on authentication status -->
           <div v-if="authStore.isAuthenticated" class="flex items-center space-x-4">
             <!-- <router-link
-              to="/lobby"
+              to="/play"
               class="text-sm font-medium text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
             >
-              Lobby
+              Play
             </router-link> -->
             <router-link
               to="/profile"

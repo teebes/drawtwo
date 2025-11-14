@@ -54,10 +54,10 @@
             </div>
             <div class="mt-6">
               <router-link
-                to="/lobby"
+                to="/play"
                 class="inline-flex w-full items-center justify-center rounded-lg bg-primary-600 px-4 py-3 text-sm font-medium text-white shadow-sm transition-all hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
               >
-                Enter the Lobby
+                Start Playing
                 <svg class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                 </svg>
@@ -136,9 +136,9 @@ const confirmEmail = async () => {
 
     if (result.success) {
       success.value = true
-      // Redirect to lobby after a short delay
+      // Redirect to play after a short delay
       setTimeout(() => {
-        router.push('/lobby')
+        router.push('/play')
       }, 3000)
     } else {
       errorMessage.value = result.error?.error || result.error?.message || 'Email confirmation failed. The link may be invalid or expired.'

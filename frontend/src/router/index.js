@@ -38,8 +38,8 @@ const routes = [
     meta: { requiresAuth: false }
   },
   {
-    path: '/lobby',
-    name: 'Lobby',
+    path: '/play',
+    name: 'Play',
     component: Lobby,
     meta: { requiresAuth: true }
   },
@@ -202,16 +202,12 @@ router.beforeEach(async (to, from, next) => {
     next({ name: 'Login', query: { redirect: to.fullPath } })
     return
   } else if (to.meta.requiresStaff && (!authStore.isAuthenticated || !authStore.user?.is_staff)) {
-    // Redirect to lobby if route requires staff and user is not staff
-    next({ name: 'Lobby' })
+    // Redirect to play if route requires staff and user is not staff
+    next({ name: 'Play' })
     return
   } else if (to.name === 'Login' && authStore.isAuthenticated) {
-    // Redirect to lobby if user is already authenticated and trying to access login
-    next({ name: 'Lobby' })
-    return
-  } else if (to.name === 'Home' && authStore.isAuthenticated) {
-    // Redirect authenticated users from home to lobby
-    next({ name: 'Lobby' })
+    // Redirect to play if user is already authenticated and trying to access login
+    next({ name: 'Play' })
     return
   }
 
