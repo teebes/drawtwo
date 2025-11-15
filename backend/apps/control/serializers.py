@@ -3,7 +3,9 @@ from django.contrib.auth import get_user_model
 from django.db.models import Count
 from django.utils import timezone
 from datetime import timedelta
+
 from .models import SiteSettings
+from apps.gameplay.models import MatchmakingQueue
 
 User = get_user_model()
 
@@ -100,3 +102,54 @@ class RecentUsersSerializer(serializers.ModelSerializer):
             'is_email_verified',
             'created_at'
         ]
+
+
+class MatchmakingQueueEntrySerializer(serializers.ModelSerializer):
+    """Serializer for matchmaking queue entries in the control panel."""
+
+    user_display_name = serializers.CharField(source='user.display_name', read_only=True)
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    deck_name = serializers.CharField(source='deck.name', read_only=True)
+    deck_id = serializers.IntegerField(source='deck.id', read_only=True)
+    hero_name = serializers.CharField(source='deck.hero.name', read_only=True)
+    title_name = serializers.CharField(source='deck.title.name', read_only=True)
+    title_slug = serializers.CharField(source='deck.title.slug', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    wait_seconds = serializers.SerializerMethodField()
+    matched_with_entry = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MatchmakingQueue
+        fields = [
+            'id',
+            'status',
+            'status_display',
+            'elo_rating',
+            'created_at',
+            'updated_at',
+            'user_id',
+            'user_display_name',
+            'user_email',
+            'deck_id',
+            'deck_name',
+            'hero_name',
+            'title_name',
+            'title_slug',
+            'game_id',
+            'matched_with_entry',
+            'wait_seconds',
+        ]
+
+    def get_wait_seconds(self, obj):
+        delta = timezone.now() - obj.created_at
+        return int(delta.total_seconds())
+
+    def get_matched_with_entry(self, obj):
+        if not obj.matched_with_id:
+            return None
+        partner = obj.matched_with
+        return {
+            'id': obj.matched_with_id,
+            'user_display_name': getattr(getattr(partner, 'user', None), 'display_name', None),
+            'status': getattr(partner, 'status', None),
+        }

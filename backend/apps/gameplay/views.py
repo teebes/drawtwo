@@ -260,7 +260,7 @@ def queue_for_ranked_match(request):
         # Check if the user is already in queue for this title
         existing_queue = MatchmakingQueue.objects.filter(
             user=request.user,
-            title=deck.title,
+            deck__title=deck.title,
             status=MatchmakingQueue.STATUS_QUEUED
         ).first()
 
@@ -285,7 +285,6 @@ def queue_for_ranked_match(request):
         # Create the matchmaking queue entry
         queue_entry = MatchmakingQueue.objects.create(
             user=request.user,
-            title=deck.title,
             deck=deck,
             elo_rating=user_rating.elo_rating,
             status=MatchmakingQueue.STATUS_QUEUED

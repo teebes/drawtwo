@@ -1,13 +1,15 @@
+import logging
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
 from django.utils import timezone
-from datetime import timedelta
-from rest_framework import status, permissions
+from rest_framework import permissions, status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.response import Response
-from rest_framework.views import APIView
 from rest_framework.generics import ListAPIView
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from .models import SiteSettings
 from .serializers import (
@@ -15,10 +17,15 @@ from .serializers import (
     UserManagementSerializer,
     UserStatusUpdateSerializer,
     UserAnalyticsSerializer,
-    RecentUsersSerializer
+    RecentUsersSerializer,
+    MatchmakingQueueEntrySerializer,
 )
+from apps.gameplay.models import MatchmakingQueue
+from apps.gameplay.services import GameService
+from apps.builder.models import Title
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 class IsStaffPermission(permissions.BasePermission):
@@ -180,6 +187,138 @@ class RecentUsersView(ListAPIView):
     def get_queryset(self):
         """Get the 20 most recent users."""
         return User.objects.all().order_by('-created_at')[:20]
+
+
+class MatchmakingQueueAdminView(APIView):
+    """View matchmaking queue state for administrators."""
+
+    permission_classes = [IsStaffPermission]
+
+    def get(self, request):
+        status_filter = request.query_params.get('status', MatchmakingQueue.STATUS_QUEUED)
+        limit_param = request.query_params.get('limit', 100)
+        try:
+            limit = max(1, min(int(limit_param), 500))
+        except (ValueError, TypeError):
+            limit = 100
+
+        queryset = (
+            MatchmakingQueue.objects.select_related(
+                'user',
+                'deck',
+                'deck__hero',
+                'deck__title',
+                'matched_with',
+                'matched_with__user',
+                'game',
+            )
+            .order_by('-created_at')
+        )
+
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        entries = queryset[:limit]
+        serializer = MatchmakingQueueEntrySerializer(entries, many=True)
+
+        status_counts = {
+            item['status']: item['count']
+            for item in MatchmakingQueue.objects.values('status').annotate(count=Count('id'))
+        }
+
+        title_summary_qs = (
+            MatchmakingQueue.objects.filter(status=MatchmakingQueue.STATUS_QUEUED)
+            .values('deck__title_id', 'deck__title__name', 'deck__title__slug')
+            .annotate(queued_count=Count('id'))
+            .order_by('-queued_count')
+        )
+        title_summary = [
+            {
+                'title_id': row['deck__title_id'],
+                'title_name': row['deck__title__name'],
+                'title_slug': row['deck__title__slug'],
+                'queued_count': row['queued_count'],
+            }
+            for row in title_summary_qs
+        ]
+
+        return Response({
+            'entries': serializer.data,
+            'summary': {
+                'queued': status_counts.get(MatchmakingQueue.STATUS_QUEUED, 0),
+                'matched': status_counts.get(MatchmakingQueue.STATUS_MATCHED, 0),
+                'cancelled': status_counts.get(MatchmakingQueue.STATUS_CANCELLED, 0),
+                'title_summary': title_summary,
+            },
+            'status_filter': status_filter,
+            'limit': limit,
+            'refreshed_at': timezone.now(),
+        })
+
+
+class MatchmakingManualRunView(APIView):
+    """Trigger a manual matchmaking pass from the control panel."""
+
+    permission_classes = [IsStaffPermission]
+
+    def post(self, request):
+        title_id = request.data.get('title_id')
+
+        try:
+            if title_id:
+                try:
+                    title = Title.objects.get(id=title_id)
+                except Title.DoesNotExist:
+                    return Response({'error': 'Title not found'}, status=status.HTTP_404_NOT_FOUND)
+
+                matches_created = GameService.process_matchmaking(title.id)
+                logger.info(
+                    "Manual matchmaking run for title %s (%s) created %s matches",
+                    title.id,
+                    title.name,
+                    matches_created,
+                )
+                return Response({
+                    'message': f'Processed matchmaking queue for {title.name}',
+                    'processed_titles': 1,
+                    'matches_created': matches_created,
+                })
+
+            title_ids = list(
+                MatchmakingQueue.objects.filter(status=MatchmakingQueue.STATUS_QUEUED)
+                .values_list('deck__title_id', flat=True)
+                .distinct()
+            )
+
+            if not title_ids:
+                return Response({
+                    'message': 'No queued players to process',
+                    'processed_titles': 0,
+                    'matches_created': 0,
+                })
+
+            total_matches = 0
+            for tid in title_ids:
+                total_matches += GameService.process_matchmaking(tid)
+
+            logger.info(
+                "Manual matchmaking run for %s titles created %s matches",
+                len(title_ids),
+                total_matches,
+            )
+
+            return Response({
+                'message': f'Processed matchmaking for {len(title_ids)} title(s)',
+                'processed_titles': len(title_ids),
+                'matches_created': total_matches,
+            })
+
+        except Exception as exc:
+            logger.exception("Manual matchmaking run failed: %s", exc)
+            return Response(
+                {'error': f'Failed to process matchmaking: {exc}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 @api_view(['GET'])

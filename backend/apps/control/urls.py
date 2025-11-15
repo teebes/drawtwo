@@ -7,6 +7,10 @@ urlpatterns = [
     # Control panel overview
     path('overview/', views.control_panel_overview, name='overview'),
 
+    # Matchmaking queue admin
+    path('matchmaking/queue/', views.MatchmakingQueueAdminView.as_view(), name='matchmaking_queue'),
+    path('matchmaking/run/', views.MatchmakingManualRunView.as_view(), name='matchmaking_run'),
+
     # Site settings
     path('settings/', views.SiteSettingsView.as_view(), name='site_settings'),
 

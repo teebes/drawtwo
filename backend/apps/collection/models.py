@@ -88,7 +88,7 @@ class Deck(TimestampedModel):
     def owner_name(self):
         """Returns displayable owner name"""
         if self.user:
-            return self.user.email
+            return self.user.username or "Anonymous Gamer"
         return f"🤖 {self.ai_player.name}"
 
     @property

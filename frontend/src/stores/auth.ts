@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import axios from '../config/api'
+import axios, { getBaseUrl } from '../config/api'
 
 // Types for API responses
 interface User {
@@ -309,13 +309,13 @@ export const useAuthStore = defineStore('auth', {
         return
       }
 
-      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-      const baseUrl = axios.defaults.baseURL || ''
-      const wsBaseUrl = baseUrl.replace(/^https?:/, protocol + ':')
-      const wsUrl = `${wsBaseUrl}/ws/user/?token=${this.accessToken}`
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const wsUrl = new URL('/ws/user/', getBaseUrl())
+      wsUrl.protocol = wsProtocol
+      wsUrl.searchParams.set('token', this.accessToken)
 
       this.userWsStatus = 'connecting'
-      this.userSocket = new WebSocket(wsUrl)
+      this.userSocket = new WebSocket(wsUrl.toString())
 
       this.userSocket.onopen = () => {
         console.log('User websocket connected')

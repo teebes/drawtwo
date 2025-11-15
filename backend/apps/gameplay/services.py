@@ -846,16 +846,16 @@ class GameService:
         # Get all queued entries for this title, ordered by ELO
         queued_entries = list(
             MatchmakingQueue.objects.filter(
-                title_id=title_id,
+                deck__title_id=title_id,
                 status=MatchmakingQueue.STATUS_QUEUED
             )
-            .select_related('user', 'deck', 'deck__hero', 'title')
+            .select_related('user', 'deck', 'deck__hero', 'deck__title')
             .order_by('elo_rating')
         )
 
         if len(queued_entries) < 2:
             logger.info(f"Not enough players in queue ({len(queued_entries)}), skipping matchmaking")
-            return
+            return 0
 
         # Simple matchmaking: pair closest ELO ratings
         # More sophisticated algorithms could consider wait time, rank tiers, etc.
@@ -923,8 +923,10 @@ class GameService:
 
                 # Notify both players via websocket
                 from apps.gameplay.notifications import send_matchmaking_success
-                send_matchmaking_success(entry_a.user_id, game.id, entry_a.title.slug)
-                send_matchmaking_success(entry_b.user_id, game.id, entry_b.title.slug)
+                title_slug = getattr(entry_a.title, 'slug', None)
+                if title_slug:
+                    send_matchmaking_success(entry_a.user_id, game.id, title_slug)
+                    send_matchmaking_success(entry_b.user_id, game.id, title_slug)
 
             except Exception as e:
                 logger.error(f"Failed to create game for matched pair: {e}")
@@ -934,4 +936,6 @@ class GameService:
                 entry_b.status = MatchmakingQueue.STATUS_QUEUED
                 entry_b.save(update_fields=['status'])
 
-        logger.info(f"Matchmaking complete: created {len(matched_pairs)} games")
+        matches_created = len(matched_pairs)
+        logger.info(f"Matchmaking complete: created {matches_created} games")
+        return matches_created

@@ -243,4 +243,15 @@ class MatchmakingQueue(TimestampedModel):
         ]
 
     def __str__(self):
-        return f"{self.user.display_name} - {self.title.name} ({self.status})"
+        title = getattr(self.deck, 'title', None)
+        title_name = getattr(title, 'name', 'Unknown Title')
+        return f"{self.user.display_name} - {title_name} ({self.status})"
+
+    @property
+    def title(self):
+        """
+        Convenience accessor to the queue entry's title.
+        Ensures existing matchmaking logic can reference entry.title
+        without needing a separate DB column.
+        """
+        return getattr(self.deck, 'title', None)
