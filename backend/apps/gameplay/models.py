@@ -32,6 +32,9 @@ class Game(TimestampedModel):
 
     queue = models.JSONField(default=list)
 
+    # Friendly matches (friend vs friend) are not rated
+    is_friendly = models.BooleanField(default=False, help_text="Friend vs Friend games are unrated")
+
     @property
     def game_state(self):
         return GameState.model_validate(self.state)
@@ -255,3 +258,46 @@ class MatchmakingQueue(TimestampedModel):
         without needing a separate DB column.
         """
         return getattr(self.deck, 'title', None)
+
+
+class FriendlyChallenge(TimestampedModel):
+    """
+    Represents a direct friend-vs-friend challenge request.
+    When accepted, a Game is created and marked as unrated.
+    """
+    STATUS_PENDING = 'pending'
+    STATUS_ACCEPTED = 'accepted'
+    STATUS_CANCELLED = 'cancelled'
+    STATUS_EXPIRED = 'expired'
+
+    status = models.CharField(
+        max_length=20,
+        choices=list_to_choices([STATUS_PENDING, STATUS_ACCEPTED, STATUS_CANCELLED, STATUS_EXPIRED]),
+        default=STATUS_PENDING
+    )
+
+    challenger = models.ForeignKey(User, on_delete=models.CASCADE, related_name='challenges_sent')
+    challengee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='challenges_received')
+
+    title = models.ForeignKey('builder.Title', on_delete=models.CASCADE, related_name='friendly_challenges')
+
+    challenger_deck = models.ForeignKey(Deck, on_delete=models.PROTECT, related_name='as_challenger_in_challenges')
+    challengee_deck = models.ForeignKey(Deck, on_delete=models.PROTECT, null=True, blank=True, related_name='as_challengee_in_challenges')
+
+    game = models.ForeignKey(Game, on_delete=models.SET_NULL, null=True, blank=True, related_name='friendly_challenge')
+
+    class Meta:
+        db_table = 'gameplay_friendly_challenge'
+        indexes = [
+            models.Index(fields=['status', 'title']),
+            models.Index(fields=['challenger', 'challengee', 'status']),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                check=~models.Q(challenger=models.F('challengee')),
+                name='friendly_challenge_no_self'
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.challenger.display_name} -> {self.challengee.display_name} [{self.title.name}] ({self.status})"

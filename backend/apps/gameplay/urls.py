@@ -23,6 +23,11 @@ urlpatterns = [
     path('matchmaking/queue/', views.queue_for_ranked_match, name='queue-ranked-match'),
     path('matchmaking/status/<slug:title_slug>/', views.matchmaking_queue_status, name='matchmaking-status'),
 
+    # Friendly challenges
+    path('challenges/', views.create_friendly_challenge, name='friendly-challenge-create'),
+    path('challenges/pending/<slug:title_slug>/', views.list_pending_friendly_challenges, name='friendly-challenge-pending'),
+    path('challenges/<int:challenge_id>/accept/', views.accept_friendly_challenge, name='friendly-challenge-accept'),
+
     # Title-specific leaderboard and user rating
     path('<slug:title_slug>/leaderboard/', LeaderboardView.as_view(), name='leaderboard'),
     path('<slug:title_slug>/my-rating/', UserTitleRatingView.as_view(), name='user-title-rating'),

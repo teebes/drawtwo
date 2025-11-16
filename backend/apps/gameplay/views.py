@@ -358,3 +358,149 @@ def matchmaking_queue_status(request, title_slug):
             }
         }
     })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_friendly_challenge(request):
+    """
+    Create a friend vs friend challenge (unrated). Requires:
+    - title_slug
+    - challengee_user_id
+    - challenger_deck_id
+    """
+    from apps.authentication.models import Friendship
+    from apps.gameplay.models import FriendlyChallenge
+    import logging
+    logger = logging.getLogger(__name__)
+
+    title_slug = request.data.get('title_slug')
+    challengee_user_id = request.data.get('challengee_user_id')
+    challenger_deck_id = request.data.get('challenger_deck_id')
+
+    if not (title_slug and challengee_user_id and challenger_deck_id):
+        return Response({'error': 'title_slug, challengee_user_id, and challenger_deck_id are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    title = get_object_or_404(Title, slug=title_slug)
+    challengee = get_object_or_404(request.user.__class__, id=challengee_user_id)
+    challenger_deck = get_object_or_404(Deck, id=challenger_deck_id, user=request.user, title=title)
+
+    # Cannot challenge self
+    if challengee.id == request.user.id:
+        return Response({'error': 'Cannot challenge yourself'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Validate they are friends (accepted)
+    is_friend = Friendship.objects.filter(
+        user=request.user, friend=challengee, status=Friendship.STATUS_ACCEPTED
+    ).exists()
+    if not is_friend:
+        return Response({'error': 'You can only challenge accepted friends'}, status=status.HTTP_403_FORBIDDEN)
+
+    # If there is already a pending challenge from challenger to challengee for this title, return it
+    existing = FriendlyChallenge.objects.filter(
+        challenger=request.user, challengee=challengee, title=title, status=FriendlyChallenge.STATUS_PENDING
+    ).first()
+    if existing:
+        return Response({
+            'id': existing.id,
+            'status': existing.status,
+            'title': {'id': title.id, 'name': title.name, 'slug': title.slug},
+            'challenger': {'id': request.user.id, 'display_name': request.user.display_name},
+            'challengee': {'id': challengee.id, 'display_name': challengee.display_name},
+            'challenger_deck': {'id': challenger_deck.id, 'name': challenger_deck.name, 'hero': challenger_deck.hero.name},
+        }, status=status.HTTP_200_OK)
+
+    challenge = FriendlyChallenge.objects.create(
+        challenger=request.user,
+        challengee=challengee,
+        title=title,
+        challenger_deck=challenger_deck,
+        status=FriendlyChallenge.STATUS_PENDING
+    )
+
+    return Response({
+        'id': challenge.id,
+        'status': challenge.status,
+        'title': {'id': title.id, 'name': title.name, 'slug': title.slug},
+        'challenger': {'id': request.user.id, 'display_name': request.user.display_name},
+        'challengee': {'id': challengee.id, 'display_name': challengee.display_name},
+        'challenger_deck': {'id': challenger_deck.id, 'name': challenger_deck.name, 'hero': challenger_deck.hero.name},
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_pending_friendly_challenges(request, title_slug):
+    """
+    List pending incoming and outgoing challenges for the current user and title.
+    """
+    from apps.gameplay.models import FriendlyChallenge
+    title = get_object_or_404(Title, slug=title_slug)
+
+    incoming = FriendlyChallenge.objects.select_related('challenger', 'challenger_deck').filter(
+        challengee=request.user, title=title, status=FriendlyChallenge.STATUS_PENDING
+    )
+    outgoing = FriendlyChallenge.objects.select_related('challengee', 'challenger_deck').filter(
+        challenger=request.user, title=title, status=FriendlyChallenge.STATUS_PENDING
+    )
+
+    incoming_payload = [{
+        'id': c.id,
+        'status': c.status,
+        'challenger': {'id': c.challenger.id, 'display_name': c.challenger.display_name},
+        'challengee': {'id': c.challengee.id, 'display_name': c.challengee.display_name},
+        'challenger_deck': {'id': c.challenger_deck.id, 'name': c.challenger_deck.name, 'hero': c.challenger_deck.hero.name},
+        'title': {'id': c.title.id, 'name': c.title.name, 'slug': c.title.slug},
+    } for c in incoming]
+
+    outgoing_payload = [{
+        'id': c.id,
+        'status': c.status,
+        'challenger': {'id': c.challenger.id, 'display_name': c.challenger.display_name},
+        'challengee': {'id': c.challengee.id, 'display_name': c.challengee.display_name},
+        'challenger_deck': {'id': c.challenger_deck.id, 'name': c.challenger_deck.name, 'hero': c.challenger_deck.hero.name},
+        'title': {'id': c.title.id, 'name': c.title.name, 'slug': c.title.slug},
+    } for c in outgoing]
+
+    return Response({'incoming': incoming_payload, 'outgoing': outgoing_payload})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def accept_friendly_challenge(request, challenge_id):
+    """
+    Accept a friendly challenge. Requires:
+    - challengee_deck_id
+    Creates an unrated Game and returns its id.
+    """
+    from apps.gameplay.models import FriendlyChallenge
+    challenge = get_object_or_404(FriendlyChallenge, id=challenge_id)
+
+    if challenge.challengee != request.user:
+        return Response({'error': 'Only the challengee can accept this challenge'}, status=status.HTTP_403_FORBIDDEN)
+
+    if challenge.status != FriendlyChallenge.STATUS_PENDING:
+        return Response({'error': 'Challenge is not pending'}, status=status.HTTP_400_BAD_REQUEST)
+
+    challengee_deck_id = request.data.get('challengee_deck_id')
+    if not challengee_deck_id:
+        return Response({'error': 'challengee_deck_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Validate deck ownership and title
+    challengee_deck = get_object_or_404(Deck, id=challengee_deck_id, user=request.user, title=challenge.title)
+
+    # Create the game
+    game = GameService.start_game(challenge.challenger_deck, challengee_deck, randomize_starting_player=True)
+    game.is_friendly = True
+    game.save(update_fields=['is_friendly'])
+
+    # Link and update challenge
+    challenge.challengee_deck = challengee_deck
+    challenge.game = game
+    challenge.status = FriendlyChallenge.STATUS_ACCEPTED
+    challenge.save(update_fields=['challengee_deck', 'game', 'status'])
+
+    # Kick off first step
+    step.delay(game.id)
+
+    return Response({'game_id': game.id}, status=status.HTTP_200_OK)

@@ -156,6 +156,31 @@
               </div>
 
               <div v-else class="space-y-6">
+                <!-- Incoming challenge banner -->
+                <div v-if="hasIncomingChallenge && firstIncomingChallenge" class="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <span class="font-semibold">{{ firstIncomingChallenge.challenger.display_name }}</span>
+                      challenged you to a friendly match.
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <button
+                        type="button"
+                        class="inline-flex items-center rounded-md px-4 py-2 text-sm font-medium transition-colors"
+                        :class="[
+                          selectedPlayerDeck
+                            ? 'bg-secondary-600 text-white hover:bg-secondary-700'
+                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        ]"
+                        :disabled="!selectedPlayerDeck"
+                        @click="acceptIncomingChallenge(firstIncomingChallenge)"
+                      >
+                        Accept Challenge
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 <div class="flex flex-col items-center space-y-3">
                   <button
                     type="button"
@@ -211,10 +236,16 @@
                       </div>
                       <button
                         type="button"
-                        class="inline-flex items-center rounded-md border border-secondary-500 px-4 py-2 text-sm font-medium text-secondary-600 transition-colors hover:bg-secondary-50 focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2"
+                        class="inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2"
+                        :class="[
+                          isFriendChallenged(friend)
+                            ? 'border-gray-300 text-gray-400 cursor-not-allowed'
+                            : 'border-secondary-500 text-secondary-600 hover:bg-secondary-50 focus:ring-secondary-500'
+                        ]"
+                        :disabled="isFriendChallenged(friend)"
                         @click="challengeFriend(friend)"
                       >
-                        Challenge
+                        {{ isFriendChallenged(friend) ? 'Challenged' : 'Challenge' }}
                       </button>
                     </div>
                   </div>
@@ -259,6 +290,8 @@ import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
 import { friendsApi } from '../services/friends'
 import type { Friendship } from '../types/auth'
+import { challengesApi } from '../services/challenges'
+import type { FriendlyChallenge, PendingChallengesResponse } from '../types/challenge'
 
 interface DeckData {
   id: number
@@ -316,6 +349,9 @@ const friendsError = ref<string | null>(null)
 const rankedQueueEntry = ref<RankedQueueEntry | null>(null)
 const rankedQueueLoading = ref<boolean>(false)
 const rankedQueueError = ref<string | null>(null)
+// Friendly challenges
+const pendingIncomingChallenges = ref<FriendlyChallenge[]>([])
+const pendingOutgoingChallenges = ref<FriendlyChallenge[]>([])
 
 // Selections
 const selectedPlayerDeck = ref<DeckData | null>(null)
@@ -335,6 +371,18 @@ const canCreateGame = computed(() => {
 const isRankedButtonDisabled = computed(() => {
   return queueingRanked.value || rankedQueueLoading.value || !!rankedQueueEntry.value
 })
+
+const outgoingPendingByUserId = computed<Record<number, boolean>>(() => {
+  const map: Record<number, boolean> = {}
+  for (const c of pendingOutgoingChallenges.value) {
+    // Disable by the challengee's user id
+    map[c.challengee.id] = true
+  }
+  return map
+})
+
+const hasIncomingChallenge = computed(() => pendingIncomingChallenges.value.length > 0)
+const firstIncomingChallenge = computed(() => pendingIncomingChallenges.value[0] || null)
 
 // Methods
 const fetchPlayerDecks = async (): Promise<void> => {
@@ -375,6 +423,16 @@ const fetchFriends = async (): Promise<void> => {
     friendsError.value = 'Failed to load friends. Please try again later.'
   } finally {
     friendsLoading.value = false
+  }
+}
+
+const fetchPendingChallenges = async (): Promise<void> => {
+  try {
+    const resp: PendingChallengesResponse = await challengesApi.listPending(titleSlug.value)
+    pendingIncomingChallenges.value = resp.incoming || []
+    pendingOutgoingChallenges.value = resp.outgoing || []
+  } catch (err) {
+    console.error('Error fetching pending challenges:', err)
   }
 }
 
@@ -420,9 +478,45 @@ const queueForRanked = async (): Promise<void> => {
   }
 }
 
-const challengeFriend = (friend: Friendship): void => {
-  const friendName = friend.friend_data.display_name || friend.friend_data.username || friend.friend_data.email
-  notificationStore.info(`Challenging ${friendName} will be available soon.`)
+const isFriendChallenged = (friend: Friendship): boolean => {
+  const friendUserId = friend.friend_data.id as unknown as number
+  return !!outgoingPendingByUserId.value[friendUserId]
+}
+
+const challengeFriend = async (friend: Friendship): Promise<void> => {
+  const friendUserId = (friend.friend_data.id as unknown as number) || friend.friend
+  if (!selectedPlayerDeck.value) {
+    notificationStore.error('Please select your deck first')
+    return
+  }
+  try {
+    await challengesApi.createChallenge({
+      title_slug: titleSlug.value,
+      challengee_user_id: friendUserId,
+      challenger_deck_id: selectedPlayerDeck.value.id
+    })
+    notificationStore.success('Challenge sent!')
+    // Refresh pending list so button greys out
+    await fetchPendingChallenges()
+  } catch (err) {
+    console.error('Error creating challenge:', err)
+    notificationStore.handleApiError(err as Error)
+  }
+}
+
+const acceptIncomingChallenge = async (challenge: FriendlyChallenge): Promise<void> => {
+  if (!selectedPlayerDeck.value) {
+    notificationStore.error('Select your deck to accept the challenge')
+    return
+  }
+  try {
+    const { game_id } = await challengesApi.acceptChallenge(challenge.id, selectedPlayerDeck.value.id)
+    notificationStore.success('Challenge accepted! Starting game...')
+    router.push({ name: 'Board', params: { game_id, slug: titleSlug.value } })
+  } catch (err) {
+    console.error('Error accepting challenge:', err)
+    notificationStore.handleApiError(err as Error)
+  }
 }
 
 const createGame = async (): Promise<void> => {
@@ -475,6 +569,7 @@ watch(gameMode, (newMode) => {
 
   if (newMode === 'pvp') {
     fetchRankedQueueStatus()
+    fetchPendingChallenges()
   }
 })
 
@@ -490,6 +585,8 @@ onMounted(async () => {
     ])
 
     await fetchRankedQueueStatus()
+    // Preload challenges if user lands with PvP selected later
+    await fetchPendingChallenges()
   } catch (err) {
     console.error('Error initializing game create:', err)
     error.value = 'Failed to initialize page'

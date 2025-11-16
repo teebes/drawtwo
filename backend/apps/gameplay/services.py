@@ -698,6 +698,11 @@ class GameService:
             logger.info(f"Skipping ELO update for PvE game {game.id}")
             return
 
+        # Skip for friendly unrated matches
+        if getattr(game, 'is_friendly', False):
+            logger.info(f"Skipping ELO update for friendly (unrated) game {game.id}")
+            return
+
         # Skip if no winner (shouldn't happen, but just in case)
         if not game.winner:
             logger.warning(f"Game {game.id} ended without a winner")
