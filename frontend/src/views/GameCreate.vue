@@ -159,11 +159,26 @@
                 <div class="flex flex-col items-center space-y-3">
                   <button
                     type="button"
-                    class="inline-flex w-full items-center justify-center rounded-lg bg-secondary-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-secondary-700 focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2 sm:w-auto"
+                    class="inline-flex w-full items-center justify-center rounded-lg px-6 py-3 text-sm font-semibold transition-colors sm:w-auto"
+                    :class="[
+                      isRankedButtonDisabled
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-secondary-600 text-white hover:bg-secondary-700 focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2'
+                    ]"
+                    :disabled="isRankedButtonDisabled"
                     @click="queueForRanked"
                   >
                     Play Ranked
                   </button>
+                  <p v-if="rankedQueueLoading" class="text-xs text-gray-500">
+                    Checking ranked queue status...
+                  </p>
+                  <p v-else-if="rankedQueueEntry" class="text-xs text-gray-600 text-center">
+                    Already queued with {{ rankedQueueEntry.deck.name }}. Waiting for opponent.
+                  </p>
+                  <p v-else-if="rankedQueueError" class="text-xs text-red-600 text-center">
+                    {{ rankedQueueError }}
+                  </p>
                   <div class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                     or
                   </div>
@@ -262,6 +277,23 @@ interface DeckData {
   updated_at: string
 }
 
+interface RankedQueueEntry {
+  id: number
+  status: string
+  elo_rating: number
+  queued_at: string
+  deck: {
+    id: number
+    name: string
+    hero: string
+  }
+  title: {
+    id: number
+    name: string
+    slug: string
+  }
+}
+
 const route = useRoute()
 const router = useRouter()
 const notificationStore = useNotificationStore()
@@ -270,6 +302,7 @@ const notificationStore = useNotificationStore()
 const loading = ref<boolean>(true)
 const error = ref<string | null>(null)
 const creating = ref<boolean>(false)
+const queueingRanked = ref<boolean>(false)
 const gameMode = ref<'pve' | 'pvp'>('pve')
 
 // Data
@@ -280,6 +313,9 @@ const pveDecksLoading = ref<boolean>(false)
 const friends = ref<Friendship[]>([])
 const friendsLoading = ref<boolean>(false)
 const friendsError = ref<string | null>(null)
+const rankedQueueEntry = ref<RankedQueueEntry | null>(null)
+const rankedQueueLoading = ref<boolean>(false)
+const rankedQueueError = ref<string | null>(null)
 
 // Selections
 const selectedPlayerDeck = ref<DeckData | null>(null)
@@ -294,6 +330,10 @@ const canCreateGame = computed(() => {
   }
 
   return false
+})
+
+const isRankedButtonDisabled = computed(() => {
+  return queueingRanked.value || rankedQueueLoading.value || !!rankedQueueEntry.value
 })
 
 // Methods
@@ -338,6 +378,22 @@ const fetchFriends = async (): Promise<void> => {
   }
 }
 
+const fetchRankedQueueStatus = async (): Promise<void> => {
+  if (!titleSlug.value) return
+
+  try {
+    rankedQueueLoading.value = true
+    rankedQueueError.value = null
+    const response = await axios.get(`/gameplay/matchmaking/status/${titleSlug.value}/`)
+    rankedQueueEntry.value = response.data.in_queue ? response.data.queue_entry : null
+  } catch (err) {
+    console.error('Error fetching ranked queue status:', err)
+    rankedQueueError.value = 'Failed to check ranked queue status.'
+  } finally {
+    rankedQueueLoading.value = false
+  }
+}
+
 const queueForRanked = async (): Promise<void> => {
   if (!selectedPlayerDeck.value) {
     notificationStore.error('Please select a deck first')
@@ -345,14 +401,22 @@ const queueForRanked = async (): Promise<void> => {
   }
 
   try {
+    queueingRanked.value = true
     const response = await axios.post('/gameplay/matchmaking/queue/', {
       deck_id: selectedPlayerDeck.value.id
     })
     notificationStore.success('Queued for ranked match! Waiting for opponent...')
     console.log('Queue response:', response.data)
+    await fetchRankedQueueStatus()
   } catch (err) {
     console.error('Error queueing for ranked:', err)
     notificationStore.handleApiError(err as Error)
+    const errorResponse = (err as any)?.response
+    if (errorResponse?.status === 400 && errorResponse?.data?.queue_entry_id) {
+      await fetchRankedQueueStatus()
+    }
+  } finally {
+    queueingRanked.value = false
   }
 }
 
@@ -408,6 +472,10 @@ watch(gameMode, (newMode) => {
   if (newMode === 'pvp' && friends.value.length === 0 && !friendsLoading.value) {
     fetchFriends()
   }
+
+  if (newMode === 'pvp') {
+    fetchRankedQueueStatus()
+  }
 })
 
 // Lifecycle
@@ -420,6 +488,8 @@ onMounted(async () => {
       fetchPlayerDecks(),
       fetchPveDecks()
     ])
+
+    await fetchRankedQueueStatus()
   } catch (err) {
     console.error('Error initializing game create:', err)
     error.value = 'Failed to initialize page'

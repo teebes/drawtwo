@@ -152,6 +152,7 @@ class GameService:
                 hero_power=deck_a.hero.hero_power,
                 exhausted=False,
                 art_url=get_hero_art_url(deck_a.title.slug, deck_a.hero.slug),
+                player_name=deck_a.owner_name,
             ),
             'side_b': HeroInPlay(
                 hero_id=str(deck_b.hero.id),
@@ -163,6 +164,8 @@ class GameService:
                 hero_power=deck_b.hero.hero_power,
                 exhausted=False,
                 art_url=get_hero_art_url(deck_b.title.slug, deck_b.hero.slug),
+                player_name=deck_b.owner_name,
+
             ),
         }
 
@@ -905,7 +908,7 @@ class GameService:
                 game = GameService.start_game(
                     entry_a.deck,
                     entry_b.deck,
-                    randomize_starting_player=True
+                    randomize_starting_player=True,
                 )
 
                 # Update both queue entries

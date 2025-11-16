@@ -317,3 +317,44 @@ def queue_for_ranked_match(request):
             {'error': f'Failed to queue for match: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def matchmaking_queue_status(request, title_slug):
+    """
+    Return the current matchmaking queue status for the requesting user within a title.
+    """
+    title = get_object_or_404(Title, slug=title_slug)
+
+    queue_entry = MatchmakingQueue.objects.select_related('deck', 'deck__hero').filter(
+        user=request.user,
+        deck__title=title,
+        status=MatchmakingQueue.STATUS_QUEUED
+    ).first()
+
+    if not queue_entry:
+        return Response({
+            'in_queue': False,
+            'queue_entry': None
+        })
+
+    return Response({
+        'in_queue': True,
+        'queue_entry': {
+            'id': queue_entry.id,
+            'status': queue_entry.status,
+            'elo_rating': queue_entry.elo_rating,
+            'queued_at': queue_entry.created_at,
+            'deck': {
+                'id': queue_entry.deck.id,
+                'name': queue_entry.deck.name,
+                'hero': queue_entry.deck.hero.name
+            },
+            'title': {
+                'id': title.id,
+                'name': title.name,
+                'slug': title.slug
+            }
+        }
+    })
