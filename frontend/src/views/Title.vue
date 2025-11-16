@@ -55,7 +55,7 @@
               >
                 <div class="flex items-center space-x-3">
                   <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 text-sm font-bold text-green-600">
-                    VS
+                    {{ game.type === 'pve' ? '🤖' : '👥' }}
                   </div>
                   <div class="font-medium text-gray-900 hover:text-green-600 dark:text-white">
                     {{ game.name }}
@@ -257,6 +257,7 @@ interface DeckData extends DeckApiData {
 interface GameData {
   id: number
   name: string
+  type: 'pve' | 'pvp'
 }
 
 interface LeaderboardPlayer {

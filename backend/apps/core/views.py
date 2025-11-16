@@ -129,16 +129,22 @@ def title_games(request, slug):
     game_summaries = []
 
     for game in games:
+
         if game.side_a.user == request.user:
-            game_summaries.append(GameSummary(
-                id=game.id,
-                name=game.side_b.owner_name,
-            ))
+            opposing_deck = game.side_b
         else:
-            game_summaries.append(GameSummary(
-                id=game.id,
-                name=game.side_a.owner_name,
-            ))
+            opposing_deck = game.side_a
+
+        if opposing_deck.is_ai_deck:
+            opposing_name = opposing_deck.name
+        else:
+            opposing_name = opposing_deck.owner_name
+
+        game_summaries.append(GameSummary(
+            id=game.id,
+            name=opposing_name,
+            type="pve" if opposing_deck.is_ai_deck else "pvp",
+        ))
 
     return Response(GameList(games=game_summaries).model_dump())
 
