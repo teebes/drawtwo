@@ -6,8 +6,9 @@ from rest_framework.response import Response
 from rest_framework import status
 
 
+from apps.builder.models import Title
 from apps.collection.models import Deck
-from apps.gameplay.models import Game
+from apps.gameplay.models import Game, MatchmakingQueue, UserTitleRating
 from apps.gameplay.schemas import GameSummary, GameList
 from apps.gameplay.schemas.game import GameState
 from apps.gameplay.services import GameService
@@ -227,3 +228,133 @@ def create_game(request):
             {'error': f'Failed to create game: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def queue_for_ranked_match(request):
+    """
+    Queue a player for a ranked match.
+    Creates a matchmaking queue entry for the player with their selected deck.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.debug(f"queue_for_ranked_match called with data: {request.data}")
+
+    deck_id = request.data.get('deck_id')
+
+    # Validate input
+    if not deck_id:
+        logger.error("deck_id is missing")
+        return Response(
+            {'error': 'deck_id is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        # Get the deck and verify ownership
+        deck = get_object_or_404(Deck, id=deck_id, user=request.user)
+        logger.debug(f"Found deck: {deck}")
+
+
+        # Check if the user is already in queue for this title
+        existing_queue = MatchmakingQueue.objects.filter(
+            user=request.user,
+            deck__title=deck.title,
+            status=MatchmakingQueue.STATUS_QUEUED
+        ).first()
+
+        if existing_queue:
+            logger.info(f"User already in queue: {existing_queue}")
+            return Response(
+                {
+                    'error': 'You are already in queue for this title',
+                    'queue_entry_id': existing_queue.id
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get or create the user's rating for this title
+        user_rating, created = UserTitleRating.objects.get_or_create(
+            user=request.user,
+            title=deck.title,
+            defaults={'elo_rating': 1200}
+        )
+        logger.debug(f"User rating: {user_rating.elo_rating}")
+
+        # Create the matchmaking queue entry
+        queue_entry = MatchmakingQueue.objects.create(
+            user=request.user,
+            deck=deck,
+            elo_rating=user_rating.elo_rating,
+            status=MatchmakingQueue.STATUS_QUEUED
+        )
+        logger.debug(f"Queue entry created: {queue_entry}")
+
+        # Trigger matchmaking task to attempt to find a match
+        from apps.gameplay.tasks import process_matchmaking
+        process_matchmaking.delay(deck.title.id)
+
+        return Response({
+            'id': queue_entry.id,
+            'status': queue_entry.status,
+            'title': {
+                'slug': deck.title.slug,
+                'name': deck.title.name
+            },
+            'deck': {
+                'id': deck.id,
+                'name': deck.name,
+                'hero': deck.hero.name
+            },
+            'elo_rating': user_rating.elo_rating,
+            'message': f'Successfully queued for ranked match in {deck.title.name}'
+        }, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        logger.exception(f"Error queueing for ranked match: {str(e)}")
+        return Response(
+            {'error': f'Failed to queue for match: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def matchmaking_queue_status(request, title_slug):
+    """
+    Return the current matchmaking queue status for the requesting user within a title.
+    """
+    title = get_object_or_404(Title, slug=title_slug)
+
+    queue_entry = MatchmakingQueue.objects.select_related('deck', 'deck__hero').filter(
+        user=request.user,
+        deck__title=title,
+        status=MatchmakingQueue.STATUS_QUEUED
+    ).first()
+
+    if not queue_entry:
+        return Response({
+            'in_queue': False,
+            'queue_entry': None
+        })
+
+    return Response({
+        'in_queue': True,
+        'queue_entry': {
+            'id': queue_entry.id,
+            'status': queue_entry.status,
+            'elo_rating': queue_entry.elo_rating,
+            'queued_at': queue_entry.created_at,
+            'deck': {
+                'id': queue_entry.deck.id,
+                'name': queue_entry.deck.name,
+                'hero': queue_entry.deck.hero.name
+            },
+            'title': {
+                'id': title.id,
+                'name': title.name,
+                'slug': title.slug
+            }
+        }
+    })

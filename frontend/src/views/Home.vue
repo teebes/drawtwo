@@ -3,7 +3,10 @@
     <main>
       <!-- Hero Section -->
       <section class="relative min-h-[85vh] flex items-center justify-center px-6 py-24 sm:px-8 lg:px-12">
-        <div class="mx-auto max-w-3xl text-center">
+        <div class="hero-logo" aria-hidden="true">
+          <img src="/drawtwo_logo.png" alt="" />
+        </div>
+        <div class="mx-auto max-w-3xl text-center relative z-10">
           <h1 class="font-display text-5xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-6xl lg:text-7xl">
             Draw Two
           </h1>
@@ -115,7 +118,7 @@ const handlePlayClick = () => {
   if (authStore.isAuthenticated) {
     router.push({ name: 'Play' })
   } else {
-    console.log('Play button clicked - user not authenticated')
+    router.push({ name: 'Login' })
   }
 }
 </script>
@@ -123,5 +126,21 @@ const handlePlayClick = () => {
 <style scoped>
 .home {
   min-height: 100vh;
+}
+
+.hero-logo {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  transform: translateY(-100px);
+}
+
+.hero-logo img {
+  width: min(60vw, 420px);
+  opacity: 0.1;
+  filter: drop-shadow(0 0 40px rgba(0, 0, 0, 0.35));
 }
 </style>

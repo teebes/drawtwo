@@ -60,6 +60,7 @@ class HeroInPlay(BaseModel):
     health: int
     health_max: Optional[int] = None
     name: str
+    player_name: Optional[str] = None
     description: str = ''
     exhausted: bool = True
     actions: List[Action] = Field(default_factory=list)

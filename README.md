@@ -1,21 +1,17 @@
-# DrawTwo - Full Stack Card Game
+# DrawTwo
 
-A full-stack card game application with a Django backend and Vue.js frontend.
+An open-source engine for building online trading card games.
 
-## Features
+## Stack
+
+Docker & Docker Compose orchestration
 
 ### Backend
 - Django 5.1 with Django REST Framework
 - PostgreSQL database
 - **Celery Task Queue** with Redis broker for asynchronous processing
-- Docker & Docker Compose for easy development
+- Django Channels for Websockets
 - Environment-based configuration
-- Separate settings for development and production
-- Pre-configured CORS headers for frontend integration
-- Health check endpoint
-- Comprehensive logging
-- Security best practices
-- **GitHub Actions CI/CD** - Automated testing and deployment
 
 ### Frontend
 - Vue 3 with Composition API
@@ -25,11 +21,6 @@ A full-stack card game application with a Django backend and Vue.js frontend.
 - Hot module replacement for development
 - Production-ready builds
 
-### Full Stack
-- Unified development commands
-- Independent or combined service execution
-- Docker Compose orchestration
-- Frontend/backend communication via API proxy
 
 ## Quick Start
 
@@ -87,84 +78,6 @@ A full-stack card game application with a Django backend and Vue.js frontend.
    - Admin interface: http://localhost:8000/admin/
    - Redis: localhost:6379 (for external access)
    - Celery Flower (monitoring): http://localhost:5555 (run `make celery-flower`)
-
-## GitHub Actions CI/CD
-
-This project includes automated testing and deployment workflows using GitHub Actions.
-
-### What's Included
-
-**CI Pipeline** (`.github/workflows/ci.yml`):
-- ✅ **Django Tests**: Full test suite with PostgreSQL
-- ✅ **Security Scans**: Dependency vulnerability checks with Safety + Bandit
-- ✅ **Docker Build**: Ensures containers build correctly
-- ✅ **System Checks**: Django deployment checks
-
-**Code Quality Pipeline** (`.github/workflows/code-quality.yml`):
-- 🎨 **Optional**: Black formatting, isort imports, flake8 linting
-- 🔧 **Manual trigger**: Run when you want to check code quality
-- 📅 **Weekly schedule**: Automated weekly checks (non-blocking)
-
-**Deploy Pipeline** (`.github/workflows/deploy.yml`):
-- ✅ **Production Tests**: Final test run before deployment
-- ✅ **Docker Build**: Production-ready container builds
-- ✅ **Deployment Ready**: Template for your preferred hosting provider
-
-### How It Works
-
-1. **On Pull Requests**: CI runs all tests and checks
-2. **On Push to Main**: CI runs + deployment workflow triggers
-3. **Manual Trigger**: Deploy workflow can be run manually from GitHub UI
-
-### GitHub Actions Pricing
-
-- **FREE**: 2,000 minutes/month for private repos, unlimited for public repos
-- **GitHub Pro**: 3,000 minutes/month for private repos
-- Most Django projects use ~10-50 minutes per workflow run
-
-### Setting Up CI/CD
-
-**For existing GitHub repo:**
-1. Push the `.github/workflows/` files to your repo
-2. GitHub automatically detects and runs the workflows
-3. Check the "Actions" tab in your GitHub repo
-
-**For new GitHub repo:**
-```bash
-# Initialize git (if not already done)
-git init
-git add .
-git commit -m "Add Django 5.1 project with CI/CD"
-
-# Add GitHub remote and push
-git branch -M main
-git remote add origin https://github.com/yourusername/drawtwo.git
-git push -u origin main
-```
-
-**Adding Deployment Secrets:**
-1. Go to your GitHub repo → Settings → Secrets and variables → Actions
-2. Add secrets like `SECRET_KEY` for production deployment
-3. Update the deploy workflow with your hosting provider commands
-
-### Local Testing
-
-Before pushing to GitHub, you can run the same CI checks locally to catch issues early:
-
-```bash
-# Quick code quality checks
-make lint              # Black, isort, flake8 checks
-make format            # Auto-format code with Black + isort
-
-# Full CI pipeline locally
-make ci-check          # Runs everything CI does
-
-# Individual checks
-make test              # Django tests only
-docker-compose build   # Docker build test only
-```
-
-For detailed local testing instructions, see **[docs/local-ci-testing.md](docs/local-ci-testing.md)**.
 
 ## IDE Setup
 

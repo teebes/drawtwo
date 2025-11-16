@@ -479,7 +479,7 @@ const handleClickOpposingHero = () => {
     const opposingSide = viewer.value === 'side_a' ? 'side_b' : 'side_a'
     selectedEntity.value = { type: 'hero', id: opposingSide, isOwned: false }
     overlay.value = 'entity_detail'
-    overlayTitle.value = 'Enemy Hero'
+    overlayTitle.value = `${opposingHero.value.player_name}` || 'Enemy Hero'
 }
 
 /* Action Handlers - From EntityDetail Component */

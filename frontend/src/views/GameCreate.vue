@@ -106,7 +106,7 @@
           </Panel>
 
           <!-- Opponent Deck Selection -->
-          <Panel :title="gameMode === 'pve' ? 'Choose AI Opponent' : 'Choose Player Opponent'">
+          <Panel :title="gameMode === 'pve' ? 'Choose AI Opponent' : 'Opponent'">
             <!-- PvE Mode: AI Decks -->
             <div v-if="gameMode === 'pve'">
               <div v-if="pveDecksLoading" class="text-center py-8">
@@ -151,40 +151,71 @@
 
             <!-- PvP Mode: Player Decks -->
             <div v-else>
-              <div v-if="opponentDecksLoading" class="text-center py-8">
-                <p class="text-gray-600">Loading opponent decks...</p>
+              <div v-if="friendsLoading" class="text-center py-8">
+                <p class="text-gray-600">Loading friends...</p>
               </div>
 
-              <div v-else-if="opponentDecks.length === 0" class="text-center py-8">
-                <p class="text-gray-600">No other players have decks for this title yet.</p>
-              </div>
+              <div v-else class="space-y-6">
+                <div class="flex flex-col items-center space-y-3">
+                  <button
+                    type="button"
+                    class="inline-flex w-full items-center justify-center rounded-lg px-6 py-3 text-sm font-semibold transition-colors sm:w-auto"
+                    :class="[
+                      isRankedButtonDisabled
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-secondary-600 text-white hover:bg-secondary-700 focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2'
+                    ]"
+                    :disabled="isRankedButtonDisabled"
+                    @click="queueForRanked"
+                  >
+                    Play Ranked
+                  </button>
+                  <p v-if="rankedQueueLoading" class="text-xs text-gray-500">
+                    Checking ranked queue status...
+                  </p>
+                  <p v-else-if="rankedQueueEntry" class="text-xs text-gray-600 text-center">
+                    Already queued with {{ rankedQueueEntry.deck.name }}. Waiting for opponent.
+                  </p>
+                  <p v-else-if="rankedQueueError" class="text-xs text-red-600 text-center">
+                    {{ rankedQueueError }}
+                  </p>
+                  <div class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    or
+                  </div>
+                </div>
 
-              <div v-else class="space-y-3">
-                <div
-                  v-for="deck in opponentDecks"
-                  :key="deck.id"
-                  @click="selectedOpponentDeck = deck"
-                  :class="[
-                    'cursor-pointer rounded-lg border-2 p-4 transition-colors',
-                    selectedOpponentDeck?.id === deck.id
-                      ? 'border-secondary-500 bg-secondary-50 dark:bg-secondary-900/20'
-                      : 'border-gray-200 hover:border-secondary-300 dark:border-gray-700'
-                  ]"
-                >
-                  <div class="flex items-center space-x-3">
-                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary-100 text-sm font-bold text-secondary-600">
-                      {{ deck.hero.name.charAt(0) }}
-                    </div>
-                    <div class="flex-1">
-                      <div class="font-medium text-gray-900 dark:text-white">{{ deck.name }}</div>
-                      <div class="text-sm text-gray-600">
-                        {{ deck.hero.name }} • {{ deck.owner?.email }} • {{ deck.card_count }} cards
+                <div>
+                  <div class="mb-4 text-center text-sm font-semibold text-gray-900 dark:text-white">Play a Friend</div>
+
+                  <div v-if="friendsError" class="rounded-lg border border-red-200 bg-red-50 p-4 text-center text-sm text-red-600">
+                    {{ friendsError }}
+                  </div>
+
+                  <div v-else-if="friends.length === 0" class="rounded-lg border border-gray-200 bg-white p-6 text-center text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800">
+                    You don't have any friends yet. Add a friend to challenge them here.
+                  </div>
+
+                  <div v-else class="space-y-3">
+                    <div
+                      v-for="friend in friends"
+                      :key="friend.id"
+                      class="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                    >
+                      <div>
+                        <div class="font-medium text-gray-900 dark:text-white">
+                          {{ friend.friend_data.display_name || friend.friend_data.username || friend.friend_data.email }}
+                        </div>
+                        <div class="text-sm text-gray-600 dark:text-gray-400">
+                          {{ friend.friend_data.email }}
+                        </div>
                       </div>
-                    </div>
-                    <div v-if="selectedOpponentDeck?.id === deck.id" class="text-secondary-600">
-                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                      </svg>
+                      <button
+                        type="button"
+                        class="inline-flex items-center rounded-md border border-secondary-500 px-4 py-2 text-sm font-medium text-secondary-600 transition-colors hover:bg-secondary-50 focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2"
+                        @click="challengeFriend(friend)"
+                      >
+                        Challenge
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -223,10 +254,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useTitleStore } from '../stores/title'
 import { useNotificationStore } from '../stores/notifications'
 import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
+import { friendsApi } from '../services/friends'
+import type { Friendship } from '../types/auth'
 
 interface DeckData {
   id: number
@@ -245,42 +277,63 @@ interface DeckData {
   updated_at: string
 }
 
-interface TitleData {
+interface RankedQueueEntry {
   id: number
-  slug: string
-  name: string
-  description?: string
+  status: string
+  elo_rating: number
+  queued_at: string
+  deck: {
+    id: number
+    name: string
+    hero: string
+  }
+  title: {
+    id: number
+    name: string
+    slug: string
+  }
 }
 
 const route = useRoute()
 const router = useRouter()
-const titleStore = useTitleStore()
 const notificationStore = useNotificationStore()
 
 // Component state
 const loading = ref<boolean>(true)
 const error = ref<string | null>(null)
 const creating = ref<boolean>(false)
+const queueingRanked = ref<boolean>(false)
 const gameMode = ref<'pve' | 'pvp'>('pve')
 
 // Data
 const playerDecks = ref<DeckData[]>([])
 const pveDecks = ref<DeckData[]>([])
-const opponentDecks = ref<DeckData[]>([])
 const playerDecksLoading = ref<boolean>(false)
 const pveDecksLoading = ref<boolean>(false)
-const opponentDecksLoading = ref<boolean>(false)
+const friends = ref<Friendship[]>([])
+const friendsLoading = ref<boolean>(false)
+const friendsError = ref<string | null>(null)
+const rankedQueueEntry = ref<RankedQueueEntry | null>(null)
+const rankedQueueLoading = ref<boolean>(false)
+const rankedQueueError = ref<string | null>(null)
 
 // Selections
 const selectedPlayerDeck = ref<DeckData | null>(null)
 const selectedOpponentDeck = ref<DeckData | null>(null)
 
 // Computed
-const title = computed((): TitleData | null => titleStore.currentTitle)
 const titleSlug = computed(() => route.params.slug as string)
 
 const canCreateGame = computed(() => {
-  return selectedPlayerDeck.value && selectedOpponentDeck.value && !creating.value
+  if (gameMode.value === 'pve') {
+    return !!selectedPlayerDeck.value && !!selectedOpponentDeck.value && !creating.value
+  }
+
+  return false
+})
+
+const isRankedButtonDisabled = computed(() => {
+  return queueingRanked.value || rankedQueueLoading.value || !!rankedQueueEntry.value
 })
 
 // Methods
@@ -310,17 +363,66 @@ const fetchPveDecks = async (): Promise<void> => {
   }
 }
 
-const fetchOpponentDecks = async (): Promise<void> => {
+const fetchFriends = async (): Promise<void> => {
   try {
-    opponentDecksLoading.value = true
-    const response = await axios.get(`/collection/titles/${titleSlug.value}/opponents/`)
-    opponentDecks.value = response.data.decks || []
+    friendsLoading.value = true
+    friendsError.value = null
+
+    const friendships = await friendsApi.getFriendships()
+    friends.value = friendships.filter(friendship => friendship.status === 'accepted')
   } catch (err) {
-    console.error('Error fetching opponent decks:', err)
-    error.value = 'Failed to load opponent decks'
+    console.error('Error fetching friends:', err)
+    friendsError.value = 'Failed to load friends. Please try again later.'
   } finally {
-    opponentDecksLoading.value = false
+    friendsLoading.value = false
   }
+}
+
+const fetchRankedQueueStatus = async (): Promise<void> => {
+  if (!titleSlug.value) return
+
+  try {
+    rankedQueueLoading.value = true
+    rankedQueueError.value = null
+    const response = await axios.get(`/gameplay/matchmaking/status/${titleSlug.value}/`)
+    rankedQueueEntry.value = response.data.in_queue ? response.data.queue_entry : null
+  } catch (err) {
+    console.error('Error fetching ranked queue status:', err)
+    rankedQueueError.value = 'Failed to check ranked queue status.'
+  } finally {
+    rankedQueueLoading.value = false
+  }
+}
+
+const queueForRanked = async (): Promise<void> => {
+  if (!selectedPlayerDeck.value) {
+    notificationStore.error('Please select a deck first')
+    return
+  }
+
+  try {
+    queueingRanked.value = true
+    const response = await axios.post('/gameplay/matchmaking/queue/', {
+      deck_id: selectedPlayerDeck.value.id
+    })
+    notificationStore.success('Queued for ranked match! Waiting for opponent...')
+    console.log('Queue response:', response.data)
+    await fetchRankedQueueStatus()
+  } catch (err) {
+    console.error('Error queueing for ranked:', err)
+    notificationStore.handleApiError(err as Error)
+    const errorResponse = (err as any)?.response
+    if (errorResponse?.status === 400 && errorResponse?.data?.queue_entry_id) {
+      await fetchRankedQueueStatus()
+    }
+  } finally {
+    queueingRanked.value = false
+  }
+}
+
+const challengeFriend = (friend: Friendship): void => {
+  const friendName = friend.friend_data.display_name || friend.friend_data.username || friend.friend_data.email
+  notificationStore.info(`Challenging ${friendName} will be available soon.`)
 }
 
 const createGame = async (): Promise<void> => {
@@ -366,9 +468,13 @@ watch(gameMode, (newMode) => {
   // Clear selection when switching modes
   selectedOpponentDeck.value = null
 
-  // Load opponent decks if switching to PvP and not already loaded
-  if (newMode === 'pvp' && opponentDecks.value.length === 0) {
-    fetchOpponentDecks()
+  // Load friends if switching to PvP and not already loaded
+  if (newMode === 'pvp' && friends.value.length === 0 && !friendsLoading.value) {
+    fetchFriends()
+  }
+
+  if (newMode === 'pvp') {
+    fetchRankedQueueStatus()
   }
 })
 
@@ -382,6 +488,8 @@ onMounted(async () => {
       fetchPlayerDecks(),
       fetchPveDecks()
     ])
+
+    await fetchRankedQueueStatus()
   } catch (err) {
     console.error('Error initializing game create:', err)
     error.value = 'Failed to initialize page'

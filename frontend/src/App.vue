@@ -8,15 +8,18 @@
   </div>
 </template>
 
-<script setup>
-import { computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useThemeStore } from './stores/theme'
+import { useAuthStore } from './stores/auth'
 import AppHeader from './components/AppHeader.vue'
 import ToastNotifications from './components/ui/ToastNotifications.vue'
 
 const route = useRoute()
+const router = useRouter()
 const themeStore = useThemeStore()
+const authStore = useAuthStore()
 
 const shouldHideHeader = computed(() => {
   return route.meta?.hideHeader === true
@@ -24,6 +27,19 @@ const shouldHideHeader = computed(() => {
 
 onMounted(() => {
   themeStore.initTheme()
+
+  // Expose router globally for websocket handlers
+  ;(window as any).vueRouter = router
+
+  // Connect user websocket if authenticated
+  if (authStore.isAuthenticated) {
+    authStore.connectUserWebSocket()
+  }
+})
+
+onUnmounted(() => {
+  // Disconnect user websocket on unmount
+  authStore.disconnectUserWebSocket()
 })
 </script>
 

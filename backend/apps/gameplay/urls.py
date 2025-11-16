@@ -19,6 +19,10 @@ urlpatterns = [
     path('games/', views.current_games, name='current-games'),
     path('games/new/', views.create_game, name='game-create'),
 
+    # Matchmaking
+    path('matchmaking/queue/', views.queue_for_ranked_match, name='queue-ranked-match'),
+    path('matchmaking/status/<slug:title_slug>/', views.matchmaking_queue_status, name='matchmaking-status'),
+
     # Title-specific leaderboard and user rating
     path('<slug:title_slug>/leaderboard/', LeaderboardView.as_view(), name='leaderboard'),
     path('<slug:title_slug>/my-rating/', UserTitleRatingView.as_view(), name='user-title-rating'),

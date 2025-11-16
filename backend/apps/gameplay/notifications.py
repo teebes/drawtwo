@@ -124,3 +124,25 @@ def send_game_updates_to_clients(game_id: int, state, updates: list, errors: lis
                 'state': filtered_state,
             }
         )
+
+
+def send_matchmaking_success(user_id: int, game_id: int, title_slug: str):
+    """
+    Send a matchmaking success notification to a specific user.
+
+    Args:
+        user_id: The user's ID
+        game_id: The created game ID
+        title_slug: The title slug for routing
+    """
+    channel_layer = get_channel_layer()
+    user_group_name = f'user_{user_id}'
+
+    async_to_sync(channel_layer.group_send)(
+        user_group_name,
+        {
+            'type': 'matchmaking_success',
+            'game_id': game_id,
+            'title_slug': title_slug,
+        }
+    )

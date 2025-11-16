@@ -18,7 +18,7 @@
       <!-- Profile Content -->
       <section class="py-16">
         <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-          <div class="grid gap-8 lg:grid-cols-2">
+          <div :class="['grid gap-8', authStore.user?.is_staff ? 'lg:grid-cols-2' : '']">
 
             <!-- User Information -->
             <div class="rounded-2xl bg-white p-8 shadow-sm dark:bg-gray-900">
@@ -63,99 +63,39 @@
               </div>
             </div>
 
-            <!-- Account Actions -->
-            <div class="rounded-2xl bg-white p-8 shadow-sm dark:bg-gray-900">
+            <!-- Administrative shortcuts -->
+            <div
+              v-if="authStore.user?.is_staff"
+              class="rounded-2xl bg-white p-8 shadow-sm dark:bg-gray-900"
+            >
               <h2 class="font-display text-2xl font-bold text-gray-900 dark:text-white mb-6">
-                ⚙️ Account Actions
+                🛡️ Administrative Access
               </h2>
 
-              <div class="space-y-4">
-                <!-- Admin Dashboard Link (Staff Only) -->
-                <div v-if="authStore.user?.is_staff" class="rounded-lg bg-purple-50 p-4 dark:bg-purple-900/20">
-                  <h3 class="font-medium text-gray-900 dark:text-white mb-2">
-                    🛡️ Administrative Access
-                  </h3>
-                  <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                    Access the admin dashboard to manage the system.
-                  </p>
+              <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                Manage DrawTwo systems and content from these quick links.
+              </p>
 
-                  <div class="">
-                    <router-link
-                      to="/dashboard"
-                      class="mr-2 mb-2 inline-flex items-center rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
-                    >
-                      Admin Dashboard
-                      <svg class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                      </svg>
-                    </router-link>
+              <div class="space-y-3">
+                <router-link
+                  to="/dashboard"
+                  class="flex items-center justify-between rounded-xl bg-purple-600 px-4 py-3 text-sm font-medium text-white shadow-sm transition-all hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                >
+                  Admin Dashboard
+                  <svg class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                  </svg>
+                </router-link>
 
-                    <router-link
-                      v-if="authStore.user?.is_staff"
-                      to="/control"
-                      class="inline-flex items-center rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
-                    >
-                      Control Panel
-                      <svg class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                      </svg>
-                    </router-link>
-                  </div>
-                </div>
-
-                <!-- Friends Link -->
-                <div class="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
-                  <h3 class="font-medium text-gray-900 dark:text-white mb-2">
-                    👥 Friends
-                  </h3>
-                  <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                    Manage your friends and view your friend list.
-                  </p>
-                  <router-link
-                    to="/friends"
-                    class="inline-flex items-center rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-                  >
-                    View Friends
-                    <svg class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                    </svg>
-                  </router-link>
-                </div>
-
-                <!-- Theme Toggle -->
-                <div class="rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
-                  <h3 class="font-medium text-gray-900 dark:text-white mb-2">
-                    🎨 Appearance
-                  </h3>
-                  <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                    Choose between light and dark mode for the interface.
-                  </p>
-                  <div class="flex items-center justify-between">
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Theme preference
-                    </span>
-                    <ThemeToggle />
-                  </div>
-                </div>
-
-                <!-- Logout -->
-                <div class="rounded-lg bg-red-50 p-4 dark:bg-red-900/20">
-                  <h3 class="font-medium text-gray-900 dark:text-white mb-2">
-                    🚪 Sign Out
-                  </h3>
-                  <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                    Sign out of your account and return to the home page.
-                  </p>
-                  <button
-                    @click="handleLogout"
-                    class="inline-flex items-center rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-                  >
-                    Sign Out
-                    <svg class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
-                    </svg>
-                  </button>
-                </div>
+                <router-link
+                  to="/control"
+                  class="flex items-center justify-between rounded-xl bg-purple-600 px-4 py-3 text-sm font-medium text-white shadow-sm transition-all hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                >
+                  Control Panel
+                  <svg class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                  </svg>
+                </router-link>
               </div>
             </div>
           </div>
@@ -165,26 +105,18 @@
   </div>
 </template>
 
-<script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+<script setup lang="ts">
+import { onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
-import ThemeToggle from '../components/ui/ThemeToggle.vue'
 
-const router = useRouter()
 const authStore = useAuthStore()
 
-const formatDate = (dateString) => {
+const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric'
   })
-}
-
-const handleLogout = async () => {
-  await authStore.logout()
-  router.push('/')
 }
 
 onMounted(async () => {

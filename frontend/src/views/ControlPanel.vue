@@ -44,6 +44,10 @@
           <SiteSettings />
         </div>
 
+        <div v-if="activeTab === 'matchmaking'">
+          <MatchmakingQueueAdmin />
+        </div>
+
         <div v-if="activeTab === 'analytics'">
           <UserAnalytics />
         </div>
@@ -60,6 +64,7 @@ import OverviewDashboard from '../components/control/OverviewDashboard.vue'
 import UserManagement from '../components/control/UserManagement.vue'
 import SiteSettings from '../components/control/SiteSettings.vue'
 import UserAnalytics from '../components/control/UserAnalytics.vue'
+import MatchmakingQueueAdmin from '../components/control/MatchmakingQueueAdmin.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -69,6 +74,7 @@ const activeTab = ref('overview')
 const tabs = [
   { id: 'overview', name: 'Overview' },
   { id: 'users', name: 'User Management' },
+  { id: 'matchmaking', name: 'Matchmaking' },
   { id: 'analytics', name: 'Analytics' },
   { id: 'settings', name: 'Site Settings' }
 ]

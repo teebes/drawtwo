@@ -48,6 +48,42 @@ export interface ControlPanelOverview {
   quick_stats: QuickStats
 }
 
+export interface MatchmakingQueueEntry {
+  id: number
+  status: string
+  status_display: string
+  elo_rating: number
+  created_at: string
+  updated_at: string
+  user_id: number
+  user_display_name: string
+  user_email: string
+  deck_id: number
+  deck_name: string
+  hero_name: string
+  title_name: string
+  title_slug: string
+  game_id: number | null
+  matched_with_entry: {
+    id: number
+    user_display_name: string | null
+    status: string | null
+  } | null
+  wait_seconds: number
+}
+
+export interface MatchmakingQueueSummary {
+  queued: number
+  matched: number
+  cancelled: number
+  title_summary: Array<{
+    title_id: number
+    title_name: string
+    title_slug: string
+    queued_count: number
+  }>
+}
+
 export interface PaginatedResponse<T> {
   count: number
   next: string | null

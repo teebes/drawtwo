@@ -1,9 +1,10 @@
 <template>
-  <div class="gradient-primary-to-secondary-diagonal min-h-screen">
+  <!-- gradient-primary-to-secondary-diagonal -->
+  <div class=" min-h-[100svh]">
     <div class="mx-auto flex min-h-screen w-full items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
       <div class="w-full max-w-md space-y-8">
         <!-- Header -->
-        <div class="text-center">
+        <div class="text-center" v-if="false">
           <router-link to="/" class="inline-flex items-center">
             <h1 class="font-display text-3xl font-bold text-white">
               DrawTwo
@@ -22,8 +23,14 @@
           </p>
         </div>
 
+        <div class="text-center">
+          <h2 class="mt-6 font-display text-2xl font-bold text-white">
+            {{ isSignUp ? 'Create your account' : 'Welcome back' }}
+          </h2>
+        </div>
+
         <!-- Main Card -->
-        <div class="rounded-2xl bg-white p-8 shadow-xl dark:bg-gray-900">
+        <div class="rounded-2xl bg-white p-8 shadow-xl dark:bg-gray-800">
           <!-- Error/Success Messages -->
           <div v-if="message" class="mb-6 rounded-lg p-4" :class="{
             'bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-700 dark:text-green-200': messageType === 'success',
@@ -123,18 +130,6 @@
             </button>
           </div>
 
-          <!-- Back to Home -->
-          <div class="mt-4 text-center">
-            <router-link
-              to="/"
-              class="inline-flex items-center text-sm font-medium text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-            >
-              <svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-              </svg>
-              Back to Home
-            </router-link>
-          </div>
         </div>
       </div>
     </div>
