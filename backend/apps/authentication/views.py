@@ -4,6 +4,7 @@ from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 from dj_rest_auth.registration.views import SocialLoginView
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from rest_framework.exceptions import PermissionDenied
 from django.core.mail import send_mail
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -34,6 +35,57 @@ class GoogleLogin(SocialLoginView):
         settings.FRONTEND_URL + "/auth/callback/google"
     )  # Configurable frontend callback URL
     client_class = OAuth2Client
+
+    def post(self, request, *args, **kwargs):
+        """Override post to handle errors and mark email as verified after Google OAuth login."""
+        try:
+            response = super().post(request, *args, **kwargs)
+        except PermissionDenied as e:
+            # Handle signup disabled error from signal
+            # DRF's PermissionDenied has a detail attribute
+            error_message = getattr(e, 'detail', str(e))
+            if isinstance(error_message, list):
+                error_message = error_message[0] if error_message else str(e)
+            return Response(
+                {
+                    "error": error_message,
+                    "signup_disabled": True,
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # If login was successful, mark email as verified
+        # Google has already verified the email, so we should trust it
+        if response.status_code == status.HTTP_200_OK:
+            user = None
+
+            # Try to get user from response data first
+            if hasattr(response, 'data') and isinstance(response.data, dict):
+                user_data = response.data.get('user')
+                if user_data and isinstance(user_data, dict):
+                    user_id = user_data.get('id')
+                    if user_id:
+                        try:
+                            user = User.objects.get(id=user_id)
+                        except User.DoesNotExist:
+                            pass
+
+            # Fallback: try to get user from authenticated request
+            if not user and hasattr(request, 'user') and request.user.is_authenticated:
+                user = request.user
+
+            # Mark email as verified if we found the user
+            if user and not user.is_email_verified:
+                user.is_email_verified = True
+                user.save(update_fields=['is_email_verified'])
+
+                # Also update the response data if it contains user info
+                if hasattr(response, 'data') and isinstance(response.data, dict):
+                    user_data = response.data.get('user')
+                    if user_data and isinstance(user_data, dict):
+                        user_data['is_email_verified'] = True
+
+        return response
 
 
 @method_decorator(csrf_exempt, name="dispatch")

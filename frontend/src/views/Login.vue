@@ -238,7 +238,12 @@ const initGoogleClient = async () => {
             router.push(redirect)
           }, 800)
         } else {
-          const errorMsg = result.error?.message || 'Google login failed'
+          // Check for various error message formats from the backend
+          // DRF uses 'detail', our custom errors use 'error', some use 'message'
+          const errorMsg = result.error?.error
+            || result.error?.detail
+            || result.error?.message
+            || 'Google login failed'
           showMessage(errorMsg, 'error')
         }
       }
@@ -273,7 +278,11 @@ const handleSubmit = async () => {
         // Switch to login mode
         isSignUp.value = false
       } else {
-        const errorMsg = result.error?.email?.[0] || result.error?.message || 'Registration failed'
+        // Check for various error message formats from the backend
+        const errorMsg = result.error?.email?.[0]
+          || result.error?.error
+          || result.error?.message
+          || 'Registration failed'
         showMessage(errorMsg, 'error')
       }
     } else {
