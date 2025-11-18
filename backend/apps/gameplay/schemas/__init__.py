@@ -6,6 +6,7 @@ class GameSummary(BaseModel):
     id: int
     name: str
     type: Literal['pve', 'pvp']
+    is_user_turn: bool
 
 
 class GameList(BaseModel):

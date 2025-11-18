@@ -131,8 +131,10 @@ def title_games(request, slug):
     for game in games:
 
         if game.side_a.user == request.user:
+            user_side = 'side_a'
             opposing_deck = game.side_b
         else:
+            user_side = 'side_b'
             opposing_deck = game.side_a
 
         if opposing_deck.is_ai_deck:
@@ -140,10 +142,15 @@ def title_games(request, slug):
         else:
             opposing_name = opposing_deck.owner_name
 
+        # Determine if it's the user's turn
+        game_state = game.game_state
+        is_user_turn = game_state.active == user_side
+
         game_summaries.append(GameSummary(
             id=game.id,
             name=opposing_name,
             type="pve" if opposing_deck.is_ai_deck else "pvp",
+            is_user_turn=is_user_turn,
         ))
 
     return Response(GameList(games=game_summaries).model_dump())

@@ -51,7 +51,11 @@
                 v-for="game in games"
                 :key="game.id"
                 :to="{ name: 'Board', params: { game_id: game.id, slug: title.slug } }"
-                class="flex items-center justify-between rounded-lg bg-gray-50 p-3 hover:bg-gray-100 transition-colors dark:bg-gray-800 dark:hover:bg-gray-700"
+                class="flex items-center justify-between rounded-lg p-3 transition-colors"
+                :class="{
+                  'bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 border border-blue-200 dark:border-blue-800': game.is_user_turn,
+                  'bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700': !game.is_user_turn
+                }"
               >
                 <div class="flex items-center space-x-3">
                   <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 text-sm font-bold text-green-600">
@@ -61,6 +65,13 @@
                     {{ game.name }}
                   </div>
                 </div>
+                <span
+                  v-if="game.is_user_turn"
+                  class="inline-flex items-center rounded-full bg-blue-600 px-2 py-0.5 text-xs font-medium text-white"
+                  title="Your turn"
+                >
+                  Your Turn
+                </span>
               </router-link>
             </div>
 
@@ -258,6 +269,7 @@ interface GameData {
   id: number
   name: string
   type: 'pve' | 'pvp'
+  is_user_turn: boolean
 }
 
 interface LeaderboardPlayer {
