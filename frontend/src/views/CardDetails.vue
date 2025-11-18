@@ -47,8 +47,8 @@
           </div>
         </div>
 
-        <div class="flex-grow flex-shrink flex justify-center items-center sm:items-start">
-          <GameCard :card="card" class="max-w-[15rem] max-h-[21rem]"/>
+        <div class="w-48 mx-auto p-1">
+          <GameCard :card="card" />
         </div>
 
     </section>
