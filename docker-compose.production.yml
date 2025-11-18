@@ -55,6 +55,7 @@ services:
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    command: ["daphne", "-b", "0.0.0.0", "-p", "8000", "config.asgi:application"]
     networks:
       - backend
       - frontend
