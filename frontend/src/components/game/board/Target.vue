@@ -113,6 +113,12 @@
             </div>
         </div>
 
+        <!-- Card Information -->
+        <div class="text-center border-t border-gray-700 py-4">
+            <div class="text-lg mb-4">{{ sourceCard?.name }}</div>
+            <div>{{  sourceCard?.description }}</div>
+        </div>
+
 
     </div>
 </template>
