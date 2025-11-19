@@ -67,7 +67,7 @@
           </div>
 
           <div class="mt-12 flex items-center gap-3">
-            <a href="https://x.com/teebesz" target="_blank" rel="noopener noreferrer" class="text-lg font-semibold text-gray-900 underline decoration-2 underline-offset-4 transition-colors hover:text-gray-700 dark:text-white dark:hover:text-gray-300">
+            <a href="https://x.com/thibaudm" target="_blank" rel="noopener noreferrer" class="text-lg font-semibold text-gray-900 underline decoration-2 underline-offset-4 transition-colors hover:text-gray-700 dark:text-white dark:hover:text-gray-300">
               Follow on X
             </a>
 
