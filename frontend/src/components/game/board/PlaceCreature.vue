@@ -15,7 +15,7 @@
 
                         <!-- Interleave creatures with placement zones -->
                         <template v-for="(creature, index) in ownBoard" :key="`creature-${creature.creature_id}`">
-                            <div class="p-1 h-24">
+                            <div class="p-1 w-16">
                                 <GameCard v-if="creature"
                                         class="flex-grow-0"
                                         :card="creature"

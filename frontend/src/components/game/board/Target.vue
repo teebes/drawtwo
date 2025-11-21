@@ -43,7 +43,7 @@
             <!-- Opponent Board (if targeting enemies) -->
             <div v-if="showOpposingBoard" class="flex w-full bg-gray-800 border-b border-gray-700 py-8 overflow-x-auto">
                 <div v-if="opposingBoard.length > 0" class="flex flex-row h-24 mx-auto">
-                    <div v-for="creature in opposingBoard" :key="creature.creature_id" class="p-1">
+                    <div v-for="creature in opposingBoard" :key="creature.creature_id" class="w-14">
                         <GameCard
                             class="flex-grow-0"
                             :card="creature"
@@ -62,7 +62,7 @@
             <!-- Own Board (if targeting friendly) -->
             <div v-if="showOwnBoard" class="flex w-full bg-gray-800 border-b border-gray-700 py-8 overflow-x-auto">
                 <div v-if="ownBoard && ownBoard.length > 0" class="flex flex-row h-24 mx-auto">
-                    <div v-for="creature in ownBoard" :key="creature.creature_id" class="p-1">
+                    <div v-for="creature in ownBoard" :key="creature.creature_id" class="w-14">
                         <GameCard
                             class="flex-grow-0"
                             :card="creature"
