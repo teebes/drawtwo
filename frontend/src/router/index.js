@@ -19,7 +19,6 @@ import CardEdit from '../views/CardEdit.vue'
 import CardDetails from '../views/CardDetails.vue'
 import DeckDetail from '../views/DeckDetail.vue'
 import DeckEdit from '../views/DeckEdit.vue'
-import GameBoard from '../views/GameBoard.vue'
 import GameCreate from '../views/GameCreate.vue'
 import Board from '../views/Board.vue'
 import Friends from '../views/Friends.vue'
@@ -134,12 +133,6 @@ const routes = [
     name: 'DeckEdit',
     component: DeckEdit,
     meta: { requiresAuth: true }
-  },
-  {
-    path: '/games/:game_id',
-    name: 'GameBoard',
-    component: GameBoard,
-    meta: { requiresAuth: true, hideHeader: true }
   },
   {
     path: '/:slug/games/new',
