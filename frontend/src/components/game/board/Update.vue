@@ -1,18 +1,100 @@
 <template>
-    <div class="game-update">{{ updateText(props.update) }}</div>
+
+    <!-- Damage -->
+    <div class="game-update flex items-center" v-if="props.update.type === 'update_damage'">
+        <UpdateEntity
+            v-if="source && gameStore.viewer"
+            :name="source.name"
+            :art_url="'art_url' in source ? source.art_url : null"
+            :class="isViewerTurn ? 'border-green-500' : 'border-red-500'"
+        />
+        <div class="flex items-center mx-2">
+            <div class="bg-red-500 text-white font-bold px-3 py-1 rounded-lg shadow-md flex items-center gap-1.5">
+                <span class="text-sm">⚔️</span>
+                <span>{{ props.update.damage }}</span>
+                <span class="text-xs">→</span>
+            </div>
+        </div>
+        <UpdateEntity
+            v-if="target && gameStore.viewer"
+            :name="target.name"
+            :art_url="'art_url' in target ? target.art_url : null"
+            :class="isViewerTurn ? 'border-red-500' : 'border-green-500'"
+        />
+    </div>
+
+    <!-- Heal -->
+    <div class="game-update flex items-center" v-else-if="props.update.type === 'update_heal'">
+        <UpdateEntity
+            v-if="source && gameStore.viewer"
+            :name="source.name"
+            :art_url="'art_url' in source ? source.art_url : null"
+            :class="isViewerTurn ? 'border-green-500' : 'border-red-500'"
+        />
+        <div class="flex items-center mx-2">
+            <div class="bg-green-500 text-white font-bold px-3 py-1 rounded-lg shadow-md flex items-center gap-1.5">
+                <span class="text-sm">💚</span>
+                <span>{{ props.update.amount }}</span>
+                <span class="text-xs">→</span>
+            </div>
+        </div>
+        <UpdateEntity
+            v-if="target && gameStore.viewer"
+            :name="target.name"
+            :art_url="'art_url' in target ? target.art_url : null"
+            class="border-green-500"
+            :class="isViewerTurn ? 'border-green-500' : 'border-red-500'"
+        />
+    </div>
+
+    <!-- Draw -->
+    <div class="game-update relative flex items-center" v-else-if="props.update.type === 'update_draw_card'">
+
+            <div class="mr-4">Draw</div>
+
+            <UpdateEntity v-if="target && gameStore.viewer == props.update.side"
+                :name="target.name"
+                :art_url="'art_url' in target ? target.art_url : null"
+                class="border-green-500"/>
+            <UpdateEntity v-else name="Card" class="border-red-500"/>
+
+            <!-- <span class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">⬆️</span> -->
+             <!-- <span class="absolute top-0 left-0">⬆️</span> -->
+    </div>
+
+    <!-- Play -->
+    <div class="game-update relative flex items-center" v-else-if="props.update.type === 'update_play_card'">
+        <div class="mr-4">Play</div>
+        <UpdateEntity v-if="source && gameStore.viewer"
+            :name="source.name"
+            :art_url="'art_url' in source ? source.art_url : null"
+            :class="isViewerTurn ? 'border-green-500' : 'border-red-500'"/>
+        <!-- <span class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">⬇️</span> -->
+    </div>
+
+    <div class="game-update" v-else>
+        {{ updateText(props.update) }}
+    </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+import UpdateEntity from './UpdateEntity.vue'
 import { useGameStore } from '@/stores/game'
 import { HeroInPlay } from '@/types/game'
 
 interface Props {
     update: any
+    hideSource?: boolean
 }
 
 const props = defineProps<Props>()
 
 const gameStore = useGameStore()
+
+const isViewerTurn = computed(() => {
+    return gameStore.viewer === props.update.side
+})
 
 const updateText = (update: any) => {
 
@@ -23,6 +105,10 @@ const updateText = (update: any) => {
     let side_name = hero.name + ': ';
     if (gameStore.viewer === update.side) {
         side_name = 'You: ';
+    }
+
+    if (props.hideSource) {
+        side_name = '';
     }
 
     if (update.type === "update_draw_card") {
@@ -104,4 +190,29 @@ const updateText = (update: any) => {
 
     return `${update.side} - ${update.type}`
 }
+
+const source = computed(() => {
+    if (props.update.source_type === "card") {
+        return gameStore.getCard(props.update.source_id)
+    } else if (props.update.source_type === "creature") {
+        console.log('creature: ' + props.update.source_id)
+        return gameStore.getCreature(props.update.source_id)
+    } else if (props.update.source_type === "hero") {
+        return gameStore.getHero(props.update.source_id)
+    }
+    return null
+})
+
+const target = computed(() => {
+    if (props.update.target_type === "card") {
+        return gameStore.getCard(props.update.target_id)
+    } else if (props.update.target_type === "creature") {
+        return gameStore.getCreature(props.update.target_id)
+    } else if (props.update.target_type === "hero") {
+        return gameStore.getHero(props.update.target_id)
+    }
+    return null
+})
+
+
 </script>

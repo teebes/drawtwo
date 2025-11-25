@@ -794,10 +794,14 @@ class GameService:
                 updates.append(DrawCardUpdate(
                     side=event.side,
                     card_id=event.card_id,
+                    target_type=event.target_type,
+                    target_id=event.target_id,
                 ))
             elif event.type == "event_play":
                 updates.append(PlayCardUpdate(
                     side=event.side,
+                    source_type=event.source_type,
+                    source_id=event.source_id,
                     card_id=event.source_id,
                     position=event.position,
                     target_type=event.target_type,

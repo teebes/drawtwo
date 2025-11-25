@@ -74,7 +74,13 @@ def draw(effect: DrawEffect, state: GameState) -> Result:
             return Success(new_state = state, events=[go_event])
 
         state.hands[effect.side].append(card_id)
-        events.append(DrawEvent(side=effect.side, card_id=card_id))
+        events.append(
+            DrawEvent(
+                side=effect.side,
+                card_id=card_id,
+                target_type="card",
+                target_id=card_id,
+            ))
 
     return Success(
         new_state=state,
@@ -190,10 +196,6 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
                 target_type=effect.target_type,
                 target_id=effect.target_id,
             ))
-
-            # Also remove from creatures dict
-            if target_type == "creature":
-                del state.creatures[effect.target_id]
         else:
             # Determine if we need to retaliate
             should_retaliate = (

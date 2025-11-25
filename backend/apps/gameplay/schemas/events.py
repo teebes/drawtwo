@@ -27,6 +27,8 @@ class DamageEvent(EventBase):
 class DrawEvent(EventBase):
     type: Literal["event_draw"] = "event_draw"
     card_id: str
+    target_type: Literal["card"] = "card"
+    target_id: str
 
 
 class HealEvent(EventBase):

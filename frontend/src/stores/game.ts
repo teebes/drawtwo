@@ -81,6 +81,16 @@ export const useGameStore = defineStore('game', {
       return state.gameState.creatures[creatureId]
     },
 
+    getHero: (state) => (heroId: string): HeroInPlay | undefined => {
+      for (const side in state.gameState.heroes) {
+        const hero = state.gameState.heroes[side]
+        if (hero && hero.hero_id === heroId) {
+          return hero
+        }
+      }
+      return undefined
+    },
+
     // Viewer perspective
     currentViewer: (state): Side | null => {
       return state.viewer
@@ -261,7 +271,8 @@ export const useGameStore = defineStore('game', {
           'update_draw_card',
           'update_play_card',
           'update_end_turn',
-          'update_damage']
+          'update_damage',
+          'update_heal']
 
         if (display_types.includes(update.type)) {
           return true

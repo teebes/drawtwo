@@ -84,11 +84,11 @@
                     Turn {{ gameState.turn }} <span class="text-gray-500 ml-2">[ {{ gameState.phase }} ]</span>
                 </div>
                 <GameButton
-                    v-if="gameState.winner === 'none'"
+                    v-if="gameState.winner === 'none' && gameState.active === bottomSide"
                     variant="secondary"
                     class="m-2"
                     @click="handleEndTurn">End Turn</GameButton>
-                <div v-else class="flex items-center justify-center mr-4">{{ gameOver.winner }} wins!</div>
+                <div v-else-if="gameState.winner !== 'none'" class="flex items-center justify-center mr-4">{{ gameOver.winner }} wins!</div>
             </div>
 
             <!-- Viewer Side-->
@@ -230,12 +230,7 @@
 
             <!-- Updates Overlay -->
             <div v-if="overlay === 'updates'" class="flex-1 min-h-0">
-                <div class="flex flex-col h-full border-gray-700 overflow-y-auto">
-                    <div class="flex border-gray-700 items-center justify-center py-2" :class="{ 'border-b': update.type === 'update_end_turn' }"
-                         v-for="update in displayUpdates" :key="update.timestamp">
-                        <Update :update="update" />
-                    </div>
-                </div>
+                <UpdatesList :updates="displayUpdates" />
             </div>
 
             <!-- Debug Overlay -->
@@ -271,6 +266,7 @@ import PlaceCreature from '../components/game/board/PlaceCreature.vue'
 import Target from '../components/game/board/Target.vue'
 import GameOverOverlay from '../components/game/board/GameOverOverlay.vue'
 import Update from '../components/game/board/Update.vue'
+import UpdatesList from '../components/game/board/UpdatesList.vue'
 import OverlayHeader from '../components/game/board/OverlayHeader.vue'
 import DebugOverlay from '../components/game/board/DebugOverlay.vue'
 import Hero from '../components/game/board/Hero.vue'
@@ -487,6 +483,37 @@ const handleClickOpposingHero = () => {
 // Place creature card on board
 const handlePlaceCreature = (card_id: string) => {
     console.log('handlePlaceCreature', card_id)
+    const card = get_card(card_id)
+    if (!card) return
+
+    // If board is empty, automatically play at position 0
+    if (!ownBoard.value || ownBoard.value.length === 0) {
+        // Check if the card has a battlecry that needs a target
+        if (requiresBattlecryTarget(card)) {
+            const allowedTargets = getBattlecryAllowedTargets(card)
+            const targetScope = getBattlecryTargetScope(card)
+            pendingPlay.value = { card_id, position: 0 }
+            targetingState.value = {
+                sourceType: 'battlecry',
+                sourceId: card_id,
+                allowedTypes: convertAllowedTargets(allowedTargets),
+                scope: targetScope,
+                sourceCard: card,
+                errorMessage: null,
+                title: 'Choose Battlecry Target'
+            }
+            overlay.value = 'select_target'
+            overlayTitle.value = 'Battlecry Target'
+            return
+        }
+
+        // No battlecry target required, play immediately at position 0
+        gameStore.playCard(card_id, 0)
+        closeOverlay()
+        return
+    }
+
+    // Board is not empty, show placement interface
     selectedCardId.value = card_id
     overlay.value = 'place_creature'
     overlayTitle.value = 'Place Creature'
@@ -661,6 +688,72 @@ const handleClickDebug = () => {
 }
 
 /* Utility Functions */
+
+// Check if a creature card has a battlecry that requires targeting
+function requiresBattlecryTarget(card: CardInPlay): boolean {
+    const traits = card.traits || []
+    const battlecry = traits.find((t: any) => t.type === 'battlecry')
+    if (!battlecry) return false
+
+    const actions = battlecry.actions || []
+    for (const action of actions) {
+        // Battlecry actions that require targeting (damage, heal)
+        if (action.action === 'damage' || action.action === 'heal') {
+            return true
+        }
+    }
+    return false
+}
+
+// Get allowed target types for battlecry
+function getBattlecryAllowedTargets(card: CardInPlay): Array<'card' | 'hero' | 'any'> {
+    const allowed = new Set<'card' | 'hero' | 'any'>()
+    const traits = card.traits || []
+    const battlecry = traits.find((t: any) => t.type === 'battlecry')
+    if (!battlecry) return ['any']
+
+    for (const action of battlecry.actions || []) {
+        if (action.action === 'damage') {
+            if (action.target === 'creature' || action.target === 'enemy') {
+                allowed.add('card')
+            }
+            if (action.target === 'hero' || action.target === 'enemy') {
+                allowed.add('hero')
+            }
+        }
+        if (action.action === 'heal') {
+            if (action.target === 'creature' || action.target === 'friendly') {
+                allowed.add('card')
+            }
+            if (action.target === 'hero' || action.target === 'friendly') {
+                allowed.add('hero')
+            }
+        }
+    }
+
+    if (allowed.size === 0) allowed.add('any')
+    return Array.from(allowed)
+}
+
+// Get target scope (enemy or friendly) for battlecry
+function getBattlecryTargetScope(card: CardInPlay): 'enemy' | 'friendly' {
+    const traits = card.traits || []
+    const battlecry = traits.find((t: any) => t.type === 'battlecry')
+    if (!battlecry) return 'enemy'
+
+    for (const action of battlecry.actions || []) {
+        // Heal actions target friendly units
+        if (action.action === 'heal') {
+            return 'friendly'
+        }
+        // Damage actions target enemies
+        if (action.action === 'damage') {
+            return 'enemy'
+        }
+    }
+
+    return 'enemy'
+}
 
 // Close overlay and clear state
 const closeOverlay = () => {

@@ -31,27 +31,27 @@ class EndTurnUpdate(UpdateBase):
 class DrawCardUpdate(UpdateBase):
     type: Literal["update_draw_card"] = "update_draw_card"
     card_id: str
+    target_type: Optional[Literal["card"]] = None
+    target_id: Optional[str] = None
 
 
 class PlayCardUpdate(UpdateBase):
     type: Literal["update_play_card"] = "update_play_card"
+    source_type: Literal["card"] = "card"
+    source_id: str
     card_id: str
     position: int
     target_type: Optional[Literal["card", "hero", "creature"]] = None
     target_id: Optional[str] = None
 
 
-class DealDamageUpdate(UpdateBase):
-    type: Literal["update_deal_damage"] = "update_deal_damage"
+class DamageUpdate(UpdateBase):
+    type: Literal["update_damage"] = "update_damage"
     source_type: Literal["card", "hero", "board", "creature"] = "card"
     source_id: str
     target_type: Literal["card", "hero", "creature"] = "card"
     target_id: str
     damage: int
-
-
-class DamageUpdate(DealDamageUpdate):
-    type: Literal["update_damage"] = "update_damage"
 
 
 class HealUpdate(UpdateBase):
