@@ -10,7 +10,7 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import permissions, status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -93,6 +93,7 @@ class PasswordlessLoginView(APIView):
     """Send passwordless login email to user."""
 
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
     def post(self, request):
         serializer = PasswordlessLoginSerializer(data=request.data)
@@ -162,6 +163,7 @@ class EmailConfirmationView(APIView):
     """Confirm email and log user in."""
 
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
     def post(self, request):
         serializer = EmailVerificationSerializer(data=request.data)
@@ -258,6 +260,7 @@ def protected_test_view(request):
 
 @api_view(["POST"])
 @permission_classes([permissions.AllowAny])
+@authentication_classes([])
 @csrf_exempt
 def register_view(request):
     """Register a new user and send email verification."""
