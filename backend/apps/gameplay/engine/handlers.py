@@ -483,7 +483,7 @@ def new_phase(effect: NewPhaseEffect, state: GameState) -> Result:
         child_effects.append(refresh_phase)
 
     elif effect.phase == 'refresh':
-        state.mana_pool[effect.side] = state.turn
+        state.mana_pool[effect.side] = min(state.turn, 10)
         state.mana_used[effect.side] = 0
         draw_phase = NewPhaseEffect(side=effect.side, phase='draw')
         child_effects.append(draw_phase)
