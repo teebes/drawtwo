@@ -849,6 +849,128 @@ class TauntMechanicTests(AttackValidationTestBase):
         self.assertIn("taunt", result_b.reason.lower())
 
 
+class SpellTargetingWithTauntTests(AttackValidationTestBase):
+    """Test that spells can target non-taunt creatures even when taunt creatures exist."""
+
+    def setUp(self):
+        super().setUp()
+        # Add a taunt creature to side_b
+        self.taunt_creature = Creature(
+            creature_id='taunt_b_1',
+            card_id='card_taunt_b_1',
+            name='Taunt Creature',
+            description='Has Taunt',
+            attack=1,
+            attack_max=1,
+            health=3,
+            health_max=3,
+            traits=[Taunt()],
+            exhausted=False
+        )
+        self.game_state.creatures['taunt_b_1'] = self.taunt_creature
+        self.game_state.board['side_b'].append('taunt_b_1')
+
+        # Add a non-taunt creature with 1 HP to side_b
+        self.weak_creature = Creature(
+            creature_id='weak_b_1',
+            card_id='card_weak_b_1',
+            name='Weak Creature',
+            description='1 HP, no taunt',
+            attack=1,
+            attack_max=1,
+            health=1,
+            health_max=1,
+            traits=[],
+            exhausted=False
+        )
+        self.game_state.creatures['weak_b_1'] = self.weak_creature
+        self.game_state.board['side_b'].append('weak_b_1')
+
+        # Create a spell card that deals 2 damage
+        from apps.builder.schemas import Battlecry
+        from apps.gameplay.schemas.game import CardInPlay
+        self.spell_card = CardInPlay(
+            card_type="spell",
+            card_id="spell_damage_2",
+            template_slug="damage-spell",
+            name="Damage Spell",
+            cost=1,
+            traits=[
+                Battlecry(
+                    actions=[
+                        DamageAction(
+                            amount=2,
+                            target="enemy",
+                        )
+                    ]
+                )
+            ],
+        )
+        self.game_state.cards["spell_damage_2"] = self.spell_card
+        self.game_state.hands["side_a"] = ["spell_damage_2"]
+        self.game_state.mana_pool["side_a"] = 1
+        self.game_state.mana_used["side_a"] = 0
+
+    def test_spell_can_target_non_taunt_creature_with_taunt_on_board(self):
+        """Test that a spell can target a non-taunt creature even when taunt creatures exist.
+
+        This test verifies that the backend allows spells to target non-taunt creatures
+        even when taunt creatures are present. Taunt should only affect creature attacks,
+        not spell targeting.
+        """
+        from apps.gameplay.engine.dispatcher import resolve
+        from apps.gameplay.schemas.effects import PlayEffect
+        from apps.gameplay.schemas.engine import Success
+
+        # Try to play the spell targeting the weak (non-taunt) creature
+        play_effect = PlayEffect(
+            side="side_a",
+            source_id="spell_damage_2",
+            position=0,
+            target_type="creature",
+            target_id="weak_b_1",  # Non-taunt creature
+        )
+
+        result = resolve(play_effect, self.game_state)
+
+        # Should succeed - spells are NOT affected by taunt
+        # If this fails, it means the backend is incorrectly applying taunt restrictions to spells
+        self.assertEqual(result.type, 'outcome_success')
+        self.assertIsInstance(result, Success)
+
+        # Verify the spell was played (moved from hand to graveyard)
+        new_state = result.new_state
+        self.assertNotIn("spell_damage_2", new_state.hands["side_a"])
+        self.assertIn("spell_damage_2", new_state.graveyard["side_a"])
+
+        # Verify a PlayEvent was created with the correct target
+        self.assertEqual(len(result.events), 1)
+        self.assertEqual(result.events[0].type, 'event_play')
+        self.assertEqual(result.events[0].target_type, 'creature')
+        self.assertEqual(result.events[0].target_id, 'weak_b_1')
+
+    def test_spell_can_target_taunt_creature_with_taunt_on_board(self):
+        """Test that a spell can also target a taunt creature (should work too)."""
+        from apps.gameplay.engine.dispatcher import resolve
+        from apps.gameplay.schemas.effects import PlayEffect
+        from apps.gameplay.schemas.engine import Success
+
+        # Try to play the spell targeting the taunt creature
+        play_effect = PlayEffect(
+            side="side_a",
+            source_id="spell_damage_2",
+            position=0,
+            target_type="creature",
+            target_id="taunt_b_1",  # Taunt creature
+        )
+
+        result = resolve(play_effect, self.game_state)
+
+        # Should succeed - spells can target any valid target
+        self.assertEqual(result.type, 'outcome_success')
+        self.assertIsInstance(result, Success)
+
+
 class AITauntTests(TestCase):
     """Test that AI respects taunt mechanics when choosing moves."""
 

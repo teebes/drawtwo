@@ -161,17 +161,23 @@ const canTargetCreature = computed(() => {
     return props.allowedTargetTypes === 'creature' || props.allowedTargetTypes === 'both'
 })
 
+// Check if the source is a spell (spells are not affected by taunt)
+const isSpellSource = computed(() => {
+    return props.sourceCard && 'card_type' in props.sourceCard && props.sourceCard.card_type === 'spell'
+})
+
 const canTargetHero = computed(() => {
     // Cannot target hero if there are taunt creatures on the opposing board
+    // BUT: Spells are NOT affected by taunt restrictions
     const baseCanTarget = props.allowedTargetTypes === 'hero' || props.allowedTargetTypes === 'both'
 
-    // If targeting enemies, check for taunt creatures
-    if (baseCanTarget && (props.targetScope === 'enemy' || props.targetScope === 'any')) {
+    // If targeting enemies, check for taunt creatures (only for non-spell sources)
+    if (baseCanTarget && (props.targetScope === 'enemy' || props.targetScope === 'any') && !isSpellSource.value) {
         const hasTauntCreatures = props.opposingBoard.some(creature =>
             creature.traits?.some((trait: any) => trait.type === 'taunt')
         )
         if (hasTauntCreatures) {
-            return false // Cannot target hero while taunt creatures exist
+            return false // Cannot target hero while taunt creatures exist (for creature attacks)
         }
     }
 
@@ -195,7 +201,14 @@ const tauntCreatures = computed(() => {
 const canTargetSpecificCreature = (creature: Creature): boolean => {
     if (!canTargetCreature.value) return false
 
+    // Taunt restrictions only apply to creature attacks, not spells
+    // If the source is a spell, taunt doesn't restrict targeting
+    if (isSpellSource.value) {
+        return true
+    }
+
     // If there are taunt creatures and this isn't one of them, can't target it
+    // (This applies to creature attacks)
     if (tauntCreatures.value.length > 0) {
         return hasTaunt(creature)
     }
