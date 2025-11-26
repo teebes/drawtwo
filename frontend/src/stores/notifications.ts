@@ -15,7 +15,7 @@ interface Notification {
   timestamp: Date
 }
 
-interface NotificationOptions {
+interface AppNotificationOptions {
   type?: NotificationType
   title?: string
   message?: string
@@ -37,7 +37,7 @@ export const useNotificationStore = defineStore('notifications', {
   },
 
   actions: {
-    addNotification(notification: NotificationOptions): number {
+    addNotification(notification: AppNotificationOptions): number {
       const id = Date.now() + Math.random()
       const newNotification: Notification = {
         id,
@@ -73,8 +73,34 @@ export const useNotificationStore = defineStore('notifications', {
       this.notifications.forEach(n => n.dismissed = true)
     },
 
+    // Request browser notification permission
+    async requestBrowserPermission(): Promise<boolean> {
+      if (!('Notification' in window)) {
+        console.log('This browser does not support desktop notification')
+        return false
+      }
+
+      if (Notification.permission === 'granted') {
+        return true
+      }
+
+      if (Notification.permission !== 'denied') {
+        const permission = await Notification.requestPermission()
+        return permission === 'granted'
+      }
+
+      return false
+    },
+
+    // Send a browser notification
+    sendBrowserNotification(title: string, options?: globalThis.NotificationOptions): void {
+      if (Notification.permission === 'granted') {
+        new Notification(title, options)
+      }
+    },
+
     // Convenience methods for different notification types
-    success(message: string, options: Omit<NotificationOptions, 'type' | 'message'> = {}): number {
+    success(message: string, options: Omit<AppNotificationOptions, 'type' | 'message'> = {}): number {
       return this.addNotification({
         type: 'success',
         message,
@@ -82,7 +108,7 @@ export const useNotificationStore = defineStore('notifications', {
       })
     },
 
-    error(message: string, options: Omit<NotificationOptions, 'type' | 'message'> = {}): number {
+    error(message: string, options: Omit<AppNotificationOptions, 'type' | 'message'> = {}): number {
       return this.addNotification({
         type: 'error',
         message,
@@ -91,7 +117,7 @@ export const useNotificationStore = defineStore('notifications', {
       })
     },
 
-    warning(message: string, options: Omit<NotificationOptions, 'type' | 'message'> = {}): number {
+    warning(message: string, options: Omit<AppNotificationOptions, 'type' | 'message'> = {}): number {
       return this.addNotification({
         type: 'warning',
         message,
@@ -99,7 +125,7 @@ export const useNotificationStore = defineStore('notifications', {
       })
     },
 
-    info(message: string, options: Omit<NotificationOptions, 'type' | 'message'> = {}): number {
+    info(message: string, options: Omit<AppNotificationOptions, 'type' | 'message'> = {}): number {
       return this.addNotification({
         type: 'info',
         message,

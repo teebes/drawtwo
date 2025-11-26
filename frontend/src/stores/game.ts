@@ -366,7 +366,16 @@ export const useGameStore = defineStore('game', {
 
       // Update the game state
       if (data.state) {
+        const oldActive = this.gameState.active
         this.gameState = data.state
+
+        // Check for turn change to current player
+        if (oldActive !== this.gameState.active &&
+            this.gameState.active === this.viewer &&
+            !this.gameOver.isGameOver) {
+           const notificationStore = this.getNotificationStore()
+           notificationStore.sendBrowserNotification("It's your turn!")
+        }
 
         // Check if the game is over based on the state's winner field
         if (data.state.winner && data.state.winner !== 'none' && !this.gameOver.isGameOver) {
@@ -536,6 +545,8 @@ export const useGameStore = defineStore('game', {
       await this.fetchGameState(gameId)
       if (!this.error) {
         this.connectWebSocket(gameId)
+        // Request notification permission
+        this.getNotificationStore().requestBrowserPermission()
       }
     },
 
