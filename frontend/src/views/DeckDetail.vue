@@ -51,7 +51,7 @@
               class="card-item flex items-center rounded-lg bg-gray-50 dark:bg-gray-800 space-x-2"
             >
               <!-- Card cost badge -->
-              <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded bg-gray-200 text-sm font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+              <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-500 text-sm font-semibold text-gray-700 dark:text-gray-300">
                 {{ card.cost }}
               </div>
 
@@ -151,7 +151,7 @@
               :variant="isAddCardMode ? 'secondary' : 'primary'"
               @click="toggleAddCardMode"
             >
-              {{ isAddCardMode ? 'Cancel Add Card' : 'Add Card' }}
+              {{ isAddCardMode ? 'Cancel Edit Cards' : 'Edit Cards' }}
             </GameButton>
           </div>
         </Panel>
