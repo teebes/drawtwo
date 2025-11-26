@@ -3,7 +3,6 @@ import { useAuthStore } from '../stores/auth'
 import { useTitleStore } from '../stores/title'
 import Home from '../views/Home.vue'
 import Login from '../views/Login.vue'
-import Dashboard from '../views/Dashboard.vue'
 import EmailConfirm from '../views/EmailConfirm.vue'
 import ControlPanel from '../views/ControlPanel.vue'
 import DesignReference from '../views/DesignReference.vue'
@@ -78,12 +77,6 @@ const routes = [
     path: '/mockup',
     name: 'Mockup',
     component: Mockup,
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/dashboard',
-    name: 'Dashboard',
-    component: Dashboard,
     meta: { requiresAuth: true }
   },
   {

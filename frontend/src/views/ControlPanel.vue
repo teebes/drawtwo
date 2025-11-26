@@ -13,22 +13,24 @@
         </header>
 
         <!-- Navigation Tabs -->
-        <div class="mb-8">
-          <nav class="flex space-x-8" aria-label="Tabs">
-            <button
-              v-for="tab in tabs"
-              :key="tab.id"
-              @click="activeTab = tab.id"
-              :class="[
-                'whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm',
-                activeTab === tab.id
-                  ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:border-gray-300'
-              ]"
-            >
-              {{ tab.name }}
-            </button>
-          </nav>
+        <div class="mb-8 overflow-hidden">
+          <div class="overflow-x-auto pb-2 -mb-2">
+            <nav class="flex space-x-8 border-b border-gray-200 dark:border-gray-700" aria-label="Tabs">
+              <button
+                v-for="tab in tabs"
+                :key="tab.id"
+                @click="activeTab = tab.id"
+                :class="[
+                  'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200',
+                  activeTab === tab.id
+                    ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:border-gray-300'
+                ]"
+              >
+                {{ tab.name }}
+              </button>
+            </nav>
+          </div>
         </div>
 
         <!-- Tab Content -->
@@ -51,6 +53,10 @@
         <div v-if="activeTab === 'analytics'">
           <UserAnalytics />
         </div>
+
+        <div v-if="activeTab === 'system'">
+          <SystemStatus />
+        </div>
       </div>
     </div>
   </div>
@@ -65,6 +71,7 @@ import UserManagement from '../components/control/UserManagement.vue'
 import SiteSettings from '../components/control/SiteSettings.vue'
 import UserAnalytics from '../components/control/UserAnalytics.vue'
 import MatchmakingQueueAdmin from '../components/control/MatchmakingQueueAdmin.vue'
+import SystemStatus from '../components/control/SystemStatus.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -76,7 +83,8 @@ const tabs = [
   { id: 'users', name: 'User Management' },
   { id: 'matchmaking', name: 'Matchmaking' },
   { id: 'analytics', name: 'Analytics' },
-  { id: 'settings', name: 'Site Settings' }
+  { id: 'settings', name: 'Site Settings' },
+  { id: 'system', name: 'System Status' }
 ]
 
 onMounted(() => {
@@ -86,9 +94,3 @@ onMounted(() => {
   }
 })
 </script>
-
-<style scoped>
-.control-panel {
-  /* Custom styles if needed */
-}
-</style>

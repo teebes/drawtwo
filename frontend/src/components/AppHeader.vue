@@ -83,6 +83,15 @@
                   >
                     Friends
                   </button>
+                  <button
+                    v-if="authStore.user?.is_staff"
+                    type="button"
+                    class="flex w-full items-center rounded-xl px-4 py-2 text-sm font-medium text-purple-600 transition hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-950/30"
+                    @click="() => goToRoute('/control')"
+                    role="menuitem"
+                  >
+                    Control Panel
+                  </button>
                 </div>
                 <div class="my-2 rounded-xl bg-gray-50 px-4 py-3 dark:bg-gray-800">
                   <div class="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-200">
