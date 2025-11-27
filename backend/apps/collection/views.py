@@ -4,7 +4,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from django.db.models import Count
+from django.db.models import Count, Sum
+from django.db.models.functions import Coalesce
 
 from apps.builder.models import Title, CardTemplate, HeroTemplate
 from apps.builder.schemas import TitleConfig
@@ -29,7 +30,7 @@ def deck_list_by_title(request, title_slug):
             user=request.user,
             hero__title=title
         ).select_related('hero').annotate(
-            card_count=Count('deckcard')
+            card_count=Coalesce(Sum('deckcard__count'), 0)
         ).order_by('-updated_at')
 
         # Serialize the deck data
@@ -344,7 +345,7 @@ def opponent_decks_by_title(request, title_slug):
     ).exclude(
         user=request.user  # Exclude current user
     ).select_related('hero', 'user').annotate(
-        card_count=Count('deckcard')
+        card_count=Coalesce(Sum('deckcard__count'), 0)
     ).order_by('-updated_at')
 
     # Serialize the deck data
