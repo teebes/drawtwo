@@ -192,6 +192,11 @@ const hasTaunt = (creature: Creature): boolean => {
     return creature.traits?.some((trait: any) => trait.type === 'taunt') ?? false
 }
 
+    // Helper to check if a creature has stealth
+const hasStealth = (creature: Creature): boolean => {
+    return creature.traits?.some((trait: any) => trait.type === 'stealth') ?? false
+}
+
 // Get taunt creatures from the opposing board
 const tauntCreatures = computed(() => {
     if (props.targetScope === 'enemy' || props.targetScope === 'any') {
@@ -203,6 +208,11 @@ const tauntCreatures = computed(() => {
 // Check if a specific creature can be targeted
 const canTargetSpecificCreature = (creature: Creature): boolean => {
     if (!canTargetCreature.value) return false
+
+    // Stealth Check: Cannot target creatures with stealth
+    if (hasStealth(creature)) {
+        return false
+    }
 
     // Taunt restrictions only apply to creature attacks, not spells
     // If the source is a spell, taunt doesn't restrict targeting

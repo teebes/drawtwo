@@ -6,7 +6,7 @@ from pydantic import TypeAdapter
 from .card_assets import get_card_art_url
 
 
-def serialize_cards_with_traits(queryset) -> List[Dict[str, Any]]:
+def serialize_cards_with_traits(queryset) -> List[Card]:
     """
     Efficiently serialize a CardTemplate queryset to Card schema format.
 
@@ -14,7 +14,7 @@ def serialize_cards_with_traits(queryset) -> List[Dict[str, Any]]:
         queryset: CardTemplate queryset (can be filtered, ordered, etc.)
 
     Returns:
-        List of dictionaries in Card schema format
+        List of Card schema objects
     """
     # Apply efficient prefetching to the queryset
     cards = queryset.select_related('title', 'faction').prefetch_related(
@@ -53,7 +53,7 @@ def serialize_cards_with_traits(queryset) -> List[Dict[str, Any]]:
             art_url=get_card_art_url(card.title.slug, card.slug)
         )
 
-        card_data.append(card_obj.model_dump())
+        card_data.append(card_obj)
 
     return card_data
 

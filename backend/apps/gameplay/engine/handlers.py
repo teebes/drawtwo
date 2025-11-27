@@ -87,6 +87,11 @@ def draw(effect: DrawEffect, state: GameState) -> Result:
         events=events
     )
 
+def has_stealth(creature: Creature) -> bool:
+    """Check if a creature has the stealth trait."""
+    return any(trait.type == "stealth" for trait in creature.traits)
+
+
 @register("effect_play")
 def play(effect: PlayEffect, state: GameState) -> Result:
 
@@ -96,6 +101,15 @@ def play(effect: PlayEffect, state: GameState) -> Result:
     usable_mana = state.mana_pool[effect.side] - state.mana_used[effect.side]
     if card.cost > usable_mana:
         return Rejected(reason="Not enough energy to play the card")
+
+    # STEALTH VALIDATION: Cannot directly target stealthed creatures with spells
+    if effect.target_type == "creature" and effect.target_id:
+        target_creature = state.creatures.get(effect.target_id)
+        if target_creature and has_stealth(target_creature):
+            # Only reject if it's an ENEMY creature
+            opposing_side = "side_b" if effect.side == "side_a" else "side_a"
+            if effect.target_id in state.board[opposing_side]:
+                return Rejected(reason="Cannot target stealthed creatures")
 
     state.hands[effect.side].remove(effect.source_id)
 
@@ -156,8 +170,6 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
         target = state.creatures[effect.target_id]
     else:
         raise NotImplementedError
-
-    #setattr(source, "exhausted", True)
 
     events = [DamageEvent(
         side=effect.side,
@@ -337,10 +349,8 @@ def attack(effect: AttackEffect, state: GameState) -> Result:
     # STEALTH VALIDATION: Cannot directly target stealthed creatures
     if effect.target_type == "creature":
         target_creature = state.creatures.get(effect.target_id)
-        if target_creature:
-            has_stealth = any(trait.type == "stealth" for trait in target_creature.traits)
-            if has_stealth:
-                return Rejected(reason="Cannot target stealthed creatures")
+        if target_creature and has_stealth(target_creature):
+            return Rejected(reason="Cannot target stealthed creatures")
 
     # TAUNT VALIDATION: If opponent has creatures with taunt, must attack one of them
     taunt_creatures = get_taunt_creatures(state, opposing_side)
@@ -410,6 +420,10 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
             if effect.target_type == "creature":
                 if effect.target_id not in state.board[opposing_side]:
                     return Rejected(reason=f"Target creature is not on opponent's board")
+                # STEALTH VALIDATION: Cannot directly target stealthed creatures with hero powers
+                target_creature = state.creatures.get(effect.target_id)
+                if target_creature and has_stealth(target_creature):
+                    return Rejected(reason="Cannot target stealthed creatures")
             elif effect.target_type == "hero":
                 opposing_hero = state.heroes.get(opposing_side)
                 if not opposing_hero or opposing_hero.hero_id != effect.target_id:

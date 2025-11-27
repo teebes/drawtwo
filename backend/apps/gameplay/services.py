@@ -56,12 +56,27 @@ from apps.gameplay.schemas.events import (
 # Moved to avoid circular import - imported where needed
 
 
-from apps.gameplay.schemas.game import GameState
-from apps.gameplay.notifications import send_game_updates_to_clients
+from apps.builder.schemas import Card
 from apps.core.card_assets import get_hero_art_url
+from apps.gameplay.notifications import send_game_updates_to_clients
+from apps.gameplay.schemas.game import GameState
 
 
 class GameService:
+
+    def get_card_in_play(card: Card, card_id: int) -> CardInPlay:
+        return CardInPlay(
+            card_type=card.card_type,
+            card_id=str(card_id),
+            template_slug=card.slug,
+            name=card.name,
+            description=card.description,
+            attack=card.attack,
+            health=card.health,
+            cost=card.cost,
+            traits=card.traits,
+            art_url=card.art_url,
+        )
 
     @staticmethod
     @transaction.atomic
@@ -100,41 +115,15 @@ class GameService:
         decks = {'side_a': [], 'side_b': []}
 
         for card in cards_a:
-
-            for _ in range(deck_a_card_copies[card["id"]]):
-
+            for _ in range(deck_a_card_copies[card.id]):
                 card_id += 1
-                cards_in_play[str(card_id)] = CardInPlay(
-                    card_type=card["card_type"],
-                    card_id=str(card_id),
-                    template_slug=card["slug"],
-                    name=card["name"],
-                    description=card["description"],
-                    attack=card["attack"],
-                    health=card["health"],
-                    cost=card["cost"],
-                    traits=card["traits"],
-                    art_url=card["art_url"],
-                )
+                cards_in_play[str(card_id)] = GameService.get_card_in_play(card, card_id)
                 decks['side_a'].append(str(card_id))
 
         for card in cards_b:
-
-            for _ in range(deck_b_card_copies[card["id"]]):
-
+            for _ in range(deck_b_card_copies[card.id]):
                 card_id += 1
-                cards_in_play[str(card_id)] = CardInPlay(
-                    card_type=card["card_type"],
-                    card_id=str(card_id),
-                    template_slug=card["slug"],
-                    name=card["name"],
-                    description=card["description"],
-                    attack=card["attack"],
-                    health=card["health"],
-                    cost=card["cost"],
-                    traits=card["traits"],
-                    art_url=card["art_url"],
-                )
+                cards_in_play[str(card_id)] = GameService.get_card_in_play(card, card_id)
                 decks['side_b'].append(str(card_id))
 
         # shuffle both decks

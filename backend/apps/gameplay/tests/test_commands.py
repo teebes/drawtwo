@@ -1277,3 +1277,259 @@ class StealthMechanicTests(AttackValidationTestBase):
         result = resolve(effect, self.game_state)
         # Should succeed - stealth doesn't force you to attack it like taunt does
         self.assertEqual(result.type, 'outcome_success')
+
+    def test_spell_cannot_target_stealthed_creature(self):
+        """Test that a spell cannot target a stealthed creature."""
+        from apps.gameplay.engine.dispatcher import resolve
+        from apps.gameplay.schemas.effects import PlayEffect
+        from apps.builder.schemas import Battlecry
+        from apps.gameplay.schemas.game import CardInPlay
+
+        # Create a spell card that deals 2 damage
+        spell_card = CardInPlay(
+            card_type="spell",
+            card_id="spell_damage_2",
+            template_slug="damage-spell",
+            name="Damage Spell",
+            cost=1,
+            traits=[
+                Battlecry(
+                    actions=[
+                        DamageAction(
+                            amount=2,
+                            target="enemy",
+                        )
+                    ]
+                )
+            ],
+        )
+        self.game_state.cards["spell_damage_2"] = spell_card
+        self.game_state.hands["side_a"] = ["spell_damage_2"]
+        self.game_state.mana_pool["side_a"] = 1
+        self.game_state.mana_used["side_a"] = 0
+
+        # Try to play the spell targeting the stealthed creature
+        play_effect = PlayEffect(
+            side="side_a",
+            source_id="spell_damage_2",
+            position=0,
+            target_type="creature",
+            target_id="stealth_b_1",  # Stealth creature
+        )
+
+        result = resolve(play_effect, self.game_state)
+
+        # Should be rejected - spells cannot target stealthed creatures
+        self.assertEqual(result.type, 'outcome_rejected')
+        self.assertIn("stealth", result.reason.lower())
+
+    def test_spell_can_target_non_stealthed_creature_when_stealth_exists(self):
+        """Test that a spell CAN target non-stealthed creatures even when stealth exists."""
+        from apps.gameplay.engine.dispatcher import resolve
+        from apps.gameplay.schemas.effects import PlayEffect
+        from apps.builder.schemas import Battlecry
+        from apps.gameplay.schemas.game import CardInPlay
+
+        # Create a spell card that deals 2 damage
+        spell_card = CardInPlay(
+            card_type="spell",
+            card_id="spell_damage_2",
+            template_slug="damage-spell",
+            name="Damage Spell",
+            cost=1,
+            traits=[
+                Battlecry(
+                    actions=[
+                        DamageAction(
+                            amount=2,
+                            target="enemy",
+                        )
+                    ]
+                )
+            ],
+        )
+        self.game_state.cards["spell_damage_2"] = spell_card
+        self.game_state.hands["side_a"] = ["spell_damage_2"]
+        self.game_state.mana_pool["side_a"] = 1
+        self.game_state.mana_used["side_a"] = 0
+
+        # Try to play the spell targeting a non-stealthed creature
+        play_effect = PlayEffect(
+            side="side_a",
+            source_id="spell_damage_2",
+            position=0,
+            target_type="creature",
+            target_id="creature_b_1",  # Non-stealth creature
+        )
+
+        result = resolve(play_effect, self.game_state)
+
+        # Should succeed
+        self.assertEqual(result.type, 'outcome_success')
+
+    def test_hero_power_cannot_target_stealthed_creature(self):
+        """Test that hero power cannot target a stealthed creature."""
+        from apps.gameplay.engine.dispatcher import resolve
+        from apps.gameplay.schemas.effects import UseHeroEffect
+
+        hero_a = self.game_state.heroes['side_a']
+
+        # Try to use hero power targeting the stealthed creature
+        effect = UseHeroEffect(
+            side='side_a',
+            source_id=hero_a.hero_id,
+            target_type='creature',
+            target_id='stealth_b_1',  # Stealth creature
+        )
+
+        result = resolve(effect, self.game_state)
+
+        # Should be rejected - hero power cannot target stealthed creatures
+        self.assertEqual(result.type, 'outcome_rejected')
+        self.assertIn("stealth", result.reason.lower())
+
+    def test_hero_power_can_target_non_stealthed_creature_when_stealth_exists(self):
+        """Test that hero power CAN target non-stealthed creatures even when stealth exists."""
+        from apps.gameplay.engine.dispatcher import resolve
+        from apps.gameplay.schemas.effects import UseHeroEffect
+
+        hero_a = self.game_state.heroes['side_a']
+
+        # Try to use hero power targeting a non-stealthed creature
+        effect = UseHeroEffect(
+            side='side_a',
+            source_id=hero_a.hero_id,
+            target_type='creature',
+            target_id='creature_b_1',  # Non-stealth creature
+        )
+
+        result = resolve(effect, self.game_state)
+
+        # Should succeed
+        self.assertEqual(result.type, 'outcome_success')
+
+    def test_hero_power_can_target_hero_when_stealth_exists(self):
+        """Test that hero power CAN target enemy hero even when stealth creatures exist."""
+        from apps.gameplay.engine.dispatcher import resolve
+        from apps.gameplay.schemas.effects import UseHeroEffect
+
+        hero_a = self.game_state.heroes['side_a']
+        hero_b = self.game_state.heroes['side_b']
+
+        # Try to use hero power targeting the enemy hero
+        effect = UseHeroEffect(
+            side='side_a',
+            source_id=hero_a.hero_id,
+            target_type='hero',
+            target_id=hero_b.hero_id,
+        )
+
+        result = resolve(effect, self.game_state)
+
+        # Should succeed - stealth doesn't protect heroes
+        self.assertEqual(result.type, 'outcome_success')
+
+    def test_spell_can_target_hero_when_stealth_exists(self):
+        """Test that a spell CAN target enemy hero even when stealth creatures exist."""
+        from apps.gameplay.engine.dispatcher import resolve
+        from apps.gameplay.schemas.effects import PlayEffect
+        from apps.builder.schemas import Battlecry
+        from apps.gameplay.schemas.game import CardInPlay
+
+        hero_b = self.game_state.heroes['side_b']
+
+        # Create a spell card that deals damage to hero
+        spell_card = CardInPlay(
+            card_type="spell",
+            card_id="spell_damage_hero",
+            template_slug="damage-spell-hero",
+            name="Damage Spell Hero",
+            cost=1,
+            traits=[
+                Battlecry(
+                    actions=[
+                        DamageAction(
+                            amount=2,
+                            target="hero",
+                        )
+                    ]
+                )
+            ],
+        )
+        self.game_state.cards["spell_damage_hero"] = spell_card
+        self.game_state.hands["side_a"] = ["spell_damage_hero"]
+        self.game_state.mana_pool["side_a"] = 1
+        self.game_state.mana_used["side_a"] = 0
+
+        # Try to play the spell targeting the enemy hero
+        play_effect = PlayEffect(
+            side="side_a",
+            source_id="spell_damage_hero",
+            position=0,
+            target_type="hero",
+            target_id=hero_b.hero_id,
+        )
+
+        result = resolve(play_effect, self.game_state)
+
+        # Should succeed - stealth doesn't protect heroes
+        self.assertEqual(result.type, 'outcome_success')
+
+    def test_spell_can_target_own_stealthed_creature(self):
+        """Test that you CAN target your own stealthed creature with a spell."""
+        from apps.gameplay.engine.dispatcher import resolve
+        from apps.gameplay.schemas.effects import PlayEffect
+        from apps.builder.schemas import Battlecry, Stealth
+        from apps.gameplay.schemas.game import CardInPlay, Creature
+
+        # Add a friendly stealth creature
+        stealth_creature = Creature(
+            creature_id='stealth_a_1',
+            card_id='card_stealth_a_1',
+            name='Friendly Stealth',
+            description='Has Stealth',
+            attack=2,
+            health=2,
+            traits=[Stealth()],
+            exhausted=False
+        )
+        self.game_state.creatures['stealth_a_1'] = stealth_creature
+        self.game_state.board['side_a'].append('stealth_a_1')
+
+        # Create a buff spell (using DamageAction just for mechanics testing, assuming friendly fire is allowed by rules but maybe usually buffs)
+        # Let's use HealAction or just DamageAction (mechanically same targeting logic in play handler)
+        spell_card = CardInPlay(
+            card_type="spell",
+            card_id="spell_buff",
+            template_slug="buff-spell",
+            name="Buff Spell",
+            cost=1,
+            traits=[
+                Battlecry(
+                    actions=[
+                        DamageAction(
+                            amount=1,
+                            target="creature", # Can target any creature
+                        )
+                    ]
+                )
+            ],
+        )
+        self.game_state.cards["spell_buff"] = spell_card
+        self.game_state.hands["side_a"] = ["spell_buff"]
+        self.game_state.mana_pool["side_a"] = 1
+        self.game_state.mana_used["side_a"] = 0
+
+        # Try to play the spell targeting OWN stealthed creature
+        play_effect = PlayEffect(
+            side="side_a",
+            source_id="spell_buff",
+            position=0,
+            target_type="creature",
+            target_id="stealth_a_1",
+        )
+
+        result = resolve(play_effect, self.game_state)
+
+        # Should succeed - you can target your own stealth units
+        self.assertEqual(result.type, 'outcome_success')
