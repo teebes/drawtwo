@@ -149,7 +149,7 @@ class GameService:
                 health=deck_b.hero.health,
                 health_max=deck_b.hero.health,
                 name=deck_b.hero.name,
-                description=deck_a.hero.description,
+                description=deck_b.hero.description,
                 hero_power=deck_b.hero.hero_power,
                 exhausted=False,
                 art_url=get_hero_art_url(deck_b.title.slug, deck_b.hero.slug),
