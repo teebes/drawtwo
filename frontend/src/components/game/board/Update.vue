@@ -50,16 +50,21 @@
     <!-- Draw -->
     <div class="game-update relative flex items-center" v-else-if="props.update.type === 'update_draw_card'">
 
+        <template v-if="gameStore.viewer == props.update.side">
             <div class="mr-4">Draw</div>
-
-            <UpdateEntity v-if="target && gameStore.viewer == props.update.side"
+            <UpdateEntity v-if="target"
                 :name="target.name"
                 :art_url="'art_url' in target ? target.art_url : null"
                 class="border-green-500"/>
-            <UpdateEntity v-else name="Card" class="border-red-500"/>
+        </template>
+        <template v-else>
+            <UpdateEntity
+                :name="opposing_hero.name"
+                :art_url="'art_url' in opposing_hero ? opposing_hero.art_url : null"
+                class="border-red-500" />
+            <div class="ml-4">Draws a card</div>
 
-            <!-- <span class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">⬆️</span> -->
-             <!-- <span class="absolute top-0 left-0">⬆️</span> -->
+        </template>
     </div>
 
     <!-- Play -->
@@ -212,6 +217,17 @@ const target = computed(() => {
         return gameStore.getHero(props.update.target_id)
     }
     return null
+})
+
+const current_hero = computed(() => {
+    const hero: HeroInPlay = gameStore.gameState.heroes[props.update.side];
+    return hero;
+})
+
+const opposing_hero = computed(() => {
+    const opposite_side = props.update.side === 'side_a' ? 'side_b' : 'side_a';
+    const hero: HeroInPlay = gameStore.gameState.heroes[opposite_side]
+    return hero;
 })
 
 

@@ -555,7 +555,7 @@ class GameService:
             for target_type, target_id in targets:
                 effects.append(DamageEffect(
                     side=event.side,
-                    damage_type="physical",
+                    damage_type=action.damage_type,
                     source_type=event.source_type,
                     source_id=event.source_id,
                     target_type=target_type,
