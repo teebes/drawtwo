@@ -127,7 +127,7 @@
 
               <!-- Delete button (only for cards in deck) -->
               <button
-                v-if="isCardInDeck(card) && !isAddCardMode"
+                v-if="isCardInDeck(card)"
                 @click="deleteCard(card as DeckCard)"
                 class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-300 transition-colors"
                 title="Remove card"
@@ -383,6 +383,8 @@ const incrementCard = async (card: DeckCard): Promise<void> => {
 const decrementCard = async (card: DeckCard): Promise<void> => {
   if (card.count > 1) {
     await updateCardCount(card, card.count - 1)
+  } else {
+    await deleteCard(card)
   }
 }
 
