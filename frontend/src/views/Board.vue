@@ -204,6 +204,7 @@
                 :error-message="targetingState.errorMessage"
                 :title="targetingState.title"
                 :title-slug="titleStore.titleSlug ?? undefined"
+                :bypass-taunt="targetingState.bypassTaunt"
                 @target-selected="onTargetSelected"
                 @cancelled="closeOverlay"
             />
@@ -354,6 +355,7 @@ interface TargetingState {
     sourceCard: CardInPlay | Creature | null
     errorMessage: string | null
     title: string
+    bypassTaunt?: boolean
 }
 const targetingState = ref<TargetingState | null>(null)
 
@@ -500,7 +502,8 @@ const handlePlaceCreature = (card_id: string) => {
                 scope: targetScope,
                 sourceCard: card,
                 errorMessage: null,
-                title: 'Choose Battlecry Target'
+                title: 'Choose Battlecry Target',
+                bypassTaunt: getBattlecryBypassTaunt(card)
             }
             overlay.value = 'select_target'
             overlayTitle.value = 'Battlecry Target'
@@ -572,6 +575,14 @@ const handleUseHero = (side_id: string) => {
     const hero = getHero(side_id)
     if (!hero) return
 
+    // Check if hero power deals spell damage (bypasses taunt)
+    let bypassTaunt = false
+    if (hero.hero_power?.actions) {
+        bypassTaunt = hero.hero_power.actions.some((action: any) =>
+            action.action === 'damage' && action.damage_type === 'spell'
+        )
+    }
+
     targetingState.value = {
         sourceType: 'hero',
         sourceId: hero.hero_id,  // Use the actual hero_id for the backend command
@@ -579,7 +590,8 @@ const handleUseHero = (side_id: string) => {
         scope: getHeroPowerTargetScope(hero), // Determine scope based on hero power actions
         sourceCard: null,
         errorMessage: !canUseHero.value ? 'Cannot use hero power' : null,
-        title: 'Use Hero Power'
+        title: 'Use Hero Power',
+        bypassTaunt: bypassTaunt
     }
     overlay.value = 'select_target'
     overlayTitle.value = 'Hero Power'
@@ -602,7 +614,8 @@ const onPlacementSelected = (payload: { card_id: string; position: number; allow
         scope: payload.targetScope,
         sourceCard: card || null,
         errorMessage: null,
-        title: 'Choose Battlecry Target'
+        title: 'Choose Battlecry Target',
+        bypassTaunt: card ? getBattlecryBypassTaunt(card) : false
     }
     overlay.value = 'select_target'
     overlayTitle.value = 'Battlecry Target'
@@ -753,6 +766,17 @@ function getBattlecryTargetScope(card: CardInPlay): 'enemy' | 'friendly' {
     }
 
     return 'enemy'
+}
+
+// Check if battlecry bypasses taunt (spell damage)
+function getBattlecryBypassTaunt(card: CardInPlay): boolean {
+    const traits = card.traits || []
+    const battlecry = traits.find((t: any) => t.type === 'battlecry')
+    if (!battlecry) return false
+
+    return (battlecry.actions || []).some((action: any) =>
+        action.action === 'damage' && action.damage_type === 'spell'
+    )
 }
 
 // Close overlay and clear state

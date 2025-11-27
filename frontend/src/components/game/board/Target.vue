@@ -141,6 +141,7 @@ interface Props {
     sourceCard?: CardInPlay | Creature | null
     errorMessage?: string | null
     title?: string
+    bypassTaunt?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -149,7 +150,8 @@ const props = withDefaults(defineProps<Props>(), {
     targetScope: 'enemy',
     sourceCard: null,
     errorMessage: null,
-    title: 'Select Target'
+    title: 'Select Target',
+    bypassTaunt: false
 })
 
 const emit = defineEmits<{
@@ -163,6 +165,7 @@ const canTargetCreature = computed(() => {
 
 // Check if the source is a spell (spells are not affected by taunt)
 const isSpellSource = computed(() => {
+    if (props.bypassTaunt) return true
     return props.sourceCard && 'card_type' in props.sourceCard && props.sourceCard.card_type === 'spell'
 })
 
