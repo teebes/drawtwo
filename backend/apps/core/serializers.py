@@ -6,6 +6,48 @@ from pydantic import TypeAdapter
 from .card_assets import get_card_art_url
 
 
+def to_card_schema(card) -> Card:
+    """
+    Convert a single CardTemplate instance to Card schema.
+    Assumes traits are already prefetched for performance.
+    """
+    # Build traits list with data
+    traits_list = []
+
+    # Use all() which uses prefetch cache if available
+    # Note: Avoid using .order_by() here as it would invalidate prefetch cache
+    # The prefetch query should handle ordering if needed
+    traits = card.cardtrait_set.all()
+    # Sort in python to avoid DB hit if prefetched
+    traits = sorted(traits, key=lambda t: t.trait_slug)
+
+    for card_trait in traits:
+        trait_data = {
+            'type': card_trait.trait_slug,
+            **card_trait.data
+        }
+
+        # Use TypeAdapter to properly validate and create the discriminated union
+        trait_adapter = TypeAdapter(Trait)
+        trait_obj = trait_adapter.validate_python(trait_data)
+        traits_list.append(trait_obj)
+
+    # Create Card schema object
+    return Card(
+        id=card.id,
+        slug=card.slug,
+        name=card.name,
+        description=card.description,
+        card_type=card.card_type,
+        cost=card.cost,
+        attack=card.attack or 0,  # Handle null values for spells
+        health=card.health or 0,  # Handle null values for spells
+        traits=traits_list,
+        faction=card.faction.slug if card.faction else None,
+        art_url=get_card_art_url(card.title.slug, card.slug)
+    )
+
+
 def serialize_cards_with_traits(queryset) -> List[Card]:
     """
     Efficiently serialize a CardTemplate queryset to Card schema format.
@@ -22,40 +64,7 @@ def serialize_cards_with_traits(queryset) -> List[Card]:
     )
 
     # Transform to Card schema format
-    card_data = []
-    for card in cards:
-        # Build traits list with data
-        traits_list = []
-
-        for card_trait in card.cardtrait_set.all().order_by('trait_slug'):
-            trait_data = {
-                'type': card_trait.trait_slug,
-                **card_trait.data
-            }
-
-            # Use TypeAdapter to properly validate and create the discriminated union
-            trait_adapter = TypeAdapter(Trait)
-            trait_obj = trait_adapter.validate_python(trait_data)
-            traits_list.append(trait_obj)
-
-        # Create Card schema object
-        card_obj = Card(
-            id=card.id,
-            slug=card.slug,
-            name=card.name,
-            description=card.description,
-            card_type=card.card_type,
-            cost=card.cost,
-            attack=card.attack or 0,  # Handle null values for spells
-            health=card.health or 0,  # Handle null values for spells
-            traits=traits_list,
-            faction=card.faction.slug if card.faction else None,
-            art_url=get_card_art_url(card.title.slug, card.slug)
-        )
-
-        card_data.append(card_obj)
-
-    return card_data
+    return [to_card_schema(card) for card in cards]
 
 def serialize_decks(queryset) -> List[Dict[str, Any]]:
     queryset = queryset.select_related(

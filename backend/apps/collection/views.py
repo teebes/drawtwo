@@ -11,6 +11,7 @@ from apps.builder.models import Title, CardTemplate, HeroTemplate
 from apps.builder.schemas import TitleConfig
 from apps.collection.models import Deck, DeckCard
 from apps.core.card_assets import get_hero_art_url
+from apps.core.serializers import to_card_schema
 
 
 
@@ -136,20 +137,19 @@ def deck_detail(request, deck_id):
 
     if request.method == 'GET':
         # Get deck cards with counts
-        deck_cards = deck.deckcard_set.select_related('card').order_by('card__name')
+        deck_cards = deck.deckcard_set.select_related(
+            'card', 'card__title', 'card__faction'
+        ).prefetch_related(
+            'card__cardtrait_set'
+        ).order_by('card__name')
 
         card_data = []
         for deck_card in deck_cards:
-            card_data.append({
-                'id': deck_card.card.id,
-                'name': deck_card.card.name,
-                'slug': deck_card.card.slug,
-                'cost': deck_card.card.cost,
-                'card_type': deck_card.card.card_type,
-                'attack': deck_card.card.attack,
-                'health': deck_card.card.health,
-                'count': deck_card.count,
-            })
+            # Use schema for consistent serialization including art_url and description
+            schema = to_card_schema(deck_card.card)
+            data = schema.model_dump()
+            data['count'] = deck_card.count
+            card_data.append(data)
 
         return Response({
             'id': deck.id,
@@ -207,19 +207,18 @@ def deck_detail(request, deck_id):
         deck.save()
 
         # Get deck cards with counts for response
-        deck_cards = deck.deckcard_set.select_related('card').order_by('card__name')
+        deck_cards = deck.deckcard_set.select_related(
+            'card', 'card__title', 'card__faction'
+        ).prefetch_related(
+            'card__cardtrait_set'
+        ).order_by('card__name')
+
         card_data = []
         for deck_card in deck_cards:
-            card_data.append({
-                'id': deck_card.card.id,
-                'name': deck_card.card.name,
-                'slug': deck_card.card.slug,
-                'cost': deck_card.card.cost,
-                'card_type': deck_card.card.card_type,
-                'attack': deck_card.card.attack,
-                'health': deck_card.card.health,
-                'count': deck_card.count,
-            })
+            schema = to_card_schema(deck_card.card)
+            data = schema.model_dump()
+            data['count'] = deck_card.count
+            card_data.append(data)
 
         return Response({
             'id': deck.id,

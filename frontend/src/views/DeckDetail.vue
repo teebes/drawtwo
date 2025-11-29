@@ -113,9 +113,12 @@
               <div class="card-info flex-1 flex flex-row items-center min-w-0">
                 <div class="font-medium truncate ml-4">
                   <!-- {{ card.name }} -->
-                  <router-link :to="{ name: 'CardDetails', params: { slug: deck.title.slug, cardSlug: card.slug } }">
+                  <button
+                    @click="openCardModal(card)"
+                    class="text-left hover:text-blue-600 hover:underline focus:outline-none"
+                  >
                     {{ card.name }}
-                  </router-link>
+                  </button>
                 </div>
                 <div class="text-sm text-gray-600 dark:text-gray-400 ml-4 flex-shrink-0">
                   <span v-if="card.card_type === 'creature'">
@@ -168,6 +171,16 @@
       <p class="text-gray-600">Loading deck...</p>
     </div>
 
+    <!-- Card Detail Modal -->
+    <BaseModal :show="showCardModal" @close="closeCardModal">
+      <CardDetailContent
+        v-if="selectedCard"
+        :card="selectedCard"
+        :title-slug="titleSlug"
+        :can-edit="false"
+      />
+    </BaseModal>
+
   </div>
 </template>
 
@@ -179,6 +192,8 @@ import Panel from '../components/layout/Panel.vue'
 import type { DeckCard, Card } from '../types/card'
 import GameButton from '../components/ui/GameButton.vue'
 import { useNotificationStore } from '../stores/notifications'
+import BaseModal from '../components/modals/BaseModal.vue'
+import CardDetailContent from '../components/game/CardDetailContent.vue'
 
 interface DeckData {
   id: number
@@ -222,6 +237,23 @@ const isAddCardMode = ref<boolean>(false)
 const allCards = ref<Card[]>([])
 const allCardsLoading = ref<boolean>(false)
 const allCardsError = ref<string | null>(null)
+
+const selectedCard = ref<Card | null>(null)
+const showCardModal = ref(false)
+
+const openCardModal = (card: Card) => {
+  console.log('openCardModal', card)
+  selectedCard.value = card
+  showCardModal.value = true
+}
+
+const closeCardModal = () => {
+  showCardModal.value = false
+  // Optional: clear selected card after animation
+  setTimeout(() => {
+    selectedCard.value = null
+  }, 300)
+}
 
 // Computed property to get title slug from deck
 const titleSlug = computed(() => {
