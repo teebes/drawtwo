@@ -72,12 +72,6 @@ class Title(TimestampedModel):
         # Author and builders can view unpublished titles
         return self.can_be_edited_by(user)
 
-    """
-    https://assets.drawtwo.com/titles/archetype/banner.png
-    https://assets.drawtwo.com/titles/archetype/banner.webp
-
-    """
-
     @property
     def art_url(self, extension: str = "webp") -> str:
         if settings.USE_R2_FOR_CARDS and settings.CARD_ASSETS_BASE_URL:

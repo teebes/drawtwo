@@ -141,8 +141,6 @@ class Notification(BaseModel):
     type: Literal[
         'game_friendly',
         'game_challenge',
-        #'game_started',
-        #'game_ended',
         'game_ranked',
         'game_ranked_queued',
         'friend_request']

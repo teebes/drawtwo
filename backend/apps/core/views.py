@@ -213,7 +213,6 @@ def title_pve(request, slug):
     ])
 
 @api_view(['GET'])
-#@permission_classes([AllowAny])
 @permission_classes([IsAuthenticated])
 def title_notifications(request, slug):
     from apps.gameplay.schemas.game import Notification
