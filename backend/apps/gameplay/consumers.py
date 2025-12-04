@@ -124,7 +124,7 @@ class GameConsumer(AsyncWebsocketConsumer):
             user = self.scope["user"]
             # Check if user is a participant in the game (either side)
             # Works for both PvE (one side is user, other is AI) and PvP (both sides are users)
-            if game.side_a.user == user or game.side_b.user == user:
+            if game.player_a_user == user or game.player_b_user == user:
                 return game
             return None
         except Game.DoesNotExist:
@@ -139,10 +139,10 @@ class GameConsumer(AsyncWebsocketConsumer):
         user = self.scope["user"]
 
         # Check if user owns side_a's deck
-        if game.side_a.user == user:
+        if game.player_a_user == user:
             return 'side_a'
         # Check if user owns side_b's deck
-        elif game.side_b.user == user:
+        elif game.player_b_user == user:
             return 'side_b'
         # If AI game, assign human player to their side
         elif game.side_a.is_ai_deck:

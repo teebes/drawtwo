@@ -20,10 +20,10 @@
               <h3 class="mb-4 text-xl font-semibold text-gray-900 dark:text-white">Brand Colors</h3>
               <div class="space-y-4">
                 <ColorSwatch
-                  label="Primary (Blue)"
+                  label="Primary (Amber/Gold) - CTAs"
                   :variations="[
                     { weight: '200', bgClass: 'bg-primary-200', textClass: 'text-gray-900' },
-                    { weight: '400', bgClass: 'bg-primary-400', textClass: 'text-white' },
+                    { weight: '400', bgClass: 'bg-primary-400', textClass: 'text-gray-900' },
                     { weight: '600', bgClass: 'bg-primary-600', textClass: 'text-white' },
                     { weight: '800', bgClass: 'bg-primary-800', textClass: 'text-white' },
                     { weight: '900', bgClass: 'bg-primary-900', textClass: 'text-white' }
@@ -31,13 +31,24 @@
                 />
 
                 <ColorSwatch
-                  label="Secondary (Purple)"
+                  label="Secondary (Sky Blue) - Brand"
                   :variations="[
                     { weight: '200', bgClass: 'bg-secondary-200', textClass: 'text-gray-900' },
-                    { weight: '400', bgClass: 'bg-secondary-400', textClass: 'text-white' },
+                    { weight: '400', bgClass: 'bg-secondary-400', textClass: 'text-gray-900' },
                     { weight: '600', bgClass: 'bg-secondary-600', textClass: 'text-white' },
                     { weight: '800', bgClass: 'bg-secondary-800', textClass: 'text-white' },
                     { weight: '900', bgClass: 'bg-secondary-900', textClass: 'text-white' }
+                  ]"
+                />
+
+                <ColorSwatch
+                  label="Accent (Violet) - Highlights"
+                  :variations="[
+                    { weight: '200', bgClass: 'bg-accent-200', textClass: 'text-gray-900' },
+                    { weight: '400', bgClass: 'bg-accent-400', textClass: 'text-white' },
+                    { weight: '600', bgClass: 'bg-accent-600', textClass: 'text-white' },
+                    { weight: '800', bgClass: 'bg-accent-800', textClass: 'text-white' },
+                    { weight: '900', bgClass: 'bg-accent-900', textClass: 'text-white' }
                   ]"
                 />
               </div>
@@ -188,19 +199,19 @@
           <div class="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
             <Panel title="Card Draw">
               <div class="flex justify-center">
-                <div class="h-24 w-16 animate-card-draw rounded-lg bg-gradient-to-b from-blue-500 to-purple-600 shadow-lg"></div>
+                <div class="h-24 w-16 animate-card-draw rounded-lg bg-gradient-to-b from-secondary-500 to-accent-600 shadow-lg"></div>
               </div>
             </Panel>
 
             <Panel title="Mana Pulse">
               <div class="flex justify-center">
-                <div class="h-16 w-16 animate-mana-pulse rounded-full bg-blue-500 shadow-lg"></div>
+                <div class="h-16 w-16 animate-mana-pulse rounded-full bg-secondary-500 shadow-lg"></div>
               </div>
             </Panel>
 
             <Panel title="Card Glow">
               <div class="flex justify-center">
-                <div class="card-glow h-24 w-16 rounded-lg bg-gradient-to-b from-yellow-400 to-orange-500"></div>
+                <div class="card-glow h-24 w-16 rounded-lg bg-gradient-to-b from-primary-400 to-primary-600"></div>
               </div>
             </Panel>
           </div>

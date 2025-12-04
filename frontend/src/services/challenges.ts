@@ -21,5 +21,10 @@ export const challengesApi = {
       challengee_deck_id: challengeeDeckId
     })
     return response.data
+  },
+
+  async declineChallenge(challengeId: number): Promise<{ success: boolean; message: string }> {
+    const response = await axios.post(`/gameplay/challenges/${challengeId}/decline/`)
+    return response.data
   }
 }

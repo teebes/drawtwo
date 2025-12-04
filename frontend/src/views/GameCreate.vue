@@ -35,7 +35,7 @@
                 :class="[
                   'rounded-md px-6 py-2 text-sm font-medium transition-colors',
                   gameMode === 'pve'
-                    ? 'bg-primary-600 text-white'
+                    ? 'bg-secondary-600 text-white'
                     : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
                 ]"
               >
@@ -156,31 +156,6 @@
               </div>
 
               <div v-else class="space-y-6">
-                <!-- Incoming challenge banner -->
-                <div v-if="hasIncomingChallenge && firstIncomingChallenge" class="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-                  <div class="flex items-center justify-between">
-                    <div>
-                      <span class="font-semibold">{{ firstIncomingChallenge.challenger.display_name }}</span>
-                      challenged you to a friendly match.
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <button
-                        type="button"
-                        class="inline-flex items-center rounded-md px-4 py-2 text-sm font-medium transition-colors"
-                        :class="[
-                          selectedPlayerDeck
-                            ? 'bg-secondary-600 text-white hover:bg-secondary-700'
-                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        ]"
-                        :disabled="!selectedPlayerDeck"
-                        @click="acceptIncomingChallenge(firstIncomingChallenge)"
-                      >
-                        Accept Challenge
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
                 <div class="flex flex-col items-center space-y-3">
                   <button
                     type="button"
@@ -349,8 +324,7 @@ const friendsError = ref<string | null>(null)
 const rankedQueueEntry = ref<RankedQueueEntry | null>(null)
 const rankedQueueLoading = ref<boolean>(false)
 const rankedQueueError = ref<string | null>(null)
-// Friendly challenges
-const pendingIncomingChallenges = ref<FriendlyChallenge[]>([])
+// Friendly challenges (outgoing only - incoming handled on Title page)
 const pendingOutgoingChallenges = ref<FriendlyChallenge[]>([])
 
 // Selections
@@ -380,9 +354,6 @@ const outgoingPendingByUserId = computed<Record<number, boolean>>(() => {
   }
   return map
 })
-
-const hasIncomingChallenge = computed(() => pendingIncomingChallenges.value.length > 0)
-const firstIncomingChallenge = computed(() => pendingIncomingChallenges.value[0] || null)
 
 // Methods
 const fetchPlayerDecks = async (): Promise<void> => {
@@ -429,7 +400,6 @@ const fetchFriends = async (): Promise<void> => {
 const fetchPendingChallenges = async (): Promise<void> => {
   try {
     const resp: PendingChallengesResponse = await challengesApi.listPending(titleSlug.value)
-    pendingIncomingChallenges.value = resp.incoming || []
     pendingOutgoingChallenges.value = resp.outgoing || []
   } catch (err) {
     console.error('Error fetching pending challenges:', err)
@@ -500,21 +470,6 @@ const challengeFriend = async (friend: Friendship): Promise<void> => {
     await fetchPendingChallenges()
   } catch (err) {
     console.error('Error creating challenge:', err)
-    notificationStore.handleApiError(err as Error)
-  }
-}
-
-const acceptIncomingChallenge = async (challenge: FriendlyChallenge): Promise<void> => {
-  if (!selectedPlayerDeck.value) {
-    notificationStore.error('Select your deck to accept the challenge')
-    return
-  }
-  try {
-    const { game_id } = await challengesApi.acceptChallenge(challenge.id, selectedPlayerDeck.value.id)
-    notificationStore.success('Challenge accepted! Starting game...')
-    router.push({ name: 'Board', params: { game_id, slug: titleSlug.value } })
-  } catch (err) {
-    console.error('Error accepting challenge:', err)
     notificationStore.handleApiError(err as Error)
   }
 }

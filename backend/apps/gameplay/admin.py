@@ -20,7 +20,7 @@ class GameAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('Game Setup', {
-            'fields': ('status', 'side_a', 'side_b')
+            'fields': ('type', 'status', 'side_a', 'side_b')
         }),
         ('Game State', {
             'fields': ('state',),

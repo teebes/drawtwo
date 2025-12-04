@@ -12,8 +12,8 @@ urlpatterns = [
     path("titles/<slug:slug>/cards/<slug:card_slug>/", views.title_card_detail, name="title-card-detail"),
     path("titles/<slug:slug>/decks/", views.title_decks, name="title-decks"),
     path("titles/<slug:slug>/games/", views.title_games, name="title-games"),
+    path("titles/<slug:slug>/games/history/", views.title_games_history, name="title-games-history"),
     path("titles/<slug:slug>/heroes/", views.title_heroes, name="title-heroes"),
     path("titles/<slug:slug>/pve/", views.title_pve, name="title-pve"),
-
-
+    path("titles/<slug:slug>/notifications/", views.title_notifications, name="title-notifications"),
 ]

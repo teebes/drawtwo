@@ -357,7 +357,7 @@ const deleteCard = async (): Promise<void> => {
 
     // Redirect back to cards list after successful deletion
     router.push({
-      name: 'TitleCards',
+      name: 'Collection',
       params: { slug: titleSlug }
     })
 

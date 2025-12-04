@@ -1,8 +1,8 @@
-from django.db import models
-from apps.core.models import TimestampedModel, list_to_choices
-
-# Import the User model for foreign key relationships
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import models
+
+from apps.core.models import TimestampedModel, list_to_choices
 
 User = get_user_model()
 
@@ -71,6 +71,14 @@ class Title(TimestampedModel):
 
         # Author and builders can view unpublished titles
         return self.can_be_edited_by(user)
+
+    @property
+    def art_url(self, extension: str = "webp") -> str:
+        if settings.USE_R2_FOR_CARDS and settings.CARD_ASSETS_BASE_URL:
+            base_url = settings.CARD_ASSETS_BASE_URL.rstrip('/')
+            return f"{base_url}/titles/{self.slug}/banner.{extension}"
+        else:
+            return f"{settings.MEDIA_URL}titles/{self.slug}/banner.{extension}"
 
 
 class Builder(TimestampedModel):

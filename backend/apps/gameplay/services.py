@@ -688,7 +688,7 @@ class GameService:
             return
 
         # Skip for friendly unrated matches
-        if getattr(game, 'is_friendly', False):
+        if game.type == Game.GAME_TYPE_FRIENDLY:
             logger.info(f"Skipping ELO update for friendly (unrated) game {game.id}")
             return
 
@@ -908,6 +908,10 @@ class GameService:
                     entry_b.deck,
                     randomize_starting_player=True,
                 )
+
+                # Set game type to ranked for matchmaking games
+                game.type = Game.GAME_TYPE_RANKED
+                game.save(update_fields=['type'])
 
                 # Update both queue entries
                 entry_a.status = MatchmakingQueue.STATUS_MATCHED

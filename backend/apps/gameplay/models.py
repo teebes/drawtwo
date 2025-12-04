@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.db import models
+from django.db.models import Q, Case, When, Value
 
 from apps.collection.models import Deck
 from apps.core.models import TimestampedModel, list_to_choices
@@ -9,11 +10,54 @@ from apps.gameplay.schemas.effects import Effect
 User = get_user_model()
 
 
+class GameQuerySet(models.QuerySet):
+    """Custom QuerySet for Game with title-scoped query methods."""
+
+    def for_title(self, title):
+        """Filter games for a specific title. All queries should start here."""
+        return self.filter(title=title)
+
+    def for_user(self, user):
+        """Filter games where user is a participant. Must be chained after for_title."""
+        return self.filter(Q(player_a_user=user) | Q(player_b_user=user))
+
+    def pve_for_user(self, title, user):
+        """Convenience method: PvE games for a user in a title."""
+        return self.for_title(title).for_user(user).filter(type='pve')
+
+    def ranked_for_user(self, title, user):
+        """Convenience method: Ranked games for a user in a title."""
+        return self.for_title(title).for_user(user).filter(type='ranked')
+
+    def friendly_for_user(self, title, user):
+        """Convenience method: Friendly games for a user in a title."""
+        return self.for_title(title).for_user(user).filter(type='friendly')
+
+    def where_user_is_side(self, title, user):
+        """Get games with annotation showing which side user is on."""
+        return self.for_title(title).for_user(user).annotate(
+            user_side=Case(
+                When(player_a_user=user, then=Value('side_a')),
+                When(player_b_user=user, then=Value('side_b')),
+            )
+        )
+
+
 class Game(TimestampedModel):
 
     GAME_STATUS_INIT = 'init'
     GAME_STATUS_IN_PROGRESS = 'in_progress'
     GAME_STATUS_ENDED = 'ended'
+
+    GAME_TYPE_PVE = 'pve'
+    GAME_TYPE_RANKED = 'ranked'
+    GAME_TYPE_FRIENDLY = 'friendly'
+
+    type = models.CharField(
+        max_length=20,
+        choices=list_to_choices([GAME_TYPE_PVE, GAME_TYPE_RANKED, GAME_TYPE_FRIENDLY]),
+        default=GAME_TYPE_PVE,
+    )
 
     status = models.CharField(
         max_length=20,
@@ -25,15 +69,38 @@ class Game(TimestampedModel):
     side_a = models.ForeignKey(Deck, on_delete=models.PROTECT, related_name='games_as_side_a')
     side_b = models.ForeignKey(Deck, on_delete=models.PROTECT, related_name='games_as_side_b')
 
+    # Denormalized fields for easier querying
+    title = models.ForeignKey(
+        'builder.Title',
+        on_delete=models.PROTECT,
+        related_name='games',
+        help_text="The title this game is for (denormalized from side_a.title)"
+    )
+    player_a_user = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='games_as_player_a',
+        null=True,
+        blank=True,
+        help_text="User on side_a (denormalized from side_a.user)"
+    )
+    player_b_user = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='games_as_player_b',
+        null=True,
+        blank=True,
+        help_text="User on side_b (denormalized from side_b.user)"
+    )
+
     state = models.JSONField(default=dict)
+
+    objects = GameQuerySet.as_manager()
 
     winner = models.ForeignKey(Deck, on_delete=models.PROTECT,
                                blank=True, null=True, related_name='games_won')
 
     queue = models.JSONField(default=list)
-
-    # Friendly matches (friend vs friend) are not rated
-    is_friendly = models.BooleanField(default=False, help_text="Friend vs Friend games are unrated")
 
     @property
     def game_state(self):
@@ -62,13 +129,27 @@ class Game(TimestampedModel):
             return self.side_b
         return None  # No AI
 
-    @property
-    def title(self):
-        """Returns the title this game is for (both decks must be same title)"""
-        return self.side_a.title
+    def opponent_deck_for_user(self, user):
+        if self.side_a.user == user:
+            return self.side_b
+        elif self.side_b.user == user:
+            return self.side_a
+        return None
 
     def __str__(self):
         return f"{self.side_a.name} vs {self.side_b.name}"
+
+    def save(self, *args, **kwargs):
+        """Auto-populate denormalized fields from side_a and side_b."""
+        # Only populate if side_a and side_b are set
+        if self.side_a_id:
+            # Title is same for both sides (validated elsewhere)
+            if not self.title_id:
+                self.title = self.side_a.title
+            self.player_a_user = self.side_a.user
+        if self.side_b_id:
+            self.player_b_user = self.side_b.user
+        super().save(*args, **kwargs)
 
     def enqueue(self, effects: list[Effect], trigger: bool=True, prepend: bool=False):
         if effects:
@@ -301,3 +382,26 @@ class FriendlyChallenge(TimestampedModel):
 
     def __str__(self):
         return f"{self.challenger.display_name} -> {self.challengee.display_name} [{self.title.name}] ({self.status})"
+
+
+class PlayerNotification(TimestampedModel):
+    """
+    Game-related notifications for players to be displayed in the Title Lobby,
+    for example that a game has started or ended.
+
+    * Game challenge
+    * Game started
+    * Game ended
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    game = models.ForeignKey(Game, on_delete=models.CASCADE, related_name='notifications')
+    message = models.TextField()
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'gameplay_player_notification'
+        indexes = [
+            models.Index(fields=['user', 'is_read']),
+        ]

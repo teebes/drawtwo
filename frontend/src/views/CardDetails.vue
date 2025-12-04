@@ -48,7 +48,7 @@ const handleBack = (): void => {
   if (historyState?.back) {
     router.back()
   } else {
-    router.push({ name: 'TitleCards', params: { slug: titleSlug } })
+    router.push({ name: 'Collection', params: { slug: titleSlug } })
   }
 }
 
