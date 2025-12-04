@@ -105,7 +105,7 @@ class FriendlyChallengesAPITests(TestCase):
 
         # Game is created and flagged friendly
         game = Game.objects.get(id=game_id)
-        self.assertTrue(game.is_friendly)
+        self.assertEqual(game.type, Game.GAME_TYPE_FRIENDLY)
         self.assertCountEqual([game.side_a.id, game.side_b.id], [self.deck_a.id, self.deck_b.id])
 
         # Ensure no ELO change record exists for friendly match

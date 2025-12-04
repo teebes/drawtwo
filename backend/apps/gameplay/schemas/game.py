@@ -134,3 +134,16 @@ class GameState(BaseModel):
     @property
     def opposite_side(self) -> Literal["side_a", "side_b"]:
         return "side_b" if self.active == "side_a" else "side_a"
+
+
+class Notification(BaseModel):
+    ref_id: int
+    type: Literal[
+        'game_friendly',
+        'game_challenge',
+        #'game_started',
+        #'game_ended',
+        'game_ranked',
+        'game_ranked_queued',
+        'friend_request']
+    message: str

@@ -20,20 +20,20 @@
         <Panel>
           <div class="grid gap-4 grid-cols-4 sm:grid-cols-4">
             <div class="text-center">
-              <div class="text-2xl font-bold text-primary-600">{{ deck.total_cards }}</div>
-              <div class="text-xs text-gray-600">Total Cards</div>
+              <div class="text-2xl font-bold text-500">{{ deck.total_cards }}</div>
+              <div class="text-xs text-gray-500">Total Cards</div>
             </div>
             <div class="text-center">
-              <div class="text-2xl font-bold text-primary-600">{{ deck.cards.length }}</div>
-              <div class="text-xs text-gray-600">Unique Cards</div>
+              <div class="text-2xl font-bold text-500">{{ deck.cards.length }}</div>
+              <div class="text-xs text-gray-500">Unique Cards</div>
             </div>
             <div class="text-center">
-              <div class="text-2xl font-bold text-primary-600">{{ deck.hero.health }}</div>
-              <div class="text-xs text-gray-600">Hero Health</div>
+              <div class="text-2xl font-bold text-500">{{ deck.hero.health }}</div>
+              <div class="text-xs text-gray-500">Hero Health</div>
             </div>
             <div class="text-center">
-              <div class="text-2xl font-bold text-primary-600">{{ averageCost.toFixed(1) }}</div>
-              <div class="text-xs text-gray-600">Avg. Cost</div>
+              <div class="text-2xl font-bold text-500">{{ averageCost.toFixed(1) }}</div>
+              <div class="text-xs text-gray-500">Avg. Cost</div>
             </div>
           </div>
         </Panel>
@@ -51,7 +51,7 @@
               class="card-item flex items-center rounded-lg bg-gray-50 dark:bg-gray-800 space-x-2"
             >
               <!-- Card cost badge -->
-              <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-500 text-sm font-semibold text-gray-700 dark:text-gray-300">
+              <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-secondary-500 text-sm font-semibold text-gray-700 dark:text-gray-300">
                 {{ card.cost }}
               </div>
 

@@ -17,7 +17,7 @@ class TitleSerializer(serializers.ModelSerializer):
         model = Title
         fields = ['id', 'slug', 'version', 'is_latest', 'name', 'description',
                  'author', 'author_username', 'status', 'published_at',
-                 'created_at', 'updated_at']
+                 'created_at', 'updated_at', 'art_url']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 

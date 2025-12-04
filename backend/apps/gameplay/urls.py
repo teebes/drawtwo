@@ -27,6 +27,7 @@ urlpatterns = [
     path('challenges/', views.create_friendly_challenge, name='friendly-challenge-create'),
     path('challenges/pending/<slug:title_slug>/', views.list_pending_friendly_challenges, name='friendly-challenge-pending'),
     path('challenges/<int:challenge_id>/accept/', views.accept_friendly_challenge, name='friendly-challenge-accept'),
+    path('challenges/<int:challenge_id>/decline/', views.decline_friendly_challenge, name='friendly-challenge-decline'),
 
     # Title-specific leaderboard and user rating
     path('<slug:title_slug>/leaderboard/', LeaderboardView.as_view(), name='leaderboard'),

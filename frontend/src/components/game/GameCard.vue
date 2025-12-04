@@ -57,7 +57,7 @@
         </div>
 
         <!-- Cost Badge (upper right corner, only when in hand, extends beyond) -->
-        <div v-if="!in_lane && displayCost !== null" :class="['card-badge bg-blue-500', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.right, badgeFontClasses, badgeTextSizeClasses]">
+        <div v-if="!in_lane && displayCost !== null" :class="['card-badge bg-secondary-500', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.right, badgeFontClasses, badgeTextSizeClasses]">
             {{ displayCost }}
         </div>
 

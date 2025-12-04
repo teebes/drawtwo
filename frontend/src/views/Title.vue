@@ -1,5 +1,5 @@
 <template>
-  <div class="title-page">
+  <div class="title-page flex flex-col">
     <!-- Access Denied Message -->
     <div v-if="accessDenied" class="max-w-2xl mx-auto px-4 py-16 text-center">
       <div class="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-8">
@@ -23,215 +23,70 @@
     </div>
 
     <div v-else-if="!loading && !error && title">
-      <section class="text-center bg-gray-300 h-24 flex items-center justify-center">
-        <h1 class="font-display text-4xl font-bold text-gray-900 dark:text-gray-900">{{ title.name }}</h1>
+      <section class="banner" v-if="false">
+        <h1 class="">{{ title?.name }}</h1>
       </section>
+
+      <img v-if="title.art_url" :src="title.art_url" :alt="title.name" class="banner hidden sm:block h-48 w-auto mx-auto" />
 
       <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8 mt-8">
 
         <Panel v-if="title.description" title="Description">{{ title.description }}</Panel>
 
-        <div class="flex justify-center">
+        <div class="flex w-full">
           <router-link
-            :to="{ name: 'TitleCards', params: { slug: title.slug } }"
-            class="inline-flex items-center rounded-lg bg-primary-600 px-6 py-3 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
-          >
-            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-            </svg>
-            View Cards
-          </router-link>
+            :to="{ name: 'Collection', params: { slug: title.slug } }"
+            class="flex-1 flex items-center justify-center text-xl font-bold rounded-lg border border-transparent  hover:border-gray-300 dark:hover:border-gray-800 p-4 underline decoration-dotted underline-offset-8 decoration-gray-500"
+          >Collection</router-link>
+          <router-link
+            :to="{ name: 'Games', params: { slug: title.slug } }"
+            class="flex-1 flex items-center justify-center text-xl font-bold rounded-lg border border-transparent  hover:border-gray-300 dark:hover:border-gray-800 p-4 underline decoration-dotted underline-offset-8 decoration-gray-500"
+          >Games</router-link>
         </div>
 
-        <div class="grid gap-8 sm:grid-cols-2">
+        <div class="flex flex-col md:flex-row space-y-8 md:space-y-0 md:space-x-12">
 
-          <Panel title="Games" class="sm:order-2">
-            <div v-if="games.length > 0" class="space-y-3 flex-grow">
-              <router-link
-                v-for="game in games"
-                :key="game.id"
-                :to="{ name: 'Board', params: { game_id: game.id, slug: title.slug } }"
-                class="flex items-center justify-between rounded-lg p-3 transition-colors"
-                :class="{
-                  'bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 border border-blue-200 dark:border-blue-800': game.is_user_turn,
-                  'bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700': !game.is_user_turn
-                }"
-              >
-                <div class="flex items-center space-x-3">
-                  <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 text-sm font-bold text-green-600">
-                    {{ game.type === 'pve' ? '🤖' : '👥' }}
-                  </div>
-                  <div class="font-medium text-gray-900 hover:text-green-600 dark:text-white">
-                    {{ game.name }}
-                  </div>
-                </div>
-                <span
-                  v-if="game.is_user_turn"
-                  class="inline-flex items-center rounded-full bg-blue-600 px-2 py-0.5 text-xs font-medium text-white"
-                  title="Your turn"
-                >
-                  Your Turn
-                </span>
-              </router-link>
-            </div>
+          <section class="quick-actions flex-[2]">
+            <!-- Notifications -->
+            <TitleNotifications
+              :notifications="notifications"
+              :decks="decks"
+              :decks-loading="decksLoading"
+              :title-slug="(route.params.slug as string)"
+              @challenge-accepted="handleChallengeAccepted"
+              @challenge-declined="handleChallengeDeclined" />
 
-            <div v-if="!gamesLoading" class="pt-2 border-t border-gray-200 dark:border-gray-700">
-              <router-link
-                :to="{ name: 'GameCreate', params: { slug: title.slug } }"
-                class="flex items-center justify-center w-full rounded-lg border-2 border-dashed border-green-300 p-3 text-sm font-medium text-green-600 hover:border-green-400 hover:text-green-700 transition-colors"
-              >
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                </svg>
-                New Game
-              </router-link>
-            </div>
+            <!-- New Game-->
+            <router-link
+              :to="{ name: 'GameCreate', params: { slug: title.slug } }"
+              class="flex mt-4 items-center justify-center w-full rounded-lg border-2 border-dashed border-primary-500 p-3 text-sm font-medium text-primary-500 hover:border-primary-600 hover:text-primary-600 transition-colors">
+              <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+              </svg>
+              New Game
+            </router-link>
+          </section>
 
-            <div v-if="gamesLoading" class="text-center py-4">
-              <p class="text-gray-600">Loading games...</p>
-            </div>
-          </Panel>
+          <section class="leaderboard flex-1">
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-2 border-b border-gray-200 dark:border-gray-700 pb-2">Leaderboard</h2>
 
-          <Panel title="Decks" class="sm:order-1">
-            <div v-if="decks.length > 0" class="space-y-3 flex-grow">
-              <router-link
-                v-for="deck in decks"
-                :key="deck.id"
-                :to="{ name: 'DeckDetail', params: { id: deck.id } }"
-                class="flex items-center justify-between rounded-lg bg-gray-50 p-3 hover:bg-gray-100 transition-colors dark:bg-gray-800 dark:hover:bg-gray-700"
-              >
-                <div class="flex items-center space-x-3">
-                  <div
-                    class="relative w-10 max-w-[4rem] rounded-lg overflow-hidden shadow-md bg-gray-200 dark:bg-gray-700 flex items-center justify-center border border-gray-200 dark:border-gray-600"
-                    style="aspect-ratio: 5 / 7;"
-                  >
-                    <img
-                      v-if="deck.hero.art_url"
-                      :src="deck.hero.art_url"
-                      :alt="`${deck.hero.name} hero art`"
-                      class="inset-0 h-full object-contain object-center border-gray-600 border-2 rounded-lg"
-                    />
-                    <span v-else class="text-lg font-semibold text-primary-600">
-                      {{ deck.hero.name.charAt(0) }}
-                    </span>
-                  </div>
-                  <div>
-                    <div class="font-medium text-gray-900 hover:text-primary-600 dark:text-white">
-                      {{ deck.name }}
-                    </div>
-                  </div>
-                </div>
-              </router-link>
+            <div v-if="!leaderboardLoading" class="space-y-4 mt-4">
 
-              <div class="pt-2 border-t border-gray-200 dark:border-gray-700">
-                <router-link
-                  :to="{ name: 'DeckCreate', params: { slug: title.slug } }"
-                  class="flex items-center justify-center w-full rounded-lg border-2 border-dashed border-gray-300 p-3 text-sm font-medium text-gray-600 hover:border-primary-400 hover:text-primary-600 transition-colors"
-                >
-                  <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                  </svg>
-                  New Deck
-                </router-link>
+              <div v-for="(player, index) in topPlayers" :key="player.id" class="flex items-center">
+                <div class="w-10">{{ index + 1}}</div>
+                <div class="flex-grow text-lg font-bold">{{ player.display_name }}</div>
+                <div class="text-gray-500">[ {{ player.elo_rating }} ]</div>
               </div>
+
             </div>
 
-            <div v-else class="text-center py-8">
-              <p class="text-gray-600 mb-4">You don't have any decks for this title yet.</p>
-              <router-link
-                :to="{ name: 'DeckCreate', params: { slug: title.slug } }"
-                class="inline-flex items-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
-              >
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                </svg>
-                Create Your First Deck
-              </router-link>
+            <div v-else class="text-center py-4">
+              <p class="text-gray-600 dark:text-gray-400">Loading leaderboard...</p>
             </div>
+          </section>
 
-            <div v-if="decksLoading" class="text-center py-4">
-              <p class="text-gray-600">Loading decks...</p>
-            </div>
-          </Panel>
         </div>
 
-        <!-- ELO Ratings & Leaderboard -->
-        <Panel title="⚔️ PvP Rankings" v-if="isAuthenticated">
-          <div v-if="!leaderboardLoading" class="space-y-4">
-            <!-- User's Rating -->
-            <div v-if="userRating" class="rounded-lg bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 p-4 border border-amber-200 dark:border-amber-800">
-              <div class="flex items-center justify-between">
-                <div>
-                  <div class="text-sm font-medium text-gray-600 dark:text-gray-400">Your Rating</div>
-                  <div class="text-3xl font-bold text-amber-600 dark:text-amber-400">
-                    {{ userRating.elo_rating }}
-                  </div>
-                </div>
-                <div class="text-right">
-                  <div class="text-sm text-gray-600 dark:text-gray-400">Record</div>
-                  <div class="text-lg font-semibold text-gray-900 dark:text-white">
-                    {{ userRating.wins }}W - {{ userRating.losses }}L
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div v-else class="rounded-lg bg-gray-50 dark:bg-gray-800 p-4 text-center">
-              <p class="text-sm text-gray-600 dark:text-gray-400">
-                No rating yet. Play your first PvP match to get ranked!
-              </p>
-            </div>
-
-            <!-- Top 3 Players -->
-            <div class="space-y-2">
-              <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Top Players</h3>
-              <div
-                v-for="(player, index) in topPlayers"
-                :key="player.id"
-                class="flex items-center justify-between p-3 rounded-lg transition-colors"
-                :class="{
-                  'bg-amber-50 dark:bg-amber-900/20': index === 0,
-                  'bg-gray-50 dark:bg-gray-800': index === 1,
-                  'bg-orange-50 dark:bg-orange-900/20': index === 2
-                }"
-              >
-                <div class="flex items-center gap-3">
-                  <span class="text-2xl">
-                    {{ index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉' }}
-                  </span>
-                  <div>
-                    <div class="font-medium text-gray-900 dark:text-white">
-                      {{ player.display_name }}
-                      <span v-if="player.id === authStore.user?.id" class="ml-1 text-xs text-blue-600 dark:text-blue-400">(You)</span>
-                    </div>
-                    <div class="text-sm text-gray-600 dark:text-gray-400">
-                      {{ player.wins }}W - {{ player.losses }}L
-                    </div>
-                  </div>
-                </div>
-                <div class="text-lg font-bold text-amber-600 dark:text-amber-400">
-                  {{ player.elo_rating }}
-                </div>
-              </div>
-            </div>
-
-            <!-- View Full Leaderboard Link -->
-            <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
-              <router-link
-                :to="{ name: 'Leaderboard', params: { slug: title.slug } }"
-                class="flex items-center justify-center w-full rounded-lg bg-amber-100 dark:bg-amber-900/30 p-3 text-sm font-medium text-amber-900 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
-              >
-                🏆 View Full Leaderboard
-                <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                </svg>
-              </router-link>
-            </div>
-          </div>
-
-          <div v-else class="text-center py-4">
-            <p class="text-gray-600 dark:text-gray-400">Loading rankings...</p>
-          </div>
-        </Panel>
       </main>
     </div>
 
@@ -245,6 +100,8 @@ import { useTitleStore } from '../stores/title'
 import { useAuthStore } from '../stores/auth'
 import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
+import TitleNotifications from '../components/title/TitleNotifications.vue'
+import type { Notification } from '../types/notification'
 
 interface DeckApiData {
   id: number
@@ -268,7 +125,7 @@ interface DeckData extends DeckApiData {
 interface GameData {
   id: number
   name: string
-  type: 'pve' | 'pvp'
+  type: 'pve' | 'ranked' | 'friendly'
   is_user_turn: boolean
 }
 
@@ -299,10 +156,11 @@ const accessDenied = computed(() => titleStore.errorStatus === 403)
 const decks = ref<DeckData[]>([])
 const games = ref<GameData[]>([])
 const topPlayers = ref<LeaderboardPlayer[]>([])
-const userRating = ref<LeaderboardPlayer | null>(null)
+const notifications = ref<Notification[]>([])
 const decksLoading = ref<boolean>(false)
 const gamesLoading = ref<boolean>(false)
 const leaderboardLoading = ref<boolean>(false)
+const notificationsLoading = ref<boolean>(false)
 
 // Title data now comes from the store via router preloading
 
@@ -349,22 +207,41 @@ const fetchLeaderboard = async (): Promise<void> => {
     leaderboardLoading.value = true
     const slug = route.params.slug as string
 
-    // Fetch top players and user's rating in parallel
-    const [leaderboardResponse, userRatingResponse] = await Promise.all([
-      axios.get(`/gameplay/${slug}/leaderboard/`, {
-        params: { limit: 3 } // Only need top 3 for display
-      }),
-      axios.get(`/gameplay/${slug}/my-rating/`)
-    ])
+    const response = await axios.get(`/gameplay/${slug}/leaderboard/`, {
+      params: { limit: 3 } // Only need top 3 for display
+    })
 
-    topPlayers.value = leaderboardResponse.data as LeaderboardPlayer[]
-    userRating.value = userRatingResponse.data as LeaderboardPlayer
+    topPlayers.value = response.data as LeaderboardPlayer[]
   } catch (err) {
     console.error('Error fetching leaderboard:', err)
     // Don't show error, just log it
   } finally {
     leaderboardLoading.value = false
   }
+}
+
+const fetchNotifications = async (): Promise<void> => {
+  if (!title.value || !isAuthenticated.value) return
+
+  try {
+    notificationsLoading.value = true
+    const slug = route.params.slug as string
+    const response = await axios.get(`/titles/${slug}/notifications/`)
+    notifications.value = response.data as Notification[]
+  } catch (err) {
+    console.error('Error fetching notifications:', err)
+  } finally {
+    notificationsLoading.value = false
+  }
+}
+
+// Event handlers for TitleNotifications component
+const handleChallengeAccepted = (challengeId: number) => {
+  notifications.value = notifications.value.filter(n => !(n.type === 'game_challenge' && n.ref_id === challengeId))
+}
+
+const handleChallengeDeclined = (challengeId: number) => {
+  notifications.value = notifications.value.filter(n => !(n.type === 'game_challenge' && n.ref_id === challengeId))
 }
 
 const formatDate = (dateString: string): string => {
@@ -378,9 +255,12 @@ const formatDate = (dateString: string): string => {
 // Watch for title to be loaded and then fetch related data
 watch(title, async (newTitle) => {
   if (newTitle) {
-    await fetchDecks()
-    await fetchGames()
-    await fetchLeaderboard()
+    await Promise.all([
+      fetchDecks(),
+      fetchGames(),
+      fetchLeaderboard(),
+      fetchNotifications()
+    ])
   }
 }, { immediate: true })
 
@@ -390,9 +270,11 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.title-page {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
+img.banner {
+  filter: brightness(0.0);
+}
+
+.dark img.banner {
+  filter: brightness(0.8);
 }
 </style>

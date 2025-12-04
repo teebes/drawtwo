@@ -219,13 +219,8 @@ const target = computed(() => {
     return null
 })
 
-const current_hero = computed(() => {
-    const hero: HeroInPlay = gameStore.gameState.heroes[props.update.side];
-    return hero;
-})
-
 const opposing_hero = computed(() => {
-    const opposite_side = props.update.side === 'side_a' ? 'side_b' : 'side_a';
+    const opposite_side = gameStore.viewer === 'side_a' ? 'side_b' : 'side_a';
     const hero: HeroInPlay = gameStore.gameState.heroes[opposite_side]
     return hero;
 })

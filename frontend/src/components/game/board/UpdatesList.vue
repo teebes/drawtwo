@@ -59,7 +59,7 @@ const turnGroups = computed(() => {
             groups.push({
                 side: side,
                 updates: [...currentUpdates],
-                label: getTurnLabel(side)
+                label: getTurnLabel(side, Math.floor(groups.length / 2) + 1)
             })
             currentUpdates = []
             currentSide = null // Reset for next group
@@ -85,19 +85,17 @@ const turnGroups = computed(() => {
         groups.push({
             side: side!,
             updates: [...currentUpdates],
-            label: getTurnLabel(side!)
+            label: getTurnLabel(side!, Math.floor(groups.length / 2) + 1)
         })
     }
 
     return groups
 })
 
-function getTurnLabel(side: string) {
-    if (gameStore.viewer === side) {
-        return "Your Turn"
-    }
+function getTurnLabel(side: string, turnNumber: number) {
     const hero = gameStore.gameState.heroes[side]
-    return hero ? `${hero.name}'s Turn` : "Enemy Turn"
+    const name = (gameStore.viewer === side) ? "You" : (hero ? hero.name : "Enemy")
+    return `Turn ${turnNumber} - ${name}`
 }
 
 const scrollToBottom = async () => {

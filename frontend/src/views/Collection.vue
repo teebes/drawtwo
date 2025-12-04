@@ -1,14 +1,79 @@
 <template>
-  <div class="title-cards-page min-h-screen bg-gray-50 dark:bg-gray-900">
+  <div class="collection-page min-h-screen bg-gray-50 dark:bg-gray-900">
 
     <div v-if="!loading && !error && title" class="relative flex flex-col h-full">
       <!-- Hero Section -->
-      <section class="bg-gray-300 h-24 flex items-center justify-center">
-        <h1 class="font-display text-4xl font-bold dark:text-gray-900">Collection</h1>
+      <section class="banner">
+        <h1>Collection</h1>
       </section>
 
       <!-- Cards Sections -->
       <main class="mx-auto w-full px-4 sm:px-6 lg:px-8 pb-16 space-y-12">
+        <!-- Decks Section -->
+        <section class="max-w-xl mx-auto mt-8">
+          <Panel title="Your Decks">
+            <div v-if="decks.length > 0" class="space-y-3 flex-grow">
+              <router-link
+                v-for="deck in decks"
+                :key="deck.id"
+                :to="{ name: 'DeckDetail', params: { id: deck.id } }"
+                class="flex items-center justify-between rounded-lg bg-gray-50 p-3 hover:bg-gray-100 transition-colors dark:bg-gray-800 dark:hover:bg-gray-700"
+              >
+                <div class="flex items-center space-x-3">
+                  <div
+                    class="relative w-10 max-w-[4rem] rounded-lg overflow-hidden shadow-md bg-gray-200 dark:bg-gray-700 flex items-center justify-center border border-gray-200 dark:border-gray-600"
+                    style="aspect-ratio: 5 / 7;"
+                  >
+                    <img
+                      v-if="deck.hero.art_url"
+                      :src="deck.hero.art_url"
+                      :alt="`${deck.hero.name} hero art`"
+                      class="inset-0 h-full object-contain object-center border-gray-600 border-2 rounded-lg"
+                    />
+                    <span v-else class="text-lg font-semibold text-primary-600">
+                      {{ deck.hero.name.charAt(0) }}
+                    </span>
+                  </div>
+                  <div>
+                    <div class="font-medium text-gray-900 hover:text-primary-600 dark:text-white">
+                      {{ deck.name }}
+                    </div>
+                  </div>
+                </div>
+              </router-link>
+
+              <div class="pt-2 border-t border-gray-200 dark:border-gray-700">
+                <router-link
+                  :to="{ name: 'DeckCreate', params: { slug: title.slug } }"
+                  class="flex items-center justify-center w-full rounded-lg border-2 border-dashed border-gray-300 p-3 text-sm font-medium text-gray-600 hover:border-primary-400 hover:text-primary-600 transition-colors"
+                >
+                  <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                  </svg>
+                  New Deck
+                </router-link>
+              </div>
+            </div>
+
+            <div v-else class="text-center py-8">
+              <p class="text-gray-600 mb-4 dark:text-gray-400">You don't have any decks for this title yet.</p>
+              <router-link
+                :to="{ name: 'DeckCreate', params: { slug: title.slug } }"
+                class="inline-flex items-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+              >
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg>
+                Create Your First Deck
+              </router-link>
+            </div>
+
+            <div v-if="decksLoading" class="text-center py-4">
+              <p class="text-gray-600 dark:text-gray-400">Loading decks...</p>
+            </div>
+          </Panel>
+        </section>
+
         <!-- Filters -->
         <section v-if="!cardsLoading && cards.length > 0" class="top-0 z-10 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-4 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-gray-900/60">
           <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
@@ -20,7 +85,7 @@
                     type="button"
                     class="px-3 py-1.5 text-sm font-medium focus:outline-none"
                     :class="[
-                      typeFilter === 'all' ? 'bg-primary-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700',
+                      typeFilter === 'all' ? 'bg-secondary-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700',
                     ]"
                     @click="typeFilter = 'all'"
                   >All</button>
@@ -28,7 +93,7 @@
                     type="button"
                     class="px-3 py-1.5 text-sm font-medium border-l border-gray-200 dark:border-gray-700 focus:outline-none"
                     :class="[
-                      typeFilter === 'creature' ? 'bg-primary-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700',
+                      typeFilter === 'creature' ? 'bg-secondary-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700',
                     ]"
                     @click="typeFilter = 'creature'"
                   >Creatures</button>
@@ -36,7 +101,7 @@
                     type="button"
                     class="px-3 py-1.5 text-sm font-medium border-l border-gray-200 dark:border-gray-700 focus:outline-none"
                     :class="[
-                      typeFilter === 'spell' ? 'bg-primary-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700',
+                      typeFilter === 'spell' ? 'bg-secondary-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700',
                     ]"
                     @click="typeFilter = 'spell'"
                   >Spells</button>
@@ -156,7 +221,7 @@
         </div>
       </main>
 
-      <section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-1 mb-8">
+      <section v-if="canEditTitle" class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-1 mb-8">
         <router-link
               :to="{ name: 'CardCreate', params: { slug: title.slug } }"
               class="inline-flex items-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
@@ -166,30 +231,6 @@
               </svg>
               Create New Card
             </router-link>
-      </section>
-
-      <!-- Bottom Bar -->
-      <section v-if="0 && canEditTitle"class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-1 fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-40">
-        <div class="flex items-center justify-between">
-          <div class="text-sm text-gray-600 dark:text-gray-400">
-            {{ filteredCards.length }} / {{ cards.length }} Cards
-          </div>
-
-          <div class="flex items-center space-x-4">
-            <span class="text-sm text-gray-600 dark:text-gray-400">
-              Click on any card to edit it
-            </span>
-            <router-link
-              :to="{ name: 'CardCreate', params: { slug: title.slug } }"
-              class="inline-flex items-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
-            >
-              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-              </svg>
-              Create New Card
-            </router-link>
-          </div>
-        </div>
       </section>
 
     </div>
@@ -220,8 +261,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useTitleStore } from '../stores/title'
 import axios from '../config/api'
-import CollectionCard from '../components/game/CollectionCard.vue'
 import GameCard from '../components/game/GameCard.vue'
+import Panel from '../components/layout/Panel.vue'
 import type { Card } from '../types/card'
 
 interface TitleData {
@@ -246,23 +287,40 @@ const authStore = useAuthStore()
 const titleStore = useTitleStore()
 
 // Use the title from the store instead of local state
-const title = computed((): TitleData | null => titleStore.currentTitle)
+const title = computed(() => titleStore.currentTitle as TitleData | null)
 const loading = computed(() => titleStore.loading)
 const error = computed(() => titleStore.error)
 
 const cards = ref<Card[]>([])
 const cardsLoading = ref<boolean>(false)
 
+// Deck management
+interface DeckApiData {
+  id: number
+  name: string
+  description: string
+  hero: {
+    id: number
+    name: string
+    slug: string
+    art_url?: string | null
+  }
+  card_count: number
+  created_at: string
+  updated_at: string
+}
+
+interface DeckData extends DeckApiData {
+  formattedUpdatedAt: string
+}
+
+const decks = ref<DeckData[]>([])
+const decksLoading = ref<boolean>(false)
+
 // Filters
 const typeFilter = ref<'all' | 'creature' | 'spell'>('all')
 const minCostStr = ref<string>('')
 const maxCostStr = ref<string>('')
-
-const clearFilters = (): void => {
-  typeFilter.value = 'all'
-  minCostStr.value = ''
-  maxCostStr.value = ''
-}
 
 const minCost = computed<number | null>(() => {
   if (minCostStr.value === '') return null
@@ -332,6 +390,16 @@ const navigateToDetails = (cardSlug: string): void => {
   })
 }
 
+const navigateToEdit = (cardSlug: string): void => {
+  router.push({
+    name: 'CardEdit',
+    params: {
+      slug: title.value?.slug,
+      cardSlug
+    }
+  })
+}
+
 // Title data now comes from the store via router preloading
 
 const fetchCards = async (): Promise<void> => {
@@ -351,10 +419,42 @@ const fetchCards = async (): Promise<void> => {
   }
 }
 
-// Watch for title to be loaded and then fetch cards
+const fetchDecks = async (): Promise<void> => {
+  if (!title.value) return
+
+  try {
+    decksLoading.value = true
+    const slug = route.params.slug as string
+    const response = await axios.get(`/collection/titles/${slug}/decks/`)
+    const deckList: DeckData[] = (response.data.decks || []).map((deck: DeckApiData) => ({
+      ...deck,
+      formattedUpdatedAt: formatDate(deck.updated_at)
+    }))
+    decks.value = deckList
+  } catch (err) {
+    console.error('Error fetching decks:', err)
+    // Don't show error for decks if title loaded successfully
+    // Just log it and show empty state
+  } finally {
+    decksLoading.value = false
+  }
+}
+
+const formatDate = (dateString: string): string => {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  })
+}
+
+// Watch for title to be loaded and then fetch cards and decks
 watch(title, async (newTitle) => {
   if (newTitle) {
-    await fetchCards()
+    await Promise.all([
+      fetchCards(),
+      fetchDecks()
+    ])
   }
 }, { immediate: true })
 
@@ -364,7 +464,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.title-cards-page {
+.collection-page {
   min-height: 100vh;
   display: flex;
   flex-direction: column;

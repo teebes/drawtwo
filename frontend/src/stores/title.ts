@@ -9,6 +9,7 @@ interface Title {
   description?: string
   created_at?: string
   updated_at?: string
+  art_url?: string
   [key: string]: any // Allow for additional title fields
 }
 

@@ -22,7 +22,10 @@ def game_detail(request, game_id):
         Game.objects.select_related(
             'side_a__user',
             'side_b__user',
-            'winner__user'
+            'winner__user',
+            'player_a_user',
+            'player_b_user',
+            'title'
         ).prefetch_related('elo_change'),
         id=game_id
     )
@@ -31,9 +34,9 @@ def game_detail(request, game_id):
 
     # Determine which side the viewing user is on
     # Verify the user has access to this game
-    if game.side_a.user == request.user:
+    if game.player_a_user == request.user:
         game_data['viewer'] = 'side_a'
-    elif game.side_b.user == request.user:
+    elif game.player_b_user == request.user:
         game_data['viewer'] = 'side_b'
     else:
         # User is not a participant in this game
@@ -69,18 +72,18 @@ def game_detail(request, game_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def current_games(request):
+    # Note: This endpoint doesn't filter by title, so we use the old query method
+    # In the future, if we want title-scoped queries here, we'd need to pass title
     games = Game.objects.filter(
-        Q(side_a__user=request.user) | Q(side_b__user=request.user)
+        Q(player_a_user=request.user) | Q(player_b_user=request.user)
     ).exclude(
         status=Game.GAME_STATUS_ENDED
     ).order_by('-created_at')
 
-    #games = Game.objects.all()
-
     game_summaries = []
 
     for game in games:
-        if game.side_a.user == request.user:
+        if game.player_a_user == request.user:
             user_side = 'side_a'
             opposing_deck = game.side_b
         else:
@@ -94,7 +97,7 @@ def current_games(request):
         game_summaries.append(GameSummary(
             id=game.id,
             name=opposing_deck.owner_name if not opposing_deck.is_ai_deck else opposing_deck.name,
-            type="pve" if opposing_deck.is_ai_deck else "pvp",
+            type=game.type,
             is_user_turn=is_user_turn,
         ))
 
@@ -110,7 +113,7 @@ def game_queue(request, game_id):
     game = get_object_or_404(Game, id=game_id)
 
     # Verify the user has access to this game
-    if game.side_a.user != request.user and game.side_b.user != request.user:
+    if game.player_a_user != request.user and game.player_b_user != request.user:
         return Response(
             {'error': 'You do not have access to this game'},
             status=status.HTTP_403_FORBIDDEN
@@ -208,6 +211,14 @@ def create_game(request):
         # TODO: In the future, this could be enhanced to alternate starting players
         # between the same two opponents based on previous game history
         game = GameService.start_game(player_deck, opponent_deck, randomize_starting_player=True)
+
+        # Set game type based on whether it's PvE or PvP
+        if ai_deck_id:
+            game.type = Game.GAME_TYPE_PVE
+        else:
+            game.type = Game.GAME_TYPE_RANKED
+        game.save(update_fields=['type'])
+
         logger.debug(f"Game created successfully: {game}")
 
         step.delay(game.id)
@@ -498,8 +509,8 @@ def accept_friendly_challenge(request, challenge_id):
 
     # Create the game
     game = GameService.start_game(challenge.challenger_deck, challengee_deck, randomize_starting_player=True)
-    game.is_friendly = True
-    game.save(update_fields=['is_friendly'])
+    game.type = Game.GAME_TYPE_FRIENDLY
+    game.save(update_fields=['type'])
 
     # Link and update challenge
     challenge.challengee_deck = challengee_deck
@@ -511,3 +522,24 @@ def accept_friendly_challenge(request, challenge_id):
     step.delay(game.id)
 
     return Response({'game_id': game.id}, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def decline_friendly_challenge(request, challenge_id):
+    """
+    Decline a friendly challenge. Only the challengee can decline.
+    """
+    from apps.gameplay.models import FriendlyChallenge
+    challenge = get_object_or_404(FriendlyChallenge, id=challenge_id)
+
+    if challenge.challengee != request.user:
+        return Response({'error': 'Only the challengee can decline this challenge'}, status=status.HTTP_403_FORBIDDEN)
+
+    if challenge.status != FriendlyChallenge.STATUS_PENDING:
+        return Response({'error': 'Challenge is not pending'}, status=status.HTTP_400_BAD_REQUEST)
+
+    challenge.status = FriendlyChallenge.STATUS_CANCELLED
+    challenge.save(update_fields=['status'])
+
+    return Response({'success': True, 'message': 'Challenge declined'}, status=status.HTTP_200_OK)

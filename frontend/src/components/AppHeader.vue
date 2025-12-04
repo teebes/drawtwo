@@ -18,7 +18,7 @@
             <span class="text-gray-400 dark:text-gray-500 mx-2">/</span>
             <router-link
               :to="{ name: 'Title', params: { slug: titleStore.titleSlug } }"
-              class="font-display text-xl font-semibold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors"
+              class="font-display text-xl font-semibold text-secondary-600 dark:text-secondary-400 hover:text-secondary-700 dark:hover:text-secondary-300 transition-colors"
             >
               {{ titleStore.titleName }}
             </router-link>
@@ -29,7 +29,7 @@
           <div v-if="authStore.isAuthenticated" class="relative" ref="profileMenuRef" @keydown.esc="closeProfileMenu">
             <button
               type="button"
-              class="relative inline-flex h-11 w-11 items-center justify-center rounded-full bg-gray-900 text-white shadow-sm transition-all hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:bg-gray-800 dark:text-gray-100 dark:focus:ring-offset-gray-900"
+              class="relative inline-flex h-11 w-11 items-center justify-center rounded-full bg-gray-900 text-white shadow-sm transition-all hover:scale-105 focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2 dark:bg-gray-800 dark:text-gray-100 dark:focus:ring-offset-gray-900"
               @click="toggleProfileMenu"
               aria-haspopup="menu"
               :aria-expanded="isProfileMenuOpen"

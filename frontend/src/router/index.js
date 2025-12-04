@@ -13,7 +13,7 @@ import Profile from '../views/Profile.vue'
 import Mockup from '../views/Mockup.vue'
 import Title from '../views/Title.vue'
 import TitleBriefCards from '../views/TitleBriefCards.vue'
-import TitleCards from '../views/TitleCards.vue'
+import Collection from '../views/Collection.vue'
 import CardEdit from '../views/CardEdit.vue'
 import CardDetails from '../views/CardDetails.vue'
 import DeckDetail from '../views/DeckDetail.vue'
@@ -23,6 +23,7 @@ import Board from '../views/Board.vue'
 import Friends from '../views/Friends.vue'
 import PrivacyPolicy from '../views/PrivacyPolicy.vue'
 import TermsOfService from '../views/TermsOfService.vue'
+import Games from '../views/Games.vue'
 
 const routes = [
   {
@@ -71,7 +72,7 @@ const routes = [
     path: '/:slug/leaderboard',
     name: 'Leaderboard',
     component: () => import('../views/Leaderboard.vue'),
-    meta: { requiresAuth: false }
+    meta: { requiresAuth: false, isTitleRoute: true }
   },
   {
     path: '/mockup',
@@ -113,67 +114,73 @@ const routes = [
     path: '/:slug/decks/new',
     name: 'DeckCreate',
     component: DeckEdit,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, isTitleRoute: true }
   },
   {
     path: '/:slug/decks/:id',
     name: 'DeckDetail',
     component: DeckDetail,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, isTitleRoute: true }
   },
   {
     path: '/:slug/decks/:id/edit',
     name: 'DeckEdit',
     component: DeckEdit,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, isTitleRoute: true }
+  },
+  {
+    path: '/:slug/games',
+    name: 'Games',
+    component: Games,
+    meta: { requiresAuth: true, isTitleRoute: true }
   },
   {
     path: '/:slug/games/new',
     name: 'GameCreate',
     component: GameCreate,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, isTitleRoute: true }
   },
   {
     path: '/:slug/cards/new',
     name: 'CardCreate',
     component: CardEdit,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, isTitleRoute: true }
   },
   {
     path: '/:slug/cards/:cardSlug',
     name: 'CardEdit',
     component: CardEdit,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, isTitleRoute: true }
   },
   {
     path: '/:slug/cards/:cardSlug/details',
     name: 'CardDetails',
     component: CardDetails,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, isTitleRoute: true }
   },
   {
-    path: '/:slug/cards',
-    name: 'TitleCards',
-    component: TitleCards,
-    meta: { requiresAuth: false }
+    path: '/:slug/collection',
+    name: 'Collection',
+    component: Collection,
+    meta: { requiresAuth: false, isTitleRoute: true }
   },
   {
     path: '/:slug/cards/brief',
     name: 'TitleBriefCards',
     component: TitleBriefCards,
-    meta: { requiresAuth: false }
+    meta: { requiresAuth: false, isTitleRoute: true }
   },
   {
     path: '/:slug/games/:game_id',
     name: 'Board',
     component: Board,
-    meta: { requiresAuth: false, hideHeader: true }
+    meta: { requiresAuth: false, hideHeader: true, isTitleRoute: true }
   },
   {
     path: '/:slug',
     name: 'Title',
     component: Title,
-    meta: { requiresAuth: false }
+    meta: { requiresAuth: false, isTitleRoute: true }
   }
 ]
 
@@ -181,15 +188,6 @@ const router = createRouter({
   history: createWebHistory(),
   routes
 })
-
-// List of routes that are title-related and use /:slug pattern
-const titleRoutes = [
-  'Title', 'TitleCards', 'TitleBriefCards', 'CardCreate', 'CardEdit', 'CardDetails', 'DeckDetail',
-  'DeckEdit', 'DeckCreate', 'GameCreate', 'Board', 'Leaderboard'
-]
-
-// Helper function to check if a route is a title route
-const isTitleRoute = (routeName) => titleRoutes.includes(routeName)
 
 // Navigation guards
 router.beforeEach(async (to, from, next) => {
@@ -212,7 +210,7 @@ router.beforeEach(async (to, from, next) => {
   }
 
   // Handle title loading for title routes
-  if (isTitleRoute(to.name) && to.params.slug) {
+  if (to.meta.isTitleRoute && to.params.slug) {
     try {
       await titleStore.loadTitle(to.params.slug)
     } catch (error) {
@@ -220,7 +218,7 @@ router.beforeEach(async (to, from, next) => {
       // Continue navigation even if title loading fails
       // The individual components can handle the error state
     }
-  } else if (!isTitleRoute(to.name)) {
+  } else if (!to.meta.isTitleRoute) {
     // Clear title when navigating away from title routes
     titleStore.clearCurrentTitle()
   }
