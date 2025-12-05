@@ -255,19 +255,11 @@ def title_notifications(request, slug):
                 message = f"Your turn against {opponent_deck.owner_name}."
             else:
                 message = f"Waiting for {opponent_deck.owner_name} to take their turn."
-
-        # Game Ended
-        elif ranked_game.status == Game.GAME_STATUS_ENDED:
-            if opponent_deck == ranked_game.winner:
-                message = f"You lost your ranked match against {opponent_deck.owner_name}."
-            else:
-                message = f"You won your ranked match against {opponent_deck.owner_name}."
-
-        notifications.append(Notification(
-            ref_id=ranked_game.id,
-            type='game_ranked',
-            message=message,
-        ))
+            notifications.append(Notification(
+                ref_id=ranked_game.id,
+                type='game_ranked',
+                message=message,
+            ))
 
     # Friendly games where it is the player's turn
     friendly_games = games.filter(
