@@ -31,6 +31,17 @@
           <div class="flex justify-center">
             <div class="inline-flex rounded-lg border border-gray-200 bg-white p-1 dark:border-gray-700 dark:bg-gray-800">
               <button
+                @click="gameMode = 'pvp'"
+                :class="[
+                  'rounded-md px-6 py-2 text-sm font-medium transition-colors',
+                  gameMode === 'pvp'
+                    ? 'bg-secondary-600 text-white'
+                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+                ]"
+              >
+                ⚔️ vs Player
+              </button>
+              <button
                 @click="gameMode = 'pve'"
                 :class="[
                   'rounded-md px-6 py-2 text-sm font-medium transition-colors',
@@ -41,17 +52,7 @@
               >
                 🤖 vs AI
               </button>
-              <button
-                @click="gameMode = 'pvp'"
-                :class="[
-                  'rounded-md px-6 py-2 text-sm font-medium transition-colors',
-                  gameMode === 'pvp'
-                    ? 'bg-primary-600 text-white'
-                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
-                ]"
-              >
-                ⚔️ vs Player
-              </button>
+
             </div>
           </div>
         </div>
@@ -163,7 +164,7 @@
                     :class="[
                       isRankedButtonDisabled
                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-secondary-600 text-white hover:bg-secondary-700 focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2'
+                        : 'bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2'
                     ]"
                     :disabled="isRankedButtonDisabled"
                     @click="queueForRanked"
@@ -311,7 +312,7 @@ const loading = ref<boolean>(true)
 const error = ref<string | null>(null)
 const creating = ref<boolean>(false)
 const queueingRanked = ref<boolean>(false)
-const gameMode = ref<'pve' | 'pvp'>('pve')
+const gameMode = ref<'pve' | 'pvp'>('pvp')
 
 // Data
 const playerDecks = ref<DeckData[]>([])

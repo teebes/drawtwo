@@ -41,6 +41,18 @@
             </Panel>
         </section>
 
+        <!-- New Game-->
+         <section>
+          <router-link
+            :to="{ name: 'GameCreate', params: { slug: titleSlug } }"
+            class="flex mt-4 items-center justify-center w-full rounded-lg border-2 border-dashed border-primary-500 p-3 text-sm font-medium text-primary-500 hover:border-primary-600 hover:text-primary-600 transition-colors">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+            </svg>
+            New Game
+          </router-link>
+      </section>
+
         <!-- Games List -->
         <section v-if="games.length > 0">
           <div class="space-y-2">
