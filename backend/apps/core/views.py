@@ -293,11 +293,11 @@ def title_notifications(request, slug):
             message=f'You have a pending friendly challenge from {challenger}',
         ))
 
-    # Incoming friend requests
+    # Incoming friend requests (only show requests sent TO the user, not FROM the user)
     incoming_friend_requests = Friendship.objects.filter(
         friend=request.user,
         status=Friendship.STATUS_PENDING
-    )
+    ).exclude(initiated_by=request.user)
     for friend_request in incoming_friend_requests:
         notifications.append(Notification(
             ref_id=friend_request.id,
