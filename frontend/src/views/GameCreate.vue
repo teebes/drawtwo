@@ -22,7 +22,7 @@
     <div v-else>
 
       <section class="text-center bg-gray-300 h-24 flex items-center justify-center">
-        <h1 class="font-display text-4xl font-bold text-gray-900 dark:text-gray-900">CREATE GAME</h1>
+        <h1 class="font-display text-4xl font-bold text-gray-900 dark:text-gray-900">NEW GAME</h1>
       </section>
 
       <main class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 my-8">
@@ -539,6 +539,11 @@ onMounted(async () => {
       fetchPlayerDecks(),
       fetchPveDecks()
     ])
+
+    // Load friends if initial mode is PvP (watcher only fires on change)
+    if (gameMode.value === 'pvp') {
+      await fetchFriends()
+    }
 
     await fetchRankedQueueStatus()
     // Preload challenges if user lands with PvP selected later
