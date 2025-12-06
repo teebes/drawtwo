@@ -146,3 +146,12 @@ Resource = Annotated[
     Union[Card, Deck, Hero],
     Discriminator('type')
 ]
+
+
+class IngestedResource(BaseModel):
+    """Represents a resource that was created or updated during ingestion."""
+    resource_type: Literal['card', 'hero', 'deck']
+    action: Literal['created', 'updated']
+    id: int
+    slug: str
+    name: str

@@ -17,8 +17,8 @@ urlpatterns = [
     # Card endpoints
     path('titles/<slug:title_slug>/cards/', views.create_card, name='card-create'),
     path('titles/<slug:title_slug>/cards/<slug:card_slug>/', views.card_detail, name='card-detail'),
+    path('titles/<slug:title_slug>/cards/<slug:card_slug>/yaml/', views.card_yaml, name='card-yaml'),
 
-    # Add custom URL patterns here as needed
-    # Example:
-    # path('projects/', views.ProjectListView.as_view(), name='project-list'),
+    # YAML ingestion endpoint
+    path('titles/<slug:title_slug>/ingest/', views.ingest_yaml, name='ingest-yaml'),
 ]

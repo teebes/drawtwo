@@ -6,7 +6,8 @@
        <slot name="back-button"></slot>
       <h1 class="font-display text-4xl font-bold dark:text-gray-100">{{ card.name }}</h1>
 
-      <div v-if="canEdit && titleSlug" class="absolute right-6 top-1/2 -translate-y-1/2">
+      <div v-if="canEdit && titleSlug" class="absolute right-6 top-1/2 -translate-y-1/2 flex items-center space-x-2">
+        <slot name="actions"></slot>
         <router-link
             :to="{ name: 'CardEdit', params: { slug: titleSlug, cardSlug: card.slug } }"
         >

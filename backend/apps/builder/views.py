@@ -1,3 +1,5 @@
+import yaml
+
 from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
@@ -7,12 +9,10 @@ from rest_framework.exceptions import PermissionDenied
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
-# Import your models and serializers when you create them
-# from .models import Project, Canvas, Layer
-# from .serializers import ProjectSerializer, CanvasSerializer, LayerSerializer
-
 from .models import Title, CardTemplate, CardTrait
 from .serializers import TitleSerializer, CardTemplateSerializer
+from .services import TitleService
+from .schemas import Card
 
 User = get_user_model()
 
@@ -195,6 +195,87 @@ def card_detail(request, title_slug, card_slug):
             )
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def card_yaml(request, title_slug, card_slug):
+    """
+    Get a card's YAML representation in the ingestion format.
+
+    Returns the card as YAML that can be copied and used with the ingestion endpoint.
+    """
+    # Get the title (latest version) or return 404
+    title = get_object_or_404(Title, slug=title_slug, is_latest=True)
+
+    # Check if user has permission to view this title
+    if not title.can_be_viewed_by(request.user):
+        return Response(
+            {'error': 'You do not have permission to view this title'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    # Get the card (latest version) or return 404
+    card = get_object_or_404(
+        CardTemplate,
+        title=title,
+        slug=card_slug,
+        is_latest=True
+    )
+
+    # Convert CardTemplate to Card schema format
+    card_schema = card_template_to_schema(card)
+
+    # Serialize to YAML (exclude None values and use the schema's dict representation)
+    yaml_content = yaml.dump(
+        card_schema.model_dump(exclude_none=True, exclude_defaults=False),
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True
+    )
+
+    return Response({
+        'yaml': yaml_content,
+        'card': {
+            'slug': card.slug,
+            'name': card.name,
+            'card_type': card.card_type
+        }
+    }, status=status.HTTP_200_OK)
+
+
+def card_template_to_schema(card: CardTemplate) -> Card:
+    """
+    Convert a CardTemplate database model to the Card Pydantic schema.
+
+    This ensures the output matches exactly what the ingestion endpoint expects.
+    """
+    # Build traits list from CardTrait relations
+    traits = []
+    for card_trait in card.cardtrait_set.all():
+        # The trait data contains the full trait definition including type and actions
+        trait_data = {'type': card_trait.trait_slug}
+        if card_trait.data:
+            # Merge in additional trait data (actions, etc.)
+            # But exclude 'type' from data since we set it explicitly
+            for key, value in card_trait.data.items():
+                if key != 'type':
+                    trait_data[key] = value
+        traits.append(trait_data)
+
+    # Build the Card schema
+    return Card(
+        slug=card.slug,
+        card_type=card.card_type,
+        name=card.name,
+        description=card.description or '',
+        cost=card.cost or 0,
+        attack=card.attack or 0,
+        health=card.health or 0,
+        traits=traits,
+        faction=card.faction.slug if card.faction else None,
+        art_url=card.art_url if hasattr(card, 'art_url') and card.art_url else None
+    )
+
+
 def bump_card_version(card: CardTemplate, yaml_data: str) -> CardTemplate:
     """Create a new version of a card with updated data from YAML."""
     # Lock the current latest row
@@ -238,3 +319,50 @@ def bump_card_version(card: CardTemplate, yaml_data: str) -> CardTemplate:
     updated_card = serializer.update_from_yaml(new_card, yaml_data)
 
     return updated_card
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def ingest_yaml(request, title_slug):
+    """
+    Ingest YAML manifest to create/update cards, heroes, and decks.
+
+    Accepts a YAML string containing one or more resource definitions.
+    Returns a list of created/updated resources with their types and IDs.
+    """
+    # Get the title (latest version) or return 404
+    title = get_object_or_404(Title, slug=title_slug, is_latest=True)
+
+    # Check if user has permission to edit this title
+    if not title.can_be_edited_by(request.user):
+        return Response(
+            {'error': 'You do not have permission to edit this title'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    yaml_content = request.data.get('yaml_content')
+    if not yaml_content:
+        return Response(
+            {'error': 'yaml_content is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        with transaction.atomic():
+            service = TitleService(title)
+            ingested_resources = service.ingest_yaml(yaml_content)
+
+            # Convert IngestedResource Pydantic models to dictionaries for JSON response
+            results = [res.model_dump() for res in ingested_resources]
+
+            return Response({
+                'success': True,
+                'message': f'Successfully processed {len(results)} resource(s)',
+                'resources': results
+            }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )

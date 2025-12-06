@@ -22,6 +22,13 @@
             >
               {{ titleStore.titleName }}
             </router-link>
+            <router-link
+              v-if="canEditTitle"
+              :to="{ name: 'TitleEdit', params: { slug: titleStore.titleSlug } }"
+              class="ml-4 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+            >
+              [ EDIT ]
+            </router-link>
           </div>
         </div>
 
@@ -151,6 +158,12 @@ const profileInitial = computed(() => {
     return authStore.user.email.charAt(0).toUpperCase()
   }
   return 'P'
+})
+
+const canEditTitle = computed(() => {
+  return authStore.isAuthenticated &&
+         titleStore.currentTitle &&
+         (titleStore.currentTitle as any).can_edit === true
 })
 
 const toggleProfileMenu = () => {

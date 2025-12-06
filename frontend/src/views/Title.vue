@@ -27,7 +27,7 @@
         <h1 class="">{{ title?.name }}</h1>
       </section>
 
-      <img v-if="title.art_url" :src="title.art_url" :alt="title.name" class="banner hidden sm:block h-48 w-auto mx-auto" />
+      <img v-if="title.art_url" :src="title.art_url" :alt="title.name" class="banner h-48 w-auto mx-auto" />
 
       <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8 mt-8">
 

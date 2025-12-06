@@ -1,11 +1,12 @@
 import yaml
+from typing import List
 
 from django.contrib.auth import get_user_model
 from pydantic import TypeAdapter
 
 from apps.builder import models as builder_models
 from apps.builder.models import Title, CardTemplate
-from apps.builder.schemas import Resource, Card, Hero, Deck
+from apps.builder.schemas import Resource, Card, Hero, Deck, IngestedResource
 from apps.collection import models as collection_models
 
 User = get_user_model()
@@ -23,28 +24,36 @@ class TitleService:
     def __init__(self, title: Title):
         self.title = title
 
-    def ingest_yaml(self, yaml_data: str):
+    def ingest_yaml(self, yaml_data: str) -> List[IngestedResource]:
+        """
+        Ingest YAML data and create/update resources.
+
+        Returns a list of IngestedResource objects describing what was created or updated.
+        """
         resource_data = yaml.safe_load(yaml_data)
 
+        # Handle both single resource and list of resources
         if isinstance(resource_data, list):
-            # resources = []
-            # for resource in resource_data:
-            #     print(resource)
-            #     resources.append(TypeAdapter(Resource).validate_python(resource))
             resources = [
                 TypeAdapter(Resource).validate_python(resource)
                 for resource in resource_data
             ]
         else:
+            # Single resource - wrap in list for consistent processing
             resources = [
-                Resource.model_validate(resource_data)
+                TypeAdapter(Resource).validate_python(resource_data)
             ]
 
+        ingested: List[IngestedResource] = []
         for resource in resources:
-            self.ingest(resource)
+            result = self.ingest(resource)
+            if result:
+                ingested.append(result)
+
+        return ingested
 
 
-    def ingest(self, resource: Resource):
+    def ingest(self, resource: Resource) -> IngestedResource | None:
         resource_map = {
             Card: self.ingest_card,
             Hero: self.ingest_hero,
@@ -52,8 +61,8 @@ class TitleService:
         }
         for resource_type, handler in resource_map.items():
             if isinstance(resource, resource_type):
-                handler(resource)
-                break
+                return handler(resource)
+        return None
 
     def get_default_ai_player(self):
         return builder_models.AIPlayer.objects.get_or_create(
@@ -63,18 +72,19 @@ class TitleService:
 
     # Handlers
 
-    def ingest_card(self, resource: Card):
+    def ingest_card(self, resource: Card) -> IngestedResource:
         versions = CardTemplate.objects.filter(
             title=self.title,
             slug=resource.slug,
             is_latest=True)
 
-        if versions.exists():
-            card_template = versions.first()
-        else:
+        is_new = not versions.exists()
+        if is_new:
             card_template = CardTemplate.objects.create(
                 title=self.title,
                 slug=resource.slug)
+        else:
+            card_template = versions.first()
 
         card_template.card_type = resource.card_type
         card_template.name = resource.name
@@ -92,19 +102,28 @@ class TitleService:
 
         card_template.save()
 
-    def ingest_hero(self, resource: Hero):
+        return IngestedResource(
+            resource_type='card',
+            action='created' if is_new else 'updated',
+            id=card_template.id,
+            slug=card_template.slug,
+            name=card_template.name
+        )
+
+    def ingest_hero(self, resource: Hero) -> IngestedResource:
         versions = builder_models.HeroTemplate.objects.filter(
             title=self.title,
             slug=resource.slug,
             is_latest=True)
 
-        if versions.exists():
-            hero_template = versions.first()
-        else:
+        is_new = not versions.exists()
+        if is_new:
             hero_template = builder_models.HeroTemplate.objects.create(
                 title=self.title,
                 slug=resource.slug,
                 health=resource.health)
+        else:
+            hero_template = versions.first()
 
         hero_template.name = resource.name
         hero_template.description = resource.description
@@ -112,17 +131,25 @@ class TitleService:
         hero_template.hero_power = resource.hero_power.model_dump()
         hero_template.save()
 
-    def ingest_deck(self, resource: Deck):
+        return IngestedResource(
+            resource_type='hero',
+            action='created' if is_new else 'updated',
+            id=hero_template.id,
+            slug=hero_template.slug,
+            name=hero_template.name
+        )
+
+    def ingest_deck(self, resource: Deck) -> IngestedResource:
         hero = builder_models.HeroTemplate.objects.get(
             title=self.title,
             slug=resource.hero,
             is_latest=True)
 
-        deck = collection_models.Deck.objects.get_or_create(
+        deck, is_new = collection_models.Deck.objects.get_or_create(
             ai_player=self.get_default_ai_player(),
             title=self.title,
             name=resource.name,
-            hero=hero)[0]
+            hero=hero)
 
         for card_data in resource.cards:
             card = CardTemplate.objects.get(
@@ -135,6 +162,14 @@ class TitleService:
                 card=card)[0]
             deck_card.count = card_data['count']
             deck_card.save()
+
+        return IngestedResource(
+            resource_type='deck',
+            action='created' if is_new else 'updated',
+            id=deck.id,
+            slug='',  # Decks don't have slugs, use empty string
+            name=deck.name
+        )
 
 
 

@@ -12,6 +12,7 @@ import Template from '../views/Template.vue'
 import Profile from '../views/Profile.vue'
 import Mockup from '../views/Mockup.vue'
 import Title from '../views/Title.vue'
+import TitleEdit from '../views/TitleEdit.vue'
 import TitleBriefCards from '../views/TitleBriefCards.vue'
 import Collection from '../views/Collection.vue'
 import CardEdit from '../views/CardEdit.vue'
@@ -73,6 +74,12 @@ const routes = [
     name: 'Leaderboard',
     component: () => import('../views/Leaderboard.vue'),
     meta: { requiresAuth: false, isTitleRoute: true }
+  },
+  {
+    path: '/:slug/edit',
+    name: 'TitleEdit',
+    component: TitleEdit,
+    meta: { requiresAuth: true, isTitleRoute: true }
   },
   {
     path: '/mockup',
