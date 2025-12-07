@@ -21,6 +21,7 @@ export interface Card {
   traits: Trait[]
   faction?: string | null
   art_url?: string | null  // For future user-uploaded art
+  is_collectible?: boolean  // Defaults to true if not present
 }
 
 export interface DeckCard extends Card {
