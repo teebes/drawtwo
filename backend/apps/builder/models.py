@@ -291,7 +291,6 @@ class CardTemplate(TemplateBase):
         default=CARD_TYPE_CREATURE,
     )
 
-
     cost = models.PositiveSmallIntegerField(default=0)
     attack = models.PositiveSmallIntegerField(null=True, blank=True)
     health = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -302,6 +301,11 @@ class CardTemplate(TemplateBase):
     # traits field removed - use cardtrait_set to access traits
     faction = models.ForeignKey(Faction, on_delete=models.PROTECT,
                                 null=True, blank=True)
+
+    is_collectible = models.BooleanField(
+        default=True,
+        help_text="If False, this card cannot be added to player decks"
+    )
 
     class Meta(TemplateBase.Meta):
         # All indices for CardTemplate organized in one place

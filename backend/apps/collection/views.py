@@ -403,6 +403,13 @@ def add_deck_card(request, deck_id):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    # Check if card is collectible
+    if not card.is_collectible:
+        return Response(
+            {'error': f'"{card.name}" is not collectible and cannot be added to a deck'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     world_config = TitleConfig.model_validate(card.title.config)
 
     # Get count from request (default to 1)

@@ -110,13 +110,14 @@ class Card(ResourceBase):
     card_type: Literal['creature', 'spell']
     slug: str
     name: str
-    description: str
+    description: Optional[str] = ''
     cost: int
     attack: int = 0
     health: int = 0
     traits: List[Trait] = Field(default_factory=list)
     faction: Optional[str] = None
     art_url: Optional[str] = None  # For future user-uploaded art
+    is_collectible: bool = True
 
 
 class Deck(ResourceBase):

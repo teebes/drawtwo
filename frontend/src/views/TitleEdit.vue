@@ -221,7 +221,7 @@ const getResourceLink = (resource: IngestedResource): object | null => {
   switch (resource.resource_type) {
     case 'card':
       return {
-        name: 'CardEdit',
+        name: 'CardDetails',
         params: {
           slug: title.value.slug,
           cardSlug: resource.slug

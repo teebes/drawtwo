@@ -272,7 +272,8 @@ def card_template_to_schema(card: CardTemplate) -> Card:
         health=card.health or 0,
         traits=traits,
         faction=card.faction.slug if card.faction else None,
-        art_url=card.art_url if hasattr(card, 'art_url') and card.art_url else None
+        art_url=card.art_url if hasattr(card, 'art_url') and card.art_url else None,
+        is_collectible=card.is_collectible
     )
 
 
@@ -300,7 +301,8 @@ def bump_card_version(card: CardTemplate, yaml_data: str) -> CardTemplate:
         attack=prev.attack,
         health=prev.health,
         spec=prev.spec,
-        faction=prev.faction
+        faction=prev.faction,
+        is_collectible=prev.is_collectible
     )
 
     # Copy tags
@@ -310,7 +312,7 @@ def bump_card_version(card: CardTemplate, yaml_data: str) -> CardTemplate:
     for card_trait in prev.cardtrait_set.all():
         CardTrait.objects.create(
             card=new_card,
-            trait=card_trait.trait,
+            trait_slug=card_trait.trait_slug,
             data=card_trait.data
         )
 

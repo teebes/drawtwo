@@ -88,10 +88,11 @@ class TitleService:
 
         card_template.card_type = resource.card_type
         card_template.name = resource.name
-        card_template.description = resource.description
+        card_template.description = resource.description or ''
         card_template.cost = resource.cost
         card_template.attack = resource.attack
         card_template.health = resource.health
+        card_template.is_collectible = resource.is_collectible
 
         if resource.traits:
             from apps.builder.trait_definitions import validate_trait_slug

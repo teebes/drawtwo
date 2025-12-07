@@ -195,7 +195,7 @@ class CardTemplateAdmin(admin.ModelAdmin):
             'fields': ('version', 'is_latest')
         }),
         ('Card Properties', {
-            'fields': ('card_type', 'cost', 'faction')
+            'fields': ('card_type', 'cost', 'faction', 'is_collectible')
         }),
         ('Combat Stats', {
             'fields': ('attack', 'health'),

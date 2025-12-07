@@ -13,7 +13,7 @@ export interface Card {
   id: number
   slug: string
   name: string
-  description: string
+  description?: string
   card_type: 'creature' | 'spell'
   cost: number
   attack: number
