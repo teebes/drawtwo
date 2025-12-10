@@ -12,7 +12,7 @@ from django.db import transaction
 from .models import Title, CardTemplate, CardTrait
 from .serializers import TitleSerializer, CardTemplateSerializer
 from .services import TitleService
-from .schemas import Card
+from .schemas import Card, TitleConfig
 
 User = get_user_model()
 
@@ -368,3 +368,48 @@ def ingest_yaml(request, title_slug):
             {'error': str(e)},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def title_config_yaml(request, title_slug):
+    """
+    Get a title's configuration YAML representation in the ingestion format.
+
+    Returns the title config as YAML that can be copied and used with the ingestion endpoint.
+    """
+    # Get the title (latest version) or return 404
+    title = get_object_or_404(Title, slug=title_slug, is_latest=True)
+
+    # Check if user has permission to view this title
+    if not title.can_be_viewed_by(request.user):
+        return Response(
+            {'error': 'You do not have permission to view this title'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    # Get config from title.config JSONField and create TitleConfig schema
+    # Use defaults from TitleConfig schema if fields are missing
+    config_data = title.config or {}
+    title_config = TitleConfig(
+        deck_size_limit=config_data.get('deck_size_limit', 30),
+        deck_card_max_count=config_data.get('deck_card_max_count', 9),
+        hand_start_size=config_data.get('hand_start_size', 3),
+        side_b_compensation=config_data.get('side_b_compensation')
+    )
+
+    # Serialize to YAML (exclude None values and use the schema's dict representation)
+    yaml_content = yaml.dump(
+        title_config.model_dump(exclude_none=True, exclude_defaults=False),
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True
+    )
+
+    return Response({
+        'yaml': yaml_content,
+        'title': {
+            'slug': title.slug,
+            'name': title.name
+        }
+    }, status=status.HTTP_200_OK)

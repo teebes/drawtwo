@@ -8,6 +8,7 @@ from pydantic import TypeAdapter, ValidationError
 
 logger = logging.getLogger(__name__)
 
+from apps.builder.models import CardTemplate
 from apps.builder.schemas import (
     Action,
     DeckScript,
@@ -16,8 +17,9 @@ from apps.builder.schemas import (
     HealAction,
     RemoveAction,
     TitleConfig,
+    TempManaBoostAction,
 )
-from apps.core.serializers import serialize_cards_with_traits
+from apps.core.serializers import serialize_cards_with_traits, to_card_schema
 from apps.gameplay.engine.dispatcher import resolve
 from apps.gameplay.models import Game
 from apps.gameplay.schemas.game import (
@@ -42,6 +44,7 @@ from apps.gameplay.schemas.effects import (
     PlayEffect,
     RemoveEffect,
     StartGameEffect,
+    TempManaBoostEffect,
     UseHeroEffect,
 )
 from apps.gameplay.schemas.engine import Success, Result, Prevented, Rejected, Fault
@@ -91,6 +94,9 @@ class GameService:
         if existing_game:
             return existing_game
 
+        # Load world config
+        config = TitleConfig.model_validate(deck_a.title.config)
+
         # Optionally randomize which deck goes first (50/50 chance)
         # By default, deck_a always goes first for deterministic behavior
         # This allows for future enhancements like alternating starts between same players
@@ -125,6 +131,17 @@ class GameService:
                 card_id += 1
                 cards_in_play[str(card_id)] = GameService.get_card_in_play(card, card_id)
                 decks['side_b'].append(str(card_id))
+
+                # Get the side b compensation card if it exists
+        comp_card = None
+        if config.side_b_compensation:
+            card = CardTemplate.objects.get(
+                slug=config.side_b_compensation,
+                is_latest=True)
+            comp_card = to_card_schema(card)
+            card_id += 1
+            comp_card_in_play = GameService.get_card_in_play(comp_card, card_id)
+            cards_in_play[str(card_id)] = comp_card_in_play
 
         # shuffle both decks
         random.shuffle(decks['side_a'])
@@ -164,7 +181,9 @@ class GameService:
         if deck_b.is_ai_deck:
             ai_sides.append('side_b')
 
-        config = TitleConfig.model_validate(deck_a.title.config)
+        hands = {'side_a': [], 'side_b': []}
+        if comp_card:
+            hands['side_b'].append(comp_card_in_play.card_id)
 
         game_state = GameState(
             turn=0,
@@ -172,6 +191,7 @@ class GameService:
             phase='start',
             cards=cards_in_play,
             heroes=heroes,
+            hands=hands,
             decks=decks,
             ai_sides=ai_sides,
             config=config,
@@ -550,7 +570,7 @@ class GameService:
                     target_type=target_type,
                     target_id=target_id,
                     damage=action.amount,
-                    retaliate=False,
+                    #retaliate=False,
                 ))
             return effects
 
@@ -669,6 +689,16 @@ class GameService:
                 ))
             return effects
 
+        if isinstance(action, TempManaBoostAction):
+            return [
+                TempManaBoostEffect(
+                    side=event.side,
+                    source_type=event.source_type,
+                    source_id=event.source_id,
+                    amount=action.amount,
+                )
+            ]
+
         raise ValueError(f"Invalid action: {action}")
 
 
@@ -774,6 +804,7 @@ class GameService:
             GameOverUpdate,
             DamageUpdate,
             HealUpdate,
+            TempManaBoostUpdate,
         )
 
         updates = []
@@ -812,6 +843,11 @@ class GameService:
                     source_id=event.source_id,
                     target_type=event.target_type,
                     target_id=event.target_id,
+                    amount=event.amount,
+                ))
+            elif event.type == "event_temp_mana_boost":
+                updates.append(TempManaBoostUpdate(
+                    side=event.side,
                     amount=event.amount,
                 ))
             elif event.type == "event_game_over":

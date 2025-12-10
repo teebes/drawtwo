@@ -117,6 +117,13 @@ class RemoveEffect(EffectBase):
     target_id: str
 
 
+class TempManaBoostEffect(EffectBase):
+    type: Literal["effect_temp_mana_boost"] = "effect_temp_mana_boost"
+    source_type: Literal["card"] = "card"
+    source_id: str
+    amount: int
+
+
 Effect = Annotated[
     Union[
         AttackEffect,
@@ -130,6 +137,7 @@ Effect = Annotated[
         PlayEffect,
         RemoveEffect,
         StartGameEffect,
+        TempManaBoostEffect,
         UseHeroEffect,
     ],
     Discriminator('type')

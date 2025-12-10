@@ -17,6 +17,7 @@ from apps.gameplay.schemas.effects import (
     RemoveEffect,
     StartGameEffect,
     UseHeroEffect,
+    TempManaBoostEffect,
 )
 from apps.gameplay.schemas.events import (
     CreatureDeathEvent,
@@ -28,6 +29,7 @@ from apps.gameplay.schemas.events import (
     NewPhaseEvent,
     PlayEvent,
     RemoveEvent,
+    TempManaBoostEvent,
     UseHeroEvent,
 )
 from apps.gameplay.schemas.game import GameState, CardInPlay, Creature
@@ -578,3 +580,12 @@ def remove(effect: RemoveEffect, state: GameState) -> Result:
         events=events,
         child_effects=[]
     )
+
+@register("effect_temp_mana_boost")
+def temp_mana_boost(effect: TempManaBoostEffect, state: GameState) -> Result:
+    state.mana_pool[effect.side] += effect.amount
+    return Success(
+        new_state=state,
+        events=[
+            TempManaBoostEvent(side=effect.side, amount=effect.amount)
+        ])

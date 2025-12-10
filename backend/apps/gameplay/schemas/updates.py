@@ -85,6 +85,11 @@ class GameOverUpdate(UpdateBase):
     winner: Literal["side_a", "side_b"]
 
 
+class TempManaBoostUpdate(UpdateBase):
+    type: Literal["update_temp_mana_boost"] = "update_temp_mana_boost"
+    amount: int
+
+
 GameUpdate = Annotated[
     Union[
         CardDamageUpdate,
@@ -99,6 +104,7 @@ GameUpdate = Annotated[
         DrawCardUpdate,
         PlayCardUpdate,
         RefreshPhaseUpdate,
+        TempManaBoostUpdate,
         ],
     Discriminator('type')
 ]
