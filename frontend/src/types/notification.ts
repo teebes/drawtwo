@@ -6,6 +6,7 @@ export type NotificationType =
   | 'game_ranked'
   | 'game_ranked_queued'
   | 'friend_request'
+  | 'game_pve'
 
 export interface Notification {
   ref_id: number

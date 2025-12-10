@@ -41,8 +41,11 @@
         <div v-if="friendly_notification_types.includes(notification.type)" class="mr-2">
           <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary-100 text-2xl font-bold text-secondary-600">🤝</div>
         </div>
-        <div v-if="notification.type == 'friend_request'" class="mr-2">
+        <div v-if="notification.type === 'friend_request'" class="mr-2">
           <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary-100 text-2xl font-bold text-secondary-600">👥</div>
+        </div>
+        <div v-if="notification.type === 'game_pve'" class="mr-2">
+          <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary-100 text-2xl font-bold text-secondary-600">👾</div>
         </div>
         <div class="ml-2">{{ notification.message }}</div>
       </div>
@@ -163,6 +166,11 @@ const handleNotificationClick = (notification: Notification) => {
   } else if (notification.type === 'friend_request') {
     router.push({
       name: 'Friends',
+    })
+  } else if (notification.type === 'game_pve') {
+    router.push({
+      name: 'Board',
+      params: { game_id: notification.ref_id, slug: props.titleSlug }
     })
   }
 }
