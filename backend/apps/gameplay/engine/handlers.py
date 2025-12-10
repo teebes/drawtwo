@@ -210,7 +210,8 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
                 target_type=effect.target_type,
                 target_id=effect.target_id,
             ))
-        else:
+
+        if target.health > 0 or state.config.death_retaliation:
             # Determine if we need to retaliate
             should_retaliate = (
                 effect.retaliate

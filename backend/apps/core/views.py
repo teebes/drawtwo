@@ -279,6 +279,24 @@ def title_notifications(request, slug):
             message=message,
         ))
 
+    # PvE Games
+    pve_games = games.filter(
+        type=Game.GAME_TYPE_PVE,
+        status=Game.GAME_STATUS_IN_PROGRESS
+    ).order_by('-created_at')
+    for pve_game in pve_games:
+        opponent_deck = pve_game.opponent_deck_for_user(request.user)
+        is_player_turn = pve_game.state['active'] == pve_game.user_side
+        if is_player_turn:
+            message = f"Your turn against {opponent_deck.owner_name}."
+        else:
+            message = f"Waiting for {opponent_deck.owner_name} to take their turn."
+        notifications.append(Notification(
+            ref_id=pve_game.id,
+            type='game_pve',
+            message=message,
+        ))
+
     # Pending friendly challenges
     pending_challenges = FriendlyChallenge.objects.filter(
         challengee=request.user,

@@ -21,6 +21,10 @@ class TitleAdmin(admin.ModelAdmin):
         ('Publishing', {
             'fields': ('status', 'published_at')
         }),
+        ('Advanced Configuration', {
+            'fields': ('config',),
+            'classes': ('collapse',)
+        }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)

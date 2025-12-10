@@ -149,12 +149,14 @@ class Hero(ResourceBase):
     hero_power: HeroPower
     faction: Optional[str] = None
 
+
 class TitleConfig(ResourceBase):
     type: Literal['config'] = 'config'
     deck_size_limit: int = 30
     deck_card_max_count: int = 9
     hand_start_size: int = 3
     side_b_compensation: Optional[str] = None
+    death_retaliation: bool = False
 
 
 Resource = Annotated[

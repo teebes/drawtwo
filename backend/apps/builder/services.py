@@ -187,6 +187,7 @@ class TitleService:
         updated_config['deck_size_limit'] = resource.deck_size_limit
         updated_config['deck_card_max_count'] = resource.deck_card_max_count
         updated_config['hand_start_size'] = resource.hand_start_size
+        updated_config['death_retaliation'] = resource.death_retaliation
 
         # Only include side_b_compensation if it's not None
         if resource.side_b_compensation is not None:

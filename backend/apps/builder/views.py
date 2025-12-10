@@ -395,7 +395,8 @@ def title_config_yaml(request, title_slug):
         deck_size_limit=config_data.get('deck_size_limit', 30),
         deck_card_max_count=config_data.get('deck_card_max_count', 9),
         hand_start_size=config_data.get('hand_start_size', 3),
-        side_b_compensation=config_data.get('side_b_compensation')
+        side_b_compensation=config_data.get('side_b_compensation'),
+        death_retaliation=config_data.get('death_retaliation', False)
     )
 
     # Serialize to YAML (exclude None values and use the schema's dict representation)
