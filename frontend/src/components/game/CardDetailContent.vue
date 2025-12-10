@@ -44,7 +44,7 @@
           </dl>
 
           <!-- Card Description -->
-          <div class="rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 mt-8 text-gray-900 dark:text-gray-100 shadow-sm text-lg">
+          <div v-if="card.description" class="rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 mt-8 text-gray-900 dark:text-gray-100 shadow-sm text-lg">
             {{ card.description }}
           </div>
         </div>

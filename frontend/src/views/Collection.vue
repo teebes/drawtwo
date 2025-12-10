@@ -218,6 +218,70 @@
               </div>
             </div>
           </section>
+
+          <!-- Uncollectible Cards Section -->
+          <section v-if="uncollectibleCards.length > 0" class="mt-24">
+            <h2 class="font-display text-2xl font-bold text-gray-900 dark:text-white mb-6">
+              Uncollectible Cards
+            </h2>
+
+            <!-- Uncollectible Common Cards -->
+            <div v-if="uncollectibleCommonCards.length > 0" class="mb-8">
+              <h3 class="font-display text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">
+                Common
+              </h3>
+              <div class="grid md:gap-12 sm:gap-10 gap-8 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                <div
+                  v-for="card in uncollectibleCommonCards"
+                  :key="card.slug"
+                  class="relative group"
+                >
+                  <GameCard
+                    :card="card"
+                    :details="true"
+                    class="cursor-pointer opacity-75"
+                    @click="navigateToDetails(card.slug)" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Uncollectible Faction Cards -->
+            <div
+              v-for="[factionName, factionCards] in uncollectibleFactionCardGroups"
+              :key="factionName"
+              class="space-y-6 mb-8"
+            >
+              <h3 class="font-display text-xl font-semibold text-gray-800 dark:text-gray-200 capitalize">
+                {{ factionName }}
+              </h3>
+              <div class="grid md:gap-12 sm:gap-10 gap-8 grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <div
+                  v-for="card in factionCards"
+                  :key="card.slug"
+                  class="relative group"
+                >
+                  <GameCard
+                    :card="card"
+                    :class="canEditTitle ? 'cursor-pointer opacity-75' : 'opacity-75'"
+                    @click="canEditTitle ? navigateToEdit(card.slug) : null" />
+                  <div
+                    v-if="canEditTitle"
+                    class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <button
+                      @click.stop="navigateToEdit(card.slug)"
+                      class="inline-flex items-center rounded-full bg-white dark:bg-gray-800 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 shadow-sm hover:shadow-md transition-all"
+                      title="Edit card"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       </main>
 
@@ -353,14 +417,44 @@ const filteredCards = computed<Card[]>(() => {
 })
 
 // Computed properties for organizing cards by faction
+// Filter to only show collectible cards (default to true if not present)
+const collectibleCards = computed(() => {
+  return filteredCards.value.filter(card => card.is_collectible !== false)
+})
+
+const uncollectibleCards = computed(() => {
+  return filteredCards.value.filter(card => card.is_collectible === false)
+})
+
 const commonCards = computed(() => {
-  return filteredCards.value.filter(card => !card.faction)
+  return collectibleCards.value.filter(card => !card.faction)
 })
 
 const factionCardGroups = computed(() => {
   const factionGroups = new Map<string, Card[]>()
 
-  filteredCards.value.forEach(card => {
+  collectibleCards.value.forEach(card => {
+    if (card.faction) {
+      if (!factionGroups.has(card.faction)) {
+        factionGroups.set(card.faction, [])
+      }
+      factionGroups.get(card.faction)!.push(card)
+    }
+  })
+
+  // Sort faction groups alphabetically
+  return Array.from(factionGroups.entries()).sort(([a], [b]) => a.localeCompare(b))
+})
+
+// Organize uncollectible cards by faction
+const uncollectibleCommonCards = computed(() => {
+  return uncollectibleCards.value.filter(card => !card.faction)
+})
+
+const uncollectibleFactionCardGroups = computed(() => {
+  const factionGroups = new Map<string, Card[]>()
+
+  uncollectibleCards.value.forEach(card => {
     if (card.faction) {
       if (!factionGroups.has(card.faction)) {
         factionGroups.set(card.faction, [])

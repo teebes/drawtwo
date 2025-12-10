@@ -31,7 +31,7 @@
       <!-- Bottom panel: Description and Stats -->
       <div class="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm px-2 py-1 flex flex-col gap-2">
         <!-- Description -->
-        <p class="text-xs text-gray-200 line-clamp-2">
+        <p v-if="card.description" class="text-xs text-gray-200 line-clamp-2">
           {{ card.description }}
         </p>
 

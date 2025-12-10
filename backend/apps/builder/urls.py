@@ -13,6 +13,7 @@ urlpatterns = [
 
     # Title endpoints
     path('titles/<slug:slug>/', views.title_by_slug, name='title-by-slug'),
+    path('titles/<slug:title_slug>/config/yaml/', views.title_config_yaml, name='title-config-yaml'),
 
     # Card endpoints
     path('titles/<slug:title_slug>/cards/', views.create_card, name='card-create'),

@@ -5,6 +5,52 @@
     </section>
 
     <main class="mx-auto w-full max-w-4xl px-4 sm:px-6 lg:px-8 pb-16 space-y-8">
+
+      <GameButton class="mt-8" variant="secondary" size="xs" @click="openYamlModal">
+        WORLD CONFIG
+      </GameButton>
+
+      <!-- YAML Modal -->
+      <BaseModal :show="yamlModalOpen" @close="closeYamlModal">
+        <div class="p-6">
+          <!-- Header -->
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+              Title Configuration YAML
+            </h2>
+            <button
+              @click="copyYaml"
+              class="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-colors"
+              :class="copied
+                ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'"
+            >
+              <svg v-if="!copied" class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              <svg v-else class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              {{ copied ? 'Copied!' : 'Copy' }}
+            </button>
+          </div>
+
+          <!-- Content -->
+          <div v-if="yamlLoading" class="flex items-center justify-center py-12">
+            <p class="text-gray-500 dark:text-gray-400">Loading YAML...</p>
+          </div>
+          <div v-else-if="yamlError" class="text-red-600 dark:text-red-400 py-4">
+            {{ yamlError }}
+          </div>
+          <div v-else>
+            <pre class="bg-gray-900 dark:bg-gray-950 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm font-mono max-h-96 overflow-y-auto"><code>{{ configYamlContent }}</code></pre>
+            <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
+              Copy this YAML and paste it into the ingestion tool to update the title configuration or use as a template.
+            </p>
+          </div>
+        </div>
+      </BaseModal>
+
       <!-- YAML Manifest Ingestion Section -->
       <Section class="mt-8" title="Add / Edit Resources" subtitle="Create or update cards, heroes, and decks by pasting YAML content below.">
         <Panel>
@@ -119,6 +165,7 @@ import axios from '@/config/api'
 import Section from '@/components/layout/Section.vue'
 import Panel from '@/components/layout/Panel.vue'
 import GameButton from '@/components/ui/GameButton.vue'
+import BaseModal from '@/components/modals/BaseModal.vue'
 
 interface IngestedResource {
   resource_type: 'card' | 'hero' | 'deck'
@@ -135,6 +182,13 @@ const yamlContent = ref('')
 const ingesting = ref(false)
 const error = ref<string | null>(null)
 const results = ref<IngestedResource[]>([])
+
+// YAML Modal state
+const yamlModalOpen = ref(false)
+const configYamlContent = ref('')
+const yamlLoading = ref(false)
+const yamlError = ref<string | null>(null)
+const copied = ref(false)
 
 const yamlPlaceholder = `# Example YAML format for ingestion
 
@@ -221,7 +275,7 @@ const getResourceLink = (resource: IngestedResource): object | null => {
   switch (resource.resource_type) {
     case 'card':
       return {
-        name: 'CardEdit',
+        name: 'CardDetails',
         params: {
           slug: title.value.slug,
           cardSlug: resource.slug
@@ -245,6 +299,43 @@ const getResourceLink = (resource: IngestedResource): object | null => {
       }
     default:
       return null
+  }
+}
+
+const openYamlModal = async (): Promise<void> => {
+  if (!title.value) return
+
+  yamlModalOpen.value = true
+  yamlLoading.value = true
+  yamlError.value = null
+  copied.value = false
+
+  try {
+    const response = await axios.get(`/builder/titles/${title.value.slug}/config/yaml/`)
+    configYamlContent.value = response.data.yaml
+  } catch (err: any) {
+    yamlError.value = err.response?.data?.error || err.message || 'Failed to load YAML'
+    console.error('Error fetching YAML:', err)
+  } finally {
+    yamlLoading.value = false
+  }
+}
+
+const closeYamlModal = (): void => {
+  yamlModalOpen.value = false
+  configYamlContent.value = ''
+  yamlError.value = null
+}
+
+const copyYaml = async (): Promise<void> => {
+  try {
+    await navigator.clipboard.writeText(configYamlContent.value)
+    copied.value = true
+    setTimeout(() => {
+      copied.value = false
+    }, 2000)
+  } catch (err) {
+    console.error('Failed to copy:', err)
   }
 }
 </script>

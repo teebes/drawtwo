@@ -6,7 +6,7 @@ from pydantic import TypeAdapter
 
 from apps.builder import models as builder_models
 from apps.builder.models import Title, CardTemplate
-from apps.builder.schemas import Resource, Card, Hero, Deck, IngestedResource
+from apps.builder.schemas import Resource, Card, Hero, Deck, TitleConfig, IngestedResource
 from apps.collection import models as collection_models
 
 User = get_user_model()
@@ -57,7 +57,8 @@ class TitleService:
         resource_map = {
             Card: self.ingest_card,
             Hero: self.ingest_hero,
-            Deck: self.ingest_deck
+            Deck: self.ingest_deck,
+            TitleConfig: self.ingest_config
         }
         for resource_type, handler in resource_map.items():
             if isinstance(resource, resource_type):
@@ -88,10 +89,11 @@ class TitleService:
 
         card_template.card_type = resource.card_type
         card_template.name = resource.name
-        card_template.description = resource.description
+        card_template.description = resource.description or ''
         card_template.cost = resource.cost
         card_template.attack = resource.attack
         card_template.health = resource.health
+        card_template.is_collectible = resource.is_collectible
 
         if resource.traits:
             from apps.builder.trait_definitions import validate_trait_slug
@@ -169,6 +171,41 @@ class TitleService:
             id=deck.id,
             slug='',  # Decks don't have slugs, use empty string
             name=deck.name
+        )
+
+    def ingest_config(self, resource: TitleConfig) -> IngestedResource:
+        """Update the title's configuration from a TitleConfig resource."""
+        # Get current config or initialize empty dict
+        current_config = self.title.config or {}
+
+        # Determine if this is an update (config exists) or creation (first time setting config)
+        is_new = not current_config or current_config == {}
+
+        # Update config with values from TitleConfig schema
+        # Only update fields that are explicitly set (non-None for optional fields)
+        updated_config = current_config.copy()
+        updated_config['deck_size_limit'] = resource.deck_size_limit
+        updated_config['deck_card_max_count'] = resource.deck_card_max_count
+        updated_config['hand_start_size'] = resource.hand_start_size
+        updated_config['death_retaliation'] = resource.death_retaliation
+
+        # Only include side_b_compensation if it's not None
+        if resource.side_b_compensation is not None:
+            updated_config['side_b_compensation'] = resource.side_b_compensation
+        elif 'side_b_compensation' in updated_config:
+            # Remove it if it was set to None
+            del updated_config['side_b_compensation']
+
+        # Save updated config
+        self.title.config = updated_config
+        self.title.save(update_fields=['config'])
+
+        return IngestedResource(
+            resource_type='config',
+            action='created' if is_new else 'updated',
+            id=self.title.id,
+            slug=self.title.slug,
+            name=f'{self.title.name} Configuration'
         )
 
 

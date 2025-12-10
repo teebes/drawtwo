@@ -19,7 +19,7 @@
         >
             <button
                 @click="close"
-                class="absolute top-4 right-4 z-10 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 bg-white/50 dark:bg-black/50 rounded-full p-1"
+                class="absolute top-0 right-0 z-10 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 bg-white/50 dark:bg-black/50 rounded-full p-1"
             >
                 <span class="sr-only">Close</span>
                 <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -36,6 +36,47 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * BaseModal - A reusable modal component with backdrop and close functionality.
+ *
+ * Usage:
+ *
+ * 1. Import the component:
+ *    import BaseModal from '@/components/modals/BaseModal.vue'
+ *
+ * 2. Create reactive state for modal visibility:
+ *    const modalOpen = ref(false)
+ *
+ * 3. Create open/close handlers:
+ *    const openModal = () => { modalOpen.value = true }
+ *    const closeModal = () => { modalOpen.value = false }
+ *
+ * 4. Use in template:
+ *    <button @click="openModal">Open Modal</button>
+ *    <BaseModal :show="modalOpen" @close="closeModal">
+ *      <div class="p-6">
+ *        <h2>Modal Title</h2>
+ *        <p>Modal content goes here</p>
+ *      </div>
+ *    </BaseModal>
+ *
+ * Props:
+ * - show (boolean, required): Controls the visibility of the modal
+ *
+ * Events:
+ * - close: Emitted when the modal should be closed (clicking backdrop or close button)
+ *
+ * Slots:
+ * - default: The content to display inside the modal panel
+ *
+ * Features:
+ * - Automatically teleports to body
+ * - Includes backdrop that closes modal on click
+ * - Close button in top-right corner
+ * - Fade transition animations
+ * - Responsive design with max-width and scrollable content
+ * - Dark mode support
+ */
 defineProps<{
   show: boolean
 }>()

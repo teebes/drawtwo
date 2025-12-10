@@ -24,9 +24,9 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.6;
-  color: #333;
-  background-color: #fff;
-  @apply text-gray-900 dark:text-gray-100;
+  /* color: #333; */
+  /* background-color: #fff; */
+  @apply text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-900;
 }
 
 /* Utility classes */

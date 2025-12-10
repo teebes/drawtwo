@@ -12,7 +12,7 @@ from django.db import transaction
 from .models import Title, CardTemplate, CardTrait
 from .serializers import TitleSerializer, CardTemplateSerializer
 from .services import TitleService
-from .schemas import Card
+from .schemas import Card, TitleConfig
 
 User = get_user_model()
 
@@ -272,7 +272,8 @@ def card_template_to_schema(card: CardTemplate) -> Card:
         health=card.health or 0,
         traits=traits,
         faction=card.faction.slug if card.faction else None,
-        art_url=card.art_url if hasattr(card, 'art_url') and card.art_url else None
+        art_url=card.art_url if hasattr(card, 'art_url') and card.art_url else None,
+        is_collectible=card.is_collectible
     )
 
 
@@ -300,7 +301,8 @@ def bump_card_version(card: CardTemplate, yaml_data: str) -> CardTemplate:
         attack=prev.attack,
         health=prev.health,
         spec=prev.spec,
-        faction=prev.faction
+        faction=prev.faction,
+        is_collectible=prev.is_collectible
     )
 
     # Copy tags
@@ -310,7 +312,7 @@ def bump_card_version(card: CardTemplate, yaml_data: str) -> CardTemplate:
     for card_trait in prev.cardtrait_set.all():
         CardTrait.objects.create(
             card=new_card,
-            trait=card_trait.trait,
+            trait_slug=card_trait.trait_slug,
             data=card_trait.data
         )
 
@@ -366,3 +368,49 @@ def ingest_yaml(request, title_slug):
             {'error': str(e)},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def title_config_yaml(request, title_slug):
+    """
+    Get a title's configuration YAML representation in the ingestion format.
+
+    Returns the title config as YAML that can be copied and used with the ingestion endpoint.
+    """
+    # Get the title (latest version) or return 404
+    title = get_object_or_404(Title, slug=title_slug, is_latest=True)
+
+    # Check if user has permission to view this title
+    if not title.can_be_viewed_by(request.user):
+        return Response(
+            {'error': 'You do not have permission to view this title'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    # Get config from title.config JSONField and create TitleConfig schema
+    # Use defaults from TitleConfig schema if fields are missing
+    config_data = title.config or {}
+    title_config = TitleConfig(
+        deck_size_limit=config_data.get('deck_size_limit', 30),
+        deck_card_max_count=config_data.get('deck_card_max_count', 9),
+        hand_start_size=config_data.get('hand_start_size', 3),
+        side_b_compensation=config_data.get('side_b_compensation'),
+        death_retaliation=config_data.get('death_retaliation', False)
+    )
+
+    # Serialize to YAML (exclude None values and use the schema's dict representation)
+    yaml_content = yaml.dump(
+        title_config.model_dump(exclude_none=True, exclude_defaults=False),
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True
+    )
+
+    return Response({
+        'yaml': yaml_content,
+        'title': {
+            'slug': title.slug,
+            'name': title.name
+        }
+    }, status=status.HTTP_200_OK)

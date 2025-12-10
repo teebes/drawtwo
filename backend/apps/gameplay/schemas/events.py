@@ -98,6 +98,12 @@ class RemoveEvent(EventBase):
     target_id: str
 
 
+class TempManaBoostEvent(EventBase):
+    type: Literal["event_temp_mana_boost"] = "event_temp_mana_boost"
+
+    amount: int
+
+
 Event = Annotated[
     Union[
         CreatureDeathEvent,
@@ -109,6 +115,7 @@ Event = Annotated[
         NewPhaseEvent,
         PlayEvent,
         RemoveEvent,
+        TempManaBoostEvent,
         UseHeroEvent,
     ],
     Discriminator('type')

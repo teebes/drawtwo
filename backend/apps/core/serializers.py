@@ -44,7 +44,8 @@ def to_card_schema(card) -> Card:
         health=card.health or 0,  # Handle null values for spells
         traits=traits_list,
         faction=card.faction.slug if card.faction else None,
-        art_url=get_card_art_url(card.title.slug, card.slug)
+        art_url=get_card_art_url(card.title.slug, card.slug),
+        is_collectible=card.is_collectible
     )
 
 

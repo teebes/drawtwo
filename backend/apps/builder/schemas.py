@@ -3,12 +3,6 @@ from typing import Literal, List, Annotated, Union, Optional
 from pydantic import Discriminator
 
 
-class TitleConfig(BaseModel):
-    deck_size_limit: int = 30
-    deck_card_max_count: int = 9
-    hand_start_size: int = 3
-
-
 class Encounter(BaseModel):
     name: str
 
@@ -48,8 +42,19 @@ class RemoveAction(ActionBase):
     scope: Literal['single', 'cleave', 'all'] = 'single'
 
 
+class TempManaBoostAction(ActionBase):
+    action: Literal['temp_mana_boost'] = 'temp_mana_boost'
+    amount: int
+    target: Literal['hero', 'creature', 'friendly'] = 'hero'
+
+
 Action = Annotated[
-    Union[DrawAction, DamageAction, HealAction, RemoveAction],
+    Union[
+        DrawAction,
+        DamageAction,
+        HealAction,
+        RemoveAction,
+        TempManaBoostAction],
     Discriminator('action')
 ]
 
@@ -100,6 +105,8 @@ class DeckScript(BaseModel):
     strategy: Literal['rush', 'control', 'combo', 'aggressive', 'defensive'] = 'rush'
 
 
+# Resources
+
 class ResourceBase(BaseModel):
     type: str
 
@@ -110,13 +117,14 @@ class Card(ResourceBase):
     card_type: Literal['creature', 'spell']
     slug: str
     name: str
-    description: str
+    description: Optional[str] = ''
     cost: int
     attack: int = 0
     health: int = 0
     traits: List[Trait] = Field(default_factory=list)
     faction: Optional[str] = None
     art_url: Optional[str] = None  # For future user-uploaded art
+    is_collectible: bool = True
 
 
 class Deck(ResourceBase):
@@ -142,15 +150,24 @@ class Hero(ResourceBase):
     faction: Optional[str] = None
 
 
+class TitleConfig(ResourceBase):
+    type: Literal['config'] = 'config'
+    deck_size_limit: int = 30
+    deck_card_max_count: int = 9
+    hand_start_size: int = 3
+    side_b_compensation: Optional[str] = None
+    death_retaliation: bool = False
+
+
 Resource = Annotated[
-    Union[Card, Deck, Hero],
+    Union[Card, Deck, Hero, TitleConfig],
     Discriminator('type')
 ]
 
 
 class IngestedResource(BaseModel):
     """Represents a resource that was created or updated during ingestion."""
-    resource_type: Literal['card', 'hero', 'deck']
+    resource_type: Literal['card', 'hero', 'deck', 'config']
     action: Literal['created', 'updated']
     id: int
     slug: str

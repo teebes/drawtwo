@@ -11,7 +11,7 @@ from apps.builder.models import Title, CardTemplate, HeroTemplate
 from apps.builder.schemas import TitleConfig
 from apps.collection.models import Deck, DeckCard
 from apps.core.card_assets import get_hero_art_url
-from apps.core.serializers import to_card_schema
+from apps.core.serializers import to_card_schema, serialize_cards_with_traits
 
 
 
@@ -141,6 +141,8 @@ def deck_detail(request, deck_id):
             'card', 'card__title', 'card__faction'
         ).prefetch_related(
             'card__cardtrait_set'
+        ).filter(
+            card__is_collectible=True
         ).order_by('card__name')
 
         card_data = []
@@ -150,6 +152,13 @@ def deck_detail(request, deck_id):
             data = schema.model_dump()
             data['count'] = deck_card.count
             card_data.append(data)
+
+        # Get all available collectible cards for this title (for "Edit Cards" mode)
+        all_cards_queryset = (CardTemplate.objects
+                             .filter(title=deck.hero.title, is_latest=True, is_collectible=True)
+                             .order_by('cost', 'card_type', 'attack', 'health', 'name'))
+        all_cards_data = serialize_cards_with_traits(all_cards_queryset)
+        all_cards = [card.model_dump() for card in all_cards_data]
 
         return Response({
             'id': deck.id,
@@ -168,6 +177,7 @@ def deck_detail(request, deck_id):
                 'art_url': get_hero_art_url(deck.hero.title.slug, deck.hero.slug),
             },
             'cards': card_data,
+            'all_cards': all_cards,  # All available collectible cards for adding to deck
             'total_cards': sum(card['count'] for card in card_data),
             'created_at': deck.created_at.isoformat(),
             'updated_at': deck.updated_at.isoformat(),
@@ -400,6 +410,13 @@ def add_deck_card(request, deck_id):
     if card.title != deck.hero.title:
         return Response(
             {'error': 'Card does not belong to the same title as the deck'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Check if card is collectible
+    if not card.is_collectible:
+        return Response(
+            {'error': f'"{card.name}" is not collectible and cannot be added to a deck'},
             status=status.HTTP_400_BAD_REQUEST
         )
 

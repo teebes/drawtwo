@@ -212,6 +212,7 @@ interface DeckData {
     art_url?: string | null
   }
   cards: DeckCard[]
+  all_cards?: Card[]  // All available collectible cards for adding to deck
   total_cards: number
   created_at: string
   updated_at: string
@@ -325,8 +326,13 @@ const onHeroImageError = (): void => {
 
 const toggleAddCardMode = (): void => {
   isAddCardMode.value = !isAddCardMode.value
+  // Use all_cards from deck response if available, otherwise fetch
   if (isAddCardMode.value && allCards.value.length === 0) {
-    fetchAllCards()
+    if (deck.value?.all_cards) {
+      allCards.value = deck.value.all_cards
+    } else {
+      fetchAllCards()
+    }
   }
 }
 
@@ -515,6 +521,10 @@ const fetchDeck = async (): Promise<void> => {
     const deckId = route.params.id as string
     const response = await axios.get(`/collection/decks/${deckId}/`)
     deck.value = response.data
+    // Initialize allCards from deck response if available
+    if (deck.value?.all_cards) {
+      allCards.value = deck.value.all_cards
+    }
   } catch (err: any) {
     if (err.response?.status === 404) {
       error.value = 'Deck not found'

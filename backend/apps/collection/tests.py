@@ -153,3 +153,91 @@ class UniqueTraitDeckValidationTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['count'], 1)
+
+
+class CollectibleCardDeckValidationTests(TestCase):
+    """Test that non-collectible cards cannot be added to player decks."""
+
+    def setUp(self):
+        # Create user
+        self.user = User.objects.create_user(
+            email="testuser@example.com",
+            username="testuser",
+            password="testpass123"
+        )
+
+        # Create title
+        self.title = Title.objects.create(
+            slug='test-title',
+            name='Test Title',
+            author=self.user,
+            is_latest=True,
+        )
+
+        # Create hero
+        self.hero = HeroTemplate.objects.create(
+            title=self.title,
+            slug='test-hero',
+            name='Test Hero',
+            health=30,
+            is_latest=True,
+        )
+
+        # Create a collectible card
+        self.collectible_card = CardTemplate.objects.create(
+            title=self.title,
+            slug='collectible-card',
+            name='Collectible Card',
+            cost=1,
+            attack=2,
+            health=3,
+            card_type='creature',
+            is_latest=True,
+            is_collectible=True,
+        )
+
+        # Create a non-collectible card
+        self.non_collectible_card = CardTemplate.objects.create(
+            title=self.title,
+            slug='non-collectible-card',
+            name='Non-Collectible Card',
+            cost=3,
+            attack=5,
+            health=5,
+            card_type='creature',
+            is_latest=True,
+            is_collectible=False,
+        )
+
+        # Create a deck
+        self.deck = Deck.objects.create(
+            user=self.user,
+            title=self.title,
+            name='Test Deck',
+            hero=self.hero,
+        )
+
+        # Setup API client
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def test_can_add_collectible_card(self):
+        """Test that collectible cards can be added to decks."""
+        response = self.client.post(
+            f'/api/collection/decks/{self.deck.id}/cards/add/',
+            {'card_slug': self.collectible_card.slug, 'count': 1},
+            format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+
+    def test_cannot_add_non_collectible_card(self):
+        """Test that non-collectible cards cannot be added to decks."""
+        response = self.client.post(
+            f'/api/collection/decks/{self.deck.id}/cards/add/',
+            {'card_slug': self.non_collectible_card.slug, 'count': 1},
+            format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('not collectible', response.data['error'])
+        self.assertIn(self.non_collectible_card.name, response.data['error'])

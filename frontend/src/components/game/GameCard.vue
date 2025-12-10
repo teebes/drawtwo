@@ -34,8 +34,8 @@
             {{ card.name }}
         </div>
 
-        <div v-if="details" class="absolute bottom-3 left-3 right-3 p-3 bg-black/80 rounded-xl text-xs text-white z-[15]">
-            {{ card.description}}
+        <div v-if="details && card.description" class="absolute bottom-3 left-3 right-3 p-3 bg-black/80 rounded-xl text-xs text-white z-[15]">
+            {{ card.description }}
         </div>
 
         <!-- Card Art (now fills whole card) -->

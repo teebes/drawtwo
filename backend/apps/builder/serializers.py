@@ -35,7 +35,7 @@ class CardTemplateSerializer(serializers.ModelSerializer):
     class Meta:
         model = CardTemplate
         fields = ['id', 'slug', 'name', 'description', 'version', 'is_latest',
-                 'card_type', 'cost', 'attack', 'health', 'spec',
+                 'card_type', 'cost', 'attack', 'health', 'spec', 'is_collectible',
                  'title_slug', 'faction_slug', 'traits_with_data', 'yaml_definition',
                  'art_url', 'created_at', 'updated_at']
         read_only_fields = ['id', 'version', 'created_at', 'updated_at']
@@ -61,10 +61,13 @@ class CardTemplateSerializer(serializers.ModelSerializer):
         # Build the card data structure
         card_data = {
             'name': obj.name,
-            'description': obj.description,
             'card_type': obj.card_type,
             'cost': obj.cost,
         }
+
+        # Only include description if it's not empty
+        if obj.description:
+            card_data['description'] = obj.description
 
         # Add attack/health for creatures
         if obj.card_type == 'creature':
@@ -89,6 +92,10 @@ class CardTemplateSerializer(serializers.ModelSerializer):
         # Add spec if present
         if obj.spec:
             card_data['spec'] = obj.spec
+
+        # Add is_collectible if False (True is the default, so we only show False)
+        if not obj.is_collectible:
+            card_data['is_collectible'] = False
 
         return yaml.dump(
             card_data,
@@ -130,6 +137,11 @@ class CardTemplateSerializer(serializers.ModelSerializer):
 
         # Update spec
         instance.spec = card_data.get('spec', {})
+
+        print("updating from yaml with card_data: ", card_data)
+        # Update is_collectible if present in YAML (keep existing value if not specified)
+        if 'is_collectible' in card_data:
+            instance.is_collectible = card_data['is_collectible']
 
         instance.save()
 
@@ -201,6 +213,7 @@ class CardTemplateSerializer(serializers.ModelSerializer):
             attack=card_data.get('attack') if card_type == 'creature' else None,
             health=card_data.get('health') if card_type == 'creature' else None,
             spec=card_data.get('spec', {}),
+            is_collectible=card_data.get('is_collectible', True),
             version=1,
             is_latest=True
         )

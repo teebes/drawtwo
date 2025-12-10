@@ -21,6 +21,10 @@ class TitleAdmin(admin.ModelAdmin):
         ('Publishing', {
             'fields': ('status', 'published_at')
         }),
+        ('Advanced Configuration', {
+            'fields': ('config',),
+            'classes': ('collapse',)
+        }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
@@ -195,7 +199,7 @@ class CardTemplateAdmin(admin.ModelAdmin):
             'fields': ('version', 'is_latest')
         }),
         ('Card Properties', {
-            'fields': ('card_type', 'cost', 'faction')
+            'fields': ('card_type', 'cost', 'faction', 'is_collectible')
         }),
         ('Combat Stats', {
             'fields': ('attack', 'health'),
