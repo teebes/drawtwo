@@ -52,6 +52,7 @@ class DamageUpdate(UpdateBase):
     target_type: Literal["card", "hero", "creature"] = "card"
     target_id: str
     damage: int
+    is_retaliation: bool = False
 
 
 class HealUpdate(UpdateBase):

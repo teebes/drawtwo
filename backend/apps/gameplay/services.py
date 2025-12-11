@@ -53,8 +53,8 @@ from apps.gameplay.schemas.effects import (
 from apps.gameplay.schemas.engine import Success, Result, Prevented, Rejected, Fault
 from apps.gameplay.schemas.events import (
     ActionableEvent,
-    Event,
     GameOverEvent,
+    CreatureDeathEvent,
 )
 
 
@@ -549,6 +549,19 @@ class GameService:
         - 'all': targets all valid entities on the target side
         - 'cleave': targets the selected entity and adjacent entities
         """
+
+        # If a creature death event is triggering an action, we can safely assume
+        # it's a deathrattle, in which case the source of the subsequent damage is
+        # actually the creature that died.
+        if isinstance(event, CreatureDeathEvent):
+            source_id = event.target_id
+            source_type = "creature"
+            is_deathrattle = True
+        else:
+            source_id = event.source_id
+            source_type = event.source_type
+            is_deathrattle = False
+
         if isinstance(action, DrawAction):
             return [DrawEffect(
                 side=event.side,
@@ -608,12 +621,12 @@ class GameService:
                 effects.append(DamageEffect(
                     side=event.side,
                     damage_type=action.damage_type,
-                    source_type=event.source_type,
-                    source_id=event.source_id,
+                    source_type=source_type,
+                    source_id=source_id,
                     target_type=target_type,
                     target_id=target_id,
                     damage=action.amount,
-                    #retaliate=False,
+                    retaliate=not is_deathrattle,
                 ))
             return effects
 
@@ -669,8 +682,8 @@ class GameService:
             for target_type, target_id in targets:
                 effects.append(HealEffect(
                     side=event.side,
-                    source_type=event.source_type,
-                    source_id=event.source_id,
+                    source_type=source_type,
+                    source_id=source_id,
                     target_type=target_type,
                     target_id=target_id,
                     amount=action.amount,
@@ -725,8 +738,8 @@ class GameService:
             for target_type, target_id in targets:
                 effects.append(RemoveEffect(
                     side=event.side,
-                    source_type=event.source_type,
-                    source_id=event.source_id,
+                    source_type=source_type,
+                    source_id=source_id,
                     target_type=target_type,
                     target_id=target_id,
                 ))
@@ -736,8 +749,8 @@ class GameService:
             return [
                 TempManaBoostEffect(
                     side=event.side,
-                    source_type=event.source_type,
-                    source_id=event.source_id,
+                    source_type=source_type,
+                    source_id=source_id,
                     amount=action.amount,
                 )
             ]
@@ -746,8 +759,8 @@ class GameService:
             return [
                 SummonEffect(
                     side=event.side,
-                    source_type=event.source_type,
-                    source_id=event.source_id,
+                    source_type=source_type,
+                    source_id=source_id,
                     target=action.target,
                 )
             ]

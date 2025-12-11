@@ -26,7 +26,7 @@ class DamageAction(ActionBase):
     amount: int
     target: Literal['hero', 'creature', 'enemy'] = 'creature'
     scope: Literal['single', 'cleave', 'all'] = 'single'
-    damage_type: Literal["physical", "spell"] = "physical"
+    damage_type: Literal["physical", "spell"] = "spell"
 
 
 class HealAction(ActionBase):

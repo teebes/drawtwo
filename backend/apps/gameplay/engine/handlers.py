@@ -181,7 +181,8 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
         source_id=effect.source_id,
         target_type=effect.target_type,
         target_id=effect.target_id,
-        damage=effect.damage
+        damage=effect.damage,
+        is_retaliation=effect.is_retaliation,
     )]
 
     if target_type == "hero":
@@ -207,8 +208,6 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
                 source_type=effect.source_type,
                 source_id=effect.source_id,
                 creature=target,
-                # killer_type=effect.source_type,
-                # killer_id=effect.source_id,
                 target_type=effect.target_type,
                 target_id=effect.target_id,
             ))
@@ -219,6 +218,7 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
                 effect.retaliate
                 and effect.damage_type == "physical"
                 and (target_type == "card" or target_type == "creature")
+                and effect.source_type != "card"
             )
 
             # Ranged trait doesn't get retaliated against
@@ -242,7 +242,8 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
                     target_type=effect.source_type,
                     target_id=effect.source_id,
                     damage=target.attack,
-                    retaliate=False
+                    retaliate=False,
+                    is_retaliation=True
                 ))
 
     return Success(

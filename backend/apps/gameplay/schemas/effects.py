@@ -48,6 +48,7 @@ class DamageEffect(EffectBase):
     # Whether the target should attempt to retaliate. Mostly used to disable
     # retaliation in the case of retaliation to avoid an infinite loop.
     retaliate: bool = True
+    is_retaliation: bool = False
 
 
 class CardRetaliationEffect(EffectBase):
