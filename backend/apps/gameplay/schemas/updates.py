@@ -52,6 +52,7 @@ class DamageUpdate(UpdateBase):
     target_type: Literal["card", "hero", "creature"] = "card"
     target_id: str
     damage: int
+    is_retaliation: bool = False
 
 
 class HealUpdate(UpdateBase):
@@ -90,6 +91,13 @@ class TempManaBoostUpdate(UpdateBase):
     amount: int
 
 
+class SummonUpdate(UpdateBase):
+    type: Literal["update_summon"] = "update_summon"
+    source_type: Literal["card"] = "card"
+    source_id: str
+    target_type: Literal["card"] = "card"
+    target_id: str
+
 GameUpdate = Annotated[
     Union[
         CardDamageUpdate,
@@ -104,7 +112,8 @@ GameUpdate = Annotated[
         DrawCardUpdate,
         PlayCardUpdate,
         RefreshPhaseUpdate,
+        SummonUpdate,
         TempManaBoostUpdate,
-        ],
+    ],
     Discriminator('type')
 ]

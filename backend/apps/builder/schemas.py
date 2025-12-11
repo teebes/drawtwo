@@ -26,7 +26,7 @@ class DamageAction(ActionBase):
     amount: int
     target: Literal['hero', 'creature', 'enemy'] = 'creature'
     scope: Literal['single', 'cleave', 'all'] = 'single'
-    damage_type: Literal["physical", "spell"] = "physical"
+    damage_type: Literal["physical", "spell"] = "spell"
 
 
 class HealAction(ActionBase):
@@ -48,13 +48,20 @@ class TempManaBoostAction(ActionBase):
     target: Literal['hero', 'creature', 'friendly'] = 'hero'
 
 
+class SummonAction(ActionBase):
+    action: Literal['summon'] = 'summon'
+    target: str
+
+
 Action = Annotated[
     Union[
         DrawAction,
         DamageAction,
         HealAction,
         RemoveAction,
-        TempManaBoostAction],
+        TempManaBoostAction,
+        SummonAction,
+    ],
     Discriminator('action')
 ]
 

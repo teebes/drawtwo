@@ -22,6 +22,7 @@ class DamageEvent(EventBase):
     # Whether the target should attempt to retaliate. Mostly used to disable
     # retaliation in the case of retaliation to avoid an infinite loop.
     retaliate: bool = True
+    is_retaliation: bool = False
 
 
 class DrawEvent(EventBase):
@@ -100,8 +101,15 @@ class RemoveEvent(EventBase):
 
 class TempManaBoostEvent(EventBase):
     type: Literal["event_temp_mana_boost"] = "event_temp_mana_boost"
-
     amount: int
+
+
+class SummonEvent(EventBase):
+    type: Literal["event_summon"] = "event_summon"
+    source_type: Literal["card"] = "card"
+    source_id: str
+    target_type: Literal["card"] = "card"
+    target_id: str
 
 
 Event = Annotated[
@@ -115,6 +123,7 @@ Event = Annotated[
         NewPhaseEvent,
         PlayEvent,
         RemoveEvent,
+        SummonEvent,
         TempManaBoostEvent,
         UseHeroEvent,
     ],

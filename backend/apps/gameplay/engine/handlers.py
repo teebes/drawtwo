@@ -16,8 +16,9 @@ from apps.gameplay.schemas.effects import (
     PlayEffect,
     RemoveEffect,
     StartGameEffect,
-    UseHeroEffect,
+    SummonEffect,
     TempManaBoostEffect,
+    UseHeroEffect,
 )
 from apps.gameplay.schemas.events import (
     CreatureDeathEvent,
@@ -29,6 +30,7 @@ from apps.gameplay.schemas.events import (
     NewPhaseEvent,
     PlayEvent,
     RemoveEvent,
+    SummonEvent,
     TempManaBoostEvent,
     UseHeroEvent,
 )
@@ -179,7 +181,8 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
         source_id=effect.source_id,
         target_type=effect.target_type,
         target_id=effect.target_id,
-        damage=effect.damage
+        damage=effect.damage,
+        is_retaliation=effect.is_retaliation,
     )]
 
     if target_type == "hero":
@@ -205,8 +208,6 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
                 source_type=effect.source_type,
                 source_id=effect.source_id,
                 creature=target,
-                # killer_type=effect.source_type,
-                # killer_id=effect.source_id,
                 target_type=effect.target_type,
                 target_id=effect.target_id,
             ))
@@ -217,6 +218,7 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
                 effect.retaliate
                 and effect.damage_type == "physical"
                 and (target_type == "card" or target_type == "creature")
+                and effect.source_type != "card"
             )
 
             # Ranged trait doesn't get retaliated against
@@ -240,7 +242,8 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
                     target_type=effect.source_type,
                     target_id=effect.source_id,
                     damage=target.attack,
-                    retaliate=False
+                    retaliate=False,
+                    is_retaliation=True
                 ))
 
     return Success(
@@ -590,3 +593,51 @@ def temp_mana_boost(effect: TempManaBoostEffect, state: GameState) -> Result:
         events=[
             TempManaBoostEvent(side=effect.side, amount=effect.amount)
         ])
+
+@register("effect_summon")
+def summon(effect: SummonEffect, state: GameState) -> Result:
+    card_slug = effect.target
+
+    # Look up the card template from state
+    if card_slug not in state.summonable_cards:
+        return Rejected(reason=f"Card '{card_slug}' not found in summonable cards")
+
+    template = state.summonable_cards[card_slug]
+
+    # Summon only works for creatures
+    if template.card_type != 'creature':
+        return Rejected(reason=f"Cannot summon non-creature card '{card_slug}'")
+
+    # Create a new card instance with a unique card_id
+    card_id = max((int(cid) for cid in state.cards.keys()), default=0) + 1
+    card = CardInPlay(
+        card_type=template.card_type,
+        card_id=str(card_id),
+        template_slug=template.template_slug,
+        name=template.name,
+        description=template.description,
+        attack=template.attack,
+        health=template.health,
+        cost=template.cost,
+        traits=template.traits,
+        exhausted=True,
+        art_url=template.art_url,
+    )
+
+    # Add the card to the game state
+    state.cards[str(card_id)] = card
+
+    # Spawn the creature on the board at position 0 (leftmost)
+    # Summons always go to the side of the source card
+    spawn_creature(card, state, effect.side, position=0)
+
+    return Success(
+        new_state=state,
+        events=[SummonEvent(
+            side=effect.side,
+            source_type="card",
+            source_id=effect.source_id,
+            target_type="card",
+            target_id=card.card_id,
+        )]
+    )

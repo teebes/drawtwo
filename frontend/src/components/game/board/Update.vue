@@ -77,6 +77,28 @@
         <!-- <span class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">⬇️</span> -->
     </div>
 
+    <!-- Summon -->
+    <div class="game-update flex items-center" v-else-if="props.update.type === 'update_summon'">
+        <UpdateEntity
+            v-if="source && gameStore.viewer"
+            :name="source.name"
+            :art_url="'art_url' in source ? source.art_url : null"
+            :class="isViewerTurn ? 'border-green-500' : 'border-red-500'"
+        />
+        <div class="flex items-center mx-2">
+            <div class="bg-purple-500 text-white font-bold px-3 py-1 rounded-lg shadow-md flex items-center gap-1.5">
+                <span class="text-sm">✨</span>
+                <span class="text-xs">→</span>
+            </div>
+        </div>
+        <UpdateEntity
+            v-if="target && gameStore.viewer"
+            :name="target.name"
+            :art_url="'art_url' in target ? target.art_url : null"
+            :class="isViewerTurn ? 'border-green-500' : 'border-red-500'"
+        />
+    </div>
+
     <div class="game-update" v-else>
         {{ updateText(props.update) }}
     </div>
@@ -192,6 +214,21 @@ const updateText = (update: any) => {
         return `${side_name} ${source_name} > ${target_name} (+${update.amount})`;
     }
 
+    if (update.type === "update_summon") {
+        let source_name = '';
+        if (update.source_type === "card") {
+            const card = gameStore.getCard(update.source_id);
+            source_name = card?.name || 'a card';
+        }
+
+        let target_name = '';
+        if (update.target_type === "card") {
+            const card = gameStore.getCard(update.target_id);
+            target_name = card?.name || 'a card';
+        }
+
+        return `${side_name} ${source_name} summons ${target_name}`;
+    }
 
     return `${update.side} - ${update.type}`
 }

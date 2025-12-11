@@ -272,7 +272,9 @@ export const useGameStore = defineStore('game', {
           'update_play_card',
           'update_end_turn',
           'update_damage',
-          'update_heal']
+          'update_heal',
+          'update_summon',
+        ]
 
         if (display_types.includes(update.type)) {
           return true

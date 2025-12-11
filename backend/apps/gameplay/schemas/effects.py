@@ -48,6 +48,7 @@ class DamageEffect(EffectBase):
     # Whether the target should attempt to retaliate. Mostly used to disable
     # retaliation in the case of retaliation to avoid an infinite loop.
     retaliate: bool = True
+    is_retaliation: bool = False
 
 
 class CardRetaliationEffect(EffectBase):
@@ -124,6 +125,13 @@ class TempManaBoostEffect(EffectBase):
     amount: int
 
 
+class SummonEffect(EffectBase):
+    type: Literal["effect_summon"] = "effect_summon"
+    source_type: Literal["card"] = "card"
+    source_id: str
+    target: str
+
+
 Effect = Annotated[
     Union[
         AttackEffect,
@@ -137,6 +145,7 @@ Effect = Annotated[
         PlayEffect,
         RemoveEffect,
         StartGameEffect,
+        SummonEffect,
         TempManaBoostEffect,
         UseHeroEffect,
     ],

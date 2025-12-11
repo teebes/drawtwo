@@ -192,9 +192,9 @@ class TestDamage(GamePlayTestBase):
         self.assertTrue(isinstance(result, Success))
         self.assertEqual(result.new_state.heroes['side_b'].health, 9)
 
-    def test_hero_power_creature_retaliation(self):
+    def test_hero_power_creature_physical_retaliation(self):
         """
-        Test that when a hero uses a power to damage a creature,
+        Test that when a hero uses a power to damage a creature with physical damage,
         the creature retaliates against the hero.
         """
         # Set up hero with the specified power
@@ -206,6 +206,7 @@ class TestDamage(GamePlayTestBase):
                     action="damage",
                     amount=2,
                     target="enemy",
+                    damage_type="physical",
                 )
             ],
             description="Deal 2 damage to an enemy.",
