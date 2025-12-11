@@ -16,8 +16,9 @@ from apps.gameplay.schemas.effects import (
     PlayEffect,
     RemoveEffect,
     StartGameEffect,
-    UseHeroEffect,
+    SummonEffect,
     TempManaBoostEffect,
+    UseHeroEffect,
 )
 from apps.gameplay.schemas.events import (
     CreatureDeathEvent,
@@ -29,6 +30,7 @@ from apps.gameplay.schemas.events import (
     NewPhaseEvent,
     PlayEvent,
     RemoveEvent,
+    SummonEvent,
     TempManaBoostEvent,
     UseHeroEvent,
 )
@@ -590,3 +592,51 @@ def temp_mana_boost(effect: TempManaBoostEffect, state: GameState) -> Result:
         events=[
             TempManaBoostEvent(side=effect.side, amount=effect.amount)
         ])
+
+@register("effect_summon")
+def summon(effect: SummonEffect, state: GameState) -> Result:
+    card_slug = effect.target
+
+    # Look up the card template from state
+    if card_slug not in state.summonable_cards:
+        return Rejected(reason=f"Card '{card_slug}' not found in summonable cards")
+
+    template = state.summonable_cards[card_slug]
+
+    # Summon only works for creatures
+    if template.card_type != 'creature':
+        return Rejected(reason=f"Cannot summon non-creature card '{card_slug}'")
+
+    # Create a new card instance with a unique card_id
+    card_id = max((int(cid) for cid in state.cards.keys()), default=0) + 1
+    card = CardInPlay(
+        card_type=template.card_type,
+        card_id=str(card_id),
+        template_slug=template.template_slug,
+        name=template.name,
+        description=template.description,
+        attack=template.attack,
+        health=template.health,
+        cost=template.cost,
+        traits=template.traits,
+        exhausted=True,
+        art_url=template.art_url,
+    )
+
+    # Add the card to the game state
+    state.cards[str(card_id)] = card
+
+    # Spawn the creature on the board at position 0 (leftmost)
+    # Summons always go to the side of the source card
+    spawn_creature(card, state, effect.side, position=0)
+
+    return Success(
+        new_state=state,
+        events=[SummonEvent(
+            side=effect.side,
+            source_type="card",
+            source_id=effect.source_id,
+            target_type="card",
+            target_id=card.card_id,
+        )]
+    )

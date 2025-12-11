@@ -82,12 +82,12 @@
                 :class="[
                   'cursor-pointer rounded-lg border-2 p-4 transition-colors',
                   selectedPlayerDeck?.id === deck.id
-                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                    : 'border-gray-200 hover:border-primary-300 dark:border-gray-700'
+                    ? 'border-secondary-500 bg-secondary-50 dark:bg-secondary-900/20'
+                    : 'border-gray-200 hover:border-secondary-300 dark:border-gray-700'
                 ]"
               >
                 <div class="flex items-center space-x-3">
-                  <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-100 text-sm font-bold text-primary-600">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary-100 text-sm font-bold text-secondary-600">
                     {{ deck.hero.name.charAt(0) }}
                   </div>
                   <div class="flex-1">
@@ -96,7 +96,7 @@
                       {{ deck.hero.name }} • {{ deck.card_count }} cards
                     </div>
                   </div>
-                  <div v-if="selectedPlayerDeck?.id === deck.id" class="text-primary-600">
+                  <div v-if="selectedPlayerDeck?.id === deck.id" class="text-secondary-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                     </svg>

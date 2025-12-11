@@ -40,6 +40,9 @@
                     </div>
                   </div>
                 </div>
+                <div class="text-sm text-gray-500 dark:text-gray-400 font-medium">
+                  {{ deck.card_count }} {{ deck.card_count === 1 ? 'card' : 'cards' }}
+                </div>
               </router-link>
 
               <div class="pt-2 border-t border-gray-200 dark:border-gray-700">

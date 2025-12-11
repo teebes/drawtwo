@@ -48,13 +48,20 @@ class TempManaBoostAction(ActionBase):
     target: Literal['hero', 'creature', 'friendly'] = 'hero'
 
 
+class SummonAction(ActionBase):
+    action: Literal['summon'] = 'summon'
+    target: str
+
+
 Action = Annotated[
     Union[
         DrawAction,
         DamageAction,
         HealAction,
         RemoveAction,
-        TempManaBoostAction],
+        TempManaBoostAction,
+        SummonAction,
+    ],
     Discriminator('action')
 ]
 

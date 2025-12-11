@@ -15,7 +15,9 @@ from apps.builder.schemas import (
     DrawAction,
     DamageAction,
     HealAction,
+    HeroPower,
     RemoveAction,
+    SummonAction,
     TitleConfig,
     TempManaBoostAction,
 )
@@ -44,6 +46,7 @@ from apps.gameplay.schemas.effects import (
     PlayEffect,
     RemoveEffect,
     StartGameEffect,
+    SummonEffect,
     TempManaBoostEffect,
     UseHeroEffect,
 )
@@ -52,7 +55,6 @@ from apps.gameplay.schemas.events import (
     ActionableEvent,
     Event,
     GameOverEvent,
-    UseHeroEvent,
 )
 
 
@@ -132,7 +134,7 @@ class GameService:
                 cards_in_play[str(card_id)] = GameService.get_card_in_play(card, card_id)
                 decks['side_b'].append(str(card_id))
 
-                # Get the side b compensation card if it exists
+        # Get the side b compensation card if it exists
         comp_card = None
         if config.side_b_compensation:
             card = CardTemplate.objects.get(
@@ -146,6 +148,46 @@ class GameService:
         # shuffle both decks
         random.shuffle(decks['side_a'])
         random.shuffle(decks['side_b'])
+
+        # Collect all summonable card slugs from cards and heroes
+        summonable_slugs = set()
+
+        # Scan all cards in play for summon actions
+        for card in cards_in_play.values():
+            for trait in card.traits:
+                for action in trait.actions:
+                    if isinstance(action, SummonAction):
+                        summonable_slugs.add(action.target)
+
+        # Scan hero powers for summon actions
+        for hero_template in [deck_a.hero, deck_b.hero]:
+            # Convert hero_power dict to HeroPower model
+            hero_power = HeroPower.model_validate(hero_template.hero_power)
+            for action in hero_power.actions:
+                if isinstance(action, SummonAction):
+                    summonable_slugs.add(action.target)
+
+        # Load and store the summonable card templates
+        summonable_cards = {}
+        for slug in summonable_slugs:
+            try:
+                card_template = CardTemplate.objects.get(slug=slug, is_latest=True)
+                card_schema = to_card_schema(card_template)
+                # Create a CardInPlay template (card_id will be assigned when summoned)
+                summonable_cards[slug] = CardInPlay(
+                    card_type=card_schema.card_type,
+                    card_id="",  # Placeholder, will be assigned during summon
+                    template_slug=slug,
+                    name=card_schema.name,
+                    description=card_schema.description,
+                    attack=card_schema.attack,
+                    health=card_schema.health,
+                    cost=card_schema.cost,
+                    traits=card_schema.traits,
+                    art_url=card_schema.art_url,
+                )
+            except CardTemplate.DoesNotExist:
+                logger.warning(f"Summonable card with slug '{slug}' not found")
 
         heroes = {
             'side_a': HeroInPlay(
@@ -195,6 +237,7 @@ class GameService:
             decks=decks,
             ai_sides=ai_sides,
             config=config,
+            summonable_cards=summonable_cards,
         )
 
         game = Game.objects.create(
@@ -699,6 +742,16 @@ class GameService:
                 )
             ]
 
+        if isinstance(action, SummonAction):
+            return [
+                SummonEffect(
+                    side=event.side,
+                    source_type=event.source_type,
+                    source_id=event.source_id,
+                    target=action.target,
+                )
+            ]
+
         raise ValueError(f"Invalid action: {action}")
 
 
@@ -805,6 +858,7 @@ class GameService:
             DamageUpdate,
             HealUpdate,
             TempManaBoostUpdate,
+            SummonUpdate,
         )
 
         updates = []
@@ -849,6 +903,14 @@ class GameService:
                 updates.append(TempManaBoostUpdate(
                     side=event.side,
                     amount=event.amount,
+                ))
+            elif event.type == "event_summon":
+                updates.append(SummonUpdate(
+                    side=event.side,
+                    source_type=event.source_type,
+                    source_id=event.source_id,
+                    target_type=event.target_type,
+                    target_id=event.target_id,
                 ))
             elif event.type == "event_game_over":
                 updates.append(GameOverUpdate(

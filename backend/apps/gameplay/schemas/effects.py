@@ -124,6 +124,13 @@ class TempManaBoostEffect(EffectBase):
     amount: int
 
 
+class SummonEffect(EffectBase):
+    type: Literal["effect_summon"] = "effect_summon"
+    source_type: Literal["card"] = "card"
+    source_id: str
+    target: str
+
+
 Effect = Annotated[
     Union[
         AttackEffect,
@@ -137,6 +144,7 @@ Effect = Annotated[
         PlayEffect,
         RemoveEffect,
         StartGameEffect,
+        SummonEffect,
         TempManaBoostEffect,
         UseHeroEffect,
     ],
