@@ -24,6 +24,7 @@ import Board from '../views/Board.vue'
 import Friends from '../views/Friends.vue'
 import PrivacyPolicy from '../views/PrivacyPolicy.vue'
 import TermsOfService from '../views/TermsOfService.vue'
+import Howto from '../views/Howto.vue'
 import Games from '../views/Games.vue'
 
 const routes = [
@@ -43,6 +44,12 @@ const routes = [
     path: '/terms',
     name: 'TermsOfService',
     component: TermsOfService,
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/howto',
+    name: 'Howto',
+    component: Howto,
     meta: { requiresAuth: false }
   },
   {

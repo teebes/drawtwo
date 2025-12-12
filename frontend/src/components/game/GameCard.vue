@@ -208,7 +208,7 @@ const active_classes = computed(() => {
     const classes: string[] = []
 
     if (props.active) {
-        classes.push('!border-yellow-500')
+        classes.push('!border-primary-500')
     }
 
     // Add special styling for stealth creatures

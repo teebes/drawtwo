@@ -70,7 +70,6 @@
                             <GameCard v-if="creature"
                                       class="cursor-pointer"
                                       :card="creature"
-                                      :title-slug="titleStore.titleSlug ?? undefined"
                                       @click="handleClickOpposingCreature(creature.creature_id)"
                                       compact in_lane/>
                         </div>
@@ -146,7 +145,6 @@
                             <GameCard v-if="get_card(card_id)"
                                 class="cursor-pointer"
                                 :card="get_card(card_id)!"
-                                :title-slug="titleStore.titleSlug ?? undefined"
                                 :active="isHandCardActive(card_id)"
                                 @click="handleClickHandCard(card_id)"
                                 compact />

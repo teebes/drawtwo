@@ -15,7 +15,7 @@
             <div class="text-white font-bold">{{ health }}</div>
         </div>
         <!-- Turn indicator border -->
-        <div v-if="active" class="absolute inset-0 border-4 border-yellow-500 z-20 pointer-events-none"></div>
+        <div v-if="active" class="absolute inset-0 border-4 border-primary-500 z-20 pointer-events-none"></div>
     </div>
 </template>
 

@@ -87,6 +87,8 @@
 
         </div>
 
+        <Howto />
+
       </main>
     </div>
 
@@ -102,6 +104,7 @@ import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
 import TitleNotifications from '../components/title/TitleNotifications.vue'
 import type { Notification } from '../types/notification'
+import Howto from './Howto.vue'
 
 interface DeckApiData {
   id: number

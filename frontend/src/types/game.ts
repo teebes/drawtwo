@@ -30,6 +30,7 @@ export interface CardInPlay {
   cost: number
   traits: Trait[]
   exhausted: boolean
+  art_url?: string | null
 }
 
 export interface Creature {
