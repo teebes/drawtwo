@@ -98,6 +98,15 @@ class SummonUpdate(UpdateBase):
     target_type: Literal["card"] = "card"
     target_id: str
 
+
+class RemoveUpdate(UpdateBase):
+    type: Literal["update_remove"] = "update_remove"
+    source_type: Literal["card", "hero", "board", "creature"] = "card"
+    source_id: str
+    target_type: Literal["creature"] = "creature"
+    target_id: str
+
+
 GameUpdate = Annotated[
     Union[
         CardDamageUpdate,
@@ -112,6 +121,7 @@ GameUpdate = Annotated[
         DrawCardUpdate,
         PlayCardUpdate,
         RefreshPhaseUpdate,
+        RemoveUpdate,
         SummonUpdate,
         TempManaBoostUpdate,
     ],

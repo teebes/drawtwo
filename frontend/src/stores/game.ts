@@ -274,6 +274,7 @@ export const useGameStore = defineStore('game', {
           'update_damage',
           'update_heal',
           'update_summon',
+          'update_remove',
         ]
 
         if (display_types.includes(update.type)) {

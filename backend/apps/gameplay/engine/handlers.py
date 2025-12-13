@@ -579,9 +579,6 @@ def remove(effect: RemoveEffect, state: GameState) -> Result:
     # Remove the creature from the board
     state.board[opposing_side].remove(effect.target_id)
 
-    # Remove from creatures dict
-    del state.creatures[effect.target_id]
-
     # Emit RemoveEvent (does NOT trigger deathrattle)
     events.append(RemoveEvent(
         side=effect.side,

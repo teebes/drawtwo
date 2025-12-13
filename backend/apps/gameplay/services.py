@@ -877,8 +877,9 @@ class GameService:
             GameOverUpdate,
             DamageUpdate,
             HealUpdate,
-            TempManaBoostUpdate,
+            RemoveUpdate,
             SummonUpdate,
+            TempManaBoostUpdate,
         )
 
         updates = []
@@ -918,6 +919,14 @@ class GameService:
                     target_type=event.target_type,
                     target_id=event.target_id,
                     amount=event.amount,
+                ))
+            elif event.type == "event_remove":
+                updates.append(RemoveUpdate(
+                    side=event.side,
+                    source_type=event.source_type,
+                    source_id=event.source_id,
+                    target_type=event.target_type,
+                    target_id=event.target_id,
                 ))
             elif event.type == "event_temp_mana_boost":
                 updates.append(TempManaBoostUpdate(
