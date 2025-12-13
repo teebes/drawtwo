@@ -136,10 +136,18 @@ class SummonEffect(EffectBase):
     target: str
 
 
+class ClearEffect(EffectBase):
+    type: Literal["effect_clear"] = "effect_clear"
+    source_type: Literal["card", "hero"] = "card"
+    source_id: str
+    target: Literal["both", "own", "opponent"] = "both"
+
+
 Effect = Annotated[
     Union[
         AttackEffect,
         CastEffect,
+        ClearEffect,
         ConcedeEffect,
         DamageEffect,
         DrawEffect,

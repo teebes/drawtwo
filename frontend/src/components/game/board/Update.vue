@@ -252,6 +252,25 @@ const updateText = (update: any) => {
         return `${side_name} ${source_name} summons ${target_name}`;
     }
 
+    if (update.type === "update_clear") {
+        let source_name = '';
+        if (update.source_type === "card") {
+            const card = gameStore.getCard(update.source_id);
+            source_name = card?.name || 'a card';
+        } else if (update.source_type === "hero") {
+            if (update.source_id === hero.hero_id)
+                source_name = hero.name;
+            else
+                source_name = opposite_hero.name;
+        }
+
+        const target_text = update.target === 'both' ? 'all creatures' :
+                           update.target === 'opponent' ? 'enemy board' :
+                           'own board';
+
+        return `${side_name} ${source_name} clears ${target_text}`;
+    }
+
     return `${update.side} - ${update.type}`
 }
 

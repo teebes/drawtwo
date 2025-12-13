@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 from apps.builder.models import CardTemplate
 from apps.builder.schemas import (
     Action,
+    ClearAction,
     DeckScript,
     DrawAction,
     DamageAction,
@@ -39,6 +40,7 @@ from apps.gameplay.schemas.commands import (
 )
 from apps.gameplay.schemas.effects import (
     AttackEffect,
+    ClearEffect,
     ConcedeEffect,
     DamageEffect,
     DrawEffect,
@@ -772,6 +774,16 @@ class GameService:
                 )
             ]
 
+        if isinstance(action, ClearAction):
+            return [
+                ClearEffect(
+                    side=event.side,
+                    source_type=source_type,
+                    source_id=source_id,
+                    target=action.target,
+                )
+            ]
+
         raise ValueError(f"Invalid action: {action}")
 
 
@@ -871,6 +883,7 @@ class GameService:
         In the future, this could handle more complex transformations.
         """
         from apps.gameplay.schemas.updates import (
+            ClearUpdate,
             DrawCardUpdate,
             EndTurnUpdate,
             PlayCardUpdate,
@@ -940,6 +953,21 @@ class GameService:
                     source_id=event.source_id,
                     target_type=event.target_type,
                     target_id=event.target_id,
+                ))
+            elif event.type == "event_clear":
+                # Get cleared creature IDs from the state before the event
+                opposing_side = "side_b" if event.side == "side_a" else "side_a"
+                cleared_creature_ids = []
+                # We need to figure out which creatures were cleared
+                # For now, we'll rely on the event having this info or deduce from sides
+                # Since the event doesn't carry this info, we'll leave it empty
+                # The frontend can deduce which creatures disappeared from the state
+                updates.append(ClearUpdate(
+                    side=event.side,
+                    source_type=event.source_type,
+                    source_id=event.source_id,
+                    target=event.target,
+                    cleared_creature_ids=[],  # Frontend will detect from state diff
                 ))
             elif event.type == "event_game_over":
                 updates.append(GameOverUpdate(

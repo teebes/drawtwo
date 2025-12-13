@@ -107,10 +107,19 @@ class RemoveUpdate(UpdateBase):
     target_id: str
 
 
+class ClearUpdate(UpdateBase):
+    type: Literal["update_clear"] = "update_clear"
+    source_type: Literal["card", "hero"] = "card"
+    source_id: str
+    target: Literal["both", "own", "opponent"] = "both"
+    cleared_creature_ids: list[str]
+
+
 GameUpdate = Annotated[
     Union[
         CardDamageUpdate,
         CardDestroyedUpdate,
+        ClearUpdate,
         DamageUpdate,
         HealUpdate,
         HeroDamageUpdate,

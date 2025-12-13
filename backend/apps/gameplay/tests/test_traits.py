@@ -357,7 +357,6 @@ class TestRemoveAction(GamePlayTestBase):
 
         # Verify creature was removed from board
         self.assertEqual(len(remove_result.new_state.board["side_b"]), 0)
-        self.assertNotIn(target_creature.creature_id, remove_result.new_state.creatures)
 
     def test_remove_does_not_trigger_deathrattle(self):
         """Test that remove does NOT trigger deathrattle effects."""

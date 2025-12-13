@@ -53,14 +53,20 @@ class SummonAction(ActionBase):
     target: str
 
 
+class ClearAction(ActionBase):
+    action: Literal['clear'] = 'clear'
+    target: Literal['both', 'own', 'opponent'] = 'both'
+
+
 Action = Annotated[
     Union[
+        ClearAction,
         DrawAction,
         DamageAction,
         HealAction,
         RemoveAction,
-        TempManaBoostAction,
         SummonAction,
+        TempManaBoostAction,
     ],
     Discriminator('action')
 ]

@@ -112,8 +112,16 @@ class SummonEvent(EventBase):
     target_id: str
 
 
+class ClearEvent(EventBase):
+    type: Literal["event_clear"] = "event_clear"
+    source_type: Literal["card", "hero"] = "card"
+    source_id: str
+    target: Literal["both", "own", "opponent"] = "both"
+
+
 Event = Annotated[
     Union[
+        ClearEvent,
         CreatureDeathEvent,
         DamageEvent,
         DrawEvent,

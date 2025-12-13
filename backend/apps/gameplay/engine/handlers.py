@@ -7,6 +7,7 @@ from apps.builder.schemas import Action
 from apps.gameplay.engine.dispatcher import register
 from apps.gameplay.schemas.effects import (
     AttackEffect,
+    ClearEffect,
     ConcedeEffect,
     DamageEffect,
     EndTurnEffect,
@@ -22,6 +23,7 @@ from apps.gameplay.schemas.effects import (
     UseHeroEffect,
 )
 from apps.gameplay.schemas.events import (
+    ClearEvent,
     CreatureDeathEvent,
     DamageEvent,
     DrawEvent,
@@ -649,4 +651,52 @@ def summon(effect: SummonEffect, state: GameState) -> Result:
             target_type="card",
             target_id=card.card_id,
         )]
+    )
+
+
+@register("effect_clear")
+def clear(effect: ClearEffect, state: GameState) -> Result:
+    """
+    Clear effect handler - removes all creatures from the board(s) without triggering deathrattle.
+
+    This is similar to remove but affects all creatures on one or both sides of the board.
+    The 'target' parameter determines which side(s) are cleared:
+    - 'both': Clear all creatures on both sides (default)
+    - 'own': Clear all creatures on the caster's side
+    - 'opponent': Clear all creatures on the opponent's side
+    """
+    events = []
+    cleared_creature_ids = []
+
+    # Determine which sides to clear
+    opposing_side = "side_b" if effect.side == "side_a" else "side_a"
+
+    sides_to_clear = []
+    if effect.target == "both":
+        sides_to_clear = [effect.side, opposing_side]
+    elif effect.target == "own":
+        sides_to_clear = [effect.side]
+    elif effect.target == "opponent":
+        sides_to_clear = [opposing_side]
+
+    # Clear all creatures from the specified sides
+    for side in sides_to_clear:
+        # Get a copy of the creature IDs before clearing (to avoid modifying list while iterating)
+        creature_ids = state.board[side].copy()
+        for creature_id in creature_ids:
+            state.board[side].remove(creature_id)
+            cleared_creature_ids.append(creature_id)
+
+    # Emit ClearEvent
+    events.append(ClearEvent(
+        side=effect.side,
+        source_type=effect.source_type,
+        source_id=effect.source_id,
+        target=effect.target,
+    ))
+
+    return Success(
+        new_state=state,
+        events=events,
+        child_effects=[]
     )
