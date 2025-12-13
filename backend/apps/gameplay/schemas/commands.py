@@ -39,9 +39,14 @@ class EndTurnCommand(CommandBase):
     type: Literal["cmd_end_turn"] = "cmd_end_turn"
 
 
+class ConcedeCommand(CommandBase):
+    type: Literal["cmd_concede"] = "cmd_concede"
+
+
 Command = Annotated[
     Union[
         AttackCommand,
+        ConcedeCommand,
         EndTurnCommand,
         PlayCardCommand,
         UseHeroCommand,

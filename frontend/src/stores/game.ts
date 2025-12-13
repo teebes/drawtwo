@@ -442,6 +442,14 @@ export const useGameStore = defineStore('game', {
       })
     },
 
+    concedeGame(): void {
+      if (this.gameOver.isGameOver) return
+
+      this.sendWebSocketMessage({
+        type: 'cmd_concede',
+      })
+    },
+
     playCard(
       cardId: string | number,
       position?: number,

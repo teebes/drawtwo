@@ -32,12 +32,14 @@ from apps.gameplay.schemas.game import (
 from apps.gameplay.schemas.commands import (
     AttackCommand,
     Command,
+    ConcedeCommand,
     PlayCardCommand,
     EndTurnCommand,
     UseHeroCommand,
 )
 from apps.gameplay.schemas.effects import (
     AttackEffect,
+    ConcedeEffect,
     DamageEffect,
     DrawEffect,
     Effect,
@@ -433,12 +435,17 @@ class GameService:
     def compile_cmd(game_state: GameState, command: dict, side) -> list[Effect]:
         "Translates a Command into a list of Effect objects"
 
-        if side != game_state.active:
-            raise ValueError(f"It is not your turn.")
-
         effects = []
 
         command = TypeAdapter(Command).validate_python(command)
+
+        # Allow concede at any time, regardless of whose turn it is
+        if isinstance(command, ConcedeCommand):
+            effects.append(ConcedeEffect(side=side))
+            return effects
+
+        if side != game_state.active:
+            raise ValueError(f"It is not your turn.")
 
         # Because we're transitioning to a system where the cards on the
         # board are creatures and not just cards, we make the transition

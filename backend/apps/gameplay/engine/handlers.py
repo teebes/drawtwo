@@ -7,6 +7,7 @@ from apps.builder.schemas import Action
 from apps.gameplay.engine.dispatcher import register
 from apps.gameplay.schemas.effects import (
     AttackEffect,
+    ConcedeEffect,
     DamageEffect,
     EndTurnEffect,
     DrawEffect,
@@ -472,6 +473,17 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
         child_effects=child_effects,
         events=[use_hero_event]
     )
+
+@register("effect_concede")
+def concede(effect: ConcedeEffect, state: GameState) -> Result:
+    # The player who conceded loses, so the opposing side wins
+    opposing_side = "side_b" if effect.side == "side_a" else "side_a"
+
+    return Success(
+        new_state=state,
+        events=[GameOverEvent(side=effect.side, winner=opposing_side)]
+    )
+
 
 @register("effect_end_turn")
 def end_turn(effect: EndTurnEffect, state: GameState) -> Result:

@@ -208,24 +208,14 @@
             />
 
             <!-- Menu Overlay -->
-            <div v-if="overlay === 'menu'">
-                <div class="flex flex-col items-center justify-center space-y-8 my-8">
-                    <div class="text-2xl cursor-pointer hover:text-gray-400" @click="handleClickUpdates">
-                        Updates
-                    </div>
-
-                    <div v-if="canEditTitle" class="text-2xl cursor-pointer hover:text-gray-400" @click="handleClickDebug">
-                        Debug
-                    </div>
-
-                    <div class="text-2xl">
-                        <router-link :to="{ name: 'Title', params: { slug: titleStore.titleSlug } }"
-                                     class="hover:text-gray-400">
-                            Exit Game
-                        </router-link>
-                    </div>
-                </div>
-            </div>
+            <GameMenu
+                v-if="overlay === 'menu'"
+                :can-edit-title="canEditTitle ?? false"
+                :title-slug="titleStore.titleSlug ?? undefined"
+                :game-over="gameOver.isGameOver"
+                @click-updates="handleClickUpdates"
+                @click-debug="handleClickDebug"
+            />
 
             <!-- Updates Overlay -->
             <div v-if="overlay === 'updates'" class="flex-1 min-h-0">
@@ -269,6 +259,7 @@ import UpdatesList from '../components/game/board/UpdatesList.vue'
 import OverlayHeader from '../components/game/board/OverlayHeader.vue'
 import DebugOverlay from '../components/game/board/DebugOverlay.vue'
 import Hero from '../components/game/board/Hero.vue'
+import GameMenu from '../components/game/board/GameMenu.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()

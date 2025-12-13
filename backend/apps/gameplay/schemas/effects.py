@@ -35,6 +35,10 @@ class EndTurnEffect(EffectBase):
     type: Literal["effect_end_turn"] = "effect_end_turn"
 
 
+class ConcedeEffect(EffectBase):
+    type: Literal["effect_concede"] = "effect_concede"
+
+
 # ==== Command / Action driven Effects ====
 
 class DamageEffect(EffectBase):
@@ -136,6 +140,7 @@ Effect = Annotated[
     Union[
         AttackEffect,
         CastEffect,
+        ConcedeEffect,
         DamageEffect,
         DrawEffect,
         EndTurnEffect,
