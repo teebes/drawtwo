@@ -3,6 +3,7 @@ Tests for trait processing and effects.
 """
 from apps.builder.schemas import (
     Battlecry,
+    BuffAction,
     Charge,
     DamageAction,
     DrawAction,
@@ -456,3 +457,185 @@ class TestRemoveAction(GamePlayTestBase):
 
         # Verify all creatures were removed
         self.assertEqual(len(new_state.board["side_b"]), 0)
+
+
+class TestBuffAction(GamePlayTestBase):
+    """Tests for the Buff action (buffs creature stats)."""
+
+    def test_battlecry_buff_attack_single(self):
+        """Test buff action targeting a single creature's attack."""
+        # Create a target creature on the same side
+        target_card = CardInPlay(
+            card_type="creature",
+            card_id="target_1",
+            template_slug="target-card",
+            name="Target Card",
+            attack=2,
+            health=3,
+            cost=2,
+            traits=[],
+        )
+        target_creature = spawn_creature(
+            card=target_card,
+            state=self.game_state,
+            side="side_a",
+        )
+        self.game_state.board["side_a"] = [target_creature.creature_id]
+
+        # Create battlecry card with buff attack action
+        buff_card = CardInPlay(
+            card_type="creature",
+            card_id="buffer",
+            template_slug="buffer-card",
+            name="Buffer Card",
+            attack=1,
+            health=1,
+            cost=3,
+            traits=[Battlecry(actions=[BuffAction(attribute="attack", amount=2, target="creature", scope="single")])],
+        )
+        self.game_state.cards["buffer"] = buff_card
+
+        # Create play event targeting the creature
+        play_event = PlayEvent(
+            side="side_a",
+            source_type="card",
+            source_id="buffer",
+            position=0,
+            target_type="creature",
+            target_id=target_creature.creature_id,
+        )
+
+        # Process battlecry
+        result = traits.apply(self.game_state, play_event)
+        self.assertEqual(len(result.child_effects), 1)
+        self.assertEqual(result.child_effects[0].type, "effect_buff")
+        self.assertEqual(result.child_effects[0].attribute, "attack")
+        self.assertEqual(result.child_effects[0].amount, 2)
+
+        # Resolve the buff effect
+        resolve_result = resolve(result.child_effects[0], self.game_state)
+        new_state = resolve_result.new_state
+
+        # Verify the creature's attack was buffed
+        buffed_creature = new_state.creatures[target_creature.creature_id]
+        self.assertEqual(buffed_creature.attack, 4)  # 2 + 2
+        self.assertEqual(buffed_creature.attack_max, 4)  # max should also increase
+        self.assertEqual(buffed_creature.health, 3)  # health unchanged
+
+    def test_battlecry_buff_health_single(self):
+        """Test buff action targeting a single creature's health."""
+        # Create a target creature on the same side
+        target_card = CardInPlay(
+            card_type="creature",
+            card_id="target_2",
+            template_slug="target-card-2",
+            name="Target Card 2",
+            attack=2,
+            health=3,
+            cost=2,
+            traits=[],
+        )
+        target_creature = spawn_creature(
+            card=target_card,
+            state=self.game_state,
+            side="side_a",
+        )
+        self.game_state.board["side_a"] = [target_creature.creature_id]
+
+        # Create battlecry card with buff health action
+        buff_card = CardInPlay(
+            card_type="creature",
+            card_id="health_buffer",
+            template_slug="health-buffer-card",
+            name="Health Buffer Card",
+            attack=1,
+            health=1,
+            cost=3,
+            traits=[Battlecry(actions=[BuffAction(attribute="health", amount=3, target="creature", scope="single")])],
+        )
+        self.game_state.cards["health_buffer"] = buff_card
+
+        # Create play event targeting the creature
+        play_event = PlayEvent(
+            side="side_a",
+            source_type="card",
+            source_id="health_buffer",
+            position=0,
+            target_type="creature",
+            target_id=target_creature.creature_id,
+        )
+
+        # Process battlecry
+        result = traits.apply(self.game_state, play_event)
+        self.assertEqual(len(result.child_effects), 1)
+        self.assertEqual(result.child_effects[0].type, "effect_buff")
+
+        # Resolve the buff effect
+        resolve_result = resolve(result.child_effects[0], self.game_state)
+        new_state = resolve_result.new_state
+
+        # Verify the creature's health was buffed
+        buffed_creature = new_state.creatures[target_creature.creature_id]
+        self.assertEqual(buffed_creature.attack, 2)  # attack unchanged
+        self.assertEqual(buffed_creature.health, 6)  # 3 + 3
+        self.assertEqual(buffed_creature.health_max, 6)  # max should also increase
+
+    def test_battlecry_buff_all(self):
+        """Test buff action with scope 'all' targeting all friendly creatures."""
+        # Create multiple creatures on the same side
+        for i in range(3):
+            card = CardInPlay(
+                card_type="creature",
+                card_id=f"target_{i}",
+                template_slug=f"target-card-{i}",
+                name=f"Target Card {i}",
+                attack=1,
+                health=2,
+                cost=2,
+                traits=[],
+            )
+            spawn_creature(
+                card=card,
+                state=self.game_state,
+                side="side_a",
+            )
+
+        # Verify 3 creatures on board
+        self.assertEqual(len(self.game_state.board["side_a"]), 3)
+
+        # Create battlecry card with buff all action
+        buff_all_card = CardInPlay(
+            card_type="creature",
+            card_id="buffer_all",
+            template_slug="buffer-all-card",
+            name="Buffer All Card",
+            attack=1,
+            health=1,
+            cost=5,
+            traits=[Battlecry(actions=[BuffAction(attribute="attack", amount=1, target="creature", scope="all")])],
+        )
+        self.game_state.cards["buffer_all"] = buff_all_card
+
+        # Create play event
+        play_event = PlayEvent(
+            side="side_a",
+            source_type="card",
+            source_id="buffer_all",
+            position=0,
+        )
+
+        # Process battlecry
+        result = traits.apply(self.game_state, play_event)
+        self.assertEqual(len(result.child_effects), 3)  # Should create 3 buff effects
+
+        # Resolve all buff effects
+        new_state = self.game_state
+        for effect in result.child_effects:
+            resolve_result = resolve(effect, new_state)
+            new_state = resolve_result.new_state
+
+        # Verify all creatures were buffed
+        for creature_id in new_state.board["side_a"]:
+            creature = new_state.creatures[creature_id]
+            self.assertEqual(creature.attack, 2)  # 1 + 1
+            self.assertEqual(creature.attack_max, 2)

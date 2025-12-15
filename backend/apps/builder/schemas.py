@@ -58,8 +58,17 @@ class ClearAction(ActionBase):
     target: Literal['both', 'own', 'opponent'] = 'both'
 
 
+class BuffAction(ActionBase):
+    action: Literal['buff'] = 'buff'
+    attribute: Literal['attack', 'health'] = 'attack'
+    amount: int
+    target: Literal['creature'] = 'creature'
+    scope: Literal['single', 'cleave', 'all'] = 'single'
+
+
 Action = Annotated[
     Union[
+        BuffAction,
         ClearAction,
         DrawAction,
         DamageAction,

@@ -7,6 +7,7 @@ from apps.builder.schemas import Action
 from apps.gameplay.engine.dispatcher import register
 from apps.gameplay.schemas.effects import (
     AttackEffect,
+    BuffEffect,
     ClearEffect,
     ConcedeEffect,
     DamageEffect,
@@ -23,6 +24,7 @@ from apps.gameplay.schemas.effects import (
     UseHeroEffect,
 )
 from apps.gameplay.schemas.events import (
+    BuffEvent,
     ClearEvent,
     CreatureDeathEvent,
     DamageEvent,
@@ -297,6 +299,56 @@ def heal(effect: HealEffect, state: GameState) -> Result:
         source_id=effect.source_id,
         target_type=effect.target_type,
         target_id=effect.target_id,
+        amount=effect.amount
+    )]
+
+    return Success(
+        new_state=state,
+        events=events,
+    )
+
+@register("effect_buff")
+def buff(effect: BuffEffect, state: GameState) -> Result:
+    """
+    Buff effect handler - increases attack or health of a target creature.
+    """
+    events = []
+
+    # Get the source
+    if effect.source_type == "hero":
+        source = state.heroes[effect.side]
+    elif effect.source_type == "card":
+        source = state.cards[effect.source_id]
+    elif effect.source_type == "creature":
+        source = state.creatures[effect.source_id]
+    else:
+        raise NotImplementedError(f"Unknown source type: {effect.source_type}")
+
+    # Get the target (buffs only target creatures)
+    if effect.target_type == "creature":
+        target = state.creatures[effect.target_id]
+    else:
+        raise NotImplementedError(f"Buff can only target creatures, got: {effect.target_type}")
+
+    # Apply buff to the appropriate attribute
+    if effect.attribute == "attack":
+        target.attack += effect.amount
+        if target.attack_max is not None:
+            target.attack_max += effect.amount
+    elif effect.attribute == "health":
+        target.health += effect.amount
+        if target.health_max is not None:
+            target.health_max += effect.amount
+    else:
+        raise NotImplementedError(f"Unknown buff attribute: {effect.attribute}")
+
+    events = [BuffEvent(
+        side=effect.side,
+        source_type=effect.source_type,
+        source_id=effect.source_id,
+        target_type=effect.target_type,
+        target_id=effect.target_id,
+        attribute=effect.attribute,
         amount=effect.amount
     )]
 
