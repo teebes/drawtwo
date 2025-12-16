@@ -1,6 +1,12 @@
 import random
 
-from apps.builder.schemas import DeckScript, DamageAction, HealAction, RemoveAction
+from apps.builder.schemas import (
+    BuffAction,
+    DamageAction,
+    DeckScript,
+    HealAction,
+    RemoveAction,
+)
 from apps.gameplay.schemas.game import GameState
 from apps.gameplay.schemas.effects import Effect, UseHeroEffect, PlayEffect, AttackEffect
 from apps.gameplay.engine.handlers import get_taunt_creatures
@@ -129,7 +135,7 @@ class AIMoveChooser:
         for trait in card.traits:
             for action in trait.actions:
                 # Single target actions require a target
-                if isinstance(action, (DamageAction, HealAction, RemoveAction)):
+                if isinstance(action, (DamageAction, HealAction, RemoveAction, BuffAction)):
                     if action.scope == 'single' and action.target in ['hero', 'creature', 'enemy', 'friendly']:
                         return True
         return False
@@ -143,21 +149,19 @@ class AIMoveChooser:
         opposing_side = "side_b" if active_side == "side_a" else "side_a"
         targets = []
 
-        # Determine target scope - check if any action is a HealAction with friendly target
-        targets_friendly = False
-        for trait in card.traits:
-            for action in trait.actions:
-                if isinstance(action, HealAction) and action.target == 'friendly':
-                    targets_friendly = True
-                    break
-            if targets_friendly:
-                break
+        # Determine target scope - buff/heal actions generally target friendlies
+        targets_friendly = any(
+            isinstance(action, HealAction) and action.target == 'friendly'
+            or isinstance(action, BuffAction)
+            for trait in card.traits
+            for action in trait.actions
+        )
 
         # Collect targets based on scope
         for trait in card.traits:
             for action in trait.actions:
                 if targets_friendly:
-                    if isinstance(action, HealAction):
+                    if isinstance(action, (HealAction, BuffAction)):
                         if action.target in ['hero', 'friendly']:
                             # Own hero
                             own_hero = state.heroes.get(active_side)
@@ -191,7 +195,7 @@ class AIMoveChooser:
     def _hero_power_requires_target(hero_power) -> bool:
         """Check if a hero power requires a target."""
         for action in hero_power.actions:
-            if isinstance(action, (DamageAction, HealAction, RemoveAction)):
+            if isinstance(action, (DamageAction, HealAction, RemoveAction, BuffAction)):
                 if action.scope == 'single' and action.target in ['hero', 'creature', 'enemy', 'friendly']:
                     return True
         return False
@@ -205,16 +209,17 @@ class AIMoveChooser:
         opposing_side = "side_b" if active_side == "side_a" else "side_a"
         targets = []
 
-        # Determine target scope - check if any action is a HealAction with friendly target
+        # Determine target scope - buff/heal actions generally target friendlies
         targets_friendly = any(
-            isinstance(action, HealAction) and action.target == 'friendly'
+            (isinstance(action, HealAction) and action.target == 'friendly')
+            or isinstance(action, BuffAction)
             for action in hero_power.actions
         )
 
         # Collect targets based on scope
         for action in hero_power.actions:
             if targets_friendly:
-                if isinstance(action, HealAction):
+                if isinstance(action, (HealAction, BuffAction)):
                     if action.target in ['hero', 'friendly']:
                         # Own hero
                         own_hero = state.heroes.get(active_side)

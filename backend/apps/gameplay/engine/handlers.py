@@ -7,6 +7,7 @@ from apps.builder.schemas import Action
 from apps.gameplay.engine.dispatcher import register
 from apps.gameplay.schemas.effects import (
     AttackEffect,
+    BuffEffect,
     ClearEffect,
     ConcedeEffect,
     DamageEffect,
@@ -23,6 +24,7 @@ from apps.gameplay.schemas.effects import (
     UseHeroEffect,
 )
 from apps.gameplay.schemas.events import (
+    BuffEvent,
     ClearEvent,
     CreatureDeathEvent,
     DamageEvent,
@@ -304,6 +306,58 @@ def heal(effect: HealEffect, state: GameState) -> Result:
         new_state=state,
         events=events,
     )
+
+
+@register("effect_buff")
+def buff(effect: BuffEffect, state: GameState) -> Result:
+    """Buff effect handler - increases a target's stats."""
+
+    opposing_side = "side_b" if effect.side == "side_a" else "side_a"
+
+    # Identify target
+    if effect.target_type == "hero":
+        if state.heroes[effect.side].hero_id == effect.target_id:
+            target = state.heroes[effect.side]
+        else:
+            target = state.heroes[opposing_side]
+    elif effect.target_type in ["card", "creature"]:
+        target = state.creatures.get(effect.target_id) or state.cards.get(effect.target_id)
+        if not target:
+            return Rejected(reason=f"Target {effect.target_id} does not exist")
+    else:
+        return Rejected(reason=f"Unknown target type: {effect.target_type}")
+
+    if effect.attribute == "attack":
+        if not hasattr(target, "attack"):
+            return Rejected(reason=f"Target {effect.target_id} cannot receive attack buffs")
+        target.attack += effect.amount
+        if hasattr(target, "attack_max") and target.attack_max is not None:
+            target.attack_max += effect.amount
+    elif effect.attribute == "health":
+        if not hasattr(target, "health"):
+            return Rejected(reason=f"Target {effect.target_id} cannot receive health buffs")
+        target.health += effect.amount
+        if hasattr(target, "health_max"):
+            if target.health_max is None:
+                target.health_max = target.health
+            else:
+                target.health_max += effect.amount
+        if getattr(target, "health_max", None) is not None and target.health > target.health_max:
+            target.health = target.health_max
+    else:
+        return Rejected(reason=f"Unsupported buff attribute: {effect.attribute}")
+
+    events = [BuffEvent(
+        side=effect.side,
+        source_type=effect.source_type,
+        source_id=effect.source_id,
+        target_type=effect.target_type,
+        target_id=effect.target_id,
+        attribute=effect.attribute,
+        amount=effect.amount,
+    )]
+
+    return Success(new_state=state, events=events)
 
 @register("effect_mark_exhausted")
 def mark_exhausted(effect: MarkExhaustedEffect, state: GameState) -> Result:

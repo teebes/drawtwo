@@ -36,6 +36,15 @@ class HealAction(ActionBase):
     scope: Literal['single', 'cleave', 'all'] = 'single'
 
 
+class BuffAction(ActionBase):
+    action: Literal['buff'] = 'buff'
+    attribute: Literal['attack', 'health']
+    amount: int
+    target: Literal['hero', 'creature', 'friendly'] = 'creature'
+    scope: Literal['single', 'cleave', 'all'] = 'single'
+    buff_neighbors: bool = False
+
+
 class RemoveAction(ActionBase):
     action: Literal['remove'] = 'remove'
     target: Literal['creature', 'enemy'] = 'creature'
@@ -64,6 +73,7 @@ Action = Annotated[
         DrawAction,
         DamageAction,
         HealAction,
+        BuffAction,
         RemoveAction,
         SummonAction,
         TempManaBoostAction,

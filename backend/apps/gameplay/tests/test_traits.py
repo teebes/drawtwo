@@ -3,6 +3,7 @@ Tests for trait processing and effects.
 """
 from apps.builder.schemas import (
     Battlecry,
+    BuffAction,
     Charge,
     DamageAction,
     DrawAction,
@@ -12,7 +13,7 @@ from apps.builder.schemas import (
 from apps.gameplay.engine.dispatcher import resolve
 from apps.gameplay.engine.handlers import spawn_creature
 from apps.gameplay.schemas.engine import Success
-from apps.gameplay.schemas.effects import PlayEffect, DrawEffect, RemoveEffect
+from apps.gameplay.schemas.effects import BuffEffect, DrawEffect, PlayEffect, RemoveEffect
 from apps.gameplay.schemas.events import (
     CreatureDeathEvent,
     EndTurnEvent,
@@ -456,3 +457,100 @@ class TestRemoveAction(GamePlayTestBase):
 
         # Verify all creatures were removed
         self.assertEqual(len(new_state.board["side_b"]), 0)
+
+
+class TestBuffAction(GamePlayTestBase):
+    """Tests for the Buff action."""
+
+    def test_battlecry_buff_targets_and_neighbors(self):
+        # Create ally creatures to buff
+        left_card = CardInPlay(
+            card_type="creature",
+            card_id="left",
+            template_slug="ally-left",
+            name="Left Ally",
+            attack=2,
+            health=3,
+            cost=1,
+        )
+        right_card = CardInPlay(
+            card_type="creature",
+            card_id="right",
+            template_slug="ally-right",
+            name="Right Ally",
+            attack=1,
+            health=2,
+            cost=1,
+        )
+        buffer_card = CardInPlay(
+            card_type="creature",
+            card_id="buffer",
+            template_slug="buffer",
+            name="Buffer",
+            attack=1,
+            health=1,
+            cost=1,
+            traits=[Battlecry(actions=[BuffAction(attribute="attack", amount=1, target="creature", buff_neighbors=True)])],
+        )
+
+        self.game_state.cards[left_card.card_id] = left_card
+        self.game_state.cards[right_card.card_id] = right_card
+        self.game_state.cards[buffer_card.card_id] = buffer_card
+
+        left_creature = spawn_creature(card=left_card, state=self.game_state, side="side_a", position=0)
+        buffer_creature = spawn_creature(card=buffer_card, state=self.game_state, side="side_a", position=1)
+        right_creature = spawn_creature(card=right_card, state=self.game_state, side="side_a", position=2)
+
+        # Simulate playing the buffer card with a target
+        play_event = PlayEvent(
+            side="side_a",
+            source_type="card",
+            source_id=buffer_card.card_id,
+            position=1,
+            target_type="creature",
+            target_id=left_creature.creature_id,
+            creature_id=buffer_creature.creature_id,
+        )
+
+        result = traits.apply(self.game_state, play_event)
+        self.assertEqual(len(result.child_effects), 2)
+        for effect in result.child_effects:
+            self.assertIsInstance(effect, BuffEffect)
+            self.assertEqual(effect.attribute, "attack")
+
+        target_ids = {effect.target_id for effect in result.child_effects}
+        self.assertSetEqual(target_ids, {left_creature.creature_id, right_creature.creature_id})
+
+        # Apply buffs
+        new_state = self.game_state
+        for effect in result.child_effects:
+            resolve_result = resolve(effect, new_state)
+            self.assertIsInstance(resolve_result, Success)
+            new_state = resolve_result.new_state
+
+        left_after = new_state.creatures[left_creature.creature_id]
+        right_after = new_state.creatures[right_creature.creature_id]
+        self.assertEqual(left_after.attack, left_card.attack + 1)
+        self.assertEqual(left_after.attack_max, left_card.attack + 1)
+        self.assertEqual(right_after.attack, right_card.attack + 1)
+        self.assertEqual(right_after.attack_max, right_card.attack + 1)
+        self.assertEqual(new_state.creatures[buffer_creature.creature_id].attack, buffer_card.attack)
+
+    def test_health_buff_increases_max(self):
+        hero = self.game_state.heroes["side_a"]
+        effect = BuffEffect(
+            side="side_a",
+            source_type="hero",
+            source_id=hero.hero_id,
+            target_type="hero",
+            target_id=hero.hero_id,
+            attribute="health",
+            amount=3,
+        )
+
+        result = resolve(effect, self.game_state)
+        self.assertIsInstance(result, Success)
+
+        updated_hero = result.new_state.heroes["side_a"]
+        self.assertEqual(updated_hero.health, hero.health + 3)
+        self.assertEqual(updated_hero.health_max, hero.health_max + 3)

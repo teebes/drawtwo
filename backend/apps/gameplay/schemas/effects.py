@@ -75,6 +75,16 @@ class HealEffect(EffectBase):
     amount: int
 
 
+class BuffEffect(EffectBase):
+    type: Literal["effect_buff"] = "effect_buff"
+    source_type: Literal["card", "creature", "hero", "board"] = "creature"
+    source_id: str
+    target_type: Literal["card", "hero", "creature"] = "card"
+    target_id: str
+    attribute: Literal["attack", "health"]
+    amount: int
+
+
 class PlayEffect(ActionSourceEffect):
     type: Literal["effect_play"] = "effect_play"
     source_type: Literal["card"] = "card"  # Playing a card
@@ -152,6 +162,7 @@ Effect = Annotated[
         DamageEffect,
         DrawEffect,
         EndTurnEffect,
+        BuffEffect,
         HealEffect,
         MarkExhaustedEffect,
         NewPhaseEffect,

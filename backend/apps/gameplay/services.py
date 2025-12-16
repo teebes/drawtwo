@@ -15,6 +15,7 @@ from apps.builder.schemas import (
     DeckScript,
     DrawAction,
     DamageAction,
+    BuffAction,
     HealAction,
     HeroPower,
     RemoveAction,
@@ -42,6 +43,7 @@ from apps.gameplay.schemas.effects import (
     AttackEffect,
     ClearEffect,
     ConcedeEffect,
+    BuffEffect,
     DamageEffect,
     DrawEffect,
     Effect,
@@ -57,8 +59,9 @@ from apps.gameplay.schemas.effects import (
 from apps.gameplay.schemas.engine import Success, Result, Prevented, Rejected, Fault
 from apps.gameplay.schemas.events import (
     ActionableEvent,
-    GameOverEvent,
     CreatureDeathEvent,
+    GameOverEvent,
+    PlayEvent,
 )
 
 
@@ -695,6 +698,77 @@ class GameService:
                     source_id=source_id,
                     target_type=target_type,
                     target_id=target_id,
+                    amount=action.amount,
+                ))
+            return effects
+
+        if isinstance(action, BuffAction):
+            same_side = event.side
+
+            # Determine base target for buff
+            if action.target == "hero":
+                base_target_type = "hero"
+                base_target_id = state.heroes[same_side].hero_id
+            elif action.target == "creature":
+                base_target_type = "creature"
+                base_target_id = event.target_id or (state.board[same_side][0] if state.board[same_side] else None)
+            elif action.target == "friendly":
+                base_target_type = event.target_type or "hero"
+                base_target_id = event.target_id or state.heroes[same_side].hero_id
+            else:
+                base_target_type = event.target_type
+                base_target_id = event.target_id
+
+            targets: list[tuple[str, str]] = []
+
+            if action.scope == 'single':
+                if base_target_id:
+                    targets = [(base_target_type, base_target_id)]
+
+            elif action.scope == 'all':
+                # Buff all friendlies (all creatures + hero on same side)
+                for creature_id in state.board[same_side]:
+                    targets.append(("creature", creature_id))
+                targets.append(("hero", state.heroes[same_side].hero_id))
+
+            elif action.scope == 'cleave':
+                # Buff target and adjacent creatures
+                if base_target_type == "creature" and base_target_id in state.board[same_side]:
+                    target_index = state.board[same_side].index(base_target_id)
+                    targets.append((base_target_type, base_target_id))
+                    if target_index > 0:
+                        targets.append(("creature", state.board[same_side][target_index - 1]))
+                    if target_index < len(state.board[same_side]) - 1:
+                        targets.append(("creature", state.board[same_side][target_index + 1]))
+                elif base_target_id:
+                    targets = [(base_target_type, base_target_id)]
+
+            if action.buff_neighbors:
+                source_creature_id = None
+                if source_type == "creature":
+                    source_creature_id = source_id
+                elif isinstance(event, PlayEvent):
+                    source_creature_id = getattr(event, "creature_id", None)
+
+                if source_creature_id and source_creature_id in state.board[same_side]:
+                    source_index = state.board[same_side].index(source_creature_id)
+                    if source_index > 0:
+                        targets.append(("creature", state.board[same_side][source_index - 1]))
+                    if source_index < len(state.board[same_side]) - 1:
+                        targets.append(("creature", state.board[same_side][source_index + 1]))
+
+            # Deduplicate targets
+            unique_targets = list(dict.fromkeys(targets))
+
+            effects = []
+            for target_type, target_id in unique_targets:
+                effects.append(BuffEffect(
+                    side=event.side,
+                    source_type=source_type,
+                    source_id=source_id,
+                    target_type=target_type,
+                    target_id=target_id,
+                    attribute=action.attribute,
                     amount=action.amount,
                 ))
             return effects

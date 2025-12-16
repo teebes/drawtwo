@@ -41,6 +41,16 @@ class HealEvent(EventBase):
     amount: int
 
 
+class BuffEvent(EventBase):
+    type: Literal["event_buff"] = "event_buff"
+    source_type: Literal["card", "hero", "board", "creature"] = "card"
+    source_id: str
+    target_type: Literal["card", "hero", "creature"] = "card"
+    target_id: str
+    attribute: Literal["attack", "health"]
+    amount: int
+
+
 class EndTurnEvent(EventBase):
     type: Literal["event_end_turn"] = "event_end_turn"
 
@@ -128,6 +138,7 @@ Event = Annotated[
         EndTurnEvent,
         GameOverEvent,
         HealEvent,
+        BuffEvent,
         NewPhaseEvent,
         PlayEvent,
         RemoveEvent,
