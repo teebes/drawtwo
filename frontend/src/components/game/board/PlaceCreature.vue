@@ -138,7 +138,10 @@ function hasTargetingActions(traits: any[]): boolean {
     for (const trait of traits) {
         const actions = trait.actions || []
         for (const action of actions) {
-            if (action.action === 'damage' || action.action === 'heal') {
+            if (
+                (action.action === 'damage' || action.action === 'heal' || action.action === 'remove' || action.action === 'buff') &&
+                action.scope !== 'all'
+            ) {
                 return true
             }
         }
@@ -169,6 +172,14 @@ function getAllowedTargets(card: any): Array<'card' | 'hero' | 'any'> {
                 allowed.add('hero')
             }
         }
+        if (action.action === 'remove') {
+            // Remove targets enemy creatures only
+            allowed.add('card')
+        }
+        if (action.action === 'buff') {
+            // Buff targets friendly creatures only
+            allowed.add('card')
+        }
     }
 
     if (allowed.size === 0) allowed.add('any')
@@ -185,8 +196,16 @@ function getTargetScope(card: any): 'enemy' | 'friendly' {
         if (action.action === 'heal') {
             return 'friendly'
         }
+        // Buff actions target friendly units
+        if (action.action === 'buff') {
+            return 'friendly'
+        }
         // Damage actions target enemies
         if (action.action === 'damage') {
+            return 'enemy'
+        }
+        // Remove actions target enemies
+        if (action.action === 'remove') {
             return 'enemy'
         }
     }

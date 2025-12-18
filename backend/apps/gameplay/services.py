@@ -792,7 +792,7 @@ class GameService:
             # Determine base target for buff (buffs target friendly creatures)
             if action.target == "creature":
                 base_target_type = "creature"
-                base_target_id = event.target_id or (state.board[same_side][0] if state.board[same_side] else None)
+                base_target_id = event.target_id
             else:
                 base_target_type = event.target_type
                 base_target_id = event.target_id

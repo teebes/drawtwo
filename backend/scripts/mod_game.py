@@ -77,8 +77,10 @@ def main(args):
             if card_template.card_type == 'spell':
                 game_state.hands[side].append(card_id)
             elif card_template.card_type == 'creature':
-                creature = spawn_creature(card_in_play, game_state, side, args.position)
-
+                if args.hand:
+                    game_state.hands[side].append(card_id)
+                else:
+                    spawn_creature(card_in_play, game_state, side, args.position)
 
             game.state = game_state.model_dump()
             game.save()
@@ -134,6 +136,12 @@ if __name__ == '__main__':
         type=int,
         help='The position on the board to load the creature onto',
         default=0
+    )
+
+    load_parser.add_argument(
+        '--hand',
+        action='store_true',
+        help='Load the creature into the hand instead of the board'
     )
 
     args = parser.parse_args()

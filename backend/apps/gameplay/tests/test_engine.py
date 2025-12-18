@@ -208,3 +208,93 @@ class EngineTests(GamePlayTestBase):
         self.assertTrue(isinstance(damage_result, Success))
         # This should work without errors - creature should take 1 damage
         self.assertEqual(damage_result.new_state.creatures["2"].health, 9)
+
+    def test_play_spell_buff_requires_target(self):
+        """Targeted buff spells should require an explicit target (no auto-leftmost)."""
+        from apps.builder.schemas import Battlecry, BuffAction
+        from apps.gameplay.schemas.game import CardInPlay, Creature
+
+        spell_card = CardInPlay(
+            card_type="spell",
+            card_id="buff_spell_1",
+            template_slug="boom",
+            name="Boom",
+            description="+1 attack +1 health to the targeted unit",
+            cost=0,
+            traits=[
+                Battlecry(
+                    actions=[
+                        BuffAction(attribute="health", amount=1, target="creature", scope="single"),
+                        BuffAction(attribute="attack", amount=1, target="creature", scope="single"),
+                    ]
+                )
+            ],
+        )
+
+        # Two friendly creatures on board
+        c1 = Creature(
+            creature_id="c1",
+            card_id="c1_card",
+            name="c1",
+            attack=1,
+            attack_max=1,
+            health=3,
+            health_max=3,
+            exhausted=False,
+        )
+        c2 = Creature(
+            creature_id="c2",
+            card_id="c2_card",
+            name="c2",
+            attack=2,
+            attack_max=2,
+            health=4,
+            health_max=4,
+            exhausted=False,
+        )
+        self.game_state.creatures["c1"] = c1
+        self.game_state.creatures["c2"] = c2
+        self.game_state.board["side_a"] = ["c1", "c2"]
+
+        self.game_state.cards["buff_spell_1"] = spell_card
+        self.game_state.hands["side_a"] = ["buff_spell_1"]
+        self.game_state.mana_pool["side_a"] = 1
+        self.game_state.mana_used["side_a"] = 0
+
+        # Missing target should be rejected
+        play_effect_missing_target = PlayEffect(
+            side="side_a",
+            source_id="buff_spell_1",
+            position=0,
+        )
+        result = resolve(play_effect_missing_target, self.game_state)
+        self.assertTrue(isinstance(result, Rejected))
+        self.assertIn("target", result.reason.lower())
+        self.assertIn("buff_spell_1", self.game_state.hands["side_a"])
+
+        # Providing target should succeed and buff the chosen creature
+        play_effect = PlayEffect(
+            side="side_a",
+            source_id="buff_spell_1",
+            position=0,
+            target_type="creature",
+            target_id="c2",
+        )
+        result = resolve(play_effect, self.game_state)
+        self.assertTrue(isinstance(result, Success))
+        new_state = result.new_state
+        play_event = result.events[0]
+
+        trait_result = traits.apply(new_state, play_event)
+        self.assertEqual(len(trait_result.child_effects), 2)
+
+        # Resolve both buff effects
+        for eff in trait_result.child_effects:
+            resolve_result = resolve(eff, new_state)
+            self.assertTrue(isinstance(resolve_result, Success))
+            new_state = resolve_result.new_state
+
+        self.assertEqual(new_state.creatures["c1"].attack, 1)
+        self.assertEqual(new_state.creatures["c1"].health, 3)
+        self.assertEqual(new_state.creatures["c2"].attack, 3)
+        self.assertEqual(new_state.creatures["c2"].health, 5)

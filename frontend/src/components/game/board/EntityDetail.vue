@@ -247,7 +247,10 @@ function requiresTarget(card: CardInPlay): boolean {
         for (const trait of traits) {
             const actions = trait.actions || []
             for (const action of actions) {
-                if (action.action === 'damage') {
+                if (
+                    (action.action === 'damage' || action.action === 'heal' || action.action === 'remove' || action.action === 'buff') &&
+                    action.scope !== 'all'
+                ) {
                     return true
                 }
             }

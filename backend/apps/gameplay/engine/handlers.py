@@ -2,8 +2,8 @@
 Effect handlers for the engine.
 """
 
-from pydantic import TypeAdapter
-from apps.builder.schemas import Action
+from pydantic import TypeAdapter, ValidationError
+from apps.builder.schemas import Action, DamageAction, HealAction, RemoveAction, BuffAction
 from apps.gameplay.engine.dispatcher import register
 from apps.gameplay.schemas.effects import (
     AttackEffect,
@@ -100,6 +100,76 @@ def has_stealth(creature: Creature) -> bool:
     """Check if a creature has the stealth trait."""
     return any(trait.type == "stealth" for trait in creature.traits)
 
+def _iter_validated_actions(card: CardInPlay) -> list[Action]:
+    """
+    Extract and validate all actions attached to a card's traits.
+    Cards can arrive with actions already parsed, or as raw dicts depending on
+    serialization boundaries, so we validate defensively.
+    """
+    actions: list[Action] = []
+    for trait in (card.traits or []):
+        for raw_action in (getattr(trait, "actions", None) or []):
+            try:
+                actions.append(TypeAdapter(Action).validate_python(raw_action))
+            except ValidationError:
+                continue
+    return actions
+
+
+def _card_play_requires_target(card: CardInPlay) -> bool:
+    """
+    Whether playing this card should require the player to specify a target.
+
+    Notes:
+    - 'all' scoped actions do not require a target
+    - actions that always resolve to a fixed hero target do not require a target
+    """
+    for action in _iter_validated_actions(card):
+        if isinstance(action, (DamageAction, HealAction, RemoveAction, BuffAction)):
+            if getattr(action, "scope", "single") == "all":
+                continue
+            if isinstance(action, DamageAction) and action.target == "hero":
+                continue
+            if isinstance(action, HealAction) and action.target == "hero":
+                continue
+            return True
+    return False
+
+
+def _card_play_allowed_target_types(card: CardInPlay) -> set[str]:
+    """
+    Allowed target types for this card play: subset of {'creature', 'hero'}.
+    """
+    allowed: set[str] = set()
+    for action in _iter_validated_actions(card):
+        if not isinstance(action, (DamageAction, HealAction, RemoveAction, BuffAction)):
+            continue
+        if getattr(action, "scope", "single") == "all":
+            continue
+
+        if isinstance(action, BuffAction):
+            allowed.add("creature")
+            continue
+
+        if isinstance(action, RemoveAction):
+            allowed.add("creature")
+            continue
+
+        if isinstance(action, DamageAction):
+            if action.target in ("creature", "enemy"):
+                allowed.add("creature")
+            if action.target in ("hero", "enemy"):
+                allowed.add("hero")
+            continue
+
+        if isinstance(action, HealAction):
+            if action.target in ("creature", "friendly"):
+                allowed.add("creature")
+            if action.target in ("hero", "friendly"):
+                allowed.add("hero")
+            continue
+    return allowed
+
 
 @register("effect_play")
 def play(effect: PlayEffect, state: GameState) -> Result:
@@ -110,6 +180,32 @@ def play(effect: PlayEffect, state: GameState) -> Result:
     usable_mana = state.mana_pool[effect.side] - state.mana_used[effect.side]
     if card.cost > usable_mana:
         return Rejected(reason="Not enough energy to play the card")
+
+    # If any action on this card requires a target, enforce that the player provided one.
+    # Important: do NOT over-validate "enemy vs friendly" here; some cards/tests allow
+    # targeting your own creatures with spells (e.g. for buffs or self-damage).
+    if _card_play_requires_target(card):
+        if not effect.target_type or not effect.target_id:
+            return Rejected(reason="This card requires you to choose a target")
+
+        allowed_types = _card_play_allowed_target_types(card)
+        if effect.target_type not in allowed_types:
+            return Rejected(reason="Invalid target type for this card")
+
+        if effect.target_type == "creature":
+            # Must be a creature currently in play (on either board)
+            if effect.target_id not in state.creatures:
+                return Rejected(reason="Target creature does not exist")
+            if (
+                effect.target_id not in state.board["side_a"]
+                and effect.target_id not in state.board["side_b"]
+            ):
+                return Rejected(reason="Target creature is not on the board")
+        elif effect.target_type == "hero":
+            # Must match either hero id
+            hero_ids = {state.heroes["side_a"].hero_id, state.heroes["side_b"].hero_id}
+            if effect.target_id not in hero_ids:
+                return Rejected(reason="Target hero does not exist")
 
     # STEALTH VALIDATION: Cannot directly target stealthed creatures with spells
     if effect.target_type == "creature" and effect.target_id:
