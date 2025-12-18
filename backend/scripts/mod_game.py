@@ -47,19 +47,17 @@ def main(args):
     game = Game.objects.get(id=args.game_id)
     game_state = GameState.model_validate(game.state)
 
-    if args.side:
-        side = args.side
-    elif args.opposite:
-        if game_state.active == 'side_a':
-            side = 'side_b'
-        else:
-            side = 'side_a'
-    else:
-        side = game_state.active
-
-    position = args.position
+    side = game_state.active
 
     if args.command == 'load':
+
+        if args.side:
+            side = args.side
+        elif args.opposite:
+            if game_state.active == 'side_a':
+                side = 'side_b'
+            else:
+                side = 'side_a'
 
         try:
             card_template = CardTemplate.objects.get(slug=args.creature_slug)
@@ -89,6 +87,30 @@ def main(args):
             print(f"❌ Card template not found: {args.creature_slug}")
             return
 
+    elif args.command == 'clear':
+        # Determine which side(s) to clear
+        sides_to_clear = []
+
+        if args.board:
+            if args.board == 'own':
+                sides_to_clear = [game_state.active]
+            elif args.board == 'opposite':
+                sides_to_clear = [game_state.opposite_side]
+            elif args.board == 'side_a':
+                sides_to_clear = ['side_a']
+            elif args.board == 'side_b':
+                sides_to_clear = ['side_b']
+        else:
+            # Clear both sides if no --board argument provided
+            sides_to_clear = ['side_a', 'side_b']
+
+        # Clear the board for each side
+        for side in sides_to_clear:
+            game_state.board[side] = []
+
+        game.state = game_state.model_dump()
+        game.save()
+        print(f"✅ Cleared board for: {', '.join(sides_to_clear)}")
 
     else:
         print("OK")
@@ -129,7 +151,7 @@ if __name__ == '__main__':
         '--opposite',
         action='store_true',
         help='Use the opposite side; defaults to False unless flag is present.'
-)
+    )
 
     load_parser.add_argument(
         '--position',
