@@ -1120,8 +1120,10 @@ class GameService:
                 )
 
                 # Set game type to ranked for matchmaking games
+                # and set 1 minute per turn time control
                 game.type = Game.GAME_TYPE_RANKED
-                game.save(update_fields=['type'])
+                game.time_per_turn = 60  # 1 minute per turn
+                game.save(update_fields=['type', 'time_per_turn'])
 
                 # Update both queue entries
                 entry_a.status = MatchmakingQueue.STATUS_MATCHED

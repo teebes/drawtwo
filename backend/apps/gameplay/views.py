@@ -380,6 +380,42 @@ def matchmaking_queue_status(request, title_slug):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+def leave_matchmaking_queue(request, title_slug):
+    """
+    Remove the user from the matchmaking queue for a specific title.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    title = get_object_or_404(Title, slug=title_slug)
+
+    # Find the user's active queue entry for this title
+    queue_entry = MatchmakingQueue.objects.filter(
+        user=request.user,
+        deck__title=title,
+        status=MatchmakingQueue.STATUS_QUEUED
+    ).first()
+
+    if not queue_entry:
+        return Response(
+            {'error': 'You are not currently in the queue for this title'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Cancel the queue entry
+    queue_entry.status = MatchmakingQueue.STATUS_CANCELLED
+    queue_entry.save(update_fields=['status'])
+
+    logger.info(f"User {request.user.display_name} left matchmaking queue for {title.name}")
+
+    return Response({
+        'message': 'Successfully left matchmaking queue',
+        'queue_entry_id': queue_entry.id
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def create_friendly_challenge(request):
     """
     Create a friend vs friend challenge (unrated). Requires:

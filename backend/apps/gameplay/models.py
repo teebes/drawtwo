@@ -102,6 +102,18 @@ class Game(TimestampedModel):
 
     queue = models.JSONField(default=list)
 
+    # Time control fields
+    time_per_turn = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Time limit per turn in seconds (null = no limit)"
+    )
+    turn_start_time = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the current turn started (for time enforcement)"
+    )
+
     @property
     def game_state(self):
         return GameState.model_validate(self.state)

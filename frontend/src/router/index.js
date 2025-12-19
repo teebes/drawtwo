@@ -20,6 +20,7 @@ import CardDetails from '../views/CardDetails.vue'
 import DeckDetail from '../views/DeckDetail.vue'
 import DeckEdit from '../views/DeckEdit.vue'
 import GameCreate from '../views/GameCreate.vue'
+import RankedQueue from '../views/RankedQueue.vue'
 import Board from '../views/Board.vue'
 import Friends from '../views/Friends.vue'
 import PrivacyPolicy from '../views/PrivacyPolicy.vue'
@@ -152,6 +153,12 @@ const routes = [
     path: '/:slug/games/new',
     name: 'GameCreate',
     component: GameCreate,
+    meta: { requiresAuth: true, isTitleRoute: true }
+  },
+  {
+    path: '/:slug/ranked-queue',
+    name: 'RankedQueue',
+    component: RankedQueue,
     meta: { requiresAuth: true, isTitleRoute: true }
   },
   {
