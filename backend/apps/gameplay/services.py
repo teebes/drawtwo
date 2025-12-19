@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 from apps.builder.models import CardTemplate
 from apps.builder.schemas import (
     Action,
+    BuffAction,
     ClearAction,
     DeckScript,
     DrawAction,
@@ -40,6 +41,7 @@ from apps.gameplay.schemas.commands import (
 )
 from apps.gameplay.schemas.effects import (
     AttackEffect,
+    BuffEffect,
     ClearEffect,
     ConcedeEffect,
     DamageEffect,
@@ -783,6 +785,59 @@ class GameService:
                     target=action.target,
                 )
             ]
+
+        if isinstance(action, BuffAction):
+            same_side = event.side
+
+            # Determine base target for buff (buffs target friendly creatures)
+            if action.target == "creature":
+                base_target_type = "creature"
+                base_target_id = event.target_id
+            else:
+                base_target_type = event.target_type
+                base_target_id = event.target_id
+
+            # Get all targets based on scope
+            targets = []
+
+            if action.scope == 'single':
+                if base_target_id and base_target_type == "creature":
+                    targets = [(base_target_type, base_target_id)]
+
+            elif action.scope == 'all':
+                # Buff all friendly creatures on same side
+                for creature_id in state.board[same_side]:
+                    targets.append(("creature", creature_id))
+
+            elif action.scope == 'cleave':
+                # Buff target and adjacent creatures
+                if base_target_type == "creature" and base_target_id in state.board[same_side]:
+                    target_index = state.board[same_side].index(base_target_id)
+                    # Add the main target
+                    targets.append((base_target_type, base_target_id))
+                    # Add left neighbor
+                    if target_index > 0:
+                        targets.append(("creature", state.board[same_side][target_index - 1]))
+                    # Add right neighbor
+                    if target_index < len(state.board[same_side]) - 1:
+                        targets.append(("creature", state.board[same_side][target_index + 1]))
+                elif base_target_id:
+                    # If not a creature, just buff the single target
+                    targets = [(base_target_type, base_target_id)]
+
+            # Create buff effects for each target
+            effects = []
+            for target_type, target_id in targets:
+                effects.append(BuffEffect(
+                    side=event.side,
+                    source_type=source_type,
+                    source_id=source_id,
+                    target_type=target_type,
+                    target_id=target_id,
+                    attribute=action.attribute,
+                    amount=action.amount,
+                ))
+            return effects
 
         raise ValueError(f"Invalid action: {action}")
 

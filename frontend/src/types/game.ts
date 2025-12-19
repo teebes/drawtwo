@@ -12,6 +12,7 @@ export type CardAction =
   | { action: 'damage'; amount: number; target: 'hero' | 'creature' | 'enemy'; scope?: 'single' | 'cleave' | 'all'; damage_type?: 'physical' | 'spell' }
   | { action: 'heal'; amount: number; target: 'hero' | 'creature' | 'friendly'; scope?: 'single' | 'cleave' | 'all' }
   | { action: 'remove'; target: 'creature' | 'enemy'; scope?: 'single' | 'cleave' | 'all' }
+  | { action: 'buff'; attribute: 'attack' | 'health'; amount: number; target: 'creature'; scope?: 'single' | 'cleave' | 'all' }
 
 
 export interface Trait {

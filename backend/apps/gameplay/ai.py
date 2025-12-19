@@ -1,6 +1,6 @@
 import random
 
-from apps.builder.schemas import DeckScript, DamageAction, HealAction, RemoveAction
+from apps.builder.schemas import DeckScript, DamageAction, HealAction, RemoveAction, BuffAction
 from apps.gameplay.schemas.game import GameState
 from apps.gameplay.schemas.effects import Effect, UseHeroEffect, PlayEffect, AttackEffect
 from apps.gameplay.engine.handlers import get_taunt_creatures
@@ -129,8 +129,13 @@ class AIMoveChooser:
         for trait in card.traits:
             for action in trait.actions:
                 # Single target actions require a target
-                if isinstance(action, (DamageAction, HealAction, RemoveAction)):
-                    if action.scope == 'single' and action.target in ['hero', 'creature', 'enemy', 'friendly']:
+                if isinstance(action, (DamageAction, HealAction, RemoveAction, BuffAction)):
+                    if getattr(action, "scope", "single") != 'all':
+                        # Damage/heal that always goes to a fixed hero doesn't require a target
+                        if isinstance(action, DamageAction) and action.target == "hero":
+                            continue
+                        if isinstance(action, HealAction) and action.target == "hero":
+                            continue
                         return True
         return False
 
@@ -143,11 +148,14 @@ class AIMoveChooser:
         opposing_side = "side_b" if active_side == "side_a" else "side_a"
         targets = []
 
-        # Determine target scope - check if any action is a HealAction with friendly target
+        # Determine target scope - check if any action targets friendlies
         targets_friendly = False
         for trait in card.traits:
             for action in trait.actions:
-                if isinstance(action, HealAction) and action.target == 'friendly':
+                if isinstance(action, HealAction) and action.target in ('friendly', 'creature', 'hero'):
+                    targets_friendly = True
+                    break
+                if isinstance(action, BuffAction):
                     targets_friendly = True
                     break
             if targets_friendly:
@@ -167,6 +175,10 @@ class AIMoveChooser:
                             # Own creatures
                             for creature_id in state.board[active_side]:
                                 targets.append(("creature", creature_id))
+                    if isinstance(action, BuffAction):
+                        # Buff targets own creatures
+                        for creature_id in state.board[active_side]:
+                            targets.append(("creature", creature_id))
                 else:
                     if isinstance(action, (DamageAction, RemoveAction)):
                         if action.target in ['hero', 'enemy']:
