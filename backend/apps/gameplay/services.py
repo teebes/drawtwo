@@ -1138,9 +1138,13 @@ class GameService:
 
                 logger.info(f"Created ranked game {game.id} for matched players")
 
+                # Kick off first step to initialize the game
+                from apps.gameplay.tasks import step
+                step.delay(game.id)
+
                 # Notify both players via websocket
                 from apps.gameplay.notifications import send_matchmaking_success
-                title_slug = getattr(entry_a.title, 'slug', None)
+                title_slug = getattr(entry_a.deck.title, 'slug', None)
                 if title_slug:
                     send_matchmaking_success(entry_a.user_id, game.id, title_slug)
                     send_matchmaking_success(entry_b.user_id, game.id, title_slug)
