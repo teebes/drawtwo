@@ -103,15 +103,10 @@ class Game(TimestampedModel):
     queue = models.JSONField(default=list)
 
     # Time control fields
-    time_per_turn = models.IntegerField(
+    turn_expires = models.DateTimeField(
         null=True,
         blank=True,
-        help_text="Time limit per turn in seconds (null = no limit)"
-    )
-    turn_start_time = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="When the current turn started (for time enforcement)"
+        help_text="When the current turn expires (for time enforcement)"
     )
 
     @property

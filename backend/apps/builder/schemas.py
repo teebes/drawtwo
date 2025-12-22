@@ -179,6 +179,7 @@ class TitleConfig(ResourceBase):
     hand_start_size: int = 3
     side_b_compensation: Optional[str] = None
     death_retaliation: bool = False
+    ranked_time_per_turn: int = 60
 
 
 Resource = Annotated[

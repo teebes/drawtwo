@@ -15,6 +15,22 @@ from apps.gameplay.services import GameService
 from apps.gameplay.tasks import step
 
 
+def _update_game_time_per_turn(game: Game):
+    """Update time_per_turn in game state based on game type and title config."""
+    game_state = GameState.model_validate(game.state)
+
+    if game.type == Game.GAME_TYPE_RANKED:
+        # Use ranked_time_per_turn from title config
+        game_state.time_per_turn = game_state.config.ranked_time_per_turn
+    else:
+        # Friendly and PvE games have no time limit
+        game_state.time_per_turn = 0
+
+    # Update the state in the database
+    game.state = game_state.model_dump()
+    game.save(update_fields=['state'])
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def game_detail(request, game_id):
@@ -218,6 +234,9 @@ def create_game(request):
         else:
             game.type = Game.GAME_TYPE_RANKED
         game.save(update_fields=['type'])
+
+        # Update time_per_turn in game state based on game type
+        _update_game_time_per_turn(game)
 
         logger.debug(f"Game created successfully: {game}")
 
@@ -547,6 +566,9 @@ def accept_friendly_challenge(request, challenge_id):
     game = GameService.start_game(challenge.challenger_deck, challengee_deck, randomize_starting_player=True)
     game.type = Game.GAME_TYPE_FRIENDLY
     game.save(update_fields=['type'])
+
+    # Update time_per_turn in game state (friendly games have no time limit)
+    _update_game_time_per_turn(game)
 
     # Link and update challenge
     challenge.challengee_deck = challengee_deck
