@@ -276,6 +276,7 @@ class GameService:
         if game.status == Game.GAME_STATUS_ENDED: return
         game.status = Game.GAME_STATUS_IN_PROGRESS
         game_state = GameState.model_validate(game.state)
+        previous_phase = game_state.phase
 
         # Process multiple effects in a batch to reduce DB round-trips
         effects_processed = 0
@@ -394,9 +395,25 @@ class GameService:
                 update=update.model_dump(mode="json"),
             )
 
+        # Set turn_expires when entering main phase if time_per_turn > 0
+        update_fields = ["state", "queue", "status"]
+        if game_state.phase == 'main' and previous_phase != 'main' and game_state.time_per_turn > 0:
+            from django.utils import timezone
+            from datetime import timedelta
+            turn_expires_dt = timezone.now() + timedelta(seconds=game_state.time_per_turn)
+            game.turn_expires = turn_expires_dt
+            # Also set in GameState so it's sent to frontend
+            game_state.turn_expires = turn_expires_dt.isoformat()
+            update_fields.append("turn_expires")
+        elif game_state.phase != 'main':
+            # Clear turn_expires when leaving main phase
+            game.turn_expires = None
+            game_state.turn_expires = None
+            update_fields.append("turn_expires")
+
         # Single DB save for all processed events
         game.state = game_state.model_dump()
-        game.save(update_fields=["state", "queue", "status"])
+        game.save(update_fields=update_fields)
 
         # Send filtered updates to clients
         send_game_updates_to_clients(
@@ -425,6 +442,7 @@ class GameService:
             step.apply_async(args=[game_id], countdown=0.1)
 
     @staticmethod
+    @transaction.atomic
     def process_command(game_id: int, command: dict, side):
         try:
             game = Game.objects.get(id=game_id)
