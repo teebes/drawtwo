@@ -44,7 +44,7 @@ class ServiceTestsBase(TestCase):
             DeckCard.objects.create(deck=self.deck_a, card=card)
             DeckCard.objects.create(deck=self.deck_b, card=card)
 
-        self.game = GameService.start_game(self.deck_a, self.deck_b)
+        self.game = GameService.create_game(self.deck_a, self.deck_b)
         self.game.refresh_from_db()
 
 

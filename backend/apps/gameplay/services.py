@@ -59,8 +59,10 @@ from apps.gameplay.schemas.effects import (
 from apps.gameplay.schemas.engine import Success, Result, Prevented, Rejected, Fault
 from apps.gameplay.schemas.events import (
     ActionableEvent,
-    GameOverEvent,
     CreatureDeathEvent,
+    EndTurnEvent,
+    GameOverEvent,
+    NewPhaseEvent,
 )
 
 
@@ -91,7 +93,11 @@ class GameService:
 
     @staticmethod
     @transaction.atomic
-    def start_game(deck_a, deck_b, randomize_starting_player: bool = False) -> Game:
+    def create_game(
+        deck_a,
+        deck_b,
+        randomize_starting_player: bool = False
+    ) -> Game:
 
         existing_game = Game.objects.filter(
             side_a=deck_a,
@@ -276,6 +282,20 @@ class GameService:
         if game.status == Game.GAME_STATUS_ENDED: return
         game.status = Game.GAME_STATUS_IN_PROGRESS
         game_state = GameState.model_validate(game.state)
+        previous_phase = game_state.phase
+
+        # Check for turn timeout - automatically concede if time expired
+        if (game_state.phase == 'main'
+            and game_state.time_per_turn > 0
+            and game.turn_expires
+            and game.status != Game.GAME_STATUS_ENDED):
+            from django.utils import timezone
+            if timezone.now() >= game.turn_expires:
+                # Time expired - automatically concede for the active player
+                from apps.gameplay.schemas.effects import ConcedeEffect
+                logger.info(f"Turn expired for {game_state.active} in game {game_id}, auto-conceding")
+                game.enqueue([ConcedeEffect(side=game_state.active)], trigger=False)
+                # Continue processing to handle the concede effect
 
         # Process multiple effects in a batch to reduce DB round-trips
         effects_processed = 0
@@ -312,10 +332,18 @@ class GameService:
                             game.save(update_fields=["status", "winner"])
                             game_state.winner = event.winner
                             game_state.queue = []
+                            # Clear the queue immediately to prevent processing any remaining effects
+                            game.queue = []
+                            game.save(update_fields=["queue"])
 
                             # Calculate and save ELO changes for PvP matches
                             GameService._update_elo_ratings(game)
+                            # Break out of the effect processing loop - game is over
                             break
+
+                    # If game ended, stop processing remaining effects
+                    if game.status == Game.GAME_STATUS_ENDED:
+                        break
 
                     # Enqueue child effects (depth-first)
                     if result.child_effects:
@@ -323,12 +351,27 @@ class GameService:
 
                     all_events.extend(result.events)
 
-                    # Process trait triggers for each event
+                    # ==== Event Triggers =====
                     from apps.gameplay import traits
+
                     for event in result.events:
                         trait_result = traits.apply(game_state, event)
                         if trait_result.child_effects:
                             game.enqueue(trait_result.child_effects, trigger=False, prepend=True)
+
+                        if isinstance(event, NewPhaseEvent):
+                            if event.phase == 'main' and game_state.time_per_turn > 0:
+                                from django.utils import timezone
+                                from datetime import timedelta
+                                turn_expires_dt = timezone.now() + timedelta(seconds=game_state.time_per_turn)
+                                game.turn_expires = turn_expires_dt
+                                # Also set in GameState so it's sent to frontend
+                                game_state.turn_expires = turn_expires_dt.isoformat()
+
+                        if isinstance(event, EndTurnEvent):
+                            game.turn_expires = None
+                            game_state.turn_expires = None
+
 
                 elif isinstance(result, (Prevented, Rejected)):
                     # Domain-level prevention or rejection
@@ -396,7 +439,7 @@ class GameService:
 
         # Single DB save for all processed events
         game.state = game_state.model_dump()
-        game.save(update_fields=["state", "queue", "status"])
+        game.save()
 
         # Send filtered updates to clients
         send_game_updates_to_clients(
@@ -425,13 +468,32 @@ class GameService:
             step.apply_async(args=[game_id], countdown=0.1)
 
     @staticmethod
+    @transaction.atomic
     def process_command(game_id: int, command: dict, side):
         try:
             game = Game.objects.get(id=game_id)
         except Game.DoesNotExist:
             raise ValueError(f"Game with id {game_id} does not exist")
 
+        # Reject commands if the game has already ended
+        if game.status == Game.GAME_STATUS_ENDED:
+            raise ValueError("The game has already ended.")
+
         game_state = GameState.model_validate(game.state)
+
+        # Check for turn timeout before processing command
+        if (game_state.phase == 'main'
+            and game_state.time_per_turn > 0
+            and game.turn_expires
+            and side == game_state.active):
+            from django.utils import timezone
+            if timezone.now() >= game.turn_expires:
+                # Time expired - automatically concede
+                from apps.gameplay.schemas.effects import ConcedeEffect
+                logger.info(f"Turn expired for {side} in game {game_id} when processing command, auto-conceding")
+                game.enqueue([ConcedeEffect(side=side)], trigger=False)
+                return  # Don't process the command, the concede will be handled
+
         effects = GameService.compile_cmd(game_state, command, side)
         game.enqueue(effects)
 
@@ -1113,7 +1175,7 @@ class GameService:
         for entry_a, entry_b in matched_pairs:
             try:
                 # Create the game
-                game = GameService.start_game(
+                game = GameService.create_game(
                     entry_a.deck,
                     entry_b.deck,
                     randomize_starting_player=True,
@@ -1122,6 +1184,13 @@ class GameService:
                 # Set game type to ranked for matchmaking games
                 game.type = Game.GAME_TYPE_RANKED
                 game.save(update_fields=['type'])
+
+                # Update time_per_turn in game state based on title config
+                from apps.gameplay.schemas.game import GameState
+                game_state = GameState.model_validate(game.state)
+                game_state.time_per_turn = game_state.config.ranked_time_per_turn
+                game.state = game_state.model_dump()
+                game.save(update_fields=['state'])
 
                 # Update both queue entries
                 entry_a.status = MatchmakingQueue.STATUS_MATCHED
@@ -1136,9 +1205,13 @@ class GameService:
 
                 logger.info(f"Created ranked game {game.id} for matched players")
 
+                # Kick off first step to initialize the game
+                from apps.gameplay.tasks import step
+                step.delay(game.id)
+
                 # Notify both players via websocket
                 from apps.gameplay.notifications import send_matchmaking_success
-                title_slug = getattr(entry_a.title, 'slug', None)
+                title_slug = getattr(entry_a.deck.title, 'slug', None)
                 if title_slug:
                     send_matchmaking_success(entry_a.user_id, game.id, title_slug)
                     send_matchmaking_success(entry_b.user_id, game.id, title_slug)
@@ -1154,3 +1227,36 @@ class GameService:
         matches_created = len(matched_pairs)
         logger.info(f"Matchmaking complete: created {matches_created} games")
         return matches_created
+
+    @staticmethod
+    @transaction.atomic
+    def check_expired_turns():
+        """
+        Check all active games for expired turns and automatically concede.
+        This is called periodically to catch timeouts even when no effects are being processed.
+        """
+        from django.utils import timezone
+        from apps.gameplay.schemas.effects import ConcedeEffect
+
+        now = timezone.now()
+
+        # Find all active games in main phase with turn_expires set
+        expired_games = Game.objects.filter(
+            status=Game.GAME_STATUS_IN_PROGRESS,
+            turn_expires__isnull=False,
+            turn_expires__lte=now
+        ).select_for_update(nowait=False)
+
+        for game in expired_games:
+            try:
+                game_state = GameState.model_validate(game.state)
+
+                # Only process if in main phase and has time control
+                if game_state.phase == 'main' and game_state.time_per_turn > 0:
+                    logger.info(f"Turn expired for {game_state.active} in game {game.id}, auto-conceding")
+                    game.enqueue([ConcedeEffect(side=game_state.active)], trigger=True)
+            except Exception as e:
+                logger.error(f"Error checking expired turn for game {game.id}: {e}")
+                continue
+
+        return f"Checked {len(expired_games)} games for expired turns"

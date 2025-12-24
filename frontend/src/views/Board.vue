@@ -80,7 +80,11 @@
             <!-- Mid Section -->
             <div class="flex flex-row justify-between border-gray-700 border-t border-b min-h-14">
                 <div class="flex items-center justify-center ml-2">
-                    Turn {{ gameState.turn }} <span class="text-gray-500 ml-2">[ {{ gameState.phase }} ]</span>
+                    Turn {{ gameState.turn }}
+                    <span v-if="gameState.time_per_turn && gameState.time_per_turn > 0" class="text-gray-500 ml-2">
+                        [ {{ timeLeftString }} ]
+                    </span>
+                    <span v-else class="text-gray-500 ml-2">[ {{ gameState.phase }} ]</span>
                 </div>
                 <GameButton
                     v-if="gameState.winner === 'none' && gameState.active === bottomSide"
@@ -364,6 +368,35 @@ const canEditTitle = computed(() => {
 
 // Game ID for debug overlay
 const gameId = computed(() => route.params.game_id as string)
+
+// Time control countdown
+const currentTime = ref(Date.now())
+
+const timeLeft = computed(() => {
+    if (!gameState.value.time_per_turn || gameState.value.time_per_turn === 0) {
+        return null
+    }
+
+    if (!gameState.value.turn_expires) {
+        return null
+    }
+
+    const expires = new Date(gameState.value.turn_expires).getTime()
+    const remaining = Math.max(0, Math.floor((expires - currentTime.value) / 1000))
+    return remaining
+})
+
+const timeLeftString = computed(() => {
+    const left = timeLeft.value
+    if (left === null) {
+        // If timer hasn't started yet (turn_expires is null), show phase as fallback
+        return gameState.value.phase
+    }
+
+    const minutes = Math.floor(left / 60)
+    const seconds = left % 60
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`
+})
 
 // Helper methods from store
 const get_card = (card_id: string | number) => {
@@ -942,12 +975,23 @@ const handleKeyDown = (event: KeyboardEvent) => {
     }
 }
 
+// Update current time every second for countdown timer
+let timeInterval: number | null = null
+
 onMounted(() => {
     window.addEventListener('keydown', handleKeyDown)
+
+    // Update current time every second for countdown timer
+    timeInterval = window.setInterval(() => {
+        currentTime.value = Date.now()
+    }, 1000)
 })
 
 onUnmounted(() => {
     window.removeEventListener('keydown', handleKeyDown)
+    if (timeInterval !== null) {
+        clearInterval(timeInterval)
+    }
     gameStore.disconnect()
 })
 </script>

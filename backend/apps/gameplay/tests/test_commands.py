@@ -54,21 +54,31 @@ class ProcessCommandTests(ServiceTestsBase):
         }
         GameService.process_command(self.game.id, command, 'side_a')
         self.game.refresh_from_db()
+        self.assertEqual(len(self.game.queue), 2)
+        self.assertEqual(self.game.queue[0]['type'], 'effect_start_game')
+        self.assertEqual(self.game.queue[1]['type'], 'effect_attack')
+
+        GameService.step(self.game.id)
+        self.game.refresh_from_db()
+        self.assertEqual(len(self.game.queue), 0)
         self.assertEqual(self.game.state['creatures']['5']['health'], 9)
         self.assertEqual(self.game.state['creatures']['1']['health'], 9)
-        self.assertEqual(len(self.game.queue), 0)
 
     def test_end_turn(self):
+        self.assertEqual(self.game.status, 'init')
+        GameService.step(self.game.id)
+        self.game.refresh_from_db()
+        self.assertEqual(self.game.status, 'in_progress')
+
         self.assertEqual(self.game.state['turn'], 1)
         self.assertEqual(self.game.state['active'], 'side_a')
         self.assertEqual(self.game.state['phase'], 'main')
+
         command = {'type': 'cmd_end_turn'}
         GameService.process_command(self.game.id, command, 'side_a')
         self.game.refresh_from_db()
-        self.assertEqual(self.game.state['turn'], 2)
-        self.assertEqual(self.game.state['active'], 'side_a')
-        self.assertEqual(self.game.state['phase'], 'main')
-
+        self.assertEqual(len(self.game.queue), 1)
+        self.assertEqual(self.game.queue[0]['type'], 'effect_end_turn')
 
 class AttackValidationTestBase(TestCase):
     """Base test class that sets up a game with creatures on both sides."""
@@ -122,7 +132,7 @@ class AttackValidationTestBase(TestCase):
             DeckCard.objects.create(deck=self.deck_a, card=card)
             DeckCard.objects.create(deck=self.deck_b, card=card)
 
-        self.game = GameService.start_game(self.deck_a, self.deck_b)
+        self.game = GameService.create_game(self.deck_a, self.deck_b)
         self.game.refresh_from_db()
 
         # Create a game state with creatures on both sides

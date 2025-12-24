@@ -98,6 +98,8 @@ export interface GameState {
   winner: Winner
   is_vs_ai: boolean
   elo_change?: EloChange
+  time_per_turn?: number
+  turn_expires?: string | null
 }
 
 // Game error types - matches backend Result types

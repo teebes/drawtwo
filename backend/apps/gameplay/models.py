@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q, Case, When, Value
 
 from apps.collection.models import Deck
@@ -102,6 +102,13 @@ class Game(TimestampedModel):
 
     queue = models.JSONField(default=list)
 
+    # Time control fields
+    turn_expires = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the current turn expires (for time enforcement)"
+    )
+
     @property
     def game_state(self):
         return GameState.model_validate(self.state)
@@ -161,7 +168,9 @@ class Game(TimestampedModel):
             self.save(update_fields=['queue'])
         if trigger:
             from apps.gameplay.tasks import step
-            step.apply_async(args=[self.id])
+            # Ensure the transaction is committed before triggering the step task
+            # This prevents the step task from failing silently due to lock contention
+            transaction.on_commit(lambda: step.apply_async(args=[self.id]))
 
 
 class GameUpdate(TimestampedModel):

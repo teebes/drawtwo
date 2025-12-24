@@ -15,6 +15,22 @@ from apps.gameplay.services import GameService
 from apps.gameplay.tasks import step
 
 
+def _update_game_time_per_turn(game: Game):
+    """Update time_per_turn in game state based on game type and title config."""
+    game_state = GameState.model_validate(game.state)
+
+    if game.type == Game.GAME_TYPE_RANKED:
+        # Use ranked_time_per_turn from title config
+        game_state.time_per_turn = game_state.config.ranked_time_per_turn
+    else:
+        # Friendly and PvE games have no time limit
+        game_state.time_per_turn = 0
+
+    # Update the state in the database
+    game.state = game_state.model_dump()
+    game.save(update_fields=['state'])
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def game_detail(request, game_id):
@@ -206,11 +222,11 @@ def create_game(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        logger.debug("About to call GameService.start_game")
+        logger.debug("About to call GameService.create_game")
         # Create the game using GameService with randomized starting player
         # TODO: In the future, this could be enhanced to alternate starting players
         # between the same two opponents based on previous game history
-        game = GameService.start_game(player_deck, opponent_deck, randomize_starting_player=True)
+        game = GameService.create_game(player_deck, opponent_deck, randomize_starting_player=True)
 
         # Set game type based on whether it's PvE or PvP
         if ai_deck_id:
@@ -218,6 +234,9 @@ def create_game(request):
         else:
             game.type = Game.GAME_TYPE_RANKED
         game.save(update_fields=['type'])
+
+        # Update time_per_turn in game state based on game type
+        _update_game_time_per_turn(game)
 
         logger.debug(f"Game created successfully: {game}")
 
@@ -380,6 +399,42 @@ def matchmaking_queue_status(request, title_slug):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+def leave_matchmaking_queue(request, title_slug):
+    """
+    Remove the user from the matchmaking queue for a specific title.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    title = get_object_or_404(Title, slug=title_slug)
+
+    # Find the user's active queue entry for this title
+    queue_entry = MatchmakingQueue.objects.filter(
+        user=request.user,
+        deck__title=title,
+        status=MatchmakingQueue.STATUS_QUEUED
+    ).first()
+
+    if not queue_entry:
+        return Response(
+            {'error': 'You are not currently in the queue for this title'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Cancel the queue entry
+    queue_entry.status = MatchmakingQueue.STATUS_CANCELLED
+    queue_entry.save(update_fields=['status'])
+
+    logger.info(f"User {request.user.display_name} left matchmaking queue for {title.name}")
+
+    return Response({
+        'message': 'Successfully left matchmaking queue',
+        'queue_entry_id': queue_entry.id
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def create_friendly_challenge(request):
     """
     Create a friend vs friend challenge (unrated). Requires:
@@ -508,9 +563,12 @@ def accept_friendly_challenge(request, challenge_id):
     challengee_deck = get_object_or_404(Deck, id=challengee_deck_id, user=request.user, title=challenge.title)
 
     # Create the game
-    game = GameService.start_game(challenge.challenger_deck, challengee_deck, randomize_starting_player=True)
+    game = GameService.create_game(challenge.challenger_deck, challengee_deck, randomize_starting_player=True)
     game.type = Game.GAME_TYPE_FRIENDLY
     game.save(update_fields=['type'])
+
+    # Update time_per_turn in game state (friendly games have no time limit)
+    _update_game_time_per_turn(game)
 
     # Link and update challenge
     challenge.challengee_deck = challengee_deck

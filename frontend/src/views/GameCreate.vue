@@ -436,13 +436,24 @@ const queueForRanked = async (): Promise<void> => {
     })
     notificationStore.success('Queued for ranked match! Waiting for opponent...')
     console.log('Queue response:', response.data)
-    await fetchRankedQueueStatus()
+
+    // Navigate to the ranked queue waiting screen
+    router.push({
+      name: 'RankedQueue',
+      params: { slug: titleSlug.value },
+      query: { deck_id: selectedPlayerDeck.value.id }
+    })
   } catch (err) {
     console.error('Error queueing for ranked:', err)
     notificationStore.handleApiError(err as Error)
     const errorResponse = (err as any)?.response
     if (errorResponse?.status === 400 && errorResponse?.data?.queue_entry_id) {
-      await fetchRankedQueueStatus()
+      // User is already in queue, navigate to waiting screen
+      router.push({
+        name: 'RankedQueue',
+        params: { slug: titleSlug.value },
+        query: { deck_id: selectedPlayerDeck.value.id }
+      })
     }
   } finally {
     queueingRanked.value = false

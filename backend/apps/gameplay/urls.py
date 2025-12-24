@@ -22,6 +22,7 @@ urlpatterns = [
     # Matchmaking
     path('matchmaking/queue/', views.queue_for_ranked_match, name='queue-ranked-match'),
     path('matchmaking/status/<slug:title_slug>/', views.matchmaking_queue_status, name='matchmaking-status'),
+    path('matchmaking/leave/<slug:title_slug>/', views.leave_matchmaking_queue, name='leave-matchmaking-queue'),
 
     # Friendly challenges
     path('challenges/', views.create_friendly_challenge, name='friendly-challenge-create'),

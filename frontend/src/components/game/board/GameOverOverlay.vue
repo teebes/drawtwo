@@ -8,9 +8,9 @@
                 <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
                     {{ gameOver.winner === viewer ? 'Victory!' : 'Defeat!' }}
                 </h2>
-                <p class="text-lg text-gray-600 dark:text-gray-400">
+                <!-- <p class="text-lg text-gray-600 dark:text-gray-400">
                     {{ gameOver.winner === 'side_a' ? 'Side A' : 'Side B' }} wins the game!
-                </p>
+                </p> -->
             </div>
 
             <!-- ELO Rating Changes (only for PvP games) -->

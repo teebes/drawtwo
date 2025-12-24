@@ -134,6 +134,9 @@ class GameState(BaseModel):
 
     config: TitleConfig = Field(default_factory=TitleConfig)
 
+    time_per_turn: int = 0
+    turn_expires: Optional[str] = None
+
     @property
     def opposite_side(self) -> Literal["side_a", "side_b"]:
         return "side_b" if self.active == "side_a" else "side_a"
