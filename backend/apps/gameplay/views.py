@@ -222,11 +222,11 @@ def create_game(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        logger.debug("About to call GameService.start_game")
+        logger.debug("About to call GameService.create_game")
         # Create the game using GameService with randomized starting player
         # TODO: In the future, this could be enhanced to alternate starting players
         # between the same two opponents based on previous game history
-        game = GameService.start_game(player_deck, opponent_deck, randomize_starting_player=True)
+        game = GameService.create_game(player_deck, opponent_deck, randomize_starting_player=True)
 
         # Set game type based on whether it's PvE or PvP
         if ai_deck_id:
@@ -563,7 +563,7 @@ def accept_friendly_challenge(request, challenge_id):
     challengee_deck = get_object_or_404(Deck, id=challengee_deck_id, user=request.user, title=challenge.title)
 
     # Create the game
-    game = GameService.start_game(challenge.challenger_deck, challengee_deck, randomize_starting_player=True)
+    game = GameService.create_game(challenge.challenger_deck, challengee_deck, randomize_starting_player=True)
     game.type = Game.GAME_TYPE_FRIENDLY
     game.save(update_fields=['type'])
 

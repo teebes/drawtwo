@@ -35,6 +35,7 @@ class UseHeroCommand(CommandBase):
     target_type: Literal["card", "hero", "creature"] = "card"
     target_id: str
 
+
 class EndTurnCommand(CommandBase):
     type: Literal["cmd_end_turn"] = "cmd_end_turn"
 

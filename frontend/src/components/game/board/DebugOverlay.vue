@@ -1,6 +1,9 @@
 <template>
     <div class="flex-1 min-h-0 p-6">
         <div class="flex flex-col space-y-6">
+
+            <div class="">You are <span v-if="gameState.active === 'side_a'">Side A</span><span v-else>Side B</span></div>
+
             <div class="space-y-2">
                 <h3 class="text-lg font-semibold text-gray-300">Game State</h3>
                 <a
@@ -42,10 +45,15 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import axios from '../../../config/api'
+import { useGameStore } from '../../../stores/game'
+import { storeToRefs } from 'pinia'
 
 const props = defineProps<{
     gameId: string
 }>()
+
+const gameStore = useGameStore()
+const { gameState } = storeToRefs(gameStore)
 
 const advanceSuccess = ref<string | null>(null)
 
