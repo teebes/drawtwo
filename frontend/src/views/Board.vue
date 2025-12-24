@@ -965,6 +965,10 @@ watch(() => gameOver.value.isGameOver, (isGameOver) => {
     if (isGameOver) {
         clearLocalState()
         showingGameOver.value = true
+
+        if (!gameState.value.elo_change) {
+            gameStore.fetchEloChange(route.params.game_id as string)
+        }
     }
 })
 

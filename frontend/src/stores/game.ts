@@ -292,6 +292,22 @@ export const useGameStore = defineStore('game', {
       return useNotificationStore()
     },
 
+    async fetchEloChange(gameId: string): Promise<void> {
+      try {
+        const response = await axios.get(`/gameplay/games/${gameId}/`)
+        const { elo_change } = response.data
+
+        if (elo_change) {
+          this.gameState = {
+            ...this.gameState,
+            elo_change,
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch ELO change', err)
+      }
+    },
+
     async fetchGameState(gameId: string): Promise<void> {
       try {
         this.loading = true
