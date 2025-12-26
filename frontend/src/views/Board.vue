@@ -91,7 +91,10 @@
                     variant="secondary"
                     class="m-2"
                     @click="handleEndTurn">End Turn</GameButton>
-                <div v-else-if="gameState.winner !== 'none'" class="flex items-center justify-center mr-4">{{ gameOver.winner }} wins!</div>
+                <div v-else-if="gameState.winner !== 'none'" class="flex items-center justify-center mr-4">
+                    <span v-if="gameOver.winner === bottomSide">You win!</span>
+                    <span v-else-if="gameOver.winner === topSide">You lose!</span>
+                </div>
             </div>
 
             <!-- Viewer Side-->
@@ -231,7 +234,6 @@
 
          </main>
 
-        <!-- -->
     </div>
 
     <!-- Loading Screen -->
