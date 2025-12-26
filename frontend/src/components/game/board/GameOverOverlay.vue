@@ -19,28 +19,29 @@
                     ⚔️ Rating Changes
                 </h3>
                 <div class="space-y-2">
+                    <!-- Winner -->
                     <div class="flex items-center justify-between p-2 bg-green-50 dark:bg-green-900/20 rounded">
                         <span class="font-medium text-gray-900 dark:text-white">
-                            🏆 {{ eloChange.winner.display_name }}
+                            {{ eloChange.winner.display_name }}
                         </span>
                         <div class="flex items-center gap-2">
-                            <span class="text-gray-600 dark:text-gray-400">{{ eloChange.winner.old_rating }}</span>
-                            <span class="text-green-600 dark:text-green-400 font-bold">
-                                {{ eloChange.winner.change > 0 ? '+' : '' }}{{ eloChange.winner.change }}
-                            </span>
                             <span class="font-bold text-amber-600 dark:text-amber-400">{{ eloChange.winner.new_rating }}</span>
+                            <span class="text-green-600 dark:text-green-400 font-bold">
+                                [ {{ eloChange.winner.change > 0 ? '+' : '' }}{{ eloChange.winner.change }} ]
+                            </span>
                         </div>
                     </div>
+
+                    <!-- Loser -->
                     <div class="flex items-center justify-between p-2 bg-red-50 dark:bg-red-900/20 rounded">
                         <span class="font-medium text-gray-900 dark:text-white">
                             {{ eloChange.loser.display_name }}
                         </span>
                         <div class="flex items-center gap-2">
-                            <span class="text-gray-600 dark:text-gray-400">{{ eloChange.loser.old_rating }}</span>
-                            <span class="text-red-600 dark:text-red-400 font-bold">
-                                {{ eloChange.loser.change }}
-                            </span>
                             <span class="font-bold text-amber-600 dark:text-amber-400">{{ eloChange.loser.new_rating }}</span>
+                            <span class="text-red-600 dark:text-red-400 font-bold">
+                                [ {{ eloChange.loser.change }} ]
+                            </span>
                         </div>
                     </div>
                 </div>

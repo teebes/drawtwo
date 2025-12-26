@@ -85,6 +85,14 @@ class GameConsumer(AsyncWebsocketConsumer):
         logger.debug("#### Consumer received: ####")
         logger.debug(f"received: {data}")
 
+        # Handle heartbeat ping messages (no-op, connection keepalive)
+        if message_type == 'ping':
+            logger.debug("Received heartbeat ping, responding with pong")
+            await self.send(text_data=json.dumps({
+                'type': 'pong'
+            }))
+            return
+
         try:
             await self.process_command(data, side=self.side)
         except Exception as e:
