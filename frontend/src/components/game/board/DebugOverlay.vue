@@ -4,6 +4,10 @@
 
             <div class="">You are <span v-if="gameState.active === 'side_a'">Side A</span><span v-else>Side B</span></div>
 
+            <div class="text-sm text-gray-400">
+                WS: <span :class="{ 'text-green-400': wsStatus === 'connected', 'text-yellow-400': wsStatus === 'connecting' || wsStatus === 'reconnecting', 'text-red-400': wsStatus === 'disconnected' }">{{ wsStatus }}</span><span v-if="reconnectAttempts > 0"> (attempt {{ reconnectAttempts }}/10)</span><span v-if="messageQueue.length > 0"> • {{ messageQueue.length }} queued</span>
+            </div>
+
             <div class="space-y-2">
                 <h3 class="text-lg font-semibold text-gray-300">Game State</h3>
                 <a
@@ -53,7 +57,7 @@ const props = defineProps<{
 }>()
 
 const gameStore = useGameStore()
-const { gameState } = storeToRefs(gameStore)
+const { gameState, wsStatus, reconnectAttempts, messageQueue } = storeToRefs(gameStore)
 
 const advanceSuccess = ref<string | null>(null)
 

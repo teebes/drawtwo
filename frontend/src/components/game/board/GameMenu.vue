@@ -15,17 +15,15 @@
             Concede
         </div>
 
-        <div class="text-2xl">
-            <router-link :to="{ name: 'Title', params: { slug: titleSlug } }"
-                         class="hover:text-gray-400">
-                Exit Game
-            </router-link>
+        <div class="text-2xl cursor-pointer hover:text-gray-400" @click="handleExitGame">
+            Exit Game
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
 import { useGameStore } from '@/stores/game'
+import { useRouter } from 'vue-router'
 
 const props = defineProps<{
     canEditTitle: boolean
@@ -39,6 +37,7 @@ const emit = defineEmits<{
 }>()
 
 const gameStore = useGameStore()
+const router = useRouter()
 
 const handleClickUpdates = () => {
     emit('clickUpdates')
@@ -52,5 +51,13 @@ const handleConcede = () => {
     if (confirm('Are you sure you want to concede this game?')) {
         gameStore.concedeGame()
     }
+}
+
+const handleExitGame = () => {
+    // Disconnect WebSocket intentionally before navigating
+    gameStore.disconnectWebSocket()
+
+    // Navigate to title page
+    router.push({ name: 'Title', params: { slug: props.titleSlug } })
 }
 </script>

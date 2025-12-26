@@ -6,7 +6,7 @@ import { useNotificationStore } from './notifications'
 import { useAuthStore } from './auth'
 
 // WebSocket status type
-type WebSocketStatus = 'disconnected' | 'connecting' | 'connected'
+type WebSocketStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
 
 // Game store state interface
 interface GameStoreState {
@@ -22,6 +22,13 @@ interface GameStoreState {
   }
   socket: WebSocket | null
   wsStatus: WebSocketStatus
+  intentionalDisconnect: boolean
+  reconnectAttempts: number
+  maxReconnectAttempts: number
+  reconnectTimeoutId: number | null
+  heartbeatIntervalId: number | null
+  messageQueue: WebSocketMessage[]
+  currentGameId: string | null
 
   updates: any[]
 }
@@ -68,6 +75,13 @@ export const useGameStore = defineStore('game', {
     // WebSocket state
     socket: null,
     wsStatus: 'disconnected',
+    intentionalDisconnect: false,
+    reconnectAttempts: 0,
+    maxReconnectAttempts: 10,
+    reconnectTimeoutId: null,
+    heartbeatIntervalId: null,
+    messageQueue: [],
+    currentGameId: null,
     updates: []
   }),
 
@@ -336,6 +350,10 @@ export const useGameStore = defineStore('game', {
     },
 
     connectWebSocket(gameId: string): void {
+      // Store game ID for reconnection attempts
+      this.currentGameId = gameId
+      this.intentionalDisconnect = false
+
       const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
       const baseUrl = getBaseUrl().replace(/^https?:/, protocol + ':')
 
@@ -346,14 +364,40 @@ export const useGameStore = defineStore('game', {
         ? `${baseUrl}/ws/game/${gameId}/?token=${token}`
         : `${baseUrl}/ws/game/${gameId}/`
 
-      this.wsStatus = 'connecting'
+      // Set status based on whether this is initial connection or reconnection
+      const isReconnecting = this.reconnectAttempts > 0
+      this.wsStatus = isReconnecting ? 'reconnecting' : 'connecting'
+
+      if (isReconnecting) {
+        console.log(`🔄 Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}...`)
+      } else {
+        console.log('🔄 Attempting WebSocket connection...')
+      }
+
+      // Close existing socket if any
+      if (this.socket) {
+        this.socket.close()
+      }
 
       // WebSocket connection with JWT token in query params
       this.socket = new WebSocket(wsUrl)
 
       this.socket.onopen = () => {
-        console.log('WebSocket connected')
+        console.log('✅ WebSocket connected successfully')
+        console.log('🔗 Connection URL:', wsUrl.replace(/token=.+/, 'token=***'))
+
+        if (this.reconnectAttempts > 0) {
+          console.log(`✅ Reconnected after ${this.reconnectAttempts} attempts`)
+        }
+
         this.wsStatus = 'connected'
+        this.reconnectAttempts = 0
+
+        // Start heartbeat to keep connection alive
+        this.startHeartbeat()
+
+        // Flush any queued messages
+        this.flushMessageQueue()
       }
 
       this.socket.onmessage = (event: MessageEvent) => {
@@ -362,17 +406,135 @@ export const useGameStore = defineStore('game', {
       }
 
       this.socket.onerror = (error: Event) => {
-        console.error('WebSocket error:', error)
+        console.error('❌ WebSocket error:', error)
       }
 
-      this.socket.onclose = () => {
-        console.log('WebSocket disconnected')
+      this.socket.onclose = (event: CloseEvent) => {
+        console.warn(
+          '🔌 WebSocket disconnected - Code:',
+          event.code,
+          'Reason:',
+          event.reason || '(no reason provided)',
+          'Clean:',
+          event.wasClean
+        )
+
         this.wsStatus = 'disconnected'
+        this.stopHeartbeat()
+
+        // Attempt reconnection if this wasn't intentional
+        if (!this.intentionalDisconnect) {
+          console.warn('🔄 Connection lost unexpectedly, will attempt reconnection...')
+          this.attemptReconnect()
+        } else {
+          console.log('✅ WebSocket closed intentionally (user navigated away or exited game)')
+          this.resetReconnectionState()
+        }
       }
+    },
+
+    disconnectWebSocket(): void {
+      console.log('🛑 Intentionally disconnecting WebSocket...')
+      this.intentionalDisconnect = true
+      this.stopHeartbeat()
+
+      if (this.reconnectTimeoutId) {
+        clearTimeout(this.reconnectTimeoutId)
+        this.reconnectTimeoutId = null
+      }
+
+      if (this.socket) {
+        this.socket.close(1000, 'User navigated away')
+        this.socket = null
+      }
+
+      this.wsStatus = 'disconnected'
+      this.resetReconnectionState()
+    },
+
+    attemptReconnect(): void {
+      // Clear any existing reconnection timeout
+      if (this.reconnectTimeoutId) {
+        clearTimeout(this.reconnectTimeoutId)
+      }
+
+      // Check if we've exceeded max attempts
+      if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+        console.error(
+          `❌ Max reconnection attempts (${this.maxReconnectAttempts}) reached. Please refresh the page.`
+        )
+        const notificationStore = this.getNotificationStore()
+        notificationStore.error('Connection lost. Please refresh the page.')
+        return
+      }
+
+      // Exponential backoff: 1s, 2s, 4s, 8s, 16s, capped at 30s
+      const baseDelay = 1000
+      const delay = Math.min(baseDelay * Math.pow(2, this.reconnectAttempts), 30000)
+
+      console.log(`⏱️  Reconnecting in ${delay}ms...`)
+
+      this.reconnectAttempts++
+      this.reconnectTimeoutId = window.setTimeout(() => {
+        if (this.currentGameId && !this.intentionalDisconnect) {
+          this.connectWebSocket(this.currentGameId)
+        }
+      }, delay)
+    },
+
+    startHeartbeat(): void {
+      // Clear any existing heartbeat
+      this.stopHeartbeat()
+
+      // Send ping every 30 seconds to keep connection alive
+      this.heartbeatIntervalId = window.setInterval(() => {
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+          console.log('💓 Sending heartbeat ping...')
+          this.socket.send(JSON.stringify({ type: 'ping' }))
+        } else {
+          console.warn('⚠️ Heartbeat: WebSocket not open, stopping heartbeat')
+          this.stopHeartbeat()
+        }
+      }, 30000) // 30 seconds
+    },
+
+    stopHeartbeat(): void {
+      if (this.heartbeatIntervalId) {
+        clearInterval(this.heartbeatIntervalId)
+        this.heartbeatIntervalId = null
+        console.log('🛑 Heartbeat stopped')
+      }
+    },
+
+    flushMessageQueue(): void {
+      if (this.messageQueue.length === 0) {
+        return
+      }
+
+      console.log(`📤 Flushing ${this.messageQueue.length} queued messages...`)
+
+      const queue = [...this.messageQueue]
+      this.messageQueue = []
+
+      for (const message of queue) {
+        this.sendWebSocketMessage(message)
+      }
+    },
+
+    resetReconnectionState(): void {
+      this.reconnectAttempts = 0
+      this.messageQueue = []
+      this.currentGameId = null
     },
 
     handleWebSocketMessage(data: any): void {
       console.log('WebSocket message:', data)
+
+      // Handle pong responses (heartbeat acknowledgement)
+      if (data.type === 'pong') {
+        console.log('💓 Received pong response (heartbeat acknowledged)')
+        return
+      }
 
       // Handle errors first
       if (data.errors && Array.isArray(data.errors)) {
@@ -443,9 +605,29 @@ export const useGameStore = defineStore('game', {
     },
 
     sendWebSocketMessage(message: WebSocketMessage): void {
-      if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-        console.log('Sending message:', message)
+      if (!this.socket) {
+        console.warn('⚠️ WebSocket is null, queueing message for reconnection:', message)
+        this.messageQueue.push(message)
+        return
+      }
+
+      const readyStateNames = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED']
+      const stateName = readyStateNames[this.socket.readyState] || 'UNKNOWN'
+
+      if (this.socket.readyState === WebSocket.OPEN) {
+        console.log('✅ Sending message:', message)
         this.socket.send(JSON.stringify(message))
+      } else {
+        console.warn(
+          `⚠️ WebSocket is ${stateName} (readyState: ${this.socket.readyState}), queueing message:`,
+          message
+        )
+        this.messageQueue.push(message)
+
+        // Show user notification if we're in a reconnecting state
+        if (this.wsStatus === 'reconnecting' || this.wsStatus === 'connecting') {
+          console.log(`📥 Message queued. Will send when connection is restored. Queue size: ${this.messageQueue.length}`)
+        }
       }
     },
 
@@ -608,11 +790,8 @@ export const useGameStore = defineStore('game', {
 
     // Cleanup
     disconnect(): void {
-      if (this.socket) {
-        this.socket.close()
-        this.socket = null
-      }
-      this.wsStatus = 'disconnected'
+      // Call the new disconnectWebSocket method which handles intentional disconnection properly
+      this.disconnectWebSocket()
     }
   }
 })

@@ -33,7 +33,22 @@
                     </div>
 
                     <!-- Menu -->
-                    <div class="w-24 flex justify-center items-center text-center border-l border-gray-700">
+                    <div class="w-24 flex flex-col justify-center items-center text-center border-l border-gray-700 relative">
+                        <!-- WebSocket Status Indicator -->
+                        <div class="flex items-center mb-1 absolute top-2 right-1" :title="`WebSocket: ${wsStatus}`">
+                            <div
+                                class="w-2 h-2 rounded-full mr-1"
+                                :class="{
+                                    'bg-green-500': wsStatus === 'connected',
+                                    'bg-yellow-500 animate-pulse': wsStatus === 'connecting' || wsStatus === 'reconnecting',
+                                    'bg-red-500': wsStatus === 'disconnected'
+                                }"
+                                :title="`WebSocket: ${wsStatus}`"
+                            ></div>
+                            <!-- <span class="text-xs text-gray-400" :title="`WebSocket: ${wsStatus}`">
+                                {{ wsStatus === 'connected' ? '●' : wsStatus === 'reconnecting' ? '↻' : wsStatus === 'connecting' ? '...' : '○' }}
+                            </span> -->
+                        </div>
                         <span class="inline-block cursor-pointer" @click="handleMenuClick">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-label="Menu" xmlns="http://www.w3.org/2000/svg">
                                 <rect y="5" width="24" height="2" rx="1" fill="currentColor"/>
@@ -245,7 +260,7 @@
 </template>
 
 <script setup lang="ts">
-import { watch, computed, ref, onMounted, onUnmounted } from 'vue'
+import { watch, computed, ref, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import type { CardInPlay, Creature } from '../types/game'
 import { useAuthStore } from '../stores/auth'
@@ -296,7 +311,8 @@ const {
   topSide,
   bottomSide,
   displayUpdates,
-  canUseHero
+  canUseHero,
+  wsStatus
 } = storeToRefs(gameStore)
 
 // Get hero art URLs

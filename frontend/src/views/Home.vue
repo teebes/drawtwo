@@ -11,13 +11,13 @@
             Draw Two
           </h1>
           <p class="mt-8 text-xl leading-relaxed text-gray-600 dark:text-gray-400 sm:text-2xl">
-            An open-source engine for building online trading card games.
+            An open-source engine for building strategy card games.
           </p>
 
           <div class="mt-16">
             <button
               @click="handlePlayClick"
-              class="inline-flex items-center justify-center rounded-xl bg-gray-900 px-12 py-5 text-lg font-medium text-white shadow-lg transition-all hover:bg-gray-800 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-4 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 dark:focus:ring-white sm:text-xl"
+              class="inline-flex items-center justify-center rounded-xl bg-primary-600 px-12 py-5 text-lg font-medium text-white shadow-lg transition-all hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-seon-900 focus:ring-offset-4"
             >
               Play
             </button>
@@ -34,7 +34,7 @@
 
           <div class="mt-8 space-y-6 text-lg leading-relaxed text-gray-700 dark:text-gray-300">
             <p>
-              Draw Two is a game engine designed for building online trading card games—open source and extensible.
+              Draw Two is a game engine designed for building strategy card games, open source and extensible.
             </p>
 
             <p>
@@ -49,10 +49,6 @@
               and a template for builders to create other games.
             </p>
 
-            <p>
-              The engine is built with modern web technologies and designed to support
-              multiple game titles, each with their own unique cards, mechanics, and gameplay.
-            </p>
           </div>
 
           <div class="mt-12 flex items-center gap-3">
