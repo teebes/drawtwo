@@ -99,7 +99,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import type { CardInPlay, Creature, HeroInPlay } from '@/types/game'
 import { useGameStore } from '@/stores/game'
 import GameCard from '../GameCard.vue'
@@ -237,6 +237,64 @@ const canUseHero = computed(() => {
     if (!props.isOwned) return false
 
     return gameStore.canUseHero
+})
+
+const hasPrimaryAction = computed(() => {
+    if (!props.isOwned) return false
+
+    if (props.entityType === 'card' && props.card && canPlayCard.value) {
+        return props.card.card_type === 'creature' || props.card.card_type === 'spell'
+    }
+
+    if (props.entityType === 'creature' && props.creature && canAttack.value) {
+        return true
+    }
+
+    if (props.entityType === 'hero' && props.hero && canUseHero.value) {
+        return true
+    }
+
+    return false
+})
+
+function triggerPrimaryAction() {
+    if (!hasPrimaryAction.value) return
+
+    if (props.entityType === 'card' && props.card && canPlayCard.value) {
+        if (props.card.card_type === 'creature') {
+            handlePlaceCreature()
+        } else if (props.card.card_type === 'spell') {
+            handleCastSpell()
+        }
+        return
+    }
+
+    if (props.entityType === 'creature' && props.creature && canAttack.value) {
+        handleAttack()
+        return
+    }
+
+    if (props.entityType === 'hero' && props.hero && canUseHero.value) {
+        handleUseHero()
+    }
+}
+
+const handleEnterKey = (event: KeyboardEvent) => {
+    if (event.key !== 'Enter' || event.repeat || event.defaultPrevented) return
+    triggerPrimaryAction()
+    if (hasPrimaryAction.value) {
+        event.preventDefault()
+    }
+}
+
+onMounted(() => {
+    if (typeof window === 'undefined') return
+    window.addEventListener('keydown', handleEnterKey)
+})
+
+onBeforeUnmount(() => {
+    if (typeof window === 'undefined') return
+    window.removeEventListener('keydown', handleEnterKey)
 })
 
 function requiresTarget(card: CardInPlay): boolean {
