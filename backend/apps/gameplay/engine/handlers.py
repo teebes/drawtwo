@@ -281,20 +281,22 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
     else:
         raise NotImplementedError
 
-    events = [DamageEvent(
-        side=effect.side,
-        source_type=effect.source_type,
-        source_id=effect.source_id,
-        target_type=effect.target_type,
-        target_id=effect.target_id,
-        damage=effect.damage,
-        is_retaliation=effect.is_retaliation,
-    )]
+    events = []
 
     if target_type == "hero":
 
         hero = target
         hero.health -= effect.damage
+
+        events.append(DamageEvent(
+            side=effect.side,
+            source_type=effect.source_type,
+            source_id=effect.source_id,
+            target_type=effect.target_type,
+            target_id=effect.target_id,
+            damage=effect.damage,
+            is_retaliation=effect.is_retaliation,
+        ))
 
         if hero.health <= 0:
             # If the hero dies, that is a game over event
@@ -302,21 +304,45 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
             events.append(GameOverEvent(side=effect.side, winner=effect.side))
 
     if target_type == "card" or target_type == "creature":
+
+        # This situation can occur for example in aoe damage situation
+        # and we rather than return a Rejected we return a Success because
+        # we don't want to the user to see an error message.
+        if target_type == "creature":
+            if effect.target_id not in (
+                state.board[opposing_side] + state.board[effect.side]):
+                return Success(
+                    new_state=state,
+                    events=events,
+                    child_effects=child_effects)
+
+        events.append(DamageEvent(
+            side=effect.side,
+            source_type=effect.source_type,
+            source_id=effect.source_id,
+            target_type=effect.target_type,
+            target_id=effect.target_id,
+            damage=effect.damage,
+            is_retaliation=effect.is_retaliation,
+        ))
+
         # Target is a creature on the board (we already fetched it above)
         target.health -= effect.damage
 
         # Creature death
         if target.health <= 0:
-            state.board[opposing_side].remove(effect.target_id)
+            # Only remove from board if still present (may have been removed by a previous effect)
+            if effect.target_id in state.board[opposing_side]:
+                state.board[opposing_side].remove(effect.target_id)
 
-            events.append(CreatureDeathEvent(
-                side=opposing_side,
-                source_type=effect.source_type,
-                source_id=effect.source_id,
-                creature=target,
-                target_type=effect.target_type,
-                target_id=effect.target_id,
-            ))
+                events.append(CreatureDeathEvent(
+                    side=opposing_side,
+                    source_type=effect.source_type,
+                    source_id=effect.source_id,
+                    creature=target,
+                    target_type=effect.target_type,
+                    target_id=effect.target_id,
+                ))
 
         if target.health > 0 or state.config.death_retaliation:
             # Determine if we need to retaliate

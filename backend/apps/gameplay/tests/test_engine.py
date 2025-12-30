@@ -209,6 +209,89 @@ class EngineTests(GamePlayTestBase):
         # This should work without errors - creature should take 1 damage
         self.assertEqual(damage_result.new_state.creatures["2"].health, 9)
 
+    def test_meteor_spell_targets_one_and_hits_all(self):
+        """Meteor should kill the targeted creature and hit all enemy units."""
+        meteor_spell = CardInPlay(
+            card_type="spell",
+            card_id="meteor_spell",
+            template_slug="meteor",
+            name="Meteor",
+            cost=6,
+            traits=[
+                Battlecry(
+                    actions=[
+                        DamageAction(amount=4, target="enemy", scope="single"),
+                        DamageAction(amount=2, target="enemy", scope="all"),
+                    ]
+                )
+            ],
+        )
+
+        herald_1 = Creature(
+            creature_id="herald_1",
+            card_id="herald_card_1",
+            name="Herald",
+            attack=4,
+            attack_max=4,
+            health=4,
+            health_max=4,
+            exhausted=False,
+        )
+        herald_2 = Creature(
+            creature_id="herald_2",
+            card_id="herald_card_2",
+            name="Herald",
+            attack=4,
+            attack_max=4,
+            health=4,
+            health_max=4,
+            exhausted=False,
+        )
+
+        self.game_state.cards["meteor_spell"] = meteor_spell
+        self.game_state.creatures["herald_1"] = herald_1
+        self.game_state.creatures["herald_2"] = herald_2
+        self.game_state.board["side_b"] = ["herald_1", "herald_2"]
+        self.game_state.hands["side_a"] = ["meteor_spell"]
+        self.game_state.mana_pool["side_a"] = 6
+        self.game_state.mana_used["side_a"] = 0
+
+        play_effect = PlayEffect(
+            side="side_a",
+            source_id="meteor_spell",
+            position=0,
+            target_type="creature",
+            target_id="herald_1",
+        )
+        result = resolve(play_effect, self.game_state)
+        self.assertTrue(isinstance(result, Success))
+        new_state = result.new_state
+        self.assertEqual(new_state.hands["side_a"], [])
+        self.assertEqual(new_state.graveyard["side_a"], ["meteor_spell"])
+        self.assertEqual(new_state.mana_used["side_a"], 6)
+
+        trait_result = traits.apply(new_state, result.events[0])
+        # Meteor should produce one effect for the targeted hit and three for the AoE
+        # Note: herald_1 gets hit twice (4 damage targeted + 2 damage AoE)
+        self.assertEqual(len(trait_result.child_effects), 4)
+        for damage_effect in trait_result.child_effects:
+            self.assertEqual(damage_effect.type, "effect_damage")
+
+        # Process all damage effects in order, just like the game engine does
+        final_state = new_state
+        for damage_effect in trait_result.child_effects:
+            damage_result = resolve(damage_effect, final_state)
+            self.assertTrue(isinstance(damage_result, Success))
+            final_state = damage_result.new_state
+
+        # Targeted herald should be dead (4 damage killed it, 2 damage AoE hit dead creature)
+        self.assertNotIn("herald_1", final_state.board["side_b"])
+        self.assertEqual(final_state.creatures["herald_1"].health, 0)
+        # herald_2 only took 2 damage from AoE
+        self.assertEqual(final_state.creatures["herald_2"].health, 2)
+        # Hero should also take 2 damage from the AoE
+        self.assertEqual(final_state.heroes["side_b"].health, 8)
+
     def test_play_spell_buff_requires_target(self):
         """Targeted buff spells should require an explicit target (no auto-leftmost)."""
         from apps.builder.schemas import Battlecry, BuffAction
