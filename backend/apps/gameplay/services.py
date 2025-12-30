@@ -567,9 +567,10 @@ class GameService:
             if not active_hero or active_hero.hero_id != command.hero_id:
                 raise ValueError(f"You do not control hero {command.hero_id}")
 
-            # Determine if this hero power targets friendlies or enemies
+            # Determine if this hero power targets friendlies
             targets_friendly = any(
-                isinstance(action, HealAction) and action.target == 'friendly'
+                ((isinstance(action, HealAction) and action.target == 'friendly') or
+                (isinstance(action, DamageAction) and action.target == 'self'))
                 for action in active_hero.hero_power.actions
             )
 
@@ -655,6 +656,13 @@ class GameService:
                 # 'enemy' can be hero or creature, use event target
                 base_target_type = event.target_type or "hero"
                 base_target_id = event.target_id or state.heroes[opposing_side].hero_id
+            elif action.target == "self":
+                if source_type in ("hero", "creature") and source_id:
+                    base_target_type = source_type
+                    base_target_id = source_id
+                else:
+                    base_target_type = event.target_type
+                    base_target_id = event.target_id
             else:
                 base_target_type = event.target_type
                 base_target_id = event.target_id

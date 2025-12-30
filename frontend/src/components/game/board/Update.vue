@@ -203,6 +203,12 @@ const updateText = (update: any) => {
                 target_name = opposite_hero.name;
         }
 
+        const is_self_target =
+            update.source_type === update.target_type && update.source_id === update.target_id && Boolean(update.source_id);
+        if (is_self_target) {
+            return `${side_name} ${source_name} damages itself (-${update.damage})`;
+        }
+
         return `${side_name} ${source_name} > ${target_name} (-${update.damage})`;
     }
 

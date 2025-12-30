@@ -8,7 +8,7 @@ from apps.builder.models import AIPlayer, CardTemplate, HeroTemplate, Title
 from apps.builder.schemas import HeroPower, DamageAction, Taunt, Stealth
 from apps.collection.models import Deck, DeckCard
 from apps.gameplay.engine.dispatcher import resolve
-from apps.gameplay.schemas.effects import AttackEffect, UseHeroEffect
+from apps.gameplay.schemas.effects import AttackEffect, DamageEffect, UseHeroEffect
 from apps.gameplay.schemas.game import GameState, Creature, HeroInPlay
 from apps.gameplay.services import GameService
 from apps.gameplay.ai import AIMoveChooser
@@ -589,6 +589,40 @@ class HeroPowerEffectValidationTests(AttackValidationTestBase):
         self.assertEqual(result.type, 'outcome_success')
         # Should have child effects
         self.assertGreater(len(result.child_effects), 0)
+
+    def test_hero_power_self_damage_targets_self(self):
+        """Hero power should be able to damage the hero itself when target='self'."""
+        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        self.game_state.heroes['side_a'].hero_power = HeroPower(
+            name='Self Harm',
+            actions=[
+                DamageAction(
+                    amount=2,
+                    target='self',
+                    scope='single',
+                )
+            ]
+        )
+        self.game_state.heroes['side_a'].exhausted = False
+        initial_health = self.game_state.heroes['side_a'].health
+
+        effect = UseHeroEffect(
+            side='side_a',
+            source_id=hero_a_id,
+            target_type='hero',
+            target_id=hero_a_id,
+        )
+
+        result = resolve(effect, self.game_state)
+        self.assertEqual(result.type, 'outcome_success')
+
+        hero_damage_effects = [
+            child for child in result.child_effects
+            if isinstance(child, DamageEffect) and child.target_type == 'hero' and child.target_id == hero_a_id
+        ]
+        self.assertTrue(hero_damage_effects)
+        damage_result = resolve(hero_damage_effects[0], result.new_state)
+        self.assertEqual(damage_result.new_state.heroes['side_a'].health, initial_health - 2)
 
 
 class HealingHeroPowerTests(AttackValidationTestBase):

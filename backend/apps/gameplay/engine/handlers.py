@@ -130,6 +130,8 @@ def _card_play_requires_target(card: CardInPlay) -> bool:
                 continue
             if isinstance(action, DamageAction) and action.target == "hero":
                 continue
+            if isinstance(action, DamageAction) and action.target == "self":
+                continue
             if isinstance(action, HealAction) and action.target == "hero":
                 continue
             return True
@@ -145,6 +147,8 @@ def _card_play_allowed_target_types(card: CardInPlay) -> set[str]:
         if not isinstance(action, (DamageAction, HealAction, RemoveAction, BuffAction)):
             continue
         if getattr(action, "scope", "single") == "all":
+            continue
+        if isinstance(action, DamageAction) and action.target == "self":
             continue
 
         if isinstance(action, BuffAction):
@@ -268,7 +272,8 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
 
     # Get the target
     if effect.target_type == "hero":
-        target = state.heroes[opposing_side]
+        hero_side = effect.side if state.heroes[effect.side].hero_id == effect.target_id else opposing_side
+        target = state.heroes[hero_side]
     elif effect.target_type == "card":
         target = state.cards[effect.target_id]
     elif effect.target_type == "creature":
@@ -554,9 +559,13 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
     if hero.hero_id != effect.source_id:
         return Rejected(reason=f"You do not control hero {effect.source_id}")
 
-    # Determine if this hero power targets friendlies or enemies
+    # Determine if this hero power targets friendlies, enemies, or self
     targets_friendly = any(
         isinstance(action, HealAction) and action.target == 'friendly'
+        for action in hero.hero_power.actions
+    )
+    targets_self = any(
+        isinstance(action, DamageAction) and getattr(action, "target", None) == 'self'
         for action in hero.hero_power.actions
     )
 
@@ -583,7 +592,9 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
                     return Rejected(reason="Cannot target stealthed creatures")
             elif effect.target_type == "hero":
                 opposing_hero = state.heroes.get(opposing_side)
-                if not opposing_hero or opposing_hero.hero_id != effect.target_id:
+                if effect.target_id == hero.hero_id and targets_self:
+                    pass
+                elif not opposing_hero or opposing_hero.hero_id != effect.target_id:
                     return Rejected(reason=f"Target is not the opponent's hero")
 
     if hero.exhausted:

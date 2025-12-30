@@ -260,7 +260,7 @@
 </template>
 
 <script setup lang="ts">
-import { watch, computed, ref, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
+import { watch, computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import type { CardInPlay, Creature } from '../types/game'
 import { useAuthStore } from '../stores/auth'
@@ -615,6 +615,12 @@ const handleUseHero = (side_id: string) => {
     const hero = getHero(side_id)
     if (!hero) return
 
+    if (!heroPowerRequiresTarget(hero)) {
+        gameStore.useHeroOnHero(hero.hero_id, hero.hero_id)
+        closeOverlay()
+        return
+    }
+
     // Check if hero power deals spell damage (bypasses taunt)
     let bypassTaunt = false
     if (hero.hero_power?.actions) {
@@ -959,6 +965,23 @@ function getHeroPowerTargetScope(hero: any): 'enemy' | 'friendly' {
     }
 
     return 'enemy'
+}
+
+function heroPowerRequiresTarget(hero: any): boolean {
+    if (!hero?.hero_power?.actions) {
+        return false
+    }
+
+    return hero.hero_power.actions.some((action: any) => {
+        if (
+            (action.action === 'damage' || action.action === 'heal' || action.action === 'remove' || action.action === 'buff') &&
+            action.scope !== 'all' &&
+            action.target !== 'self'
+        ) {
+            return true
+        }
+        return false
+    })
 }
 
 // Convert old target format to new format
