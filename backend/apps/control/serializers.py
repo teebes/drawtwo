@@ -117,6 +117,7 @@ class MatchmakingQueueEntrySerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     wait_seconds = serializers.SerializerMethodField()
     matched_with_entry = serializers.SerializerMethodField()
+    ladder_type_display = serializers.CharField(source='get_ladder_type_display', read_only=True)
 
     class Meta:
         model = MatchmakingQueue
@@ -124,6 +125,8 @@ class MatchmakingQueueEntrySerializer(serializers.ModelSerializer):
             'id',
             'status',
             'status_display',
+            'ladder_type',
+            'ladder_type_display',
             'elo_rating',
             'created_at',
             'updated_at',

@@ -25,7 +25,25 @@
             <Panel class="flex-1">
                     <div class="ranked-play text-center flex-1">
                         <div class="text-lg text-primary-600 dark:text-primary-500">Ranked Play</div>
-                        <div>{{ stats.ranked.wins }}W - {{ stats.ranked.losses }}L</div>
+                        <div class="mt-2 flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                          <button
+                            type="button"
+                            class="rounded-full px-3 py-1 transition-colors"
+                            :class="ladderType === 'rapid' ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900' : 'bg-gray-200 text-gray-600 hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-300'"
+                            @click="setLadder('rapid')"
+                          >
+                            Rapid
+                          </button>
+                          <button
+                            type="button"
+                            class="rounded-full px-3 py-1 transition-colors"
+                            :class="ladderType === 'daily' ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900' : 'bg-gray-200 text-gray-600 hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-300'"
+                            @click="setLadder('daily')"
+                          >
+                            Daily
+                          </button>
+                        </div>
+                        <div class="mt-2">{{ stats.ranked.wins }}W - {{ stats.ranked.losses }}L</div>
                         <div>
                             <span class="text-sm text-gray-500 dark:text-gray-400">[ {{ currentRating }} ]</span>
                         </div>
@@ -195,6 +213,7 @@ import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
 import GameButton from '../components/ui/GameButton.vue'
 import { useNotificationStore } from '../stores/notifications'
+import type { LadderType } from '../types/game'
 
 interface GameStats {
   total: number
@@ -246,6 +265,7 @@ const stats = ref<Stats>({
 })
 const games = ref<GameHistoryItem[]>([])
 const currentRating = ref<number>(1200)
+const ladderType = ref<LadderType>('rapid')
 const pagination = ref<Pagination>({
   page: 1,
   total_pages: 1,
@@ -262,7 +282,7 @@ const fetchGamesHistory = async (page: number = 1) => {
     error.value = null
 
     const response = await axios.get(`/titles/${titleSlug.value}/games/history/`, {
-      params: { page }
+      params: { page, ladder_type: ladderType.value }
     })
 
     stats.value = response.data.stats
@@ -315,6 +335,11 @@ const formatDate = (dateString: string): string => {
   }
 }
 
+const setLadder = (value: LadderType): void => {
+  if (ladderType.value === value) return
+  ladderType.value = value
+}
+
 // Watch for route changes (if navigating between titles)
 watch(
   () => route.params.slug,
@@ -325,6 +350,10 @@ watch(
     }
   }
 )
+
+watch(ladderType, () => {
+  fetchGamesHistory(1)
+})
 
 onMounted(() => {
   fetchGamesHistory()

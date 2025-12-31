@@ -158,26 +158,81 @@
 
               <div v-else class="space-y-6">
                 <div class="flex flex-col items-center space-y-3">
-                  <button
-                    type="button"
-                    class="inline-flex w-full items-center justify-center rounded-lg px-6 py-3 text-sm font-semibold transition-colors sm:w-auto"
-                    :class="[
-                      isRankedButtonDisabled
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2'
-                    ]"
-                    :disabled="isRankedButtonDisabled"
-                    @click="queueForRanked"
-                  >
-                    Play Ranked
-                  </button>
+                  <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:justify-center">
+                    <button
+                      type="button"
+                      class="inline-flex w-full items-center justify-center rounded-lg px-6 py-3 text-sm font-semibold transition-colors sm:w-auto"
+                      :class="[
+                        isRankedButtonDisabled
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : 'bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2'
+                      ]"
+                      :disabled="isRankedButtonDisabled"
+                      @click="queueForRanked('rapid')"
+                    >
+                      Play Rapid (1 min)
+                    </button>
+                    <button
+                      type="button"
+                      class="inline-flex w-full items-center justify-center rounded-lg px-6 py-3 text-sm font-semibold transition-colors sm:w-auto"
+                      :class="[
+                        isRankedButtonDisabled
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : 'bg-secondary-600 text-white hover:bg-secondary-700 focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2'
+                      ]"
+                      :disabled="isRankedButtonDisabled"
+                      @click="queueForRanked('daily')"
+                    >
+                      Play Daily (24h)
+                    </button>
+                  </div>
                   <p v-if="rankedQueueLoading" class="text-xs text-gray-500">
                     Checking ranked queue status...
                   </p>
-                  <p v-else-if="rankedQueueEntry" class="text-xs text-gray-600 text-center">
-                    Already queued with {{ rankedQueueEntry.deck.name }}. Waiting for opponent.
-                  </p>
-                  <p v-else-if="rankedQueueError" class="text-xs text-red-600 text-center">
+                  <div v-else class="space-y-2 text-xs text-center text-gray-600">
+                    <div v-if="rapidQueueEntry" class="flex flex-col items-center gap-1">
+                      <div>
+                        Rapid queued with {{ rapidQueueEntry.deck.name }}.
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <button
+                          type="button"
+                          class="text-primary-600 hover:text-primary-700"
+                          @click="leaveRankedQueue('rapid')"
+                        >
+                          Leave queue
+                        </button>
+                        <router-link
+                          :to="{
+                            name: 'RankedQueue',
+                            params: { slug: titleSlug },
+                            query: { deck_id: rapidQueueEntry.deck.id, ladder_type: 'rapid' }
+                          }"
+                          class="text-gray-500 hover:text-gray-700"
+                        >
+                          View status
+                        </router-link>
+                      </div>
+                    </div>
+                    <div v-if="dailyQueueEntry" class="flex flex-col items-center gap-1">
+                      <div>
+                        Daily queued with {{ dailyQueueEntry.deck.name }}.
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <button
+                          type="button"
+                          class="text-primary-600 hover:text-primary-700"
+                          @click="leaveRankedQueue('daily')"
+                        >
+                          Leave queue
+                        </button>
+                        <span class="text-gray-400">
+                          You can leave this page and stay queued.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <p v-if="rankedQueueError" class="text-xs text-red-600 text-center">
                     {{ rankedQueueError }}
                   </p>
                   <div class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
@@ -268,6 +323,7 @@ import { friendsApi } from '../services/friends'
 import type { Friendship } from '../types/auth'
 import { challengesApi } from '../services/challenges'
 import type { FriendlyChallenge, PendingChallengesResponse } from '../types/challenge'
+import type { LadderType } from '../types/game'
 
 interface DeckData {
   id: number
@@ -291,6 +347,7 @@ interface RankedQueueEntry {
   status: string
   elo_rating: number
   queued_at: string
+  ladder_type: LadderType
   deck: {
     id: number
     name: string
@@ -322,7 +379,8 @@ const pveDecksLoading = ref<boolean>(false)
 const friends = ref<Friendship[]>([])
 const friendsLoading = ref<boolean>(false)
 const friendsError = ref<string | null>(null)
-const rankedQueueEntry = ref<RankedQueueEntry | null>(null)
+const rapidQueueEntry = ref<RankedQueueEntry | null>(null)
+const dailyQueueEntry = ref<RankedQueueEntry | null>(null)
 const rankedQueueLoading = ref<boolean>(false)
 const rankedQueueError = ref<string | null>(null)
 // Friendly challenges (outgoing only - incoming handled on Title page)
@@ -343,8 +401,10 @@ const canCreateGame = computed(() => {
   return false
 })
 
+const hasQueueEntry = computed(() => !!rapidQueueEntry.value || !!dailyQueueEntry.value)
+
 const isRankedButtonDisabled = computed(() => {
-  return queueingRanked.value || rankedQueueLoading.value || !!rankedQueueEntry.value
+  return queueingRanked.value || rankedQueueLoading.value || hasQueueEntry.value
 })
 
 const outgoingPendingByUserId = computed<Record<number, boolean>>(() => {
@@ -407,14 +467,21 @@ const fetchPendingChallenges = async (): Promise<void> => {
   }
 }
 
-const fetchRankedQueueStatus = async (): Promise<void> => {
+const fetchRankedQueueStatus = async (ladderType: LadderType): Promise<void> => {
   if (!titleSlug.value) return
 
   try {
     rankedQueueLoading.value = true
     rankedQueueError.value = null
-    const response = await axios.get(`/gameplay/matchmaking/status/${titleSlug.value}/`)
-    rankedQueueEntry.value = response.data.in_queue ? response.data.queue_entry : null
+    const response = await axios.get(`/gameplay/matchmaking/status/${titleSlug.value}/`, {
+      params: { ladder_type: ladderType }
+    })
+    const entry = response.data.in_queue ? response.data.queue_entry : null
+    if (ladderType === 'rapid') {
+      rapidQueueEntry.value = entry
+    } else {
+      dailyQueueEntry.value = entry
+    }
   } catch (err) {
     console.error('Error fetching ranked queue status:', err)
     rankedQueueError.value = 'Failed to check ranked queue status.'
@@ -423,7 +490,24 @@ const fetchRankedQueueStatus = async (): Promise<void> => {
   }
 }
 
-const queueForRanked = async (): Promise<void> => {
+const fetchAllRankedQueueStatus = async (): Promise<void> => {
+  await Promise.all([fetchRankedQueueStatus('rapid'), fetchRankedQueueStatus('daily')])
+}
+
+const leaveRankedQueue = async (ladderType: LadderType): Promise<void> => {
+  try {
+    await axios.post(`/gameplay/matchmaking/leave/${titleSlug.value}/`, null, {
+      params: { ladder_type: ladderType }
+    })
+    notificationStore.success(`Left ${ladderType} ranked queue`)
+    await fetchAllRankedQueueStatus()
+  } catch (err) {
+    console.error('Error leaving queue:', err)
+    notificationStore.handleApiError(err as Error)
+  }
+}
+
+const queueForRanked = async (ladderType: LadderType): Promise<void> => {
   if (!selectedPlayerDeck.value) {
     notificationStore.error('Please select a deck first')
     return
@@ -432,28 +516,39 @@ const queueForRanked = async (): Promise<void> => {
   try {
     queueingRanked.value = true
     const response = await axios.post('/gameplay/matchmaking/queue/', {
-      deck_id: selectedPlayerDeck.value.id
+      deck_id: selectedPlayerDeck.value.id,
+      ladder_type: ladderType
     })
-    notificationStore.success('Queued for ranked match! Waiting for opponent...')
+    const ladderLabel = ladderType === 'daily' ? 'daily' : 'rapid'
+    notificationStore.success(`Queued for ${ladderLabel} ranked match! Waiting for opponent...`)
     console.log('Queue response:', response.data)
 
-    // Navigate to the ranked queue waiting screen
-    router.push({
-      name: 'RankedQueue',
-      params: { slug: titleSlug.value },
-      query: { deck_id: selectedPlayerDeck.value.id }
-    })
+    if (ladderType === 'rapid') {
+      // Navigate to the ranked queue waiting screen
+      router.push({
+        name: 'RankedQueue',
+        params: { slug: titleSlug.value },
+        query: { deck_id: selectedPlayerDeck.value.id, ladder_type: ladderType }
+      })
+    } else {
+      await fetchAllRankedQueueStatus()
+    }
   } catch (err) {
     console.error('Error queueing for ranked:', err)
     notificationStore.handleApiError(err as Error)
     const errorResponse = (err as any)?.response
     if (errorResponse?.status === 400 && errorResponse?.data?.queue_entry_id) {
-      // User is already in queue, navigate to waiting screen
-      router.push({
-        name: 'RankedQueue',
-        params: { slug: titleSlug.value },
-        query: { deck_id: selectedPlayerDeck.value.id }
-      })
+      const queuedLadder = (errorResponse.data?.ladder_type as LadderType) || 'rapid'
+      if (queuedLadder === 'rapid') {
+        // User is already in queue, navigate to waiting screen
+        router.push({
+          name: 'RankedQueue',
+          params: { slug: titleSlug.value },
+          query: { deck_id: selectedPlayerDeck.value.id, ladder_type: queuedLadder }
+        })
+      } else {
+        await fetchAllRankedQueueStatus()
+      }
     }
   } finally {
     queueingRanked.value = false
@@ -535,7 +630,7 @@ watch(gameMode, (newMode) => {
   }
 
   if (newMode === 'pvp') {
-    fetchRankedQueueStatus()
+    fetchAllRankedQueueStatus()
     fetchPendingChallenges()
   }
 })
@@ -556,7 +651,7 @@ onMounted(async () => {
       await fetchFriends()
     }
 
-    await fetchRankedQueueStatus()
+    await fetchAllRankedQueueStatus()
     // Preload challenges if user lands with PvP selected later
     await fetchPendingChallenges()
   } catch (err) {

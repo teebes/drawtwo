@@ -1,6 +1,7 @@
 export type Phase = 'start' | 'refresh' | 'draw' | 'main' | 'combat' | 'end'
 export type Side = 'side_a' | 'side_b'
 export type Winner = 'side_a' | 'side_b' | 'none'
+export type LadderType = 'rapid' | 'daily'
 
 export interface Event {
   type: string

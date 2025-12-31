@@ -20,8 +20,11 @@ def _update_game_time_per_turn(game: Game):
     game_state = GameState.model_validate(game.state)
 
     if game.type == Game.GAME_TYPE_RANKED:
-        # Use ranked_time_per_turn from title config
-        game_state.time_per_turn = game_state.config.ranked_time_per_turn
+        if game.ladder_type == Game.LADDER_TYPE_DAILY:
+            game_state.time_per_turn = 60 * 60 * 24
+        else:
+            # Use ranked_time_per_turn from title config (rapid ladder)
+            game_state.time_per_turn = game_state.config.ranked_time_per_turn
     else:
         # Friendly and PvE games have no time limit
         game_state.time_per_turn = 0
@@ -231,9 +234,12 @@ def create_game(request):
         # Set game type based on whether it's PvE or PvP
         if ai_deck_id:
             game.type = Game.GAME_TYPE_PVE
+            game.ladder_type = None
         else:
             game.type = Game.GAME_TYPE_RANKED
-        game.save(update_fields=['type'])
+            if not game.ladder_type:
+                game.ladder_type = Game.LADDER_TYPE_RAPID
+        game.save(update_fields=['type', 'ladder_type'])
 
         # Update time_per_turn in game state based on game type
         _update_game_time_per_turn(game)
@@ -279,6 +285,13 @@ def queue_for_ranked_match(request):
     logger.debug(f"queue_for_ranked_match called with data: {request.data}")
 
     deck_id = request.data.get('deck_id')
+    ladder_type = request.data.get('ladder_type', Game.LADDER_TYPE_RAPID)
+
+    if ladder_type not in dict(Game.LADDER_TYPE_CHOICES):
+        return Response(
+            {'error': 'Invalid ladder type'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     # Validate input
     if not deck_id:
@@ -303,10 +316,12 @@ def queue_for_ranked_match(request):
 
         if existing_queue:
             logger.info(f"User already in queue: {existing_queue}")
+            ladder_msg = f" for {existing_queue.get_ladder_type_display()}"
             return Response(
                 {
-                    'error': 'You are already in queue for this title',
-                    'queue_entry_id': existing_queue.id
+                    'error': f'You are already in queue for this title{ladder_msg}',
+                    'queue_entry_id': existing_queue.id,
+                    'ladder_type': existing_queue.ladder_type,
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
@@ -315,6 +330,7 @@ def queue_for_ranked_match(request):
         user_rating, created = UserTitleRating.objects.get_or_create(
             user=request.user,
             title=deck.title,
+            ladder_type=ladder_type,
             defaults={'elo_rating': 1200}
         )
         logger.debug(f"User rating: {user_rating.elo_rating}")
@@ -324,13 +340,14 @@ def queue_for_ranked_match(request):
             user=request.user,
             deck=deck,
             elo_rating=user_rating.elo_rating,
+            ladder_type=ladder_type,
             status=MatchmakingQueue.STATUS_QUEUED
         )
         logger.debug(f"Queue entry created: {queue_entry}")
 
         # Trigger matchmaking task to attempt to find a match
         from apps.gameplay.tasks import process_matchmaking
-        process_matchmaking.delay(deck.title.id)
+        process_matchmaking.delay(deck.title.id, ladder_type)
 
         return Response({
             'id': queue_entry.id,
@@ -345,6 +362,7 @@ def queue_for_ranked_match(request):
                 'hero': deck.hero.name
             },
             'elo_rating': user_rating.elo_rating,
+            'ladder_type': ladder_type,
             'message': f'Successfully queued for ranked match in {deck.title.name}'
         }, status=status.HTTP_201_CREATED)
 
@@ -364,9 +382,17 @@ def matchmaking_queue_status(request, title_slug):
     """
     title = get_object_or_404(Title, slug=title_slug)
 
+    ladder_type = request.query_params.get('ladder_type', Game.LADDER_TYPE_RAPID)
+    if ladder_type not in dict(Game.LADDER_TYPE_CHOICES):
+        return Response(
+            {'error': 'Invalid ladder type'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     queue_entry = MatchmakingQueue.objects.select_related('deck', 'deck__hero').filter(
         user=request.user,
         deck__title=title,
+        ladder_type=ladder_type,
         status=MatchmakingQueue.STATUS_QUEUED
     ).first()
 
@@ -383,6 +409,7 @@ def matchmaking_queue_status(request, title_slug):
             'status': queue_entry.status,
             'elo_rating': queue_entry.elo_rating,
             'queued_at': queue_entry.created_at,
+            'ladder_type': queue_entry.ladder_type,
             'deck': {
                 'id': queue_entry.deck.id,
                 'name': queue_entry.deck.name,
@@ -408,10 +435,18 @@ def leave_matchmaking_queue(request, title_slug):
 
     title = get_object_or_404(Title, slug=title_slug)
 
+    ladder_type = request.query_params.get('ladder_type', Game.LADDER_TYPE_RAPID)
+    if ladder_type not in dict(Game.LADDER_TYPE_CHOICES):
+        return Response(
+            {'error': 'Invalid ladder type'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     # Find the user's active queue entry for this title
     queue_entry = MatchmakingQueue.objects.filter(
         user=request.user,
         deck__title=title,
+        ladder_type=ladder_type,
         status=MatchmakingQueue.STATUS_QUEUED
     ).first()
 

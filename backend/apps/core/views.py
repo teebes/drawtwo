@@ -229,16 +229,17 @@ def title_notifications(request, slug):
     notifications = []
 
     # Queued for Ranked Match
-    queued_for_ranked_match = MatchmakingQueue.objects.filter(
+    queued_for_ranked_matches = MatchmakingQueue.objects.filter(
         user=request.user,
         deck__title=title,
         status=MatchmakingQueue.STATUS_QUEUED
-    ).first()
-    if queued_for_ranked_match:
+    )
+    for queued_entry in queued_for_ranked_matches:
+        ladder_label = queued_entry.get_ladder_type_display()
         notifications.append(Notification(
-            ref_id=queued_for_ranked_match.id,
+            ref_id=queued_entry.id,
             type='game_ranked_queued',
-            message="You are in the queue for a ranked match."))
+            message=f"You are in the queue for a {ladder_label} ranked match."))
 
     games = Game.objects.where_user_is_side(title, request.user)
 
@@ -338,6 +339,10 @@ def title_games_history(request, slug):
     title = get_title_or_403(slug, request.user)
     user = request.user
 
+    ladder_type = request.query_params.get('ladder_type', Game.LADDER_TYPE_RAPID)
+    if ladder_type not in dict(Game.LADDER_TYPE_CHOICES):
+        return Response({'error': 'Invalid ladder type'}, status=400)
+
     # Get all completed games for stats calculation only
     ended_games = Game.objects.for_title(title).for_user(user).filter(
         status=Game.GAME_STATUS_ENDED
@@ -347,7 +352,10 @@ def title_games_history(request, slug):
     ).prefetch_related('elo_change')
 
     # Calculate stats using efficient aggregation (only from ended games)
-    ranked_games = ended_games.filter(type=Game.GAME_TYPE_RANKED)
+    ranked_games = ended_games.filter(
+        type=Game.GAME_TYPE_RANKED,
+        ladder_type=ladder_type,
+    )
     friendly_games = ended_games.filter(type=Game.GAME_TYPE_FRIENDLY)
 
     def get_ranked_stats(queryset):
@@ -367,7 +375,11 @@ def title_games_history(request, slug):
 
     # Get user's current ELO rating for this title
     try:
-        user_rating = UserTitleRating.objects.get(user=user, title=title)
+        user_rating = UserTitleRating.objects.get(
+            user=user,
+            title=title,
+            ladder_type=ladder_type,
+        )
         current_rating = user_rating.elo_rating
     except UserTitleRating.DoesNotExist:
         current_rating = 1200  # Default rating if user hasn't played ranked games yet
@@ -376,6 +388,8 @@ def title_games_history(request, slug):
     # Use where_user_is_side to annotate user_side
     all_games = Game.objects.where_user_is_side(title, user).filter(
         status__in=[Game.GAME_STATUS_ENDED, Game.GAME_STATUS_IN_PROGRESS]
+    ).filter(
+        Q(type=Game.GAME_TYPE_RANKED, ladder_type=ladder_type) | ~Q(type=Game.GAME_TYPE_RANKED)
     ).select_related(
         'side_a__user', 'side_b__user', 'side_a__hero', 'side_b__hero',
         'winner', 'player_a_user', 'player_b_user'
@@ -452,6 +466,7 @@ def title_games_history(request, slug):
         games_list.append({
             'id': game.id,
             'type': game.type,
+            'ladder_type': game.ladder_type,
             'status': game.status,
             'opponent_name': opponent_name,
             'opponent_hero': opponent_deck.hero.name if opponent_deck.hero else None,
@@ -467,6 +482,7 @@ def title_games_history(request, slug):
             'ranked': ranked_stats,
             'friendly': friendly_stats,
             'current_rating': current_rating,
+            'ladder_type': ladder_type,
         },
         'games': games_list,
         'pagination': {

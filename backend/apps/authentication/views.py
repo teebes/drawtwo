@@ -463,7 +463,7 @@ class LeaderboardView(APIView):
         """
         from django.db.models import Count, Q
         from apps.builder.models import Title
-        from apps.gameplay.models import UserTitleRating
+        from apps.gameplay.models import UserTitleRating, Game
 
         # Get the title
         try:
@@ -474,21 +474,26 @@ class LeaderboardView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        ladder_type = request.query_params.get('ladder_type', Game.LADDER_TYPE_RAPID)
+        if ladder_type not in dict(Game.LADDER_TYPE_CHOICES):
+            return Response({'error': 'Invalid ladder type'}, status=status.HTTP_400_BAD_REQUEST)
+
         # Get limit from query params (default 100, max 1000)
         limit = min(int(request.query_params.get('limit', 100)), 1000)
 
         # Get all user ratings for this title, annotated with win/loss counts
         user_ratings = UserTitleRating.objects.filter(
-            title=title
+            title=title,
+            ladder_type=ladder_type,
         ).select_related('user').annotate(
             wins=Count(
                 'user__elo_wins',
-                filter=Q(user__elo_wins__title=title),
+                filter=Q(user__elo_wins__title=title, user__elo_wins__ladder_type=ladder_type),
                 distinct=True
             ),
             losses=Count(
                 'user__elo_losses',
-                filter=Q(user__elo_losses__title=title),
+                filter=Q(user__elo_losses__title=title, user__elo_losses__ladder_type=ladder_type),
                 distinct=True
             )
         ).filter(
@@ -525,7 +530,7 @@ class UserTitleRatingView(APIView):
     def get(self, request, title_slug):
         """Get the authenticated user's rating for a specific title."""
         from apps.builder.models import Title
-        from apps.gameplay.models import UserTitleRating
+        from apps.gameplay.models import UserTitleRating, Game
         from django.db.models import Count, Q
 
         try:
@@ -536,20 +541,24 @@ class UserTitleRatingView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        ladder_type = request.query_params.get('ladder_type', Game.LADDER_TYPE_RAPID)
+        if ladder_type not in dict(Game.LADDER_TYPE_CHOICES):
+            return Response({'error': 'Invalid ladder type'}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             # Get or create the user's rating for this title
             user_rating = UserTitleRating.objects.select_related('user').annotate(
                 wins=Count(
                     'user__elo_wins',
-                    filter=Q(user__elo_wins__title=title),
+                    filter=Q(user__elo_wins__title=title, user__elo_wins__ladder_type=ladder_type),
                     distinct=True
                 ),
                 losses=Count(
                     'user__elo_losses',
-                    filter=Q(user__elo_losses__title=title),
+                    filter=Q(user__elo_losses__title=title, user__elo_losses__ladder_type=ladder_type),
                     distinct=True
                 )
-            ).get(user=request.user, title=title)
+            ).get(user=request.user, title=title, ladder_type=ladder_type)
 
             wins = user_rating.wins
             losses = user_rating.losses
@@ -560,6 +569,7 @@ class UserTitleRatingView(APIView):
                 'display_name': request.user.display_name,
                 'avatar': request.user.avatar,
                 'elo_rating': user_rating.elo_rating,
+                'ladder_type': ladder_type,
                 'wins': wins,
                 'losses': losses,
                 'total_games': wins + losses,
@@ -572,6 +582,7 @@ class UserTitleRatingView(APIView):
                 'display_name': request.user.display_name,
                 'avatar': request.user.avatar,
                 'elo_rating': 1200,  # Default rating
+                'ladder_type': ladder_type,
                 'wins': 0,
                 'losses': 0,
                 'total_games': 0,

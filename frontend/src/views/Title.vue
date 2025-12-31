@@ -69,6 +69,24 @@
 
           <section class="leaderboard flex-1">
             <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-2 border-b border-gray-200 dark:border-gray-700 pb-2">Leaderboard</h2>
+            <div class="mb-3 flex items-center justify-start gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              <button
+                type="button"
+                class="rounded-full px-3 py-1 transition-colors"
+                :class="leaderboardLadder === 'rapid' ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900' : 'bg-gray-200 text-gray-600 hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-300'"
+                @click="leaderboardLadder = 'rapid'"
+              >
+                Rapid
+              </button>
+              <button
+                type="button"
+                class="rounded-full px-3 py-1 transition-colors"
+                :class="leaderboardLadder === 'daily' ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900' : 'bg-gray-200 text-gray-600 hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-300'"
+                @click="leaderboardLadder = 'daily'"
+              >
+                Daily
+              </button>
+            </div>
 
             <div v-if="!leaderboardLoading" class="space-y-4 mt-4">
 
@@ -104,6 +122,7 @@ import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
 import TitleNotifications from '../components/title/TitleNotifications.vue'
 import type { Notification } from '../types/notification'
+import type { LadderType } from '../types/game'
 import Howto from './Howto.vue'
 
 interface DeckApiData {
@@ -164,6 +183,7 @@ const decksLoading = ref<boolean>(false)
 const gamesLoading = ref<boolean>(false)
 const leaderboardLoading = ref<boolean>(false)
 const notificationsLoading = ref<boolean>(false)
+const leaderboardLadder = ref<LadderType>('rapid')
 
 // Title data now comes from the store via router preloading
 
@@ -211,7 +231,7 @@ const fetchLeaderboard = async (): Promise<void> => {
     const slug = route.params.slug as string
 
     const response = await axios.get(`/gameplay/${slug}/leaderboard/`, {
-      params: { limit: 3 } // Only need top 3 for display
+      params: { limit: 3, ladder_type: leaderboardLadder.value } // Only need top 3 for display
     })
 
     topPlayers.value = response.data as LeaderboardPlayer[]
@@ -266,6 +286,12 @@ watch(title, async (newTitle) => {
     ])
   }
 }, { immediate: true })
+
+watch(leaderboardLadder, async () => {
+  if (title.value) {
+    await fetchLeaderboard()
+  }
+})
 
 onMounted(() => {
   // Title will be loaded by router, so we just need to watch for it

@@ -53,10 +53,23 @@ class Game(TimestampedModel):
     GAME_TYPE_RANKED = 'ranked'
     GAME_TYPE_FRIENDLY = 'friendly'
 
+    LADDER_TYPE_RAPID = 'rapid'
+    LADDER_TYPE_DAILY = 'daily'
+
+    LADDER_TYPE_CHOICES = list_to_choices([LADDER_TYPE_RAPID, LADDER_TYPE_DAILY])
+
     type = models.CharField(
         max_length=20,
         choices=list_to_choices([GAME_TYPE_PVE, GAME_TYPE_RANKED, GAME_TYPE_FRIENDLY]),
         default=GAME_TYPE_PVE,
+    )
+
+    ladder_type = models.CharField(
+        max_length=20,
+        choices=LADDER_TYPE_CHOICES,
+        null=True,
+        blank=True,
+        help_text="Ladder type for ranked games (rapid or daily).",
     )
 
     status = models.CharField(
@@ -196,6 +209,12 @@ class UserTitleRating(TimestampedModel):
         on_delete=models.CASCADE,
         related_name='user_ratings'
     )
+    ladder_type = models.CharField(
+        max_length=20,
+        choices=Game.LADDER_TYPE_CHOICES,
+        default=Game.LADDER_TYPE_RAPID,
+        help_text="Which ladder this rating applies to."
+    )
     elo_rating = models.IntegerField(
         default=1200,
         help_text="Player's ELO rating for this title (default: 1200)"
@@ -205,14 +224,14 @@ class UserTitleRating(TimestampedModel):
         db_table = 'gameplay_user_title_rating'
         verbose_name = 'User Title Rating'
         verbose_name_plural = 'User Title Ratings'
-        unique_together = [['user', 'title']]
+        unique_together = [['user', 'title', 'ladder_type']]
         indexes = [
-            models.Index(fields=['title', '-elo_rating']),
-            models.Index(fields=['user']),
+            models.Index(fields=['title', 'ladder_type', '-elo_rating']),
+            models.Index(fields=['user', 'ladder_type']),
         ]
 
     def __str__(self):
-        return f"{self.user.display_name} - {self.title.name}: {self.elo_rating}"
+        return f"{self.user.display_name} - {self.title.name} ({self.ladder_type}): {self.elo_rating}"
 
 
 class ELORatingChange(TimestampedModel):
@@ -233,6 +252,12 @@ class ELORatingChange(TimestampedModel):
         help_text="The title this rating change is for",
         null=True,  # Temporarily nullable for migration
         blank=True
+    )
+    ladder_type = models.CharField(
+        max_length=20,
+        choices=Game.LADDER_TYPE_CHOICES,
+        default=Game.LADDER_TYPE_RAPID,
+        help_text="Which ladder this rating change applies to."
     )
 
     # Winner's rating change
@@ -264,11 +289,13 @@ class ELORatingChange(TimestampedModel):
             models.Index(fields=['winner']),
             models.Index(fields=['loser']),
             models.Index(fields=['title']),
+            models.Index(fields=['title', 'ladder_type']),
         ]
 
     def __str__(self):
         return (
-            f"{self.title.name}: {self.winner.display_name} ({self.winner_rating_change:+d}) "
+            f"{self.title.name} ({self.ladder_type}): "
+            f"{self.winner.display_name} ({self.winner_rating_change:+d}) "
             f"vs {self.loser.display_name} ({self.loser_rating_change:+d})"
         )
 
@@ -294,6 +321,13 @@ class MatchmakingQueue(TimestampedModel):
         on_delete=models.CASCADE,
         related_name='matchmaking_queue_entries',
         help_text="The deck the user will use for the match"
+    )
+
+    ladder_type = models.CharField(
+        max_length=20,
+        choices=Game.LADDER_TYPE_CHOICES,
+        default=Game.LADDER_TYPE_RAPID,
+        help_text="Which ladder this queue entry is for."
     )
 
     status = models.CharField(
@@ -330,15 +364,15 @@ class MatchmakingQueue(TimestampedModel):
         verbose_name = 'Matchmaking Queue Entry'
         verbose_name_plural = 'Matchmaking Queue Entries'
         indexes = [
-            models.Index(fields=['status', 'elo_rating']),
-            models.Index(fields=['user', 'status']),
+            models.Index(fields=['status', 'ladder_type', 'elo_rating']),
+            models.Index(fields=['user', 'status', 'ladder_type']),
             models.Index(fields=['-created_at']),
         ]
 
     def __str__(self):
         title = getattr(self.deck, 'title', None)
         title_name = getattr(title, 'name', 'Unknown Title')
-        return f"{self.user.display_name} - {title_name} ({self.status})"
+        return f"{self.user.display_name} - {title_name} ({self.ladder_type}, {self.status})"
 
     @property
     def title(self):
