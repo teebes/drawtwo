@@ -131,7 +131,7 @@ class TempManaBoostEffect(EffectBase):
 
 class SummonEffect(EffectBase):
     type: Literal["effect_summon"] = "effect_summon"
-    source_type: Literal["card"] = "card"
+    source_type: Literal["card", "creature", "hero", "board"] = "card"
     source_id: str
     target: str
 

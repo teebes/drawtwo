@@ -6,14 +6,16 @@ from apps.builder.schemas import (
     BuffAction,
     Charge,
     DamageAction,
-    DrawAction,
     DeathRattle,
+    DrawAction,
     RemoveAction,
+    SummonAction,
+    Unique,
 )
 from apps.gameplay.engine.dispatcher import resolve
 from apps.gameplay.engine.handlers import spawn_creature
 from apps.gameplay.schemas.engine import Success
-from apps.gameplay.schemas.effects import PlayEffect, DrawEffect, RemoveEffect
+from apps.gameplay.schemas.effects import PlayEffect, DrawEffect, RemoveEffect, SummonEffect
 from apps.gameplay.schemas.events import (
     CreatureDeathEvent,
     EndTurnEvent,
@@ -295,6 +297,96 @@ class TestTraitProcessing(GamePlayTestBase):
         self.assertIsInstance(result.child_effects[0], DrawEffect)
         self.assertEqual(result.child_effects[0].side, "side_b")
         self.assertEqual(result.child_effects[0].amount, 1)
+
+    def test_phoenix_deathrattle_resummons_itself(self):
+        phoenix_template = CardInPlay(
+            card_type="creature",
+            card_id="",
+            template_slug="phoenix",
+            name="Phoenix",
+            description="On death: rise from the ashes.",
+            attack=5,
+            health=5,
+            cost=7,
+            traits=[
+                DeathRattle(actions=[SummonAction(target="phoenix")]),
+                Unique(),
+            ],
+        )
+        self.game_state.summonable_cards["phoenix"] = phoenix_template
+
+        killer_card = CardInPlay(
+            card_type="creature",
+            card_id="1",
+            template_slug="killer-card",
+            name="Killer Card",
+            attack=2,
+            health=2,
+            cost=1,
+        )
+        phoenix_card = CardInPlay(
+            card_type="creature",
+            card_id="2",
+            template_slug="phoenix",
+            name="Phoenix",
+            attack=5,
+            health=5,
+            cost=7,
+            traits=[
+                DeathRattle(actions=[SummonAction(target="phoenix")]),
+                Unique(),
+            ],
+        )
+
+        self.game_state.cards["1"] = killer_card
+        self.game_state.cards["2"] = phoenix_card
+
+        killer_creature = spawn_creature(
+            card=killer_card,
+            state=self.game_state,
+            side="side_a",
+        )
+        phoenix_creature = spawn_creature(
+            card=phoenix_card,
+            state=self.game_state,
+            side="side_b",
+        )
+
+        # Mimic the board cleanup that happens when a creature dies.
+        self.game_state.board["side_b"].remove(phoenix_creature.creature_id)
+        phoenix_creature.health = 0
+
+        death_event = CreatureDeathEvent(
+            side="side_b",
+            creature=phoenix_creature,
+            source_type="creature",
+            source_id=killer_creature.creature_id,
+            target_type="creature",
+            target_id=phoenix_creature.creature_id,
+        )
+
+        trait_result = traits.apply(self.game_state, death_event)
+        self.assertEqual(len(trait_result.child_effects), 1)
+        summon_effect = trait_result.child_effects[0]
+        self.assertIsInstance(summon_effect, SummonEffect)
+        self.assertEqual(summon_effect.target, "phoenix")
+
+        # Trim non-numeric helper cards so the summon handler can assign a new ID.
+        non_numeric_keys = [key for key in trait_result.new_state.cards if key.startswith("card_")]
+        for key in non_numeric_keys:
+            trait_result.new_state.cards.pop(key)
+
+        summon_result = resolve(summon_effect, trait_result.new_state)
+        self.assertTrue(isinstance(summon_result, Success))
+        final_state = summon_result.new_state
+
+        self.assertEqual(len(final_state.board["side_b"]), 1)
+        summoned_creature_id = final_state.board["side_b"][0]
+        summoned_creature = final_state.creatures[summoned_creature_id]
+        summoned_card = final_state.cards[summoned_creature.card_id]
+        self.assertEqual(summoned_card.template_slug, "phoenix")
+        self.assertEqual(summoned_creature.name, "Phoenix")
+        self.assertEqual(summoned_creature.health, 5)
 
 
 class TestRemoveAction(GamePlayTestBase):
