@@ -5,7 +5,7 @@
     <div>A game opposes two heroes, and ends when a hero's health reaches 0 or when all cards in the deck are drawn.</div>
 
     <!-- Hero Board-->
-    <div class="flex flex-col border border-gray-700 w-[350px] mx-auto">
+    <div class="flex flex-col border border-gray-700 w-[320px] mx-auto">
       <!-- Opponent -->
       <div class="h-24 border-b border-gray-700 flex">
         <!-- Opponent Avatar-->

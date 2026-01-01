@@ -2,17 +2,8 @@
   <div class="leaderboard">
     <main class="flex-1">
       <!-- Leaderboard Header -->
-      <section class="bg-gradient-to-br from-amber-600 via-amber-700 to-orange-700 py-12">
-        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div class="text-center">
-            <h1 class="font-display text-4xl font-bold text-white sm:text-5xl">
-              🏆 {{ titleName }} Leaderboard
-            </h1>
-            <p class="mt-4 text-xl text-amber-100">
-              Top Players by {{ ladderLabel }} Rating
-            </p>
-          </div>
-        </div>
+      <section class="banner">
+        <h1>Leaderboard</h1>
       </section>
 
       <!-- Leaderboard Content -->
@@ -214,7 +205,7 @@ const titleStore = useTitleStore()
 const players = ref<LeaderboardPlayer[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
-const ladderType = ref<LadderType>('rapid')
+const ladderType = ref<LadderType>('daily')
 
 const titleSlug = computed(() => route.params.slug as string)
 const titleName = computed(() => titleStore.currentTitle?.name || titleSlug.value)

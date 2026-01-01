@@ -33,6 +33,7 @@
 
         <Panel v-if="title.description" title="Description">{{ title.description }}</Panel>
 
+        <!-- Collection / Games -->
         <div class="flex w-full">
           <router-link
             :to="{ name: 'Collection', params: { slug: title.slug } }"
@@ -44,18 +45,10 @@
           >Games</router-link>
         </div>
 
-        <div class="flex flex-col md:flex-row space-y-8 md:space-y-0 md:space-x-12">
+        <div class="flex flex-col md:flex-row space-y-8 md:space-y-0 md:space-x-24 md:py-16">
 
+          <!-- Quick Actions -->
           <section class="quick-actions flex-[2]">
-            <!-- Notifications -->
-            <TitleNotifications
-              :notifications="notifications"
-              :decks="decks"
-              :decks-loading="decksLoading"
-              :title-slug="(route.params.slug as string)"
-              @challenge-accepted="handleChallengeAccepted"
-              @challenge-declined="handleChallengeDeclined" />
-
             <!-- New Game-->
             <router-link
               :to="{ name: 'GameCreate', params: { slug: title.slug } }"
@@ -65,27 +58,40 @@
               </svg>
               New Game
             </router-link>
+
+            <!-- Notifications -->
+            <TitleNotifications
+              :notifications="notifications"
+              :decks="decks"
+              :decks-loading="decksLoading"
+              :title-slug="(route.params.slug as string)"
+              @challenge-accepted="handleChallengeAccepted"
+              @challenge-declined="handleChallengeDeclined" />
+
           </section>
 
+          <!-- Leaderboard-->
           <section class="leaderboard flex-1">
-            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-2 border-b border-gray-200 dark:border-gray-700 pb-2">Leaderboard</h2>
-            <div class="mb-3 flex items-center justify-start gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-              <button
-                type="button"
-                class="rounded-full px-3 py-1 transition-colors"
-                :class="leaderboardLadder === 'rapid' ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900' : 'bg-gray-200 text-gray-600 hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-300'"
-                @click="leaderboardLadder = 'rapid'"
-              >
-                Rapid
-              </button>
-              <button
-                type="button"
-                class="rounded-full px-3 py-1 transition-colors"
-                :class="leaderboardLadder === 'daily' ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900' : 'bg-gray-200 text-gray-600 hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-300'"
-                @click="leaderboardLadder = 'daily'"
-              >
-                Daily
-              </button>
+            <div class="mb-2 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 pb-2">
+              <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200">Leaderboard</h2>
+              <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+                <button
+                  type="button"
+                  class="rounded-full px-3 py-1 transition-colors"
+                  :class="leaderboardLadder === 'rapid' ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900' : 'bg-gray-200 text-gray-600 hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-300'"
+                  @click="leaderboardLadder = 'rapid'"
+                >
+                  Rapid
+                </button>
+                <button
+                  type="button"
+                  class="rounded-full px-3 py-1 transition-colors"
+                  :class="leaderboardLadder === 'daily' ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900' : 'bg-gray-200 text-gray-600 hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-300'"
+                  @click="leaderboardLadder = 'daily'"
+                >
+                  Daily
+                </button>
+              </div>
             </div>
 
             <div v-if="!leaderboardLoading" class="space-y-4 mt-4">
@@ -96,7 +102,16 @@
                 <div class="text-gray-500">[ {{ player.elo_rating }} ]</div>
               </div>
 
+              <router-link
+                v-if="route.params.slug"
+                :to="{ name: 'Leaderboard', params: { slug: route.params.slug } }"
+                class="text-left block text-xs font-semibold uppercase tracking-wide text-gray-500 hover:text-primary-500 dark:text-gray-400"
+              >
+                Full Leaderboard
+              </router-link>
             </div>
+
+
 
             <div v-else class="text-center py-4">
               <p class="text-gray-600 dark:text-gray-400">Loading leaderboard...</p>
@@ -183,7 +198,7 @@ const decksLoading = ref<boolean>(false)
 const gamesLoading = ref<boolean>(false)
 const leaderboardLoading = ref<boolean>(false)
 const notificationsLoading = ref<boolean>(false)
-const leaderboardLadder = ref<LadderType>('rapid')
+const leaderboardLadder = ref<LadderType>('daily')
 
 // Title data now comes from the store via router preloading
 
