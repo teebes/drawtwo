@@ -2,7 +2,7 @@
   <div class="ranked-queue-page">
     <!-- Header -->
     <section class="text-center bg-gray-300 h-24 flex items-center justify-center">
-      <h1 class="font-display text-4xl font-bold text-gray-900">RANKED QUEUE</h1>
+      <h1 class="font-display text-4xl font-bold text-gray-900">{{ ladderTitle }} QUEUE</h1>
     </section>
 
     <main class="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8 my-8">
@@ -55,7 +55,7 @@
         </div>
 
         <!-- Timer -->
-        <div class="mb-8">
+        <div v-if="!isDaily" class="mb-8">
           <div class="text-5xl font-bold text-primary-600 mb-2">
             {{ formattedTime }}
           </div>
@@ -70,6 +70,9 @@
             <p class="text-xs text-gray-500 mt-2">Queue timeout in {{ timeRemaining }}s</p>
           </div>
         </div>
+        <div v-else class="mb-8 text-sm text-gray-500">
+          You can leave this page and stay in the daily queue until a match is found.
+        </div>
 
         <!-- Cancel Button -->
         <button
@@ -82,7 +85,7 @@
       </div>
 
       <!-- Timeout State -->
-      <div v-else-if="timedOut" class="text-center py-12">
+      <div v-else-if="timedOut && !isDaily" class="text-center py-12">
         <div class="mb-8">
           <svg class="w-24 h-24 text-gray-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -113,7 +116,7 @@
 
       <!-- Not in Queue State -->
       <div v-else class="text-center py-12">
-        <p class="text-gray-600 mb-4">You are not currently in the ranked queue.</p>
+        <p class="text-gray-600 mb-4">You are not currently in the {{ ladderLabel }} queue.</p>
         <router-link
           :to="{ name: 'GameCreate', params: { slug: titleSlug } }"
           class="inline-flex items-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
@@ -130,12 +133,14 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useNotificationStore } from '../stores/notifications'
 import axios from '../config/api'
+import type { LadderType } from '../types/game'
 
 interface QueueEntry {
   id: number
   status: string
   elo_rating: number
   queued_at: string
+  ladder_type: LadderType
   deck: {
     id: number
     name: string
@@ -173,6 +178,10 @@ const POLL_INTERVAL_MS = 3000 // Poll every 3 seconds
 // Computed
 const titleSlug = computed(() => route.params.slug as string)
 const deckId = computed(() => route.query.deck_id as string)
+const ladderType = computed(() => (route.query.ladder_type as LadderType) || 'rapid')
+const isDaily = computed(() => ladderType.value === 'daily')
+const ladderLabel = computed(() => (isDaily.value ? 'daily' : 'rapid'))
+const ladderTitle = computed(() => ladderLabel.value.toUpperCase())
 
 const formattedTime = computed(() => {
   const minutes = Math.floor(elapsedSeconds.value / 60)
@@ -191,7 +200,9 @@ const timeRemaining = computed(() => {
 // Methods
 const fetchQueueStatus = async (): Promise<void> => {
   try {
-    const response = await axios.get(`/gameplay/matchmaking/status/${titleSlug.value}/`)
+    const response = await axios.get(`/gameplay/matchmaking/status/${titleSlug.value}/`, {
+      params: { ladder_type: ladderType.value }
+    })
     inQueue.value = response.data.in_queue
     queueEntry.value = response.data.queue_entry
 
@@ -228,7 +239,9 @@ const fetchQueueStatus = async (): Promise<void> => {
 const leaveQueue = async (): Promise<void> => {
   try {
     leaving.value = true
-    await axios.post(`/gameplay/matchmaking/leave/${titleSlug.value}/`)
+    await axios.post(`/gameplay/matchmaking/leave/${titleSlug.value}/`, null, {
+      params: { ladder_type: ladderType.value }
+    })
     notificationStore.success('Left matchmaking queue')
     stopPolling()
     stopTimer()
@@ -257,9 +270,10 @@ const requeue = async (): Promise<void> => {
   try {
     requeueing.value = true
     await axios.post('/gameplay/matchmaking/queue/', {
-      deck_id: parseInt(deckId.value)
+      deck_id: parseInt(deckId.value),
+      ladder_type: ladderType.value
     })
-    notificationStore.success('Requeued for ranked match!')
+    notificationStore.success(`Requeued for ${ladderLabel.value} ranked match!`)
 
     // Reset state
     timedOut.value = false
@@ -279,6 +293,7 @@ const requeue = async (): Promise<void> => {
 }
 
 const startTimer = (): void => {
+  if (isDaily.value) return
   timerInterval.value = window.setInterval(() => {
     elapsedSeconds.value++
 
@@ -322,7 +337,7 @@ onMounted(async () => {
       startTimer()
       startPolling()
     } else {
-      error.value = 'You are not currently in the ranked queue'
+      error.value = `You are not currently in the ${ladderLabel.value} queue`
     }
   } catch (err) {
     console.error('Error initializing ranked queue:', err)

@@ -52,6 +52,8 @@ export interface MatchmakingQueueEntry {
   id: number
   status: string
   status_display: string
+  ladder_type: 'rapid' | 'daily'
+  ladder_type_display: string
   elo_rating: number
   created_at: string
   updated_at: string

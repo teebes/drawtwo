@@ -947,6 +947,7 @@ class GameService:
         loser_deck = game.side_a if game.winner == game.side_b else game.side_b
         loser_user = loser_deck.user
         title = game.title
+        ladder_type = game.ladder_type or Game.LADDER_TYPE_RAPID
 
         # Skip if either player is None (shouldn't happen for non-AI games)
         if not winner_user or not loser_user:
@@ -957,11 +958,13 @@ class GameService:
         winner_rating, _ = UserTitleRating.objects.get_or_create(
             user=winner_user,
             title=title,
+            ladder_type=ladder_type,
             defaults={'elo_rating': 1200}
         )
         loser_rating, _ = UserTitleRating.objects.get_or_create(
             user=loser_user,
             title=title,
+            ladder_type=ladder_type,
             defaults={'elo_rating': 1200}
         )
 
@@ -985,6 +988,7 @@ class GameService:
         ELORatingChange.objects.create(
             game=game,
             title=title,
+            ladder_type=ladder_type,
             winner=winner_user,
             winner_old_rating=winner_old_rating,
             winner_new_rating=winner_new_rating,
@@ -996,7 +1000,7 @@ class GameService:
         )
 
         logger.info(
-            f"ELO updated for game {game.id} ({title.name}): "
+            f"ELO updated for game {game.id} ({title.name}, {ladder_type}): "
             f"{winner_user.display_name} {winner_old_rating}->{winner_new_rating}, "
             f"{loser_user.display_name} {loser_old_rating}->{loser_new_rating}"
         )
@@ -1108,7 +1112,7 @@ class GameService:
 
     @staticmethod
     @transaction.atomic
-    def process_matchmaking(title_id: int):
+    def process_matchmaking(title_id: int, ladder_type: str = Game.LADDER_TYPE_RAPID):
         """
         Process matchmaking for a specific title.
         Finds two queued players with similar ELO and creates a game for them.
@@ -1122,13 +1126,21 @@ class GameService:
         from apps.gameplay.models import MatchmakingQueue, Game
         from apps.builder.models import Title
 
-        logger.info(f"Processing matchmaking for title_id={title_id}")
+        if ladder_type not in dict(Game.LADDER_TYPE_CHOICES):
+            ladder_type = Game.LADDER_TYPE_RAPID
+
+        logger.info(
+            "Processing matchmaking for title_id=%s ladder_type=%s",
+            title_id,
+            ladder_type,
+        )
 
         # Get all queued entries for this title, ordered by ELO
         queued_entries = list(
             MatchmakingQueue.objects.filter(
                 deck__title_id=title_id,
-                status=MatchmakingQueue.STATUS_QUEUED
+                status=MatchmakingQueue.STATUS_QUEUED,
+                ladder_type=ladder_type,
             )
             .select_related('user', 'deck', 'deck__hero', 'deck__title')
             .order_by('elo_rating')
@@ -1191,12 +1203,16 @@ class GameService:
 
                 # Set game type to ranked for matchmaking games
                 game.type = Game.GAME_TYPE_RANKED
-                game.save(update_fields=['type'])
+                game.ladder_type = ladder_type
+                game.save(update_fields=['type', 'ladder_type'])
 
                 # Update time_per_turn in game state based on title config
                 from apps.gameplay.schemas.game import GameState
                 game_state = GameState.model_validate(game.state)
-                game_state.time_per_turn = game_state.config.ranked_time_per_turn
+                if ladder_type == Game.LADDER_TYPE_DAILY:
+                    game_state.time_per_turn = 60 * 60 * 24
+                else:
+                    game_state.time_per_turn = game_state.config.ranked_time_per_turn
                 game.state = game_state.model_dump()
                 game.save(update_fields=['state'])
 

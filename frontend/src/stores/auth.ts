@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import axios, { getBaseUrl } from '../config/api'
+import { useNotificationStore } from './notifications'
 
 // Types for API responses
 interface User {
@@ -369,16 +370,22 @@ export const useAuthStore = defineStore('auth', {
       console.log('User websocket message:', data)
 
       if (data.type === 'matchmaking_success') {
-        // Navigate to the game board
+        const notificationStore = useNotificationStore()
+        notificationStore.success('Match found! Your ranked game is ready.')
+
+        // Navigate to the game board unless already in a game
         const router = (window as any).vueRouter
         if (router) {
-          router.push({
-            name: 'Board',
-            params: {
-              slug: data.title_slug,
-              game_id: data.game_id
-            }
-          })
+          const currentRoute = router.currentRoute?.value
+          if (currentRoute?.name !== 'Board') {
+            router.push({
+              name: 'Board',
+              params: {
+                slug: data.title_slug,
+                game_id: data.game_id
+              }
+            })
+          }
         }
       }
     }

@@ -172,6 +172,11 @@ const handleNotificationClick = (notification: Notification) => {
       name: 'Board',
       params: { game_id: notification.ref_id, slug: props.titleSlug }
     })
+  } else if (notification.type === 'game_ranked_queued') {
+    router.push({
+      name: 'GameCreate',
+      params: { slug: props.titleSlug }
+    })
   }
 }
 </script>

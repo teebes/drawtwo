@@ -20,7 +20,7 @@ from .serializers import (
     RecentUsersSerializer,
     MatchmakingQueueEntrySerializer,
 )
-from apps.gameplay.models import MatchmakingQueue
+from apps.gameplay.models import MatchmakingQueue, Game
 from apps.gameplay.services import GameService
 from apps.builder.models import Title
 
@@ -196,6 +196,7 @@ class MatchmakingQueueAdminView(APIView):
 
     def get(self, request):
         status_filter = request.query_params.get('status', MatchmakingQueue.STATUS_QUEUED)
+        ladder_type = request.query_params.get('ladder_type')
         limit_param = request.query_params.get('limit', 100)
         try:
             limit = max(1, min(int(limit_param), 500))
@@ -217,13 +218,20 @@ class MatchmakingQueueAdminView(APIView):
 
         if status_filter:
             queryset = queryset.filter(status=status_filter)
+        if ladder_type:
+            if ladder_type not in dict(Game.LADDER_TYPE_CHOICES):
+                return Response({'error': 'Invalid ladder type'}, status=status.HTTP_400_BAD_REQUEST)
+            queryset = queryset.filter(ladder_type=ladder_type)
 
         entries = queryset[:limit]
         serializer = MatchmakingQueueEntrySerializer(entries, many=True)
 
+        status_counts_qs = MatchmakingQueue.objects
+        if ladder_type:
+            status_counts_qs = status_counts_qs.filter(ladder_type=ladder_type)
         status_counts = {
             item['status']: item['count']
-            for item in MatchmakingQueue.objects.values('status').annotate(count=Count('id'))
+            for item in status_counts_qs.values('status').annotate(count=Count('id'))
         }
 
         title_summary_qs = (
@@ -232,6 +240,8 @@ class MatchmakingQueueAdminView(APIView):
             .annotate(queued_count=Count('id'))
             .order_by('-queued_count')
         )
+        if ladder_type:
+            title_summary_qs = title_summary_qs.filter(ladder_type=ladder_type)
         title_summary = [
             {
                 'title_id': row['deck__title_id'],
@@ -251,6 +261,7 @@ class MatchmakingQueueAdminView(APIView):
                 'title_summary': title_summary,
             },
             'status_filter': status_filter,
+            'ladder_type': ladder_type,
             'limit': limit,
             'refreshed_at': timezone.now(),
         })
@@ -263,6 +274,7 @@ class MatchmakingManualRunView(APIView):
 
     def post(self, request):
         title_id = request.data.get('title_id')
+        ladder_type = request.data.get('ladder_type')
 
         try:
             if title_id:
@@ -271,7 +283,13 @@ class MatchmakingManualRunView(APIView):
                 except Title.DoesNotExist:
                     return Response({'error': 'Title not found'}, status=status.HTTP_404_NOT_FOUND)
 
-                matches_created = GameService.process_matchmaking(title.id)
+                if ladder_type and ladder_type not in dict(Game.LADDER_TYPE_CHOICES):
+                    return Response({'error': 'Invalid ladder type'}, status=status.HTTP_400_BAD_REQUEST)
+
+                matches_created = GameService.process_matchmaking(
+                    title.id,
+                    ladder_type=ladder_type,
+                )
                 logger.info(
                     "Manual matchmaking run for title %s (%s) created %s matches",
                     title.id,
@@ -284,8 +302,14 @@ class MatchmakingManualRunView(APIView):
                     'matches_created': matches_created,
                 })
 
+            title_queryset = MatchmakingQueue.objects.filter(status=MatchmakingQueue.STATUS_QUEUED)
+            if ladder_type:
+                if ladder_type not in dict(Game.LADDER_TYPE_CHOICES):
+                    return Response({'error': 'Invalid ladder type'}, status=status.HTTP_400_BAD_REQUEST)
+                title_queryset = title_queryset.filter(ladder_type=ladder_type)
+
             title_ids = list(
-                MatchmakingQueue.objects.filter(status=MatchmakingQueue.STATUS_QUEUED)
+                title_queryset
                 .values_list('deck__title_id', flat=True)
                 .distinct()
             )
@@ -299,7 +323,10 @@ class MatchmakingManualRunView(APIView):
 
             total_matches = 0
             for tid in title_ids:
-                total_matches += GameService.process_matchmaking(tid)
+                total_matches += GameService.process_matchmaking(
+                    tid,
+                    ladder_type=ladder_type,
+                )
 
             logger.info(
                 "Manual matchmaking run for %s titles created %s matches",

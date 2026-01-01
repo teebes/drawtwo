@@ -6,7 +6,7 @@ from .models import Game, GameUpdate, ELORatingChange, MatchmakingQueue, UserTit
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
-    list_display = ['id', '__str__', 'status', 'get_game_type', 'get_winner', 'created_at']
+    list_display = ['id', '__str__', 'status', 'get_game_type', 'ladder_type', 'get_winner', 'created_at']
     list_filter = ['status', 'created_at']
     search_fields = [
         'side_a__name',
@@ -20,7 +20,7 @@ class GameAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('Game Setup', {
-            'fields': ('type', 'status', 'side_a', 'side_b')
+            'fields': ('type', 'ladder_type', 'status', 'side_a', 'side_b')
         }),
         ('Game State', {
             'fields': ('state',),
@@ -91,11 +91,11 @@ class GameUpdateAdmin(admin.ModelAdmin):
 
 @admin.register(UserTitleRating)
 class UserTitleRatingAdmin(admin.ModelAdmin):
-    list_display = ['user', 'title', 'elo_rating', 'updated_at']
-    list_filter = ['title', 'updated_at']
+    list_display = ['user', 'title', 'ladder_type', 'elo_rating', 'updated_at']
+    list_filter = ['title', 'ladder_type', 'updated_at']
     search_fields = ['user__username', 'user__email', 'title__name']
     readonly_fields = ['created_at', 'updated_at']
-    ordering = ['title', '-elo_rating']
+    ordering = ['title', 'ladder_type', '-elo_rating']
 
 
 @admin.register(ELORatingChange)
@@ -103,13 +103,14 @@ class ELORatingChangeAdmin(admin.ModelAdmin):
     list_display = [
         'game',
         'title',
+        'ladder_type',
         'winner',
         'winner_rating_change',
         'loser',
         'loser_rating_change',
         'created_at',
     ]
-    list_filter = ['title', 'created_at']
+    list_filter = ['title', 'ladder_type', 'created_at']
     search_fields = ['winner__username', 'winner__email', 'loser__username', 'loser__email']
     readonly_fields = [
         'game',
@@ -133,13 +134,14 @@ class MatchmakingQueueAdmin(admin.ModelAdmin):
         'user',
         'deck',
         'status',
+        'ladder_type',
         'elo_rating',
         'matched_partner_display',
         'game',
         'queue_age',
         'created_at',
     ]
-    list_filter = ['status', 'created_at', 'deck__title']
+    list_filter = ['status', 'ladder_type', 'created_at', 'deck__title']
     search_fields = [
         'user__username',
         'user__email',
@@ -165,6 +167,7 @@ class MatchmakingQueueAdmin(admin.ModelAdmin):
             'fields': (
                 'user',
                 'deck',
+                'ladder_type',
                 'status',
                 'elo_rating',
             )

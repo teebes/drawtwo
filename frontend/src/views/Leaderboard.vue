@@ -9,7 +9,7 @@
               🏆 {{ titleName }} Leaderboard
             </h1>
             <p class="mt-4 text-xl text-amber-100">
-              Top Players by ELO Rating
+              Top Players by {{ ladderLabel }} Rating
             </p>
           </div>
         </div>
@@ -18,6 +18,25 @@
       <!-- Leaderboard Content -->
       <section class="py-16">
         <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div class="mb-6 flex items-center justify-center gap-3 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">
+            <button
+              type="button"
+              class="rounded-full px-4 py-2 transition-colors"
+              :class="ladderType === 'rapid' ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900' : 'bg-gray-200 text-gray-600 hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-300'"
+              @click="setLadder('rapid')"
+            >
+              Rapid
+            </button>
+            <button
+              type="button"
+              class="rounded-full px-4 py-2 transition-colors"
+              :class="ladderType === 'daily' ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900' : 'bg-gray-200 text-gray-600 hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-300'"
+              @click="setLadder('daily')"
+            >
+              Daily
+            </button>
+          </div>
+
           <!-- Loading State -->
           <div v-if="loading" class="text-center py-12">
             <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600"></div>
@@ -176,6 +195,7 @@ import { useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useTitleStore } from '../stores/title'
 import axios from '../config/api'
+import type { LadderType } from '../types/game'
 
 interface LeaderboardPlayer {
   id: number
@@ -194,9 +214,11 @@ const titleStore = useTitleStore()
 const players = ref<LeaderboardPlayer[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
+const ladderType = ref<LadderType>('rapid')
 
 const titleSlug = computed(() => route.params.slug as string)
 const titleName = computed(() => titleStore.currentTitle?.name || titleSlug.value)
+const ladderLabel = computed(() => (ladderType.value === 'daily' ? 'Daily' : 'Rapid'))
 
 const fetchLeaderboard = async () => {
   if (!titleSlug.value) {
@@ -209,7 +231,9 @@ const fetchLeaderboard = async () => {
   error.value = null
 
   try {
-    const response = await axios.get(`/gameplay/${titleSlug.value}/leaderboard/`)
+    const response = await axios.get(`/gameplay/${titleSlug.value}/leaderboard/`, {
+      params: { ladder_type: ladderType.value }
+    })
     players.value = response.data
   } catch (err: any) {
     console.error('Error fetching leaderboard:', err)
@@ -231,6 +255,12 @@ const getInitials = (name: string): string => {
 const calculateWinRate = (wins: number, total: number): string => {
   if (total === 0) return '0'
   return ((wins / total) * 100).toFixed(1)
+}
+
+const setLadder = (value: LadderType): void => {
+  if (ladderType.value === value) return
+  ladderType.value = value
+  fetchLeaderboard()
 }
 
 onMounted(() => {
