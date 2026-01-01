@@ -7,7 +7,7 @@ from rest_framework import status
 
 
 from apps.builder.models import Title
-from apps.collection.models import Deck
+from apps.collection.models import Deck, UserTitleDeckPreference
 from apps.gameplay.models import Game, MatchmakingQueue, UserTitleRating
 from apps.gameplay.schemas import GameSummary, GameList
 from apps.gameplay.schemas.game import GameState
@@ -32,6 +32,17 @@ def _update_game_time_per_turn(game: Game):
     # Update the state in the database
     game.state = game_state.model_dump()
     game.save(update_fields=['state'])
+
+
+def _set_last_used_deck(user, deck: Deck | None) -> None:
+    if not deck or deck.user_id != user.id:
+        return
+
+    UserTitleDeckPreference.objects.update_or_create(
+        user=user,
+        title=deck.title,
+        defaults={'last_used_deck': deck},
+    )
 
 
 @api_view(['GET'])
@@ -243,6 +254,7 @@ def create_game(request):
 
         # Update time_per_turn in game state based on game type
         _update_game_time_per_turn(game)
+        _set_last_used_deck(request.user, player_deck)
 
         logger.debug(f"Game created successfully: {game}")
 
@@ -361,6 +373,7 @@ def queue_for_ranked_match(request):
         # Trigger matchmaking task to attempt to find a match
         from apps.gameplay.tasks import process_matchmaking
         process_matchmaking.delay(deck.title.id, ladder_type)
+        _set_last_used_deck(request.user, deck)
 
         return Response({
             'id': queue_entry.id,
@@ -522,6 +535,7 @@ def create_friendly_challenge(request):
         challenger=request.user, challengee=challengee, title=title, status=FriendlyChallenge.STATUS_PENDING
     ).first()
     if existing:
+        _set_last_used_deck(request.user, challenger_deck)
         return Response({
             'id': existing.id,
             'status': existing.status,
@@ -538,6 +552,7 @@ def create_friendly_challenge(request):
         challenger_deck=challenger_deck,
         status=FriendlyChallenge.STATUS_PENDING
     )
+    _set_last_used_deck(request.user, challenger_deck)
 
     return Response({
         'id': challenge.id,
@@ -623,6 +638,7 @@ def accept_friendly_challenge(request, challenge_id):
     challenge.game = game
     challenge.status = FriendlyChallenge.STATUS_ACCEPTED
     challenge.save(update_fields=['challengee_deck', 'game', 'status'])
+    _set_last_used_deck(request.user, challengee_deck)
 
     # Kick off first step
     step.delay(game.id)

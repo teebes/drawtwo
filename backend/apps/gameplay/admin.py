@@ -1,7 +1,14 @@
 from django.contrib import admin
 from django.utils import timezone
 
-from .models import Game, GameUpdate, ELORatingChange, MatchmakingQueue, UserTitleRating
+from .models import (
+    ELORatingChange,
+    FriendlyChallenge,
+    Game,
+    GameUpdate,
+    MatchmakingQueue,
+    UserTitleRating,
+)
 
 
 @admin.register(Game)
@@ -221,3 +228,38 @@ class MatchmakingQueueAdmin(admin.ModelAdmin):
             game=None,
         )
         self.message_user(request, f"Reset {updated} queue entr{'y' if updated == 1 else 'ies'} to queued.")
+
+
+@admin.register(FriendlyChallenge)
+class FriendlyChallengeAdmin(admin.ModelAdmin):
+    list_display = [
+        'id',
+        'challenger',
+        'challengee',
+        'title',
+        'status',
+        'game',
+        'created_at',
+    ]
+    list_filter = ['status', 'title', 'created_at']
+    search_fields = [
+        'challenger__username',
+        'challenger__email',
+        'challengee__username',
+        'challengee__email',
+        'title__name',
+    ]
+    readonly_fields = ['created_at', 'updated_at']
+    raw_id_fields = ['challenger', 'challengee', 'title', 'challenger_deck', 'challengee_deck', 'game']
+
+    @admin.action(description="Mark selected challenges as cancelled")
+    def mark_as_cancelled(self, request, queryset):
+        updated = queryset.exclude(status=FriendlyChallenge.STATUS_CANCELLED).update(
+            status=FriendlyChallenge.STATUS_CANCELLED
+        )
+        self.message_user(
+            request,
+            f"Marked {updated} challenge{'s' if updated != 1 else ''} as cancelled.",
+        )
+
+    actions = ['mark_as_cancelled']

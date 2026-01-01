@@ -109,6 +109,40 @@ class Deck(TimestampedModel):
         return f"{self.owner_name} → {self.name}"
 
 
+class UserTitleDeckPreference(TimestampedModel):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='deck_preferences'
+    )
+    title = models.ForeignKey(
+        Title,
+        on_delete=models.CASCADE,
+        related_name='deck_preferences'
+    )
+    last_used_deck = models.ForeignKey(
+        Deck,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+'
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'title'],
+                name='user_title_deck_preference_unique'
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['user', 'title']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.display_name} → {self.title.name}"
+
+
 class DeckCard(TimestampedModel):
     deck = models.ForeignKey(Deck, on_delete=models.CASCADE)
     card = models.ForeignKey(CardTemplate, on_delete=models.PROTECT)

@@ -52,7 +52,7 @@
             <!-- New Game-->
             <router-link
               :to="{ name: 'GameCreate', params: { slug: title.slug } }"
-              class="flex mt-4 items-center justify-center w-full rounded-lg border-2 border-dashed border-primary-500 p-3 text-sm font-medium text-primary-500 hover:border-primary-600 hover:text-primary-600 transition-colors">
+              class="flex mt-4 items-center justify-center w-full rounded-lg border-2 border-dashed border-primary-500 p-3 text-sm font-medium text-primary-500 hover:border-primary-600 hover:text-primary-600 transition-colors mb-8">
               <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
               </svg>
@@ -73,7 +73,7 @@
           <!-- Leaderboard-->
           <section class="leaderboard flex-1">
             <div class="mb-2 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 pb-2">
-              <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200">Leaderboard</h2>
+              <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200">Ladder</h2>
               <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
                 <button
                   type="button"
@@ -107,7 +107,7 @@
                 :to="{ name: 'Leaderboard', params: { slug: route.params.slug } }"
                 class="text-left block text-xs font-semibold uppercase tracking-wide text-gray-500 hover:text-primary-500 dark:text-gray-400"
               >
-                Full Leaderboard
+                Full Ladder
               </router-link>
             </div>
 

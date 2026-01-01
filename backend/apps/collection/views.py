@@ -9,7 +9,7 @@ from django.db.models.functions import Coalesce
 
 from apps.builder.models import Title, CardTemplate, HeroTemplate
 from apps.builder.schemas import TitleConfig
-from apps.collection.models import Deck, DeckCard
+from apps.collection.models import Deck, DeckCard, UserTitleDeckPreference
 from apps.core.card_assets import get_hero_art_url
 from apps.core.serializers import to_card_schema, serialize_cards_with_traits
 
@@ -52,6 +52,16 @@ def deck_list_by_title(request, title_slug):
                 'updated_at': deck.updated_at.isoformat(),
             })
 
+        last_used_deck_id = None
+        preference = UserTitleDeckPreference.objects.filter(
+            user=request.user,
+            title=title
+        ).select_related('last_used_deck').first()
+        if preference and preference.last_used_deck_id:
+            deck_ids = {deck['id'] for deck in deck_data}
+            if preference.last_used_deck_id in deck_ids:
+                last_used_deck_id = preference.last_used_deck_id
+
         return Response({
             'title': {
                 'id': title.id,
@@ -59,7 +69,8 @@ def deck_list_by_title(request, title_slug):
                 'name': title.name,
             },
             'decks': deck_data,
-            'count': len(deck_data)
+            'count': len(deck_data),
+            'last_used_deck_id': last_used_deck_id,
         })
 
     elif request.method == 'POST':

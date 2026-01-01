@@ -59,7 +59,7 @@
 
         <div class="grid gap-8 md:grid-cols-2">
           <!-- Player Deck Selection -->
-          <Panel title="Choose Your Deck">
+          <Panel title="Your Deck">
             <div v-if="playerDecksLoading" class="text-center py-8">
               <p class="text-gray-600">Loading your decks...</p>
             </div>
@@ -76,38 +76,72 @@
 
             <div v-else class="space-y-3">
               <div
-                v-for="deck in playerDecks"
-                :key="deck.id"
-                @click="selectedPlayerDeck = deck"
-                :class="[
-                  'cursor-pointer rounded-lg border-2 p-4 transition-colors',
-                  selectedPlayerDeck?.id === deck.id
-                    ? 'border-secondary-500 bg-secondary-50 dark:bg-secondary-900/20'
-                    : 'border-gray-200 hover:border-secondary-300 dark:border-gray-700'
-                ]"
+                v-if="selectedPlayerDeck && !showAllPlayerDecks"
+                class="rounded-lg border-2 border-secondary-500 bg-secondary-50 p-4 dark:bg-secondary-900/20"
               >
                 <div class="flex items-center space-x-3">
                   <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary-100 text-sm font-bold text-secondary-600">
-                    {{ deck.hero.name.charAt(0) }}
+                    {{ selectedPlayerDeck.hero.name.charAt(0) }}
                   </div>
                   <div class="flex-1">
-                    <div class="font-medium text-gray-900 dark:text-white">{{ deck.name }}</div>
+                    <div class="font-medium text-gray-900 dark:text-white">{{ selectedPlayerDeck.name }}</div>
                     <div class="text-sm text-gray-600">
-                      {{ deck.hero.name }} • {{ deck.card_count }} cards
+                      {{ selectedPlayerDeck.hero.name }} • {{ selectedPlayerDeck.card_count }} cards
                     </div>
                   </div>
-                  <div v-if="selectedPlayerDeck?.id === deck.id" class="text-secondary-600">
+                  <div class="text-secondary-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                     </svg>
                   </div>
                 </div>
               </div>
+
+              <div v-else>
+                <div
+                  v-for="deck in playerDecks"
+                  :key="deck.id"
+                  @click="selectPlayerDeck(deck)"
+                  :class="[
+                    'cursor-pointer rounded-lg border-2 p-4 transition-colors',
+                    selectedPlayerDeck?.id === deck.id
+                      ? 'border-secondary-500 bg-secondary-50 dark:bg-secondary-900/20'
+                      : 'border-gray-200 hover:border-secondary-300 dark:border-gray-700'
+                  ]"
+                >
+                  <div class="flex items-center space-x-3">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary-100 text-sm font-bold text-secondary-600">
+                      {{ deck.hero.name.charAt(0) }}
+                    </div>
+                    <div class="flex-1">
+                      <div class="font-medium text-gray-900 dark:text-white">{{ deck.name }}</div>
+                      <div class="text-sm text-gray-600">
+                        {{ deck.hero.name }} • {{ deck.card_count }} cards
+                      </div>
+                    </div>
+                    <div v-if="selectedPlayerDeck?.id === deck.id" class="text-secondary-600">
+                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="playerDecks.length > 1" class="pt-2 text-center">
+                <button
+                  type="button"
+                  class="text-sm font-medium text-secondary-600 hover:text-secondary-700"
+                  @click="showAllPlayerDecks = !showAllPlayerDecks"
+                >
+                  {{ showAllPlayerDecks ? 'Hide decks' : 'View all decks' }}
+                </button>
+              </div>
             </div>
           </Panel>
 
           <!-- Opponent Deck Selection -->
-          <Panel :title="gameMode === 'pve' ? 'Choose AI Opponent' : 'Opponent'">
+          <Panel :title="gameMode === 'pve' ? 'Choose AI Opponent' : ''">
             <!-- PvE Mode: AI Decks -->
             <div v-if="gameMode === 'pve'">
               <div v-if="pveDecksLoading" class="text-center py-8">
@@ -385,6 +419,8 @@ const rankedQueueLoading = ref<boolean>(false)
 const rankedQueueError = ref<string | null>(null)
 // Friendly challenges (outgoing only - incoming handled on Title page)
 const pendingOutgoingChallenges = ref<FriendlyChallenge[]>([])
+const showAllPlayerDecks = ref<boolean>(true)
+const lastUsedDeckId = ref<number | null>(null)
 
 // Selections
 const selectedPlayerDeck = ref<DeckData | null>(null)
@@ -416,12 +452,39 @@ const outgoingPendingByUserId = computed<Record<number, boolean>>(() => {
   return map
 })
 
+const initializePlayerDeckSelection = (): void => {
+  if (playerDecks.value.length === 0) return
+
+  if (playerDecks.value.length === 1) {
+    selectedPlayerDeck.value = playerDecks.value[0]
+    showAllPlayerDecks.value = false
+    return
+  }
+
+  const storedDeck = playerDecks.value.find(deck => deck.id === lastUsedDeckId.value)
+  if (storedDeck) {
+    selectedPlayerDeck.value = storedDeck
+    showAllPlayerDecks.value = false
+  } else if (!selectedPlayerDeck.value) {
+    showAllPlayerDecks.value = true
+  }
+}
+
+const selectPlayerDeck = (deck: DeckData): void => {
+  selectedPlayerDeck.value = deck
+  if (playerDecks.value.length > 1) {
+    showAllPlayerDecks.value = false
+  }
+}
+
 // Methods
 const fetchPlayerDecks = async (): Promise<void> => {
   try {
     playerDecksLoading.value = true
     const response = await axios.get(`/collection/titles/${titleSlug.value}/decks/`)
     playerDecks.value = response.data.decks || []
+    lastUsedDeckId.value = response.data.last_used_deck_id ?? null
+    initializePlayerDeckSelection()
   } catch (err) {
     console.error('Error fetching player decks:', err)
     error.value = 'Failed to load your decks'

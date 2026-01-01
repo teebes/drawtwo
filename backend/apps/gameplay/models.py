@@ -405,8 +405,8 @@ class FriendlyChallenge(TimestampedModel):
 
     title = models.ForeignKey('builder.Title', on_delete=models.CASCADE, related_name='friendly_challenges')
 
-    challenger_deck = models.ForeignKey(Deck, on_delete=models.PROTECT, related_name='as_challenger_in_challenges')
-    challengee_deck = models.ForeignKey(Deck, on_delete=models.PROTECT, null=True, blank=True, related_name='as_challengee_in_challenges')
+    challenger_deck = models.ForeignKey(Deck, on_delete=models.CASCADE, related_name='as_challenger_in_challenges')
+    challengee_deck = models.ForeignKey(Deck, on_delete=models.CASCADE, null=True, blank=True, related_name='as_challengee_in_challenges')
 
     game = models.ForeignKey(Game, on_delete=models.SET_NULL, null=True, blank=True, related_name='friendly_challenge')
 
