@@ -201,9 +201,12 @@ class GameService:
             except CardTemplate.DoesNotExist:
                 logger.warning(f"Summonable card with slug '{slug}' not found")
 
+        hero_id_a = f"hero_{deck_a.id}_a"
+        hero_id_b = f"hero_{deck_b.id}_b"
+
         heroes = {
             'side_a': HeroInPlay(
-                hero_id=str(deck_a.hero.id),
+                hero_id=hero_id_a,
                 template_slug=deck_a.hero.slug,
                 health=deck_a.hero.health,
                 health_max=deck_a.hero.health,
@@ -215,7 +218,7 @@ class GameService:
                 player_name=deck_a.owner_name,
             ),
             'side_b': HeroInPlay(
-                hero_id=str(deck_b.hero.id),
+                hero_id=hero_id_b,
                 template_slug=deck_b.hero.slug,
                 health=deck_b.hero.health,
                 health_max=deck_b.hero.health,

@@ -474,6 +474,56 @@ class HeroPowerValidationTests(AttackValidationTestBase):
         self.assertEqual(len(effects), 1)
         self.assertIsInstance(effects[0], UseHeroEffect)
 
+    def test_hero_power_enemy_hero_damage_targets_opponent_command(self):
+        """Ensure enemy hero targeting stays on opponent when using command flow."""
+        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        hero_b_id = self.game_state.heroes['side_b'].hero_id
+        self.game_state.heroes['side_a'].hero_power = HeroPower(
+            name="Small Damage",
+            actions=[
+                DamageAction(
+                    scope="single",
+                    action="damage",
+                    amount=2,
+                    target="enemy",
+                )
+            ],
+            description="Deal 2 damage to an enemy.",
+        )
+        self.game_state.heroes['side_a'].exhausted = False
+        self.game_state.heroes['side_a'].health = 10
+        self.game_state.heroes['side_b'].health = 10
+
+        command = {
+            'type': 'cmd_use_hero',
+            'hero_id': hero_a_id,
+            'target_type': 'hero',
+            'target_id': hero_b_id,
+        }
+
+        effects = GameService.compile_cmd(self.game_state, command, 'side_a')
+        self.assertEqual(len(effects), 1)
+        self.assertIsInstance(effects[0], UseHeroEffect)
+
+        result = resolve(effects[0], self.game_state)
+        self.assertEqual(result.type, 'outcome_success')
+
+        damage_effects = [
+            effect for effect in result.child_effects
+            if isinstance(effect, DamageEffect)
+        ]
+        self.assertTrue(damage_effects)
+
+        damage_effect = damage_effects[0]
+        self.assertEqual(damage_effect.target_type, 'hero')
+        self.assertEqual(damage_effect.target_id, hero_b_id)
+        self.assertEqual(damage_effect.damage, 2)
+
+        damage_result = resolve(damage_effect, result.new_state)
+        self.assertEqual(damage_result.type, 'outcome_success')
+        self.assertEqual(damage_result.new_state.heroes['side_b'].health, 8)
+        self.assertEqual(damage_result.new_state.heroes['side_a'].health, 10)
+
     def test_cannot_use_opponent_hero(self):
         """Test that you cannot use opponent's hero power."""
         hero_b_id = self.game_state.heroes['side_b'].hero_id

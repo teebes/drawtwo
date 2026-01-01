@@ -277,3 +277,48 @@ class TestDamage(GamePlayTestBase):
         self.assertEqual(retaliation_effect.target_id, hero_a_id)
         self.assertEqual(retaliation_effect.damage, 3)  # Creature's attack
         self.assertFalse(retaliation_effect.retaliate)  # Retaliation doesn't retaliate
+
+    def test_hero_power_enemy_hero_damage_targets_opponent(self):
+        self.game_state.heroes['side_a'].hero_power = HeroPower(
+            name="Small Damage",
+            actions=[
+                DamageAction(
+                    scope="single",
+                    action="damage",
+                    amount=2,
+                    target="enemy",
+                )
+            ],
+            description="Deal 2 damage to an enemy.",
+        )
+        self.game_state.heroes['side_a'].exhausted = False
+        self.game_state.heroes['side_a'].health = 10
+        self.game_state.heroes['side_b'].health = 10
+
+        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        hero_b_id = self.game_state.heroes['side_b'].hero_id
+        use_hero_effect = UseHeroEffect(
+            side="side_a",
+            source_id=hero_a_id,
+            target_type="hero",
+            target_id=hero_b_id,
+        )
+
+        result = resolve(use_hero_effect, self.game_state)
+        self.assertTrue(isinstance(result, Success))
+
+        damage_effects = [
+            effect for effect in result.child_effects
+            if effect.type == "effect_damage"
+        ]
+        self.assertTrue(damage_effects, "Hero power should create a damage effect")
+
+        damage_effect = damage_effects[0]
+        self.assertEqual(damage_effect.target_type, "hero")
+        self.assertEqual(damage_effect.target_id, hero_b_id)
+        self.assertEqual(damage_effect.damage, 2)
+
+        damage_result = resolve(damage_effect, result.new_state)
+        self.assertTrue(isinstance(damage_result, Success))
+        self.assertEqual(damage_result.new_state.heroes['side_b'].health, 8)
+        self.assertEqual(damage_result.new_state.heroes['side_a'].health, 10)
