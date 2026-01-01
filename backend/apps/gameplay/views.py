@@ -307,6 +307,19 @@ def queue_for_ranked_match(request):
         logger.debug(f"Found deck: {deck}")
 
 
+        if ladder_type == Game.LADDER_TYPE_DAILY:
+            active_daily_games = Game.objects.filter(
+                Q(player_a_user=request.user) | Q(player_b_user=request.user),
+                status=Game.GAME_STATUS_IN_PROGRESS,
+                type=Game.GAME_TYPE_RANKED,
+                ladder_type=Game.LADDER_TYPE_DAILY,
+            ).count()
+            if active_daily_games >= 3:
+                return Response(
+                    {'error': 'Daily ladder limit reached (3 active games).'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
         # Check if the user is already in queue for this title
         existing_queue = MatchmakingQueue.objects.filter(
             user=request.user,
