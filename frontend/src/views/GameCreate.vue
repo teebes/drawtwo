@@ -182,6 +182,20 @@
                   </div>
                 </div>
               </div>
+              <div class="pt-4">
+                <button
+                  @click="createGame"
+                  :disabled="!canCreateGame || creating"
+                  :class="[
+                    'inline-flex w-full items-center justify-center rounded-lg px-6 py-3 text-sm font-semibold transition-colors',
+                    canCreateGame && !creating
+                      ? 'bg-green-600 text-white hover:bg-green-700'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  ]"
+                >
+                  {{ creating ? 'Creating Game...' : 'Create PvE Game' }}
+                </button>
+              </div>
             </div>
 
             <!-- PvP Mode: Player Decks -->
@@ -192,6 +206,10 @@
 
               <div v-else class="space-y-6">
                 <div class="flex flex-col items-center space-y-3">
+                  <div class="mb-4 text-center space-y-1">
+                    <div class="text-sm font-semibold text-gray-900 dark:text-white">Ladder</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Ranked Matches</div>
+                  </div>
                   <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:justify-center">
                     <button
                       type="button"
@@ -202,9 +220,9 @@
                           : 'bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2'
                       ]"
                       :disabled="isRankedButtonDisabled"
-                      @click="queueForRanked('rapid')"
+                      @click="queueForRanked('daily')"
                     >
-                      Play Rapid (1 min)
+                      Play Daily (24h)
                     </button>
                     <button
                       type="button"
@@ -215,9 +233,9 @@
                           : 'bg-secondary-600 text-white hover:bg-secondary-700 focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2'
                       ]"
                       :disabled="isRankedButtonDisabled"
-                      @click="queueForRanked('daily')"
+                      @click="queueForRanked('rapid')"
                     >
-                      Play Daily (24h)
+                      Play Rapid (1 min)
                     </button>
                   </div>
                   <p v-if="rankedQueueLoading" class="text-xs text-gray-500">
@@ -275,7 +293,10 @@
                 </div>
 
                 <div>
-                  <div class="mb-4 text-center text-sm font-semibold text-gray-900 dark:text-white">Play a Friend</div>
+                  <div class="mb-4 text-center space-y-1">
+                    <div class="text-sm font-semibold text-gray-900 dark:text-white">Play a Friend</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Unranked</div>
+                  </div>
 
                   <div v-if="friendsError" class="rounded-lg border border-red-200 bg-red-50 p-4 text-center text-sm text-red-600">
                     {{ friendsError }}
@@ -287,30 +308,69 @@
 
                   <div v-else class="space-y-3">
                     <div
-                      v-for="friend in friends"
-                      :key="friend.id"
-                      class="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                      v-if="selectedFriend && !showAllFriends"
+                      class="flex items-center justify-between rounded-lg border border-secondary-200 bg-secondary-50 p-4 shadow-sm dark:border-secondary-700 dark:bg-secondary-900/20"
                     >
                       <div>
                         <div class="font-medium text-gray-900 dark:text-white">
-                          {{ friend.friend_data.display_name || friend.friend_data.username || friend.friend_data.email }}
+                          {{ selectedFriend.friend_data.display_name || selectedFriend.friend_data.username || selectedFriend.friend_data.email }}
                         </div>
                         <div class="text-sm text-gray-600 dark:text-gray-400">
-                          {{ friend.friend_data.email }}
+                          {{ selectedFriend.friend_data.email }}
                         </div>
                       </div>
                       <button
                         type="button"
                         class="inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2"
                         :class="[
-                          isFriendChallenged(friend)
+                          isFriendChallenged(selectedFriend)
                             ? 'border-gray-300 text-gray-400 cursor-not-allowed'
                             : 'border-secondary-500 text-secondary-600 hover:bg-secondary-50 focus:ring-secondary-500'
                         ]"
-                        :disabled="isFriendChallenged(friend)"
-                        @click="challengeFriend(friend)"
+                        :disabled="isFriendChallenged(selectedFriend)"
+                        @click="challengeFriend(selectedFriend)"
                       >
-                        {{ isFriendChallenged(friend) ? 'Challenged' : 'Challenge' }}
+                        {{ isFriendChallenged(selectedFriend) ? 'Challenged' : 'Challenge' }}
+                      </button>
+                    </div>
+
+                    <div v-else class="space-y-3">
+                      <div
+                        v-for="friend in friends"
+                        :key="friend.id"
+                        class="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                        @click="selectFriend(friend)"
+                      >
+                        <div>
+                          <div class="font-medium text-gray-900 dark:text-white">
+                            {{ friend.friend_data.display_name || friend.friend_data.username || friend.friend_data.email }}
+                          </div>
+                          <div class="text-sm text-gray-600 dark:text-gray-400">
+                            {{ friend.friend_data.email }}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          class="inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2"
+                          :class="[
+                            selectedFriend?.id === friend.id
+                              ? 'border-secondary-500 text-secondary-600'
+                              : 'border-gray-300 text-gray-500 hover:border-secondary-400 hover:text-secondary-600'
+                          ]"
+                          @click.stop="selectFriend(friend)"
+                        >
+                          {{ selectedFriend?.id === friend.id ? 'Selected' : 'Select' }}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div v-if="friends.length > 1" class="pt-2 text-center">
+                      <button
+                        type="button"
+                        class="text-sm font-medium text-secondary-600 hover:text-secondary-700"
+                        @click="showAllFriends = !showAllFriends"
+                      >
+                        {{ showAllFriends ? 'Hide friends' : 'View all friends' }}
                       </button>
                     </div>
                   </div>
@@ -318,29 +378,6 @@
               </div>
             </div>
           </Panel>
-        </div>
-
-        <!-- Action Buttons -->
-        <div class="mt-8 flex justify-center space-x-4">
-          <router-link
-            :to="{ name: 'Title', params: { slug: titleSlug } }"
-            class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-6 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-          >
-            Cancel
-          </router-link>
-
-          <button
-            @click="createGame"
-            :disabled="!canCreateGame || creating"
-            :class="[
-              'inline-flex items-center rounded-lg px-6 py-3 text-sm font-medium transition-colors',
-              canCreateGame && !creating
-                ? 'bg-green-600 text-white hover:bg-green-700'
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            ]"
-          >
-            {{ creating ? 'Creating Game...' : `Create ${gameMode === 'pve' ? 'PvE' : 'PvP'} Game` }}
-          </button>
         </div>
       </main>
     </div>
@@ -421,10 +458,13 @@ const rankedQueueError = ref<string | null>(null)
 const pendingOutgoingChallenges = ref<FriendlyChallenge[]>([])
 const showAllPlayerDecks = ref<boolean>(true)
 const lastUsedDeckId = ref<number | null>(null)
+const showAllFriends = ref<boolean>(true)
+const lastUsedFriendId = ref<number | null>(null)
 
 // Selections
 const selectedPlayerDeck = ref<DeckData | null>(null)
 const selectedOpponentDeck = ref<DeckData | null>(null)
+const selectedFriend = ref<Friendship | null>(null)
 
 // Computed
 const titleSlug = computed(() => route.params.slug as string)
@@ -452,6 +492,10 @@ const outgoingPendingByUserId = computed<Record<number, boolean>>(() => {
   return map
 })
 
+const getFriendUserId = (friend: Friendship): number => {
+  return (friend.friend_data.id as unknown as number) || friend.friend
+}
+
 const initializePlayerDeckSelection = (): void => {
   if (playerDecks.value.length === 0) return
 
@@ -470,10 +514,35 @@ const initializePlayerDeckSelection = (): void => {
   }
 }
 
+const initializeFriendSelection = (): void => {
+  if (friends.value.length === 0) return
+
+  if (friends.value.length === 1) {
+    selectedFriend.value = friends.value[0]
+    showAllFriends.value = false
+    return
+  }
+
+  const storedFriend = friends.value.find(friend => getFriendUserId(friend) === lastUsedFriendId.value)
+  if (storedFriend) {
+    selectedFriend.value = storedFriend
+    showAllFriends.value = false
+  } else if (!selectedFriend.value) {
+    showAllFriends.value = true
+  }
+}
+
 const selectPlayerDeck = (deck: DeckData): void => {
   selectedPlayerDeck.value = deck
   if (playerDecks.value.length > 1) {
     showAllPlayerDecks.value = false
+  }
+}
+
+const selectFriend = (friend: Friendship): void => {
+  selectedFriend.value = friend
+  if (friends.value.length > 1) {
+    showAllFriends.value = false
   }
 }
 
@@ -484,6 +553,7 @@ const fetchPlayerDecks = async (): Promise<void> => {
     const response = await axios.get(`/collection/titles/${titleSlug.value}/decks/`)
     playerDecks.value = response.data.decks || []
     lastUsedDeckId.value = response.data.last_used_deck_id ?? null
+    lastUsedFriendId.value = response.data.last_used_friend_id ?? null
     initializePlayerDeckSelection()
   } catch (err) {
     console.error('Error fetching player decks:', err)
@@ -513,6 +583,7 @@ const fetchFriends = async (): Promise<void> => {
 
     const friendships = await friendsApi.getFriendships()
     friends.value = friendships.filter(friendship => friendship.status === 'accepted')
+    initializeFriendSelection()
   } catch (err) {
     console.error('Error fetching friends:', err)
     friendsError.value = 'Failed to load friends. Please try again later.'
@@ -619,7 +690,7 @@ const queueForRanked = async (ladderType: LadderType): Promise<void> => {
 }
 
 const isFriendChallenged = (friend: Friendship): boolean => {
-  const friendUserId = friend.friend_data.id as unknown as number
+  const friendUserId = getFriendUserId(friend)
   return !!outgoingPendingByUserId.value[friendUserId]
 }
 

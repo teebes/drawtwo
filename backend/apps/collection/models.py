@@ -127,6 +127,13 @@ class UserTitleDeckPreference(TimestampedModel):
         blank=True,
         related_name='+'
     )
+    last_used_friend = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+'
+    )
 
     class Meta:
         constraints = [

@@ -45,6 +45,17 @@ def _set_last_used_deck(user, deck: Deck | None) -> None:
     )
 
 
+def _set_last_used_friend(user, title, friend_user) -> None:
+    if not friend_user or friend_user.id == user.id:
+        return
+
+    UserTitleDeckPreference.objects.update_or_create(
+        user=user,
+        title=title,
+        defaults={'last_used_friend': friend_user},
+    )
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def game_detail(request, game_id):
@@ -535,6 +546,7 @@ def create_friendly_challenge(request):
         challenger=request.user, challengee=challengee, title=title, status=FriendlyChallenge.STATUS_PENDING
     ).first()
     if existing:
+        _set_last_used_friend(request.user, title, challengee)
         _set_last_used_deck(request.user, challenger_deck)
         return Response({
             'id': existing.id,
@@ -552,6 +564,7 @@ def create_friendly_challenge(request):
         challenger_deck=challenger_deck,
         status=FriendlyChallenge.STATUS_PENDING
     )
+    _set_last_used_friend(request.user, title, challengee)
     _set_last_used_deck(request.user, challenger_deck)
 
     return Response({
@@ -639,6 +652,7 @@ def accept_friendly_challenge(request, challenge_id):
     challenge.status = FriendlyChallenge.STATUS_ACCEPTED
     challenge.save(update_fields=['challengee_deck', 'game', 'status'])
     _set_last_used_deck(request.user, challengee_deck)
+    _set_last_used_friend(request.user, challenge.title, challenge.challenger)
 
     # Kick off first step
     step.delay(game.id)

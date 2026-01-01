@@ -8,6 +8,7 @@ from django.db.models import Count, Sum
 from django.db.models.functions import Coalesce
 
 from apps.builder.models import Title, CardTemplate, HeroTemplate
+from apps.authentication.models import Friendship
 from apps.builder.schemas import TitleConfig
 from apps.collection.models import Deck, DeckCard, UserTitleDeckPreference
 from apps.core.card_assets import get_hero_art_url
@@ -53,6 +54,7 @@ def deck_list_by_title(request, title_slug):
             })
 
         last_used_deck_id = None
+        last_used_friend_id = None
         preference = UserTitleDeckPreference.objects.filter(
             user=request.user,
             title=title
@@ -61,6 +63,14 @@ def deck_list_by_title(request, title_slug):
             deck_ids = {deck['id'] for deck in deck_data}
             if preference.last_used_deck_id in deck_ids:
                 last_used_deck_id = preference.last_used_deck_id
+        if preference and preference.last_used_friend_id:
+            is_friend = Friendship.objects.filter(
+                user=request.user,
+                friend_id=preference.last_used_friend_id,
+                status=Friendship.STATUS_ACCEPTED
+            ).exists()
+            if is_friend:
+                last_used_friend_id = preference.last_used_friend_id
 
         return Response({
             'title': {
@@ -71,6 +81,7 @@ def deck_list_by_title(request, title_slug):
             'decks': deck_data,
             'count': len(deck_data),
             'last_used_deck_id': last_used_deck_id,
+            'last_used_friend_id': last_used_friend_id,
         })
 
     elif request.method == 'POST':
