@@ -103,7 +103,7 @@ class User(AbstractUser):
     @property
     def display_name(self):
         """Returns the user's display name."""
-        return self.username or self.email
+        return self.username or f"Gamer {self.id}"
 
     @property
     def is_approved(self):
