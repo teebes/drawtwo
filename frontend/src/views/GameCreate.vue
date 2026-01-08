@@ -388,6 +388,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useNotificationStore } from '../stores/notifications'
+import { useAuthStore } from '../stores/auth'
 import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
 import { friendsApi } from '../services/friends'
@@ -434,6 +435,7 @@ interface RankedQueueEntry {
 const route = useRoute()
 const router = useRouter()
 const notificationStore = useNotificationStore()
+const authStore = useAuthStore()
 
 // Component state
 const loading = ref<boolean>(true)
@@ -773,6 +775,12 @@ watch(gameMode, (newMode) => {
 onMounted(async () => {
   try {
     loading.value = true
+
+    // Ensure WebSocket is connected for real-time match notifications
+    if (authStore.isAuthenticated && authStore.userWsStatus !== 'connected') {
+      console.log('Ensuring WebSocket connection for matchmaking...')
+      authStore.connectUserWebSocket()
+    }
 
     // Fetch player decks and PvE decks (opponent decks loaded on demand)
     await Promise.all([

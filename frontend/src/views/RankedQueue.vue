@@ -129,9 +129,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useNotificationStore } from '../stores/notifications'
+import { useAuthStore } from '../stores/auth'
 import axios from '../config/api'
 import type { LadderType } from '../types/game'
 
@@ -156,6 +157,7 @@ interface QueueEntry {
 const route = useRoute()
 const router = useRouter()
 const notificationStore = useNotificationStore()
+const authStore = useAuthStore()
 
 // Component state
 const loading = ref<boolean>(true)
@@ -327,10 +329,26 @@ const stopPolling = (): void => {
   }
 }
 
+// Watch for WebSocket connection status and ensure it's connected
+watch(() => authStore.userWsStatus, (status) => {
+  console.log('WebSocket status changed:', status)
+  if (status === 'disconnected' && authStore.isAuthenticated) {
+    console.log('WebSocket disconnected, attempting to reconnect...')
+    authStore.connectUserWebSocket()
+  }
+})
+
 // Lifecycle
 onMounted(async () => {
   try {
     loading.value = true
+
+    // Ensure WebSocket is connected for real-time match notifications
+    if (authStore.isAuthenticated && authStore.userWsStatus !== 'connected') {
+      console.log('Ensuring WebSocket connection for matchmaking...')
+      authStore.connectUserWebSocket()
+    }
+
     await fetchQueueStatus()
 
     if (inQueue.value) {
