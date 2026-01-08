@@ -81,18 +81,32 @@
               @click="viewGame(game)"
             >
               <!-- Game Type Badge -->
-              <div
-                :class="[
-                  'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold',
-                  game.type === 'ranked'
-                    ? 'bg-primary-500 text-white'
-                    : game.type === 'friendly'
-                    ? 'bg-secondary-500 text-gray-800'
-                    : 'bg-gray-500 text-white'
-                ]"
-                :title="game.type === 'ranked' ? 'Ranked Game' : game.type === 'friendly' ? 'Friendly Game' : 'PvE Game'"
-              >
-                {{ game.type === 'ranked' ? 'R' : game.type === 'friendly' ? 'F' : 'AI' }}
+              <div class="flex items-center gap-1">
+                <div
+                  :class="[
+                    'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                    game.type === 'ranked'
+                      ? 'bg-primary-500 text-white'
+                      : game.type === 'friendly'
+                      ? 'bg-secondary-500 text-gray-800'
+                      : 'bg-gray-500 text-white'
+                  ]"
+                  :title="game.type === 'ranked' ? 'Ranked Game' : game.type === 'friendly' ? 'Friendly Game' : 'PvE Game'"
+                >
+                  {{ game.type === 'ranked' ? 'R' : game.type === 'friendly' ? 'F' : 'AI' }}
+                </div>
+
+                <!-- Ladder Type Badge (for ranked games) -->
+                <div
+                  v-if="game.type === 'ranked' && game.ladder_type"
+                  :class="[
+                    'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-xs font-bold',
+                    'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300'
+                  ]"
+                  :title="game.ladder_type === 'rapid' ? 'Rapid (1 min/turn)' : 'Daily'"
+                >
+                  {{ game.ladder_type === 'rapid' ? 'R' : 'D' }}
+                </div>
               </div>
 
               <!-- Outcome Indicator (only for ended games) -->
@@ -234,6 +248,7 @@ interface Stats {
 interface GameHistoryItem {
   id: number
   type: 'ranked' | 'friendly' | 'pve'
+  ladder_type: 'rapid' | 'daily' | null
   status: 'init' | 'in_progress' | 'ended'
   opponent_name: string
   opponent_hero: string | null
