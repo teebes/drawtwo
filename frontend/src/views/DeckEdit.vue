@@ -112,7 +112,7 @@
             <GameButton
               type="submit"
               variant="primary"
-              :disabled="saving || !canSave"
+              :disabled="saving"
               class="flex-1"
             >
               {{ saving ? 'Saving...' : (isEditMode ? 'Update Deck' : 'Create Deck') }}
@@ -256,7 +256,16 @@ const fetchDeck = async (): Promise<void> => {
 }
 
 const saveDeck = async (): Promise<void> => {
-  if (!canSave.value) return
+  // Validate form inputs
+  if (!deckName.value.trim()) {
+    notificationStore.error('Deck name is required')
+    return
+  }
+
+  if (selectedHeroId.value === null) {
+    notificationStore.error('Please select a hero for your deck')
+    return
+  }
 
   try {
     saving.value = true
