@@ -56,7 +56,7 @@ class BasicDjangoTestCase(TestCase):
         user = User.objects.create_user(email="test2@example.com")
         self.assertEqual(user.email, "test2@example.com")
         self.assertIsNone(user.username)
-        self.assertEqual(user.display_name, "test2@example.com")
+        self.assertEqual(user.display_name, f"Gamer {user.id}")
         self.assertFalse(user.is_email_verified)
 
     def test_admin_accessible(self):

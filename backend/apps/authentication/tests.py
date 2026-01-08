@@ -31,7 +31,7 @@ class UserModelTestCase(TestCase):
         user = User.objects.create_user(email="test@example.com")
         self.assertEqual(user.email, "test@example.com")
         self.assertIsNone(user.username)
-        self.assertEqual(user.display_name, "test@example.com")
+        self.assertEqual(user.display_name, f"Gamer {user.id}")
         self.assertFalse(user.is_email_verified)
         self.assertFalse(user.has_usable_password())
 
@@ -99,16 +99,16 @@ class AuthenticationAPITestCase(APITestCase):
         self.assertIn("message", response.data)
         self.assertIn("user", response.data)
 
-        user_data = response.data["user"]
-        self.assertEqual(user_data["email"], "minimal@example.com")
-        self.assertIsNone(user_data["username"])
-        self.assertEqual(user_data["display_name"], "minimal@example.com")
-        self.assertFalse(user_data["is_email_verified"])
-
         # Verify user was created in database
         user = User.objects.get(email="minimal@example.com")
         self.assertEqual(user.email, "minimal@example.com")
         self.assertIsNone(user.username)
+
+        user_data = response.data["user"]
+        self.assertEqual(user_data["email"], "minimal@example.com")
+        self.assertIsNone(user_data["username"])
+        self.assertEqual(user_data["display_name"], f"Gamer {user.id}")
+        self.assertFalse(user_data["is_email_verified"])
 
     def test_register_with_email_and_username(self):
         """Test user registration with email and optional username."""
@@ -450,7 +450,7 @@ class AuthenticationIntegrationTestCase(APITestCase):
         full_user = User.objects.get(email="full@example.com")
 
         self.assertIsNone(minimal_user.username)
-        self.assertEqual(minimal_user.display_name, "minimal@example.com")
+        self.assertEqual(minimal_user.display_name, f"Gamer {minimal_user.id}")
 
         self.assertEqual(full_user.username, "fulluser")
         self.assertEqual(full_user.display_name, "fulluser")
