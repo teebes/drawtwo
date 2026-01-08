@@ -339,7 +339,7 @@ def title_games_history(request, slug):
     title = get_title_or_403(slug, request.user)
     user = request.user
 
-    ladder_type = request.query_params.get('ladder_type', Game.LADDER_TYPE_RAPID)
+    ladder_type = request.query_params.get('ladder_type', Game.LADDER_TYPE_DAILY)
     if ladder_type not in dict(Game.LADDER_TYPE_CHOICES):
         return Response({'error': 'Invalid ladder type'}, status=400)
 
@@ -385,11 +385,10 @@ def title_games_history(request, slug):
         current_rating = 1200  # Default rating if user hasn't played ranked games yet
 
     # Get all games (ended and in-progress) for the games list
+    # Show ALL games regardless of ladder type (stats are filtered by ladder_type, but list shows everything)
     # Use where_user_is_side to annotate user_side
     all_games = Game.objects.where_user_is_side(title, user).filter(
         status__in=[Game.GAME_STATUS_ENDED, Game.GAME_STATUS_IN_PROGRESS]
-    ).filter(
-        Q(type=Game.GAME_TYPE_RANKED, ladder_type=ladder_type) | ~Q(type=Game.GAME_TYPE_RANKED)
     ).select_related(
         'side_a__user', 'side_b__user', 'side_a__hero', 'side_b__hero',
         'winner', 'player_a_user', 'player_b_user'

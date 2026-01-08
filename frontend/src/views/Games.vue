@@ -265,7 +265,7 @@ const stats = ref<Stats>({
 })
 const games = ref<GameHistoryItem[]>([])
 const currentRating = ref<number>(1200)
-const ladderType = ref<LadderType>('rapid')
+const ladderType = ref<LadderType>('daily')
 const pagination = ref<Pagination>({
   page: 1,
   total_pages: 1,
