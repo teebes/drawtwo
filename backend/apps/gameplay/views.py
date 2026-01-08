@@ -337,9 +337,9 @@ def queue_for_ranked_match(request):
                 type=Game.GAME_TYPE_RANKED,
                 ladder_type=Game.LADDER_TYPE_DAILY,
             ).count()
-            if active_daily_games >= 3:
+            if active_daily_games >= 5:
                 return Response(
-                    {'error': 'Daily ladder limit reached (3 active games).'},
+                    {'error': 'Daily ladder limit reached (5 active games).'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
