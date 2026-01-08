@@ -4,6 +4,7 @@ import traceback
 import uuid
 
 from django.db import transaction, DatabaseError
+from django.db.models import Q
 from pydantic import TypeAdapter, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -1177,6 +1178,18 @@ class GameService:
                 # Don't match users against themselves
                 if entry_a.user_id == entry_b.user_id:
                     continue
+
+                # For daily ladder, don't match if they already have an active game
+                if ladder_type == Game.LADDER_TYPE_DAILY:
+                    existing_game = Game.objects.filter(
+                        Q(player_a_user=entry_a.user, player_b_user=entry_b.user) |
+                        Q(player_a_user=entry_b.user, player_b_user=entry_a.user),
+                        status=Game.GAME_STATUS_IN_PROGRESS,
+                        type=Game.GAME_TYPE_RANKED,
+                        ladder_type=Game.LADDER_TYPE_DAILY,
+                    ).exists()
+                    if existing_game:
+                        continue
 
                 elo_diff = abs(entry_a.elo_rating - entry_b.elo_rating)
                 if elo_diff < best_diff:

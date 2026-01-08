@@ -1,6 +1,11 @@
 """
 Tests for GameService - game initialization and high-level operations.
 """
+from django.test import TestCase
+from apps.authentication.models import User
+from apps.builder.models import Title, HeroTemplate, CardTemplate
+from apps.collection.models import Deck, DeckCard
+from apps.gameplay.models import Game, MatchmakingQueue
 from apps.gameplay.tests import ServiceTestsBase
 from apps.gameplay.services import GameService
 
@@ -15,3 +20,233 @@ class ServiceTests(ServiceTestsBase):
         self.assertEqual(self.game.state['phase'], 'start')
         self.assertEqual(len(self.game.state['hands']['side_a']), 0)
         self.assertEqual(len(self.game.state['hands']['side_b']), 0)
+
+
+class MatchmakingTests(TestCase):
+    """Tests for matchmaking functionality."""
+
+    def setUp(self):
+        """Create test users, title, decks for matchmaking tests."""
+        # Create two users
+        self.user_a = User.objects.create_user(
+            email="user_a@example.com",
+            username="user_a"
+        )
+        self.user_b = User.objects.create_user(
+            email="user_b@example.com",
+            username="user_b"
+        )
+
+        # Create title and heroes
+        self.title = Title.objects.create(slug='test-title', author=self.user_a)
+        self.hero_a = HeroTemplate.objects.create(
+            title=self.title,
+            slug='hero-a',
+            name="Hero A",
+            health=30
+        )
+        self.hero_b = HeroTemplate.objects.create(
+            title=self.title,
+            slug='hero-b',
+            name="Hero B",
+            health=30
+        )
+
+        # Create decks for both users
+        self.deck_a = Deck.objects.create(
+            title=self.title,
+            user=self.user_a,
+            name="Deck A",
+            hero=self.hero_a
+        )
+        self.deck_b = Deck.objects.create(
+            title=self.title,
+            user=self.user_b,
+            name="Deck B",
+            hero=self.hero_b
+        )
+
+        # Add some cards to both decks
+        for i in range(4):
+            card = CardTemplate.objects.create(
+                title=self.title,
+                slug=f'card-{i}',
+                name=f'Card {i}',
+                cost=1,
+            )
+            DeckCard.objects.create(deck=self.deck_a, card=card)
+            DeckCard.objects.create(deck=self.deck_b, card=card)
+
+        # Create alternate decks for testing multiple games
+        self.deck_a2 = Deck.objects.create(
+            title=self.title,
+            user=self.user_a,
+            name="Deck A2",
+            hero=self.hero_a
+        )
+        self.deck_b2 = Deck.objects.create(
+            title=self.title,
+            user=self.user_b,
+            name="Deck B2",
+            hero=self.hero_b
+        )
+        # Add cards to alternate decks
+        for i in range(4):
+            card = CardTemplate.objects.get(slug=f'card-{i}')
+            DeckCard.objects.create(deck=self.deck_a2, card=card)
+            DeckCard.objects.create(deck=self.deck_b2, card=card)
+
+    def test_prevent_duplicate_daily_ranked_games(self):
+        """Test that two players cannot have multiple active daily ranked games."""
+        # Create an existing active daily ranked game between user_a and user_b
+        existing_game = GameService.create_game(
+            self.deck_a,
+            self.deck_b,
+            randomize_starting_player=False,
+        )
+        existing_game.type = Game.GAME_TYPE_RANKED
+        existing_game.ladder_type = Game.LADDER_TYPE_DAILY
+        existing_game.status = Game.GAME_STATUS_IN_PROGRESS
+        existing_game.save()
+
+        # Queue both users for daily ranked matchmaking with DIFFERENT decks
+        # Daily games should prevent matching even with different decks
+        queue_a = MatchmakingQueue.objects.create(
+            user=self.user_a,
+            deck=self.deck_a2,  # Use alternate deck
+            elo_rating=1500,
+            status=MatchmakingQueue.STATUS_QUEUED,
+            ladder_type=Game.LADDER_TYPE_DAILY,
+        )
+        queue_b = MatchmakingQueue.objects.create(
+            user=self.user_b,
+            deck=self.deck_b2,  # Use alternate deck
+            elo_rating=1500,
+            status=MatchmakingQueue.STATUS_QUEUED,
+            ladder_type=Game.LADDER_TYPE_DAILY,
+        )
+
+        # Process matchmaking for daily ladder
+        matches_created = GameService.process_matchmaking(
+            self.title.id,
+            ladder_type=Game.LADDER_TYPE_DAILY
+        )
+
+        # Verify that no new matches were created
+        self.assertEqual(matches_created, 0)
+
+        # Verify that both queue entries are still in QUEUED status
+        queue_a.refresh_from_db()
+        queue_b.refresh_from_db()
+        self.assertEqual(queue_a.status, MatchmakingQueue.STATUS_QUEUED)
+        self.assertEqual(queue_b.status, MatchmakingQueue.STATUS_QUEUED)
+
+        # Verify only 1 game exists (the original)
+        game_count = Game.objects.filter(
+            type=Game.GAME_TYPE_RANKED,
+            ladder_type=Game.LADDER_TYPE_DAILY,
+        ).count()
+        self.assertEqual(game_count, 1)
+
+    def test_allow_duplicate_rapid_ranked_games(self):
+        """Test that two players CAN have multiple active rapid ranked games."""
+        # Create an existing active rapid ranked game between user_a and user_b
+        existing_game = GameService.create_game(
+            self.deck_a,
+            self.deck_b,
+            randomize_starting_player=False,
+        )
+        existing_game.type = Game.GAME_TYPE_RANKED
+        existing_game.ladder_type = Game.LADDER_TYPE_RAPID
+        existing_game.status = Game.GAME_STATUS_IN_PROGRESS
+        existing_game.save()
+
+        # Queue both users for rapid ranked matchmaking with DIFFERENT decks
+        # (same deck matchup would be caught by create_game's duplicate check)
+        queue_a = MatchmakingQueue.objects.create(
+            user=self.user_a,
+            deck=self.deck_a2,  # Use alternate deck
+            elo_rating=1500,
+            status=MatchmakingQueue.STATUS_QUEUED,
+            ladder_type=Game.LADDER_TYPE_RAPID,
+        )
+        queue_b = MatchmakingQueue.objects.create(
+            user=self.user_b,
+            deck=self.deck_b2,  # Use alternate deck
+            elo_rating=1500,
+            status=MatchmakingQueue.STATUS_QUEUED,
+            ladder_type=Game.LADDER_TYPE_RAPID,
+        )
+
+        # Process matchmaking for rapid ladder
+        matches_created = GameService.process_matchmaking(
+            self.title.id,
+            ladder_type=Game.LADDER_TYPE_RAPID
+        )
+
+        # Verify that a new match WAS created (rapid allows duplicates)
+        self.assertEqual(matches_created, 1)
+
+        # Verify that both queue entries are now MATCHED
+        queue_a.refresh_from_db()
+        queue_b.refresh_from_db()
+        self.assertEqual(queue_a.status, MatchmakingQueue.STATUS_MATCHED)
+        self.assertEqual(queue_b.status, MatchmakingQueue.STATUS_MATCHED)
+
+        # Verify 2 games exist (the original + the new match)
+        game_count = Game.objects.filter(
+            type=Game.GAME_TYPE_RANKED,
+            ladder_type=Game.LADDER_TYPE_RAPID,
+        ).count()
+        self.assertEqual(game_count, 2)
+
+    def test_allow_new_daily_game_after_previous_completes(self):
+        """Test that players can be matched again after their previous daily game completes."""
+        # Create a COMPLETED daily ranked game between user_a and user_b
+        completed_game = GameService.create_game(
+            self.deck_a,
+            self.deck_b,
+            randomize_starting_player=False,
+        )
+        completed_game.type = Game.GAME_TYPE_RANKED
+        completed_game.ladder_type = Game.LADDER_TYPE_DAILY
+        completed_game.status = Game.GAME_STATUS_ENDED  # Game is completed
+        completed_game.save()
+
+        # Queue both users for daily ranked matchmaking
+        queue_a = MatchmakingQueue.objects.create(
+            user=self.user_a,
+            deck=self.deck_a,
+            elo_rating=1500,
+            status=MatchmakingQueue.STATUS_QUEUED,
+            ladder_type=Game.LADDER_TYPE_DAILY,
+        )
+        queue_b = MatchmakingQueue.objects.create(
+            user=self.user_b,
+            deck=self.deck_b,
+            elo_rating=1500,
+            status=MatchmakingQueue.STATUS_QUEUED,
+            ladder_type=Game.LADDER_TYPE_DAILY,
+        )
+
+        # Process matchmaking for daily ladder
+        matches_created = GameService.process_matchmaking(
+            self.title.id,
+            ladder_type=Game.LADDER_TYPE_DAILY
+        )
+
+        # Verify that a new match WAS created (previous game is completed)
+        self.assertEqual(matches_created, 1)
+
+        # Verify that both queue entries are now MATCHED
+        queue_a.refresh_from_db()
+        queue_b.refresh_from_db()
+        self.assertEqual(queue_a.status, MatchmakingQueue.STATUS_MATCHED)
+        self.assertEqual(queue_b.status, MatchmakingQueue.STATUS_MATCHED)
+
+        # Verify 2 games exist (the completed + the new one)
+        game_count = Game.objects.filter(
+            type=Game.GAME_TYPE_RANKED,
+            ladder_type=Game.LADDER_TYPE_DAILY,
+        ).count()
+        self.assertEqual(game_count, 2)
