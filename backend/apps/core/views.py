@@ -243,19 +243,19 @@ def title_notifications(request, slug):
 
     games = Game.objects.where_user_is_side(title, request.user)
 
-    ranked_game = games.filter(
-        type=Game.GAME_TYPE_RANKED
-    ).order_by('-created_at').first()
-    if ranked_game:
+    # Ranked games where it is the player's turn
+    ranked_games = games.filter(
+        type=Game.GAME_TYPE_RANKED,
+        status=Game.GAME_STATUS_IN_PROGRESS
+    ).order_by('-created_at')
+    for ranked_game in ranked_games:
         opponent_deck = ranked_game.opponent_deck_for_user(request.user)
-
-        # Game In Progress
-        if ranked_game.status == Game.GAME_STATUS_IN_PROGRESS:
-            is_player_turn = ranked_game.state['active'] == ranked_game.user_side
-            if is_player_turn:
-                message = f"Your turn against {opponent_deck.owner_name}."
-            else:
-                message = f"Waiting for {opponent_deck.owner_name} to take their turn."
+        is_player_turn = ranked_game.state['active'] == ranked_game.user_side
+        # Only show notification if it's the player's turn
+        if is_player_turn:
+            # Include ladder type in message for clarity
+            ladder_label = ranked_game.get_ladder_type_display()
+            message = f"Your turn in {ladder_label} ranked against {opponent_deck.owner_name}."
             notifications.append(Notification(
                 ref_id=ranked_game.id,
                 type='game_ranked',
