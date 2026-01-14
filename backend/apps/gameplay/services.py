@@ -341,7 +341,12 @@ class GameService:
                             game.save(update_fields=["queue"])
 
                             # Calculate and save ELO changes for PvP matches
-                            GameService._update_elo_ratings(game)
+                            # Wrap in try-except so ELO failures don't rollback the game ending
+                            try:
+                                GameService._update_elo_ratings(game)
+                            except Exception as e:
+                                logger.error(f"Failed to update ELO ratings for game {game.id}: {e}")
+                                # Continue - game has ended, ELO update is secondary
                             # Break out of the effect processing loop - game is over
                             break
 
@@ -495,7 +500,7 @@ class GameService:
                 # Time expired - automatically concede
                 from apps.gameplay.schemas.effects import ConcedeEffect
                 logger.info(f"Turn expired for {side} in game {game_id} when processing command, auto-conceding")
-                game.enqueue([ConcedeEffect(side=side)], trigger=False)
+                game.enqueue([ConcedeEffect(side=side)], trigger=True)
                 return  # Don't process the command, the concede will be handled
 
         effects = GameService.compile_cmd(game_state, command, side)

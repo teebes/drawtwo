@@ -11,8 +11,6 @@ def process_matchmaking(title_id: int, ladder_type: str = None):
     Process matchmaking queue for a specific title.
     Attempts to find and match players with similar ELO ratings.
     """
-    if ladder_type is None:
-        return GameService.process_matchmaking(title_id)
     return GameService.process_matchmaking(title_id, ladder_type=ladder_type)
 
 @shared_task
