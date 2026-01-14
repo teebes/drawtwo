@@ -35,6 +35,9 @@ class GoogleLogin(SocialLoginView):
         settings.FRONTEND_URL + "/auth/callback/google"
     )  # Configurable frontend callback URL
     client_class = OAuth2Client
+    # Disable DRF's SessionAuthentication which enforces CSRF independently.
+    # This is necessary for iOS Safari where ITP may block the CSRF cookie.
+    authentication_classes = []
 
     def post(self, request, *args, **kwargs):
         """Override post to handle errors and mark email as verified after Google OAuth login."""
