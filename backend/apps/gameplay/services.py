@@ -295,6 +295,31 @@ class GameService:
             and game.status != Game.GAME_STATUS_ENDED):
             from django.utils import timezone
             if timezone.now() >= game.turn_expires:
+                # Check for abort condition: ranked game, turn 1, side_a timing out
+                if (game.type == Game.GAME_TYPE_RANKED and
+                        game_state.turn == 1 and
+                        game_state.active == 'side_a'):
+                    logger.info(
+                        f"Ranked game {game_id} aborted: side_a timed out on turn 1 "
+                        f"(no winner, no rating changes)"
+                    )
+                    # Abort the game - no winner, no ConcedeEffect
+                    from apps.gameplay.schemas.updates import GameAbortedUpdate
+                    from apps.gameplay.notifications import send_game_updates_to_clients
+
+                    game.status = Game.GAME_STATUS_ABORTED
+                    game.queue = []
+                    game.turn_expires = None
+                    game.save(update_fields=['status', 'queue', 'turn_expires'])
+
+                    # Notify clients
+                    abort_update = GameAbortedUpdate(
+                        side=game_state.active,
+                        reason="first_turn_timeout"
+                    )
+                    send_game_updates_to_clients(game.id, game_state, [abort_update])
+                    return  # Game is done, exit step
+
                 # Time expired - automatically concede for the active player
                 from apps.gameplay.schemas.effects import ConcedeEffect
                 logger.info(f"Turn expired for {game_state.active} in game {game_id}, auto-conceding")
@@ -484,8 +509,8 @@ class GameService:
         except Game.DoesNotExist:
             raise ValueError(f"Game with id {game_id} does not exist")
 
-        # Reject commands if the game has already ended
-        if game.status == Game.GAME_STATUS_ENDED:
+        # Reject commands if the game has already ended or been aborted
+        if game.status in (Game.GAME_STATUS_ENDED, Game.GAME_STATUS_ABORTED):
             raise ValueError("The game has already ended.")
 
         game_state = GameState.model_validate(game.state)
@@ -497,6 +522,31 @@ class GameService:
             and side == game_state.active):
             from django.utils import timezone
             if timezone.now() >= game.turn_expires:
+                # Check for abort condition: ranked game, turn 1, side_a timing out
+                if (game.type == Game.GAME_TYPE_RANKED and
+                        game_state.turn == 1 and
+                        game_state.active == 'side_a'):
+                    logger.info(
+                        f"Ranked game {game_id} aborted: side_a timed out on turn 1 "
+                        f"(no winner, no rating changes)"
+                    )
+                    # Abort the game - no winner, no ConcedeEffect
+                    from apps.gameplay.schemas.updates import GameAbortedUpdate
+                    from apps.gameplay.notifications import send_game_updates_to_clients
+
+                    game.status = Game.GAME_STATUS_ABORTED
+                    game.queue = []
+                    game.turn_expires = None
+                    game.save(update_fields=['status', 'queue', 'turn_expires'])
+
+                    # Notify clients
+                    abort_update = GameAbortedUpdate(
+                        side=game_state.active,
+                        reason="first_turn_timeout"
+                    )
+                    send_game_updates_to_clients(game.id, game_state, [abort_update])
+                    return  # Game is aborted
+
                 # Time expired - automatically concede
                 from apps.gameplay.schemas.effects import ConcedeEffect
                 logger.info(f"Turn expired for {side} in game {game_id} when processing command, auto-conceding")
@@ -941,6 +991,11 @@ class GameService:
             logger.info(f"Skipping ELO update for friendly (unrated) game {game.id}")
             return
 
+        # Skip for aborted games (e.g., side_a timed out on turn 1)
+        if game.status == Game.GAME_STATUS_ABORTED:
+            logger.info(f"Skipping ELO update for aborted game {game.id}")
+            return
+
         # Skip if no winner (shouldn't happen, but just in case)
         if not game.winner:
             logger.warning(f"Game {game.id} ended without a winner")
@@ -1279,9 +1334,14 @@ class GameService:
         """
         Check all active games for expired turns and automatically concede.
         This is called periodically to catch timeouts even when no effects are being processed.
+
+        For ranked games: if side_a times out on turn 1 without making any moves,
+        the game is aborted (no winner, no rating changes).
         """
         from django.utils import timezone
         from apps.gameplay.schemas.effects import ConcedeEffect
+        from apps.gameplay.schemas.updates import GameAbortedUpdate
+        from apps.gameplay.notifications import send_game_updates_to_clients
 
         now = timezone.now()
 
@@ -1298,6 +1358,34 @@ class GameService:
 
                 # Only process if in main phase and has time control
                 if game_state.phase == 'main' and game_state.time_per_turn > 0:
+                    # Check for abort condition: ranked game, turn 1, side_a timing out
+                    # This handles the case where someone queued but never came back
+                    if (game.type == Game.GAME_TYPE_RANKED and
+                            game_state.turn == 1 and
+                            game_state.active == 'side_a'):
+                        logger.info(
+                            f"Ranked game {game.id} aborted: side_a timed out on turn 1 "
+                            f"(no winner, no rating changes)"
+                        )
+                        # Abort the game - no winner, no ConcedeEffect
+                        game.status = Game.GAME_STATUS_ABORTED
+                        game.queue = []
+                        game.turn_expires = None
+                        game.save(update_fields=['status', 'queue', 'turn_expires'])
+
+                        # Notify clients
+                        abort_update = GameAbortedUpdate(
+                            side=game_state.active,
+                            reason="first_turn_timeout"
+                        )
+                        send_game_updates_to_clients(
+                            game.id,
+                            game_state,
+                            [abort_update]
+                        )
+                        continue  # Don't process as normal timeout
+
+                    # Normal timeout - concede for the active player
                     logger.info(f"Turn expired for {game_state.active} in game {game.id}, auto-conceding")
                     game.enqueue([ConcedeEffect(side=game_state.active)], trigger=True)
             except Exception as e:

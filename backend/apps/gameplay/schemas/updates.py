@@ -86,6 +86,15 @@ class GameOverUpdate(UpdateBase):
     winner: Literal["side_a", "side_b"]
 
 
+class GameAbortedUpdate(UpdateBase):
+    """
+    Sent when a ranked game is aborted (e.g., first player timed out on turn 1).
+    No winner is declared and no rating changes occur.
+    """
+    type: Literal["update_game_aborted"] = "update_game_aborted"
+    reason: str = "first_turn_timeout"
+
+
 class TempManaBoostUpdate(UpdateBase):
     type: Literal["update_temp_mana_boost"] = "update_temp_mana_boost"
     amount: int
@@ -121,6 +130,7 @@ GameUpdate = Annotated[
         CardDestroyedUpdate,
         ClearUpdate,
         DamageUpdate,
+        GameAbortedUpdate,
         HealUpdate,
         HeroDamageUpdate,
         DrawPhaseUpdate,

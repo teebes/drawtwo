@@ -48,6 +48,7 @@ class Game(TimestampedModel):
     GAME_STATUS_INIT = 'init'
     GAME_STATUS_IN_PROGRESS = 'in_progress'
     GAME_STATUS_ENDED = 'ended'
+    GAME_STATUS_ABORTED = 'aborted'
 
     GAME_TYPE_PVE = 'pve'
     GAME_TYPE_RANKED = 'ranked'
@@ -75,7 +76,7 @@ class Game(TimestampedModel):
     status = models.CharField(
         max_length=20,
         choices=list_to_choices(
-            [GAME_STATUS_INIT, GAME_STATUS_IN_PROGRESS, GAME_STATUS_ENDED]
+            [GAME_STATUS_INIT, GAME_STATUS_IN_PROGRESS, GAME_STATUS_ENDED, GAME_STATUS_ABORTED]
         ),
         default=GAME_STATUS_INIT,
     )
