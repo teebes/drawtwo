@@ -12,4 +12,5 @@ export interface Notification {
   ref_id: number
   type: NotificationType
   message: string
+  is_user_turn?: boolean
 }

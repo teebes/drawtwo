@@ -6,8 +6,8 @@
       :key="`${notification.type}-${notification.ref_id}`"
       :class="[
         'rounded-lg p-4 transition-all border cursor-pointer',
-        ranked_notification_types.includes(notification.type)
-          ? ranked_notifications
+        notification.is_user_turn
+          ? 'bg-primary-100 border-primary-500 dark:bg-primary-950 dark:border-primary-800 text-black dark:text-white'
           : 'dark:text-white dark:border-secondary-800 dark:bg-secondary-950 border-secondary-300 bg-secondary-200 text-black'
       ]">
       <!-- Challenge Notification -->
@@ -103,7 +103,6 @@ const notificationStore = useNotificationStore()
 
 const ranked_notification_types = ['game_ranked_queued', 'game_ranked']
 const friendly_notification_types = ['game_friendly', 'game_challenge']
-const ranked_notifications = 'bg-primary-100 border-primary-500 dark:bg-primary-950 dark:border-primary-800 text-black dark:text-white'
 
 const showDeckModal = ref(false)
 const selectedChallengeId = ref<number | null>(null)

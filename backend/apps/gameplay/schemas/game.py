@@ -152,3 +152,4 @@ class Notification(BaseModel):
         'game_pve',
         'friend_request']
     message: str
+    is_user_turn: bool | None = None

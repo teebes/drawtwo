@@ -260,6 +260,7 @@ def title_notifications(request, slug):
             ref_id=ranked_game.id,
             type='game_ranked',
             message=message,
+            is_user_turn=is_player_turn,
         ))
 
     # Friendly games where it is the player's turn
@@ -278,6 +279,7 @@ def title_notifications(request, slug):
             ref_id=friendly_game.id,
             type='game_friendly',
             message=message,
+            is_user_turn=is_player_turn,
         ))
 
     # PvE Games
@@ -296,6 +298,7 @@ def title_notifications(request, slug):
             ref_id=pve_game.id,
             type='game_pve',
             message=message,
+            is_user_turn=is_player_turn,
         ))
 
     # Pending friendly challenges
