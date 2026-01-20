@@ -384,6 +384,9 @@ class RankedGameAbortTests(TestCase):
         # Run the expired turns check
         GameService.check_expired_turns()
 
+        # In tests, on_commit callbacks don't fire, so manually run step
+        GameService.step(game.id)
+
         # Refresh the game from DB
         game.refresh_from_db()
 
@@ -424,6 +427,9 @@ class RankedGameAbortTests(TestCase):
         # Run the expired turns check
         GameService.check_expired_turns()
 
+        # In tests, on_commit callbacks don't fire, so manually run step
+        GameService.step(game.id)
+
         # Refresh the game from DB
         game.refresh_from_db()
 
@@ -462,6 +468,9 @@ class RankedGameAbortTests(TestCase):
 
         # Run the expired turns check
         GameService.check_expired_turns()
+
+        # In tests, on_commit callbacks don't fire, so manually run step
+        GameService.step(game.id)
 
         # Refresh the game from DB
         game.refresh_from_db()

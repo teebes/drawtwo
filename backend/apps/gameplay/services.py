@@ -305,7 +305,6 @@ class GameService:
                     )
                     # Abort the game - no winner, no ConcedeEffect
                     from apps.gameplay.schemas.updates import GameAbortedUpdate
-                    from apps.gameplay.notifications import send_game_updates_to_clients
 
                     game.status = Game.GAME_STATUS_ABORTED
                     game.queue = []
@@ -532,7 +531,6 @@ class GameService:
                     )
                     # Abort the game - no winner, no ConcedeEffect
                     from apps.gameplay.schemas.updates import GameAbortedUpdate
-                    from apps.gameplay.notifications import send_game_updates_to_clients
 
                     game.status = Game.GAME_STATUS_ABORTED
                     game.queue = []
@@ -1341,7 +1339,6 @@ class GameService:
         from django.utils import timezone
         from apps.gameplay.schemas.effects import ConcedeEffect
         from apps.gameplay.schemas.updates import GameAbortedUpdate
-        from apps.gameplay.notifications import send_game_updates_to_clients
 
         now = timezone.now()
 
