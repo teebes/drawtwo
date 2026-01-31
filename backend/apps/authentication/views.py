@@ -464,7 +464,7 @@ class LeaderboardView(APIView):
         Args:
             title_slug: The slug of the title to get leaderboard for
         """
-        from django.db.models import Count, Q
+        from django.db.models import Count, F, Q
         from apps.builder.models import Title
         from apps.gameplay.models import UserTitleRating, Game
 
@@ -499,9 +499,11 @@ class LeaderboardView(APIView):
                 filter=Q(user__elo_losses__title=title, user__elo_losses__ladder_type=ladder_type),
                 distinct=True
             )
+        ).annotate(
+            total_games=F('wins') + F('losses')
         ).filter(
-            # Only include users who have played at least one game
-            Q(wins__gt=0) | Q(losses__gt=0)
+            # Only include users who have played at least 5 games
+            total_games__gte=5
         ).order_by('-elo_rating')[:limit]
 
         # Build response data
