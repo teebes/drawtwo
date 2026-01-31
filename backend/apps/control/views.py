@@ -369,3 +369,105 @@ def control_panel_overview(request):
             'pending_users': pending_users,
         }
     })
+
+
+@api_view(['GET'])
+@permission_classes([IsStaffPermission])
+def system_status(request):
+    """
+    Get comprehensive system status for monitoring.
+    Returns health of all critical services and key metrics.
+    """
+    import os
+    import redis
+    from django.db import connection
+    from django.conf import settings as django_settings
+
+    checks = {}
+    metrics = {}
+
+    # Database check
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        checks['database'] = {'status': 'ok'}
+    except Exception as e:
+        checks['database'] = {'status': 'error', 'message': str(e)}
+
+    # Redis check
+    try:
+        redis_host = os.environ.get("REDIS_HOST", "localhost")
+        r = redis.Redis(host=redis_host, port=6379, socket_timeout=2)
+        redis_info = r.info()
+        checks['redis'] = {
+            'status': 'ok',
+            'connected_clients': redis_info.get('connected_clients'),
+            'used_memory_human': redis_info.get('used_memory_human'),
+            'uptime_in_seconds': redis_info.get('uptime_in_seconds'),
+        }
+    except Exception as e:
+        checks['redis'] = {'status': 'error', 'message': str(e)}
+
+    # Celery check - inspect active workers
+    try:
+        from celery import current_app
+        inspect = current_app.control.inspect(timeout=2.0)
+        active_workers = inspect.active()
+        if active_workers:
+            worker_info = {}
+            for worker_name, tasks in active_workers.items():
+                worker_info[worker_name] = {
+                    'active_tasks': len(tasks),
+                }
+            checks['celery'] = {
+                'status': 'ok',
+                'workers': worker_info,
+                'worker_count': len(active_workers),
+            }
+        else:
+            checks['celery'] = {'status': 'warning', 'message': 'No active workers found'}
+    except Exception as e:
+        checks['celery'] = {'status': 'error', 'message': str(e)}
+
+    # Game metrics
+    try:
+        active_games = Game.objects.filter(status=Game.GAME_STATUS_IN_PROGRESS).count()
+        games_today = Game.objects.filter(
+            created_at__date=timezone.now().date()
+        ).count()
+        games_with_queue = Game.objects.filter(
+            status=Game.GAME_STATUS_IN_PROGRESS
+        ).exclude(queue=[]).count()
+
+        metrics['games'] = {
+            'active': active_games,
+            'today': games_today,
+            'with_pending_effects': games_with_queue,
+        }
+    except Exception as e:
+        metrics['games'] = {'error': str(e)}
+
+    # Matchmaking queue metrics
+    try:
+        queued_players = MatchmakingQueue.objects.filter(
+            status=MatchmakingQueue.STATUS_QUEUED
+        ).count()
+        metrics['matchmaking'] = {
+            'queued_players': queued_players,
+        }
+    except Exception as e:
+        metrics['matchmaking'] = {'error': str(e)}
+
+    # Determine overall status
+    all_ok = all(
+        c.get('status') == 'ok'
+        for c in checks.values()
+    )
+    overall_status = 'healthy' if all_ok else 'degraded'
+
+    return Response({
+        'status': overall_status,
+        'checks': checks,
+        'metrics': metrics,
+        'timestamp': timezone.now().isoformat(),
+    })

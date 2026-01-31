@@ -36,8 +36,42 @@ def get_title_or_403(slug, user):
     return title
 
 def health_check(request):
-    """Simple health check endpoint"""
-    return JsonResponse({"status": "healthy"})
+    """
+    Health check endpoint that verifies database and Redis connectivity.
+    Returns 503 if any critical service is unavailable.
+    """
+    from django.db import connection
+    from django.core.cache import cache
+    import redis
+    import os
+
+    checks = {}
+
+    # Check database
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        checks['database'] = 'ok'
+    except Exception as e:
+        checks['database'] = f'error: {str(e)}'
+
+    # Check Redis (used for channel layer and Celery)
+    try:
+        redis_host = os.environ.get("REDIS_HOST", "localhost")
+        r = redis.Redis(host=redis_host, port=6379, socket_timeout=2)
+        r.ping()
+        checks['redis'] = 'ok'
+    except Exception as e:
+        checks['redis'] = f'error: {str(e)}'
+
+    # Determine overall status
+    all_ok = all(v == 'ok' for v in checks.values())
+    status_code = 200 if all_ok else 503
+
+    return JsonResponse({
+        "status": "healthy" if all_ok else "degraded",
+        "checks": checks
+    }, status=status_code)
 
 @api_view(['GET'])
 def titles(request):

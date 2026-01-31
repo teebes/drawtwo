@@ -94,12 +94,19 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 # Django Channels configuration
+# Includes connection pool limits and socket timeout to prevent deadlocks
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [(os.environ.get("REDIS_HOST", "localhost"), 6379)],
+            "hosts": [{
+                "address": (os.environ.get("REDIS_HOST", "localhost"), 6379),
+                "socket_timeout": 5,        # Timeout for socket operations
+                "socket_connect_timeout": 5, # Timeout for initial connection
+            }],
             "prefix": "drawtwo:ws:",
+            "capacity": 1500,               # Max messages per channel
+            "expiry": 10,                   # Message expiry in seconds
         },
     },
 }

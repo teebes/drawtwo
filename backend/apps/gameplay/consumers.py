@@ -1,16 +1,20 @@
+import asyncio
 import json
 import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
 from .models import Game, GameUpdate
-#from .schemas import GameState, GameUpdate as PydGameUpdate
 from apps.gameplay.schemas.game import GameState
 from apps.gameplay.schemas.updates import GameUpdate as PydGameUpdate
 from .services import GameService
 from pydantic import TypeAdapter
 
 logger = logging.getLogger(__name__)
+
+# Timeout for channel layer operations (group_add, group_discard, etc.)
+# Prevents deadlocks if Redis becomes unresponsive
+CHANNEL_LAYER_TIMEOUT = 5.0
 
 
 class GameConsumer(AsyncWebsocketConsumer):
@@ -36,14 +40,20 @@ class GameConsumer(AsyncWebsocketConsumer):
         self.side_group_name = f'game_{self.game_id}_{self.side}'
 
         # Join both the general game group and the side-specific group
-        await self.channel_layer.group_add(
-            self.game_group_name,
-            self.channel_name
-        )
-        await self.channel_layer.group_add(
-            self.side_group_name,
-            self.channel_name
-        )
+        # Use timeout to prevent deadlock if Redis is unresponsive
+        try:
+            await asyncio.wait_for(
+                self.channel_layer.group_add(self.game_group_name, self.channel_name),
+                timeout=CHANNEL_LAYER_TIMEOUT
+            )
+            await asyncio.wait_for(
+                self.channel_layer.group_add(self.side_group_name, self.channel_name),
+                timeout=CHANNEL_LAYER_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout joining channel groups for game {self.game_id}")
+            await self.close()
+            return
 
         await self.accept()
 
@@ -67,16 +77,23 @@ class GameConsumer(AsyncWebsocketConsumer):
         return
 
     async def disconnect(self, close_code):
-        # Leave both groups
-        await self.channel_layer.group_discard(
-            self.game_group_name,
-            self.channel_name
-        )
-        if hasattr(self, 'side_group_name'):
-            await self.channel_layer.group_discard(
-                self.side_group_name,
-                self.channel_name
+        # Leave both groups with timeout to prevent blocking on Redis issues
+        try:
+            await asyncio.wait_for(
+                self.channel_layer.group_discard(self.game_group_name, self.channel_name),
+                timeout=CHANNEL_LAYER_TIMEOUT
             )
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout leaving game group {self.game_group_name}")
+
+        if hasattr(self, 'side_group_name'):
+            try:
+                await asyncio.wait_for(
+                    self.channel_layer.group_discard(self.side_group_name, self.channel_name),
+                    timeout=CHANNEL_LAYER_TIMEOUT
+                )
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout leaving side group {self.side_group_name}")
 
     async def receive(self, text_data):
         data = json.loads(text_data)
@@ -203,22 +220,30 @@ class UserConsumer(AsyncWebsocketConsumer):
         self.user_id = self.scope["user"].id
         self.user_group_name = f'user_{self.user_id}'
 
-        # Join user-specific group
-        await self.channel_layer.group_add(
-            self.user_group_name,
-            self.channel_name
-        )
+        # Join user-specific group with timeout
+        try:
+            await asyncio.wait_for(
+                self.channel_layer.group_add(self.user_group_name, self.channel_name),
+                timeout=CHANNEL_LAYER_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout joining user channel group for user {self.user_id}")
+            await self.close()
+            return
 
         await self.accept()
         logger.info(f"User {self.user_id} connected to user channel")
 
     async def disconnect(self, close_code):
-        # Leave user group
+        # Leave user group with timeout
         if hasattr(self, 'user_group_name'):
-            await self.channel_layer.group_discard(
-                self.user_group_name,
-                self.channel_name
-            )
+            try:
+                await asyncio.wait_for(
+                    self.channel_layer.group_discard(self.user_group_name, self.channel_name),
+                    timeout=CHANNEL_LAYER_TIMEOUT
+                )
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout leaving user group {self.user_group_name}")
             logger.info(f"User {self.user_id} disconnected from user channel")
 
     async def matchmaking_success(self, event):

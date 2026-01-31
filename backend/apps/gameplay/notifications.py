@@ -5,8 +5,16 @@ This module handles all WebSocket communication with game clients,
 including filtering state and updates based on what each player should see.
 """
 
+import asyncio
+import logging
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+
+logger = logging.getLogger(__name__)
+
+# Timeout for sending updates via channel layer.
+# Prevents Celery workers from blocking indefinitely if Redis is unresponsive.
+SEND_TIMEOUT = 5.0
 
 
 def filter_updates_for_side(updates: list, viewing_side: str) -> list:
@@ -94,12 +102,27 @@ def filter_state_for_side(state, viewing_side: str) -> dict:
     return filtered_state
 
 
+async def _send_with_timeout(channel_layer, group_name: str, message: dict):
+    """Send to channel group with timeout to prevent blocking."""
+    try:
+        await asyncio.wait_for(
+            channel_layer.group_send(group_name, message),
+            timeout=SEND_TIMEOUT
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"Timeout sending to channel group {group_name}")
+    except Exception as e:
+        logger.error(f"Error sending to channel group {group_name}: {e}")
+
+
 def send_game_updates_to_clients(game_id: int, state, updates: list, errors: list = []):
     """
     Send game updates to WebSocket clients with per-player filtering.
 
     Each player receives their own filtered version of the state and updates,
     hiding information they shouldn't see (opponent's hand, deck, etc.).
+
+    Uses timeout to prevent blocking if Redis channel layer is unresponsive.
 
     Args:
         game_id: The game ID
@@ -115,7 +138,8 @@ def send_game_updates_to_clients(game_id: int, state, updates: list, errors: lis
         filtered_updates = filter_updates_for_side(updates, side)
         filtered_state = filter_state_for_side(state, side)
 
-        async_to_sync(channel_layer.group_send)(
+        async_to_sync(_send_with_timeout)(
+            channel_layer,
             side_group_name,
             {
                 'type': 'game_updates',
@@ -130,6 +154,8 @@ def send_matchmaking_success(user_id: int, game_id: int, title_slug: str):
     """
     Send a matchmaking success notification to a specific user.
 
+    Uses timeout to prevent blocking if Redis channel layer is unresponsive.
+
     Args:
         user_id: The user's ID
         game_id: The created game ID
@@ -138,7 +164,8 @@ def send_matchmaking_success(user_id: int, game_id: int, title_slug: str):
     channel_layer = get_channel_layer()
     user_group_name = f'user_{user_id}'
 
-    async_to_sync(channel_layer.group_send)(
+    async_to_sync(_send_with_timeout)(
+        channel_layer,
         user_group_name,
         {
             'type': 'matchmaking_success',

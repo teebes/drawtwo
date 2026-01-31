@@ -7,6 +7,9 @@ urlpatterns = [
     # Control panel overview
     path('overview/', views.control_panel_overview, name='overview'),
 
+    # System status (health checks + metrics)
+    path('system-status/', views.system_status, name='system_status'),
+
     # Matchmaking queue admin
     path('matchmaking/queue/', views.MatchmakingQueueAdminView.as_view(), name='matchmaking_queue'),
     path('matchmaking/run/', views.MatchmakingManualRunView.as_view(), name='matchmaking_run'),
