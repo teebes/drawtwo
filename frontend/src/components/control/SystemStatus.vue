@@ -201,64 +201,58 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, h, defineComponent } from 'vue'
 import api from '../../config/api'
 
-// Sub-components defined inline for simplicity
-const ServiceCheck = {
+// Sub-components using render functions (avoids runtime template compilation)
+const ServiceCheck = defineComponent({
   props: ['name', 'status', 'details'],
-  template: `
-    <div class="flex items-center justify-between rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
-      <div class="flex items-center">
-        <div
-          class="h-2.5 w-2.5 rounded-full"
-          :class="{
-            'bg-green-500': status === 'ok',
-            'bg-yellow-500': status === 'warning',
-            'bg-red-500': status === 'error',
-            'bg-gray-400': !status
-          }"
-        ></div>
-        <span class="ml-3 font-medium text-gray-900 dark:text-white">{{ name }}</span>
-      </div>
-      <div class="flex items-center">
-        <span
-          v-if="details"
-          class="mr-2 text-xs text-gray-500 dark:text-gray-400"
-        >{{ details }}</span>
-        <span
-          class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
-          :class="{
-            'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': status === 'ok',
-            'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': status === 'warning',
-            'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': status === 'error',
-            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200': !status
-          }"
-        >
-          {{ status === 'ok' ? 'Healthy' : status === 'warning' ? 'Warning' : status === 'error' ? 'Error' : 'Unknown' }}
-        </span>
-      </div>
-    </div>
-  `
-}
+  setup(props) {
+    return () => {
+      const statusClass = {
+        'bg-green-500': props.status === 'ok',
+        'bg-yellow-500': props.status === 'warning',
+        'bg-red-500': props.status === 'error',
+        'bg-gray-400': !props.status
+      }
+      const badgeClass = {
+        'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': props.status === 'ok',
+        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': props.status === 'warning',
+        'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': props.status === 'error',
+        'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200': !props.status
+      }
+      const statusText = props.status === 'ok' ? 'Healthy' : props.status === 'warning' ? 'Warning' : props.status === 'error' ? 'Error' : 'Unknown'
 
-const MetricRow = {
+      return h('div', { class: 'flex items-center justify-between rounded-lg bg-gray-50 p-4 dark:bg-gray-800' }, [
+        h('div', { class: 'flex items-center' }, [
+          h('div', { class: ['h-2.5 w-2.5 rounded-full', statusClass] }),
+          h('span', { class: 'ml-3 font-medium text-gray-900 dark:text-white' }, props.name)
+        ]),
+        h('div', { class: 'flex items-center' }, [
+          props.details ? h('span', { class: 'mr-2 text-xs text-gray-500 dark:text-gray-400' }, props.details) : null,
+          h('span', { class: ['inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', badgeClass] }, statusText)
+        ])
+      ])
+    }
+  }
+})
+
+const MetricRow = defineComponent({
   props: ['label', 'value', 'description', 'warning'],
-  template: `
-    <div class="flex items-center justify-between">
-      <div>
-        <div class="font-medium text-gray-900 dark:text-white">{{ label }}</div>
-        <div class="text-sm text-gray-500 dark:text-gray-400">{{ description }}</div>
-      </div>
-      <div
-        class="text-2xl font-semibold"
-        :class="warning ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-900 dark:text-white'"
-      >
-        {{ value }}
-      </div>
-    </div>
-  `
-}
+  setup(props) {
+    return () => {
+      const valueClass = props.warning ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-900 dark:text-white'
+
+      return h('div', { class: 'flex items-center justify-between' }, [
+        h('div', {}, [
+          h('div', { class: 'font-medium text-gray-900 dark:text-white' }, props.label),
+          h('div', { class: 'text-sm text-gray-500 dark:text-gray-400' }, props.description)
+        ]),
+        h('div', { class: ['text-2xl font-semibold', valueClass] }, props.value)
+      ])
+    }
+  }
+})
 
 interface SystemStatusData {
   status: 'healthy' | 'degraded' | 'error'
