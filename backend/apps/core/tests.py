@@ -31,9 +31,16 @@ class HealthCheckTestCase(TestCase):
 
     def test_health_endpoint(self):
         """Test that the health endpoint returns a 200 status."""
-        response = self.client.get("/api/health/")
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "healthy")
+        from unittest.mock import patch, MagicMock
+
+        # Mock Redis since it's not available in CI
+        mock_redis_instance = MagicMock()
+        mock_redis_instance.ping.return_value = True
+
+        with patch('redis.Redis', return_value=mock_redis_instance):
+            response = self.client.get("/api/health/")
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, "healthy")
 
 
 class BasicDjangoTestCase(TestCase):
