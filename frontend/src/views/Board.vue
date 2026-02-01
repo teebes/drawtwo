@@ -105,6 +105,7 @@
                     v-if="gameState.winner === 'none' && gameState.active === bottomSide"
                     variant="secondary"
                     class="m-2"
+                    :class="{ 'ring-2 ring-primary-500': hasNoAvailableActions }"
                     @click="handleEndTurn">End Turn</GameButton>
                 <div v-else-if="gameState.winner !== 'none'" class="flex items-center justify-center mr-4">
                     <span v-if="gameOver.winner === bottomSide">You win!</span>
@@ -382,6 +383,33 @@ const canEditTitle = computed(() => {
   return authStore.isAuthenticated &&
          title.value &&
          title.value.can_edit === true
+})
+
+// Check if user has no available actions (should highlight End Turn)
+const hasNoAvailableActions = computed(() => {
+  // Only relevant during player's turn in main phase
+  if (gameState.value.active !== bottomSide.value) return false
+  if (gameState.value.phase !== 'main') return false
+
+  // Check if any card in hand can be played
+  const hand = ownHand.value || []
+  const energy = ownEnergy.value || 0
+  const canPlayAnyCard = hand.some(cardId => {
+    const card = get_card(cardId)
+    return card && card.cost <= energy
+  })
+  if (canPlayAnyCard) return false
+
+  // Check if any creature on board can attack
+  const board = ownBoard.value || []
+  const canAttackWithAny = board.some(creature => !creature.exhausted)
+  if (canAttackWithAny) return false
+
+  // Check if hero power can be used
+  if (canUseHero.value) return false
+
+  // No actions available
+  return true
 })
 
 // Game ID for debug overlay
