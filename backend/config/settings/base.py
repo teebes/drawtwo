@@ -101,8 +101,8 @@ CHANNEL_LAYERS = {
         "CONFIG": {
             "hosts": [{
                 "address": f"redis://{os.environ.get('REDIS_HOST', 'localhost')}:6379",
-                "socket_timeout": 5,        # Timeout for socket operations
-                "socket_connect_timeout": 5, # Timeout for initial connection
+                "socket_timeout": 30,        # Timeout for socket operations
+                "socket_connect_timeout": 30, # Timeout for initial connection
             }],
             "prefix": "drawtwo:ws:",
             "capacity": 1500,               # Max messages per channel

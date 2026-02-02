@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 # Timeout for channel layer operations (group_add, group_discard, etc.)
 # Prevents deadlocks if Redis becomes unresponsive
-CHANNEL_LAYER_TIMEOUT = 5.0
+CHANNEL_LAYER_TIMEOUT = 30.0
 
 
 class GameConsumer(AsyncWebsocketConsumer):
