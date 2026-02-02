@@ -79,6 +79,9 @@ def game_detail(request, game_id):
         game_data['viewer'] = 'side_a'
     elif game.player_b_user == request.user:
         game_data['viewer'] = 'side_b'
+    elif request.user.is_staff or request.user.is_superuser:
+        # Staff/superuser can view any game as spectator (read-only)
+        game_data['viewer'] = 'spectator'
     else:
         # User is not a participant in this game
         return Response(
@@ -154,7 +157,9 @@ def game_queue(request, game_id):
     game = get_object_or_404(Game, id=game_id)
 
     # Verify the user has access to this game
-    if game.player_a_user != request.user and game.player_b_user != request.user:
+    is_player = game.player_a_user == request.user or game.player_b_user == request.user
+    is_staff = request.user.is_staff or request.user.is_superuser
+    if not is_player and not is_staff:
         return Response(
             {'error': 'You do not have access to this game'},
             status=status.HTTP_403_FORBIDDEN

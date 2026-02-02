@@ -37,15 +37,19 @@ class GameConsumer(AsyncWebsocketConsumer):
 
         # Determine which side this user is on
         self.side = await self.get_user_side(game)
-        self.side_group_name = f'game_{self.game_id}_{self.side}'
 
-        # Join both the general game group and the side-specific group
+        # Join the general game group
         # Use timeout to prevent deadlock if Redis is unresponsive
         try:
             await asyncio.wait_for(
                 self.channel_layer.group_add(self.game_group_name, self.channel_name),
                 timeout=CHANNEL_LAYER_TIMEOUT
             )
+            # Join side-specific group for players, spectator group for spectators
+            if self.side == 'spectator':
+                self.side_group_name = f'game_{self.game_id}_spectator'
+            else:
+                self.side_group_name = f'game_{self.game_id}_{self.side}'
             await asyncio.wait_for(
                 self.channel_layer.group_add(self.side_group_name, self.channel_name),
                 timeout=CHANNEL_LAYER_TIMEOUT
@@ -58,20 +62,24 @@ class GameConsumer(AsyncWebsocketConsumer):
         await self.accept()
 
         # Send current game state using already-fetched game object
-        # Filter the state for this player's side
         from apps.gameplay.notifications import filter_state_for_side, filter_updates_for_side
 
         game_state = GameState.model_validate(game.state)
-        filtered_state = filter_state_for_side(game_state, self.side)
-
         raw_updates = await self.get_game_updates()
         updates = TypeAdapter(list[PydGameUpdate]).validate_python(raw_updates)
-        filtered_updates = filter_updates_for_side(updates, self.side)
+
+        # Spectators see full state, players see filtered state
+        if self.side == 'spectator':
+            state_to_send = game_state.model_dump(mode="json")
+            updates_to_send = [u.model_dump(mode="json") if hasattr(u, 'model_dump') else u for u in updates]
+        else:
+            state_to_send = filter_state_for_side(game_state, self.side)
+            updates_to_send = filter_updates_for_side(updates, self.side)
 
         await self.send(text_data=json.dumps({
             'type': 'game_updates',
-            'state': filtered_state,
-            'updates': filtered_updates,
+            'state': state_to_send,
+            'updates': updates_to_send,
         }))
 
         return
@@ -107,6 +115,21 @@ class GameConsumer(AsyncWebsocketConsumer):
             logger.debug("Received heartbeat ping, responding with pong")
             await self.send(text_data=json.dumps({
                 'type': 'pong'
+            }))
+            return
+
+        # Spectators cannot send game commands
+        if self.side == 'spectator':
+            logger.warning(f"Spectator {self.scope['user']} attempted to send command to game {self.game_id}")
+            await self.send(text_data=json.dumps({
+                'type': 'game_updates',
+                'state': None,
+                'updates': [],
+                'errors': [{
+                    'type': 'command_validation_error',
+                    'reason': 'Spectators cannot take actions in the game',
+                    'details': {},
+                }],
             }))
             return
 
@@ -151,6 +174,9 @@ class GameConsumer(AsyncWebsocketConsumer):
             # Works for both PvE (one side is user, other is AI) and PvP (both sides are users)
             if game.player_a_user == user or game.player_b_user == user:
                 return game
+            # Staff/superuser can view any game as spectator (read-only)
+            if user.is_staff or user.is_superuser:
+                return game
             return None
         except Game.DoesNotExist:
             return None
@@ -159,7 +185,7 @@ class GameConsumer(AsyncWebsocketConsumer):
     def get_user_side(self, game):
         """
         Determine which side of the game this user is on.
-        Returns 'side_a' or 'side_b'.
+        Returns 'side_a', 'side_b', or 'spectator' for staff viewing others' games.
         """
         user = self.scope["user"]
 
@@ -174,6 +200,9 @@ class GameConsumer(AsyncWebsocketConsumer):
             return 'side_b'  # User is on side_b, AI on side_a
         elif game.side_b.is_ai_deck:
             return 'side_a'  # User is on side_a, AI on side_b
+        # Staff/superuser viewing others' game as spectator
+        elif user.is_staff or user.is_superuser:
+            return 'spectator'
         else:
             # Default to side_a if we can't determine
             return 'side_a'

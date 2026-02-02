@@ -121,6 +121,7 @@ def send_game_updates_to_clients(game_id: int, state, updates: list, errors: lis
 
     Each player receives their own filtered version of the state and updates,
     hiding information they shouldn't see (opponent's hand, deck, etc.).
+    Spectators (staff viewing games) receive unfiltered full state.
 
     Uses timeout to prevent blocking if Redis channel layer is unresponsive.
 
@@ -148,6 +149,22 @@ def send_game_updates_to_clients(game_id: int, state, updates: list, errors: lis
                 'state': filtered_state,
             }
         )
+
+    # Send unfiltered state to spectators (staff viewing games)
+    spectator_group_name = f'game_{game_id}_spectator'
+    state_dict = state.model_dump(mode="json") if hasattr(state, 'model_dump') else state
+    updates_list = [u.model_dump(mode="json") if hasattr(u, 'model_dump') else u for u in updates]
+
+    async_to_sync(_send_with_timeout)(
+        channel_layer,
+        spectator_group_name,
+        {
+            'type': 'game_updates',
+            'updates': updates_list,
+            'errors': errors,
+            'state': state_dict,
+        }
+    )
 
 
 def send_matchmaking_success(user_id: int, game_id: int, title_slug: str):
