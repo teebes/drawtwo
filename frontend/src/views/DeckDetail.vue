@@ -36,6 +36,29 @@
               <div class="text-xs text-gray-500">Avg. Cost</div>
             </div>
           </div>
+
+          <div v-if="powerCurve.length > 0" class="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+            <div class="mb-2 flex items-center justify-between">
+              <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">Power Curve</h2>
+              <span class="text-[11px] text-gray-500 dark:text-gray-400">Cards by energy cost</span>
+            </div>
+
+            <div class="flex items-end gap-1 overflow-x-auto pb-1">
+              <div
+                v-for="bucket in powerCurve"
+                :key="bucket.cost"
+                class="flex min-w-[28px] flex-col items-center"
+              >
+                <span class="mb-1 text-[10px] font-semibold text-gray-500 dark:text-gray-400">{{ bucket.count }}</span>
+                <div
+                  class="w-5 rounded-t bg-secondary-500 transition-all duration-300"
+                  :class="bucket.count === 0 ? 'opacity-20' : 'opacity-90'"
+                  :style="{ height: `${bucket.height}px` }"
+                />
+                <span class="mt-1 text-[10px] font-semibold text-gray-600 dark:text-gray-300">{{ bucket.cost }}</span>
+              </div>
+            </div>
+          </div>
         </Panel>
 
         <transition name="panel-fade" mode="out-in">
@@ -266,6 +289,44 @@ const averageCost = computed(() => {
 
   const totalCost = deck.value.cards.reduce((sum, card) => sum + (card.cost * card.count), 0)
   return totalCost / deck.value.total_cards
+})
+
+type PowerCurveBucket = {
+  cost: number
+  count: number
+  height: number
+}
+
+const powerCurve = computed<PowerCurveBucket[]>(() => {
+  if (!deck.value || deck.value.cards.length === 0) return []
+
+  const costCounts = new Map<number, number>()
+
+  deck.value.cards.forEach(card => {
+    const normalizedCost = Number.isFinite(card.cost) ? Math.max(0, Math.round(card.cost)) : 0
+    costCounts.set(normalizedCost, (costCounts.get(normalizedCost) || 0) + card.count)
+  })
+
+  const costs = Array.from(costCounts.keys())
+  const counts = Array.from(costCounts.values())
+  const maxCost = costs.length > 0 ? Math.max(...costs) : 0
+  const maxCount = counts.length > 0 ? Math.max(...counts) : 1
+
+  if (maxCost < 1) return []
+
+  return Array.from({ length: maxCost }, (_, index) => {
+    const cost = index + 1
+    const count = costCounts.get(cost) || 0
+    const height = count > 0
+      ? Math.max(8, Math.round((count / maxCount) * 36) + 4)
+      : 8
+
+    return {
+      cost,
+      count,
+      height
+    }
+  })
 })
 
 const sortedCards = computed(() => {
