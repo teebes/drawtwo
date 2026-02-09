@@ -38,24 +38,25 @@
           </div>
 
           <div v-if="powerCurve.length > 0" class="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
-            <div class="mb-2 flex items-center justify-between">
-              <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">Power Curve</h2>
-              <span class="text-[11px] text-gray-500 dark:text-gray-400">Cards by energy cost</span>
+            <div class="mb-2 text-center">
+              <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">Cards by energy cost</h2>
             </div>
 
-            <div class="flex items-end gap-1 overflow-x-auto pb-1">
-              <div
-                v-for="bucket in powerCurve"
-                :key="bucket.cost"
-                class="flex min-w-[28px] flex-col items-center"
-              >
-                <span class="mb-1 text-[10px] font-semibold text-gray-500 dark:text-gray-400">{{ bucket.count }}</span>
+            <div class="overflow-x-auto pb-1">
+              <div class="mx-auto flex w-max items-end gap-1">
                 <div
-                  class="w-5 rounded-t bg-secondary-500 transition-all duration-300"
-                  :class="bucket.count === 0 ? 'opacity-20' : 'opacity-90'"
-                  :style="{ height: `${bucket.height}px` }"
-                />
-                <span class="mt-1 text-[10px] font-semibold text-gray-600 dark:text-gray-300">{{ bucket.cost }}</span>
+                  v-for="bucket in powerCurve"
+                  :key="bucket.cost"
+                  class="flex min-w-[28px] flex-col items-center"
+                >
+                  <span class="mb-1 text-[10px] font-semibold text-gray-500 dark:text-gray-400">{{ bucket.count }}</span>
+                  <div
+                    class="w-5 rounded-t bg-secondary-500 transition-all duration-300"
+                    :class="bucket.count === 0 ? 'opacity-20' : 'opacity-90'"
+                    :style="{ height: `${bucket.height}px` }"
+                  />
+                  <span class="mt-1 text-[10px] font-semibold text-gray-600 dark:text-gray-300">{{ bucket.cost }}</span>
+                </div>
               </div>
             </div>
           </div>
