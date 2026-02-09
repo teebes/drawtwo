@@ -142,6 +142,9 @@ function hasTargetingActions(traits: any[]): boolean {
                 (action.action === 'damage' || action.action === 'heal' || action.action === 'remove' || action.action === 'buff') &&
                 action.scope !== 'all'
             ) {
+                if (action.action === 'buff' && action.target === 'hero') {
+                    continue
+                }
                 return true
             }
         }
@@ -177,8 +180,12 @@ function getAllowedTargets(card: any): Array<'card' | 'hero' | 'any'> {
             allowed.add('card')
         }
         if (action.action === 'buff') {
-            // Buff targets friendly creatures only
-            allowed.add('card')
+            if (action.target === 'creature' || action.target === 'friendly') {
+                allowed.add('card')
+            }
+            if (action.target === 'hero' || action.target === 'friendly') {
+                allowed.add('hero')
+            }
         }
     }
 

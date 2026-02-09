@@ -62,7 +62,7 @@ class BuffAction(ActionBase):
     action: Literal['buff'] = 'buff'
     attribute: Literal['attack', 'health'] = 'attack'
     amount: int
-    target: Literal['creature'] = 'creature'
+    target: Literal['hero', 'creature', 'friendly'] = 'creature'
     scope: Literal['single', 'cleave', 'all'] = 'single'
 
 

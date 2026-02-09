@@ -795,6 +795,9 @@ function requiresBattlecryTarget(card: CardInPlay): boolean {
             (action.action === 'damage' || action.action === 'heal' || action.action === 'remove' || action.action === 'buff') &&
             action.scope !== 'all'
         ) {
+            if (action.action === 'buff' && action.target === 'hero') {
+                continue
+            }
             return true
         }
     }
@@ -830,8 +833,12 @@ function getBattlecryAllowedTargets(card: CardInPlay): Array<'card' | 'hero' | '
             allowed.add('card')
         }
         if (action.action === 'buff') {
-            // Buff targets friendly creatures only
-            allowed.add('card')
+            if (action.target === 'creature' || action.target === 'friendly') {
+                allowed.add('card')
+            }
+            if (action.target === 'hero' || action.target === 'friendly') {
+                allowed.add('hero')
+            }
         }
     }
 
@@ -904,6 +911,9 @@ function requiresTarget(card: CardInPlay): boolean {
                 // Actions that require targeting (single and cleave need targets, AOE doesn't)
                 if ((action.action === 'damage' || action.action === 'heal' || action.action === 'remove' || action.action === 'buff') &&
                     action.scope !== 'all') {
+                    if (action.action === 'buff' && action.target === 'hero') {
+                        continue
+                    }
                     return true
                 }
             }
@@ -943,8 +953,12 @@ function getAllowedTargets(card: CardInPlay): Array<'card' | 'hero' | 'any'> {
                 allowed.add('card')
             }
             if (action.action === 'buff') {
-                // Buff targets friendly creatures only
-                allowed.add('card')
+                if (action.target === 'creature' || action.target === 'friendly') {
+                    allowed.add('card')
+                }
+                if (action.target === 'hero' || action.target === 'friendly') {
+                    allowed.add('hero')
+                }
             }
         }
     }
@@ -992,6 +1006,10 @@ function getHeroPowerTargetScope(hero: any): 'enemy' | 'friendly' {
         if (action.action === 'heal') {
             return 'friendly'
         }
+        // Buff actions target friendly units
+        if (action.action === 'buff') {
+            return 'friendly'
+        }
         // Damage actions target enemies
         if (action.action === 'damage') {
             return 'enemy'
@@ -1007,6 +1025,9 @@ function heroPowerRequiresTarget(hero: any): boolean {
     }
 
     return hero.hero_power.actions.some((action: any) => {
+        if (action.action === 'buff' && action.target === 'hero') {
+            return false
+        }
         if (
             (action.action === 'damage' || action.action === 'heal' || action.action === 'remove' || action.action === 'buff') &&
             action.scope !== 'all' &&

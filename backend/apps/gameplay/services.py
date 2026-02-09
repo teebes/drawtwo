@@ -617,7 +617,7 @@ class GameService:
                 target_id=command.target_id,
             ))
         elif isinstance(command, UseHeroCommand):
-            from apps.builder.schemas import HealAction
+            from apps.builder.schemas import HealAction, BuffAction
 
             # Validate that the hero belongs to the active player
             active_hero = game_state.heroes.get(game_state.active)
@@ -627,7 +627,8 @@ class GameService:
             # Determine if this hero power targets friendlies
             targets_friendly = any(
                 ((isinstance(action, HealAction) and action.target == 'friendly') or
-                (isinstance(action, DamageAction) and action.target == 'self'))
+                (isinstance(action, DamageAction) and action.target == 'self') or
+                isinstance(action, BuffAction))
                 for action in active_hero.hero_power.actions
             )
 
@@ -916,10 +917,17 @@ class GameService:
         if isinstance(action, BuffAction):
             same_side = event.side
 
-            # Determine base target for buff (buffs target friendly creatures)
-            if action.target == "creature":
+            # Determine base target for buff (buffs target friendly units)
+            if action.target == "hero":
+                base_target_type = "hero"
+                base_target_id = state.heroes[same_side].hero_id
+            elif action.target == "creature":
                 base_target_type = "creature"
                 base_target_id = event.target_id
+            elif action.target == "friendly":
+                # 'friendly' can be hero or creature, use event target
+                base_target_type = event.target_type or "hero"
+                base_target_id = event.target_id or state.heroes[same_side].hero_id
             else:
                 base_target_type = event.target_type
                 base_target_id = event.target_id
@@ -928,13 +936,22 @@ class GameService:
             targets = []
 
             if action.scope == 'single':
-                if base_target_id and base_target_type == "creature":
+                if base_target_id:
                     targets = [(base_target_type, base_target_id)]
 
             elif action.scope == 'all':
-                # Buff all friendly creatures on same side
-                for creature_id in state.board[same_side]:
-                    targets.append(("creature", creature_id))
+                if action.target == "hero":
+                    # Buff own hero only
+                    targets.append(("hero", state.heroes[same_side].hero_id))
+                elif action.target == "friendly":
+                    # Buff all friendly units (all creatures + hero on same side)
+                    for creature_id in state.board[same_side]:
+                        targets.append(("creature", creature_id))
+                    targets.append(("hero", state.heroes[same_side].hero_id))
+                else:
+                    # Buff all friendly creatures on same side
+                    for creature_id in state.board[same_side]:
+                        targets.append(("creature", creature_id))
 
             elif action.scope == 'cleave':
                 # Buff target and adjacent creatures

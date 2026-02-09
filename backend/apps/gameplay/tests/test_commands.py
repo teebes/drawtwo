@@ -755,6 +755,55 @@ class HealingHeroPowerTests(AttackValidationTestBase):
         self.assertIn("not on your board", str(context.exception).lower())
 
 
+class BuffHeroPowerTests(AttackValidationTestBase):
+    """Test buff hero powers that target friendly units."""
+
+    def setUp(self):
+        super().setUp()
+        from apps.builder.schemas import HeroPower, BuffAction
+        self.game_state.heroes['side_a'].hero_power = HeroPower(
+            name='Fortify',
+            actions=[
+                BuffAction(
+                    attribute='health',
+                    amount=2,
+                    target='hero',
+                    scope='single'
+                )
+            ]
+        )
+
+    def test_can_target_own_hero_with_buff_power(self):
+        """Buff hero powers can target own hero."""
+        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        command = {
+            'type': 'cmd_use_hero',
+            'hero_id': hero_a_id,
+            'target_type': 'hero',
+            'target_id': hero_a_id,
+        }
+
+        effects = GameService.compile_cmd(self.game_state, command, 'side_a')
+        self.assertEqual(len(effects), 1)
+        self.assertIsInstance(effects[0], UseHeroEffect)
+
+    def test_cannot_target_enemy_hero_with_buff_power(self):
+        """Buff hero powers cannot target enemy hero."""
+        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        hero_b_id = self.game_state.heroes['side_b'].hero_id
+        command = {
+            'type': 'cmd_use_hero',
+            'hero_id': hero_a_id,
+            'target_type': 'hero',
+            'target_id': hero_b_id,
+        }
+
+        with self.assertRaises(ValueError) as context:
+            GameService.compile_cmd(self.game_state, command, 'side_a')
+
+        self.assertIn("not your hero", str(context.exception).lower())
+
+
 class TauntMechanicTests(AttackValidationTestBase):
     """Test the Taunt trait mechanic."""
 

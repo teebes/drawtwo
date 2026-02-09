@@ -136,6 +136,8 @@ class AIMoveChooser:
                             continue
                         if isinstance(action, HealAction) and action.target == "hero":
                             continue
+                        if isinstance(action, BuffAction) and action.target == "hero":
+                            continue
                         return True
         return False
 
@@ -176,9 +178,14 @@ class AIMoveChooser:
                             for creature_id in state.board[active_side]:
                                 targets.append(("creature", creature_id))
                     if isinstance(action, BuffAction):
-                        # Buff targets own creatures
-                        for creature_id in state.board[active_side]:
-                            targets.append(("creature", creature_id))
+                        if action.target in ['hero', 'friendly']:
+                            own_hero = state.heroes.get(active_side)
+                            if own_hero:
+                                targets.append(("hero", own_hero.hero_id))
+                        if action.target in ['creature', 'friendly']:
+                            # Buff targets own creatures
+                            for creature_id in state.board[active_side]:
+                                targets.append(("creature", creature_id))
                 else:
                     if isinstance(action, (DamageAction, RemoveAction)):
                         if action.target in ['hero', 'enemy']:
@@ -206,6 +213,9 @@ class AIMoveChooser:
             if isinstance(action, (DamageAction, HealAction, RemoveAction)):
                 if action.scope == 'single' and action.target in ['hero', 'creature', 'enemy', 'friendly']:
                     return True
+            if isinstance(action, BuffAction):
+                if action.scope == 'single' and action.target in ['creature', 'friendly']:
+                    return True
         return False
 
     @staticmethod
@@ -219,7 +229,8 @@ class AIMoveChooser:
 
         # Determine target scope - check if any action is a HealAction with friendly target
         targets_friendly = any(
-            isinstance(action, HealAction) and action.target == 'friendly'
+            (isinstance(action, HealAction) and action.target == 'friendly')
+            or isinstance(action, BuffAction)
             for action in hero_power.actions
         )
 
@@ -227,6 +238,16 @@ class AIMoveChooser:
         for action in hero_power.actions:
             if targets_friendly:
                 if isinstance(action, HealAction):
+                    if action.target in ['hero', 'friendly']:
+                        # Own hero
+                        own_hero = state.heroes.get(active_side)
+                        if own_hero:
+                            targets.append(("hero", own_hero.hero_id))
+                    if action.target in ['creature', 'friendly']:
+                        # Own creatures
+                        for creature_id in state.board[active_side]:
+                            targets.append(("creature", creature_id))
+                if isinstance(action, BuffAction):
                     if action.target in ['hero', 'friendly']:
                         # Own hero
                         own_hero = state.heroes.get(active_side)

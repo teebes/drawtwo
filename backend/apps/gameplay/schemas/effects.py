@@ -147,7 +147,7 @@ class BuffEffect(EffectBase):
     type: Literal["effect_buff"] = "effect_buff"
     source_type: Literal["card", "creature", "hero"] = "creature"
     source_id: str
-    target_type: Literal["creature"] = "creature"
+    target_type: Literal["creature", "hero"] = "creature"
     target_id: str
     attribute: Literal["attack", "health"] = "attack"
     amount: int

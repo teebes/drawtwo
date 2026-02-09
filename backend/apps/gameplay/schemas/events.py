@@ -123,7 +123,7 @@ class BuffEvent(EventBase):
     type: Literal["event_buff"] = "event_buff"
     source_type: Literal["card", "hero", "creature"] = "creature"
     source_id: str
-    target_type: Literal["creature"] = "creature"
+    target_type: Literal["creature", "hero"] = "creature"
     target_id: str
     attribute: Literal["attack", "health"] = "attack"
     amount: int

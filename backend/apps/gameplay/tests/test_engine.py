@@ -1,10 +1,11 @@
 """
 Tests for game engine effect resolution.
 """
-from apps.builder.schemas import Battlecry, DamageAction, Charge
+from apps.builder.schemas import Battlecry, BuffAction, DamageAction, Charge
 from apps.gameplay.engine.dispatcher import resolve
 from apps.gameplay.schemas.engine import Success, Prevented, Rejected
 from apps.gameplay.schemas.effects import (
+    BuffEffect,
     StartGameEffect,
     PlayEffect,
     UseHeroEffect,
@@ -381,3 +382,67 @@ class EngineTests(GamePlayTestBase):
         self.assertEqual(new_state.creatures["c1"].health, 3)
         self.assertEqual(new_state.creatures["c2"].attack, 3)
         self.assertEqual(new_state.creatures["c2"].health, 5)
+
+    def test_play_spell_buff_hero_health(self):
+        """Buff action can increase own hero health/health_max."""
+        spell_card = CardInPlay(
+            card_type="spell",
+            card_id="buff_hero_spell",
+            template_slug="fortify-hero",
+            name="Fortify Hero",
+            description="+2 Health to your hero",
+            cost=0,
+            traits=[
+                Battlecry(
+                    actions=[
+                        BuffAction(attribute="health", amount=2, target="hero", scope="single"),
+                    ]
+                )
+            ],
+        )
+
+        self.game_state.cards["buff_hero_spell"] = spell_card
+        self.game_state.hands["side_a"] = ["buff_hero_spell"]
+        self.game_state.mana_pool["side_a"] = 1
+        self.game_state.mana_used["side_a"] = 0
+
+        # Hero-targeted buff should not require an explicit target id.
+        play_effect = PlayEffect(
+            side="side_a",
+            source_id="buff_hero_spell",
+            position=0,
+        )
+        result = resolve(play_effect, self.game_state)
+        self.assertTrue(isinstance(result, Success))
+        new_state = result.new_state
+        play_event = result.events[0]
+
+        trait_result = traits.apply(new_state, play_event)
+        self.assertEqual(len(trait_result.child_effects), 1)
+        self.assertEqual(trait_result.child_effects[0].target_type, "hero")
+        self.assertEqual(trait_result.child_effects[0].target_id, new_state.heroes["side_a"].hero_id)
+
+        resolve_result = resolve(trait_result.child_effects[0], new_state)
+        self.assertTrue(isinstance(resolve_result, Success))
+
+        buffed_state = resolve_result.new_state
+        self.assertEqual(buffed_state.heroes["side_a"].health, 12)
+        self.assertEqual(buffed_state.heroes["side_a"].health_max, 12)
+        self.assertEqual(buffed_state.heroes["side_b"].health, 10)
+        self.assertEqual(buffed_state.heroes["side_b"].health_max, 10)
+
+    def test_buff_attack_on_hero_is_rejected(self):
+        """Attack buffs on heroes are invalid and should reject cleanly."""
+        effect = BuffEffect(
+            side="side_a",
+            source_type="hero",
+            source_id=self.game_state.heroes["side_a"].hero_id,
+            target_type="hero",
+            target_id=self.game_state.heroes["side_a"].hero_id,
+            attribute="attack",
+            amount=1,
+        )
+
+        result = resolve(effect, self.game_state)
+        self.assertTrue(isinstance(result, Rejected))
+        self.assertIn("cannot buff hero attack", result.reason.lower())

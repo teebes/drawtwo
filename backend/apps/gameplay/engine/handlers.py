@@ -134,6 +134,8 @@ def _card_play_requires_target(card: CardInPlay) -> bool:
                 continue
             if isinstance(action, HealAction) and action.target == "hero":
                 continue
+            if isinstance(action, BuffAction) and action.target == "hero":
+                continue
             return True
     return False
 
@@ -152,7 +154,10 @@ def _card_play_allowed_target_types(card: CardInPlay) -> set[str]:
             continue
 
         if isinstance(action, BuffAction):
-            allowed.add("creature")
+            if action.target in ("creature", "friendly"):
+                allowed.add("creature")
+            if action.target in ("hero", "friendly"):
+                allowed.add("hero")
             continue
 
         if isinstance(action, RemoveAction):
@@ -437,7 +442,7 @@ def heal(effect: HealEffect, state: GameState) -> Result:
 @register("effect_buff")
 def buff(effect: BuffEffect, state: GameState) -> Result:
     """
-    Buff effect handler - increases attack or health of a target creature.
+    Buff effect handler - increases attack/health for creatures, and health for heroes.
     """
     events = []
 
@@ -451,14 +456,23 @@ def buff(effect: BuffEffect, state: GameState) -> Result:
     else:
         raise NotImplementedError(f"Unknown source type: {effect.source_type}")
 
-    # Get the target (buffs only target creatures)
+    # Get the target
     if effect.target_type == "creature":
         target = state.creatures[effect.target_id]
+    elif effect.target_type == "hero":
+        if effect.target_id == state.heroes["side_a"].hero_id:
+            target = state.heroes["side_a"]
+        elif effect.target_id == state.heroes["side_b"].hero_id:
+            target = state.heroes["side_b"]
+        else:
+            return Rejected(reason=f"Target hero does not exist: {effect.target_id}")
     else:
-        raise NotImplementedError(f"Buff can only target creatures, got: {effect.target_type}")
+        return Rejected(reason=f"Buff cannot target: {effect.target_type}")
 
     # Apply buff to the appropriate attribute
     if effect.attribute == "attack":
+        if effect.target_type == "hero":
+            return Rejected(reason="Cannot buff hero attack")
         target.attack += effect.amount
         if target.attack_max is not None:
             target.attack_max += effect.amount
@@ -467,7 +481,7 @@ def buff(effect: BuffEffect, state: GameState) -> Result:
         if target.health_max is not None:
             target.health_max += effect.amount
     else:
-        raise NotImplementedError(f"Unknown buff attribute: {effect.attribute}")
+        return Rejected(reason=f"Unknown buff attribute: {effect.attribute}")
 
     events = [BuffEvent(
         side=effect.side,
@@ -587,7 +601,8 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
 
     # Determine if this hero power targets friendlies, enemies, or self
     targets_friendly = any(
-        isinstance(action, HealAction) and action.target == 'friendly'
+        (isinstance(action, HealAction) and action.target == 'friendly')
+        or isinstance(action, BuffAction)
         for action in hero.hero_power.actions
     )
     targets_self = any(
