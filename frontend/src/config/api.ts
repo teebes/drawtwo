@@ -23,7 +23,7 @@ const getApiBaseUrl = (): string => {
 
   // If we're in development mode (localhost), use the dev server
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:8000/api'
+    return 'http://localhost:8002/api'
   }
   // In production, use relative path (same domain)
   return '/api'
@@ -44,9 +44,9 @@ export const getBaseUrl = (): string => {
     hostname.endsWith('.local')
 
   // If the frontend is being served from Vite's dev server (port 3000),
-  // assume the backend is reachable on the same host at port 8000.
+  // assume the backend is reachable on the same host at port 8002.
   if (port === '3000') {
-    const basePort = '8000'
+    const basePort = '8002'
     return `${protocol}//${hostname}:${basePort}`
   }
 
@@ -61,7 +61,7 @@ export const getBaseUrl = (): string => {
 
   // If we're in development mode (localhost), use the dev server
   if (isLocalhostLike) {
-    return 'http://localhost:8000'
+    return 'http://localhost:8002'
   }
 
   // In production, use current domain

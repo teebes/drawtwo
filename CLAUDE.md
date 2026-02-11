@@ -70,9 +70,9 @@ docker-compose exec backend python manage.py test apps.gameplay.tests.TestGameEn
 ### Accessing Services
 
 - Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- Django Admin: http://localhost:8000/admin/
-- Health check: http://localhost:8000/api/health/
+- Backend API: http://localhost:8002
+- Django Admin: http://localhost:8002/admin/
+- Health check: http://localhost:8002/api/health/
 - Celery Flower: http://localhost:5555 (after running `make celery-flower`)
 
 ## Architecture
@@ -543,7 +543,7 @@ make format
 When testing WebSocket functionality:
 1. Start the full stack: `make dev`
 2. Backend runs with Daphne ASGI server (not runserver)
-3. WebSocket endpoint: `ws://localhost:8000/ws/game/{game_id}/`
+3. WebSocket endpoint: `ws://localhost:8002/ws/game/{game_id}/`
 4. Authentication via JWT token in query string or headers
 
 ## Important Notes

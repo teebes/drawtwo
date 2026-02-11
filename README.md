@@ -73,10 +73,10 @@ Docker & Docker Compose orchestration
 
 7. **Access the application:**
    - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - Health check: http://localhost:8000/api/health/
-   - Admin interface: http://localhost:8000/admin/
-   - Redis: localhost:6379 (for external access)
+   - Backend API: http://localhost:8002
+   - Health check: http://localhost:8002/api/health/
+   - Admin interface: http://localhost:8002/admin/
+   - Redis: localhost:6381 (for external access)
    - Celery Flower (monitoring): http://localhost:5555 (run `make celery-flower`)
 
 ## IDE Setup
@@ -182,7 +182,7 @@ npm install
 npm run dev
 ```
 
-**Note:** When running independently, make sure the backend is available at `http://localhost:8000` for the frontend to work properly.
+**Note:** When running independently, make sure the backend is available at `http://localhost:8002` for the frontend to work properly, or set `VITE_API_BASE_URL` to your backend URL.
 
 ## Environment Variables
 
@@ -193,8 +193,8 @@ Key environment variables (see `local.env.template` or `production.env.template`
 - `DEBUG`: Enable/disable debug mode
 - `DB_NAME`, `DB_USER`, `DB_PASSWORD`: Database configuration
 - `ALLOWED_HOSTS`: Allowed hosts for production
-- `CELERY_BROKER_URL`: Redis URL for Celery message broker (default: redis://localhost:6379/0)
-- `CELERY_RESULT_BACKEND`: Redis URL for Celery result backend (default: redis://localhost:6379/0)
+- `CELERY_BROKER_URL`: Redis URL for Celery message broker (Docker Compose default: `redis://redis:6379/0`, host access: `redis://localhost:6381/0`)
+- `CELERY_RESULT_BACKEND`: Redis URL for Celery result backend (Docker Compose default: `redis://redis:6379/0`, host access: `redis://localhost:6381/0`)
 
 ### Card Assets (Cloudflare R2)
 - `CARD_ASSETS_BASE_URL`: Public URL for card assets (e.g., https://assets.drawtwo.com)
@@ -231,14 +231,14 @@ The project uses PostgreSQL with the following default configuration:
 - User: `postgres`
 - Password: `postgres`
 - Host: `db` (Docker service name)
-- Port: `5432`
+- Port: `5432` (container) / `5433` (host)
 
 ## Celery Task Queue
 
 The project includes Celery for handling asynchronous tasks and background jobs.
 
 ### Architecture
-- **Message Broker**: Redis (localhost:6379)
+- **Message Broker**: Redis (localhost:6381 on host, redis:6379 in Docker network)
 - **Result Backend**: Redis + Django Database
 - **Worker**: Processes background tasks
 - **Beat**: Schedules periodic tasks

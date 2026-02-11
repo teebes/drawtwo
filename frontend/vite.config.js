@@ -18,7 +18,7 @@ export default defineConfig({
         // Use backend service name in Docker, localhost for local dev
         target: process.env.NODE_ENV === 'development' && process.env.DOCKER
           ? 'http://backend:8000'
-          : 'http://localhost:8000',
+          : 'http://localhost:8002',
         changeOrigin: true,
         secure: false,
       },

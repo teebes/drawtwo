@@ -23,7 +23,7 @@ npm run dev
 
 The frontend will be available at `http://localhost:3000`.
 
-**Note:** For the frontend to work properly, you need the backend running on `http://localhost:8000`. The frontend is configured to proxy API requests to the backend.
+**Note:** For the frontend to work properly, you need the backend running on `http://localhost:8002` (Docker Compose default host port). If you run backend on a different port, set `VITE_API_BASE_URL`.
 
 ### Building for Production
 

@@ -119,7 +119,7 @@ All sensitive files are in `.gitignore`.
 3. Check browser DevTools Network tab
 4. Verify card images load from:
    - R2: `https://assets.drawtwo.com/...` (if configured)
-   - Local: `http://localhost:8000/media/...` (if R2 not configured)
+   - Local: `http://localhost:8002/media/...` (if R2 not configured)
 
 ## Uploading Assets to R2
 
