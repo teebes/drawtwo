@@ -1,13 +1,12 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
-
-from rest_framework.test import APITestCase
 from rest_framework import status
+from rest_framework.test import APITestCase
 
-from .models import Title, CardTemplate, CardTrait, Builder
+from .models import Builder, CardTemplate, CardTrait, Title
+from .schemas import TitleConfig
 from .services import IngestionService
-
 
 User = get_user_model()
 
@@ -18,8 +17,7 @@ class BuilderTestCase(TestCase):
     def setUp(self):
         """Set up test data."""
         self.user = User.objects.create_user(
-            email="testuser@example.com",
-            username="testuser"
+            email="testuser@example.com", username="testuser"
         )
 
     def test_builder_app_configured(self):
@@ -34,16 +32,13 @@ class TestTitlePermissions(TestCase):
     def setUp(self):
         """Set up test data."""
         self.author = User.objects.create_user(
-            email="author@example.com",
-            username="author"
+            email="author@example.com", username="author"
         )
         self.builder = User.objects.create_user(
-            email="builder@example.com",
-            username="builder"
+            email="builder@example.com", username="builder"
         )
         self.other_user = User.objects.create_user(
-            email="other@example.com",
-            username="other"
+            email="other@example.com", username="other"
         )
 
         # Create a draft title
@@ -51,7 +46,7 @@ class TestTitlePermissions(TestCase):
             slug="draft-title",
             name="Draft Title",
             author=self.author,
-            status=Title.STATUS_DRAFT
+            status=Title.STATUS_DRAFT,
         )
 
         # Create a published title
@@ -59,14 +54,12 @@ class TestTitlePermissions(TestCase):
             slug="published-title",
             name="Published Title",
             author=self.author,
-            status=Title.STATUS_PUBLISHED
+            status=Title.STATUS_PUBLISHED,
         )
 
         # Add builder to draft title
         Builder.objects.create(
-            title=self.draft_title,
-            user=self.builder,
-            added_by=self.author
+            title=self.draft_title, user=self.builder, added_by=self.author
         )
 
     def test_published_title_viewable_by_anyone(self):
@@ -99,16 +92,13 @@ class TestTitleAPIPermissions(APITestCase):
     def setUp(self):
         """Set up test data."""
         self.author = User.objects.create_user(
-            email="author@example.com",
-            username="author"
+            email="author@example.com", username="author"
         )
         self.builder = User.objects.create_user(
-            email="builder@example.com",
-            username="builder"
+            email="builder@example.com", username="builder"
         )
         self.other_user = User.objects.create_user(
-            email="other@example.com",
-            username="other"
+            email="other@example.com", username="other"
         )
 
         # Create a draft title
@@ -116,7 +106,7 @@ class TestTitleAPIPermissions(APITestCase):
             slug="draft-title",
             name="Draft Title",
             author=self.author,
-            status=Title.STATUS_DRAFT
+            status=Title.STATUS_DRAFT,
         )
 
         # Create a published title
@@ -124,49 +114,47 @@ class TestTitleAPIPermissions(APITestCase):
             slug="published-title",
             name="Published Title",
             author=self.author,
-            status=Title.STATUS_PUBLISHED
+            status=Title.STATUS_PUBLISHED,
         )
 
         # Add builder to draft title
         Builder.objects.create(
-            title=self.draft_title,
-            user=self.builder,
-            added_by=self.author
+            title=self.draft_title, user=self.builder, added_by=self.author
         )
 
     def test_published_title_accessible_by_anonymous(self):
         """Published titles should be accessible by anonymous users."""
-        url = reverse('core:title-by-slug', kwargs={'slug': self.published_title.slug})
+        url = reverse("core:title-by-slug", kwargs={"slug": self.published_title.slug})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['name'], 'Published Title')
+        self.assertEqual(response.data["name"], "Published Title")
 
     def test_draft_title_forbidden_for_anonymous(self):
         """Draft titles should return 403 for anonymous users."""
-        url = reverse('core:title-by-slug', kwargs={'slug': self.draft_title.slug})
+        url = reverse("core:title-by-slug", kwargs={"slug": self.draft_title.slug})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_draft_title_accessible_by_author(self):
         """Draft titles should be accessible by the author."""
         self.client.force_authenticate(user=self.author)
-        url = reverse('core:title-by-slug', kwargs={'slug': self.draft_title.slug})
+        url = reverse("core:title-by-slug", kwargs={"slug": self.draft_title.slug})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['name'], 'Draft Title')
+        self.assertEqual(response.data["name"], "Draft Title")
 
     def test_draft_title_accessible_by_builder(self):
         """Draft titles should be accessible by builders."""
         self.client.force_authenticate(user=self.builder)
-        url = reverse('core:title-by-slug', kwargs={'slug': self.draft_title.slug})
+        url = reverse("core:title-by-slug", kwargs={"slug": self.draft_title.slug})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['name'], 'Draft Title')
+        self.assertEqual(response.data["name"], "Draft Title")
 
     def test_draft_title_forbidden_for_other_users(self):
         """Draft titles should return 403 for other authenticated users."""
         self.client.force_authenticate(user=self.other_user)
-        url = reverse('core:title-by-slug', kwargs={'slug': self.draft_title.slug})
+        url = reverse("core:title-by-slug", kwargs={"slug": self.draft_title.slug})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -175,13 +163,10 @@ class TestIngestion(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(
-            email="testuser@example.com",
-            username="testuser"
+            email="testuser@example.com", username="testuser"
         )
         self.title = IngestionService.create_title(
-            name="Test Title",
-            slug="test-title",
-            author=self.user
+            name="Test Title", slug="test-title", author=self.user
         ).title
 
     def test_ingest_new_card(self):
@@ -209,21 +194,40 @@ class TestIngestion(TestCase):
         self.assertEqual(CardTemplate.objects.count(), 1)
         card_template = CardTemplate.objects.first()
         self.assertEqual(card_template.name, "Small Charge Drawrattle")
-        self.assertEqual(card_template.description, "Charge, draw a card on destruction.")
+        self.assertEqual(
+            card_template.description, "Charge, draw a card on destruction."
+        )
         self.assertEqual(card_template.cost, 2)
         self.assertEqual(card_template.attack, 1)
         self.assertEqual(card_template.health, 1)
         self.assertEqual(card_template.cardtrait_set.count(), 2)
-        self.assertEqual(card_template.cardtrait_set.filter(trait_slug='charge').count(), 1)
-        self.assertEqual(card_template.cardtrait_set.filter(trait_slug='deathrattle').count(), 1)
-        card_trait = CardTrait.objects.get(card=card_template, trait_slug='deathrattle')
-        self.assertEqual(card_trait.data['actions'][0]['action'], 'draw')
-        self.assertEqual(card_trait.data['actions'][0]['amount'], 1)
+        self.assertEqual(
+            card_template.cardtrait_set.filter(trait_slug="charge").count(), 1
+        )
+        self.assertEqual(
+            card_template.cardtrait_set.filter(trait_slug="deathrattle").count(), 1
+        )
+        card_trait = CardTrait.objects.get(card=card_template, trait_slug="deathrattle")
+        self.assertEqual(card_trait.data["actions"][0]["action"], "draw")
+        self.assertEqual(card_trait.data["actions"][0]["amount"], 1)
 
+    def test_title_config_defaults_min_cards(self):
+        config = TitleConfig()
+        self.assertEqual(config.min_cards_in_deck, 10)
 
+    def test_ingest_config_updates_min_cards_in_deck(self):
+        config_yaml = """
+        - type: config
+          deck_size_limit: 30
+          min_cards_in_deck: 12
+          deck_card_max_count: 2
+        """
 
+        ingestion_service = IngestionService(self.title)
+        ingestion_service.ingest_yaml(config_yaml)
 
-
+        self.title.refresh_from_db()
+        self.assertEqual(self.title.config["min_cards_in_deck"], 12)
 
 
 # API Test examples for when you implement models and views:
