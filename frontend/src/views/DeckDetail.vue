@@ -209,7 +209,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
@@ -251,8 +251,9 @@ const error = ref<string | null>(null)
 
 // Inline count editing state
 const editingCardId = ref<number | null>(null)
-const editingCount = ref<string>('1')
+const editingCount = ref<string>('')
 const countInput = ref<HTMLInputElement | null>(null)
+const isSavingCountEdit = ref<boolean>(false)
 
 // Hero image error handling
 const heroImageError = ref(false)
@@ -488,26 +489,27 @@ const decrementCard = async (card: DeckCard): Promise<void> => {
   }
 }
 
-const startCountEdit = (card: DeckCard): void => {
+const startCountEdit = async (card: DeckCard): Promise<void> => {
   editingCardId.value = card.id
   editingCount.value = card.count.toString()
 
-  // Focus the input on next tick
-  setTimeout(() => {
-    const input = document.querySelector('input[type="text"]') as HTMLInputElement
-    if (input) {
-      input.focus()
-      input.select()
-    }
-  }, 0)
+  // Focus the active inline count editor only.
+  await nextTick()
+  if (countInput.value) {
+    countInput.value.focus()
+    countInput.value.select()
+  }
 }
 
 const cancelCountEdit = (): void => {
   editingCardId.value = null
-  editingCount.value = '1'
+  editingCount.value = ''
 }
 
 const saveCountEdit = async (card: DeckCard): Promise<void> => {
+  // Ignore stale blur/enter events fired after another handler already closed edit mode.
+  if (editingCardId.value !== card.id || isSavingCountEdit.value) return
+
   const newCount = parseInt(editingCount.value, 10)
 
   // Validate the input
@@ -523,8 +525,13 @@ const saveCountEdit = async (card: DeckCard): Promise<void> => {
     return
   }
 
-  await updateCardCount(card, newCount)
-  cancelCountEdit()
+  isSavingCountEdit.value = true
+  try {
+    await updateCardCount(card, newCount)
+    cancelCountEdit()
+  } finally {
+    isSavingCountEdit.value = false
+  }
 }
 
 const deleteCard = async (card: DeckCard): Promise<void> => {
