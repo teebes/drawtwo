@@ -129,7 +129,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useTitleStore } from '../stores/title'
 import { useAuthStore } from '../stores/auth'
@@ -199,6 +199,8 @@ const gamesLoading = ref<boolean>(false)
 const leaderboardLoading = ref<boolean>(false)
 const notificationsLoading = ref<boolean>(false)
 const leaderboardLadder = ref<LadderType>('daily')
+const NOTIFICATION_REFRESH_INTERVAL_MS = 10000
+let notificationsRefreshTimer: ReturnType<typeof setInterval> | null = null
 
 // Title data now comes from the store via router preloading
 
@@ -260,6 +262,7 @@ const fetchLeaderboard = async (): Promise<void> => {
 
 const fetchNotifications = async (): Promise<void> => {
   if (!title.value || !isAuthenticated.value) return
+  if (notificationsLoading.value) return
 
   try {
     notificationsLoading.value = true
@@ -271,6 +274,30 @@ const fetchNotifications = async (): Promise<void> => {
   } finally {
     notificationsLoading.value = false
   }
+}
+
+const stopNotificationsRefresh = (): void => {
+  if (notificationsRefreshTimer !== null) {
+    clearInterval(notificationsRefreshTimer)
+    notificationsRefreshTimer = null
+  }
+}
+
+const startNotificationsRefresh = (): void => {
+  stopNotificationsRefresh()
+
+  if (!title.value || !isAuthenticated.value) return
+
+  notificationsRefreshTimer = setInterval(() => {
+    if (document.visibilityState !== 'visible') return
+    void fetchNotifications()
+  }, NOTIFICATION_REFRESH_INTERVAL_MS)
+}
+
+const handleVisibilityChange = (): void => {
+  if (document.visibilityState !== 'visible') return
+  if (!title.value || !isAuthenticated.value) return
+  void fetchNotifications()
 }
 
 // Event handlers for TitleNotifications component
@@ -308,8 +335,21 @@ watch(leaderboardLadder, async () => {
   }
 })
 
+watch([title, isAuthenticated], ([newTitle, newIsAuthenticated]) => {
+  if (newTitle && newIsAuthenticated) {
+    startNotificationsRefresh()
+    return
+  }
+  stopNotificationsRefresh()
+}, { immediate: true })
+
 onMounted(() => {
-  // Title will be loaded by router, so we just need to watch for it
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+})
+
+onUnmounted(() => {
+  stopNotificationsRefresh()
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 </script>
 
