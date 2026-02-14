@@ -71,6 +71,16 @@ interface WebSocketMessage {
   [key: string]: any
 }
 
+function formatDuration(seconds: number): string {
+  if (seconds % 3600 === 0) {
+    return `${seconds / 3600}h`
+  }
+  if (seconds % 60 === 0) {
+    return `${seconds / 60}m`
+  }
+  return `${seconds}s`
+}
+
 export const useGameStore = defineStore('game', {
   state: (): GameStoreState => ({
     gameState: createInitialGameState(),
@@ -568,8 +578,38 @@ export const useGameStore = defineStore('game', {
 
       // Update the game state
       if (data.state) {
+        const oldTurnExpires = this.gameState.turn_expires
         const oldActive = this.gameState.active
         this.gameState = data.state
+
+        const oldTurnExpiresMs = oldTurnExpires ? new Date(oldTurnExpires).getTime() : null
+        const newTurnExpiresMs = this.gameState.turn_expires
+          ? new Date(this.gameState.turn_expires).getTime()
+          : null
+
+        // Detect manual time extensions (timer increased while active side stayed the same).
+        if (
+          this.currentGameType === 'ranked' &&
+          oldTurnExpiresMs !== null &&
+          newTurnExpiresMs !== null &&
+          Number.isFinite(oldTurnExpiresMs) &&
+          Number.isFinite(newTurnExpiresMs) &&
+          newTurnExpiresMs > oldTurnExpiresMs &&
+          oldActive === this.gameState.active
+        ) {
+          const extensionSeconds = Math.round((newTurnExpiresMs - oldTurnExpiresMs) / 1000)
+          if (extensionSeconds > 0) {
+            const formatted = formatDuration(extensionSeconds)
+            const notificationStore = this.getNotificationStore()
+            const isOwnTimerExtended = this.viewer === this.gameState.active
+
+            if (isOwnTimerExtended) {
+              notificationStore.info(`Your opponent extended your time by +${formatted}.`)
+            } else {
+              notificationStore.success(`You extended your opponent's time by +${formatted}.`)
+            }
+          }
+        }
 
         // Check for turn change to current player
         if (oldActive !== this.gameState.active &&
