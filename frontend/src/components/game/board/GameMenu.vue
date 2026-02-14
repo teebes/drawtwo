@@ -4,6 +4,13 @@
             Updates
         </div>
 
+        <div
+            v-if="showExtendTime && !gameOver"
+            class="text-2xl cursor-pointer hover:text-gray-400"
+            @click="handleClickExtendTime">
+            Extend Time
+        </div>
+
         <div v-if="canEditTitle" class="text-2xl cursor-pointer hover:text-gray-400" @click="handleClickDebug">
             Debug
         </div>
@@ -27,12 +34,14 @@ import { useRouter } from 'vue-router'
 
 const props = defineProps<{
     canEditTitle: boolean
+    showExtendTime: boolean
     titleSlug: string | undefined
     gameOver: boolean
 }>()
 
 const emit = defineEmits<{
     clickUpdates: []
+    clickExtendTime: []
     clickDebug: []
 }>()
 
@@ -41,6 +50,10 @@ const router = useRouter()
 
 const handleClickUpdates = () => {
     emit('clickUpdates')
+}
+
+const handleClickExtendTime = () => {
+    emit('clickExtendTime')
 }
 
 const handleClickDebug = () => {

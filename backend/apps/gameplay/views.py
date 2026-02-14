@@ -100,6 +100,8 @@ def game_detail(request, game_id):
         )
 
     game_data["is_vs_ai"] = game.is_vs_ai
+    game_data["game_type"] = game.type
+    game_data["ladder_type"] = game.ladder_type
 
     # Include ELO rating changes if available (for completed PvP games)
     if hasattr(game, "elo_change") and game.elo_change:

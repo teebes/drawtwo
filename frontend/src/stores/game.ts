@@ -1,12 +1,21 @@
 import { defineStore } from 'pinia'
 import axios from '../config/api'
 import { getBaseUrl } from '../config/api'
-import type { GameState, Side, CardInPlay, Creature, HeroInPlay, GameError } from '../types/game'
+import type {
+  GameState,
+  Side,
+  CardInPlay,
+  Creature,
+  HeroInPlay,
+  GameError,
+  LadderType
+} from '../types/game'
 import { useNotificationStore } from './notifications'
 import { useAuthStore } from './auth'
 
 // WebSocket status type
 type WebSocketStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
+type GameType = 'pve' | 'ranked' | 'friendly'
 
 // Game store state interface
 interface GameStoreState {
@@ -29,6 +38,8 @@ interface GameStoreState {
   heartbeatIntervalId: number | null
   messageQueue: WebSocketMessage[]
   currentGameId: string | null
+  currentGameType: GameType | null
+  currentLadderType: LadderType | null
 
   updates: any[]
 }
@@ -82,6 +93,8 @@ export const useGameStore = defineStore('game', {
     heartbeatIntervalId: null,
     messageQueue: [],
     currentGameId: null,
+    currentGameType: null,
+    currentLadderType: null,
     updates: []
   }),
 
@@ -278,6 +291,10 @@ export const useGameStore = defineStore('game', {
       return !hero.exhausted
     },
 
+    isRankedGame: (state): boolean => {
+      return state.currentGameType === 'ranked'
+    },
+
     // Filtered updates for display
     displayUpdates: (state): any[] => {
       return state.updates.filter((update: any) => {
@@ -334,6 +351,8 @@ export const useGameStore = defineStore('game', {
         this.viewer = data.viewer
         this.gameState = data
         this.isVsAi = data.is_vs_ai
+        this.currentGameType = data.game_type || null
+        this.currentLadderType = data.ladder_type || null
 
         // Build card name mapping from the game state
         this.cardNameMap = {}
@@ -525,6 +544,8 @@ export const useGameStore = defineStore('game', {
       this.reconnectAttempts = 0
       this.messageQueue = []
       this.currentGameId = null
+      this.currentGameType = null
+      this.currentLadderType = null
     },
 
     handleWebSocketMessage(data: any): void {
@@ -646,6 +667,14 @@ export const useGameStore = defineStore('game', {
 
       this.sendWebSocketMessage({
         type: 'cmd_concede',
+      })
+    },
+
+    extendOpponentTime(): void {
+      if (this.gameOver.isGameOver) return
+
+      this.sendWebSocketMessage({
+        type: 'cmd_extend_time',
       })
     },
 
@@ -776,6 +805,8 @@ export const useGameStore = defineStore('game', {
       this.loading = false
       this.error = null
       this.cardNameMap = {}
+      this.currentGameType = null
+      this.currentLadderType = null
       this.resetGameOverState()
     },
 

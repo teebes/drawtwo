@@ -2,6 +2,7 @@ import logging
 import random
 import traceback
 import uuid
+from datetime import timedelta
 
 from django.db import transaction, DatabaseError
 from django.db.models import Q
@@ -550,6 +551,37 @@ class GameService:
                 logger.info(f"Turn expired for {side} in game {game_id} when processing command, auto-conceding")
                 game.enqueue([ConcedeEffect(side=side)], trigger=True)
                 return  # Don't process the command, the concede will be handled
+
+        if command.get("type") == "cmd_extend_time":
+            if game.type != Game.GAME_TYPE_RANKED:
+                raise ValueError("Time extension is only available in ranked matches.")
+
+            if game.ladder_type not in (Game.LADDER_TYPE_DAILY, Game.LADDER_TYPE_RAPID):
+                raise ValueError("This ranked game does not support time extension.")
+
+            if (game_state.phase != "main"
+                or game_state.time_per_turn <= 0
+                or not game.turn_expires):
+                raise ValueError("There is no active turn timer to extend right now.")
+
+            opponent_side = "side_b" if side == "side_a" else "side_a"
+            if game_state.active != opponent_side:
+                raise ValueError("You can only extend time during your opponent's turn.")
+
+            extension_seconds = (
+                6 * 60 * 60
+                if game.ladder_type == Game.LADDER_TYPE_DAILY
+                else 30
+            )
+            extended_turn_expires = game.turn_expires + timedelta(seconds=extension_seconds)
+
+            game.turn_expires = extended_turn_expires
+            game_state.turn_expires = extended_turn_expires.isoformat()
+            game.state = game_state.model_dump()
+            game.save(update_fields=["turn_expires", "state"])
+
+            send_game_updates_to_clients(game.id, game_state, [])
+            return
 
         effects = GameService.compile_cmd(game_state, command, side)
         game.enqueue(effects)

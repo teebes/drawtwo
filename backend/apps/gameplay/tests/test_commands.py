@@ -1,12 +1,16 @@
 """
 Tests for command processing - including attack validation and game flow commands.
 """
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 
 from apps.builder.models import AIPlayer, CardTemplate, HeroTemplate, Title
 from apps.builder.schemas import HeroPower, DamageAction, Taunt, Stealth
 from apps.collection.models import Deck, DeckCard
+from apps.gameplay.models import Game
 from apps.gameplay.engine.dispatcher import resolve
 from apps.gameplay.schemas.effects import AttackEffect, DamageEffect, UseHeroEffect
 from apps.gameplay.schemas.game import GameState, Creature, HeroInPlay
@@ -79,6 +83,121 @@ class ProcessCommandTests(ServiceTestsBase):
         self.game.refresh_from_db()
         self.assertEqual(len(self.game.queue), 1)
         self.assertEqual(self.game.queue[0]['type'], 'effect_end_turn')
+
+
+class ExtendTimeCommandTests(TestCase):
+    """Tests for ranked time extension command behavior."""
+
+    def setUp(self):
+        self.user_a = User.objects.create_user(
+            email="extend_a@example.com",
+            username="extend_a"
+        )
+        self.user_b = User.objects.create_user(
+            email="extend_b@example.com",
+            username="extend_b"
+        )
+
+        self.title = Title.objects.create(slug='extend-time-title', author=self.user_a)
+        self.hero_a = HeroTemplate.objects.create(
+            title=self.title,
+            slug='extend-hero-a',
+            name="Extend Hero A",
+            health=30
+        )
+        self.hero_b = HeroTemplate.objects.create(
+            title=self.title,
+            slug='extend-hero-b',
+            name="Extend Hero B",
+            health=30
+        )
+
+        self.deck_a = Deck.objects.create(
+            title=self.title,
+            user=self.user_a,
+            name="Extend Deck A",
+            hero=self.hero_a
+        )
+        self.deck_b = Deck.objects.create(
+            title=self.title,
+            user=self.user_b,
+            name="Extend Deck B",
+            hero=self.hero_b
+        )
+
+        for i in range(4):
+            card = CardTemplate.objects.create(
+                title=self.title,
+                slug=f'extend-card-{i}',
+                name=f'Extend Card {i}',
+                cost=1,
+            )
+            DeckCard.objects.create(deck=self.deck_a, card=card)
+            DeckCard.objects.create(deck=self.deck_b, card=card)
+
+    def _create_ranked_game_with_timer(self, ladder_type: str, active_side: str = 'side_b'):
+        game = GameService.create_game(
+            self.deck_a,
+            self.deck_b,
+            randomize_starting_player=False,
+        )
+
+        start_expires = timezone.now() + timedelta(minutes=5)
+        game_state = game.game_state
+        game_state.turn = 2
+        game_state.phase = 'main'
+        game_state.active = active_side
+        game_state.time_per_turn = 60 * 60 * 24 if ladder_type == Game.LADDER_TYPE_DAILY else 60
+        game_state.turn_expires = start_expires.isoformat()
+
+        game.type = Game.GAME_TYPE_RANKED
+        game.ladder_type = ladder_type
+        game.status = Game.GAME_STATUS_IN_PROGRESS
+        game.turn_expires = start_expires
+        game.state = game_state.model_dump()
+        game.save()
+
+        return game, start_expires
+
+    def test_daily_extension_adds_six_hours(self):
+        game, start_expires = self._create_ranked_game_with_timer(Game.LADDER_TYPE_DAILY)
+
+        GameService.process_command(game.id, {'type': 'cmd_extend_time'}, 'side_a')
+
+        game.refresh_from_db()
+        self.assertEqual(game.turn_expires, start_expires + timedelta(hours=6))
+        self.assertEqual(game.game_state.turn_expires, game.turn_expires.isoformat())
+
+    def test_rapid_extension_adds_thirty_seconds(self):
+        game, start_expires = self._create_ranked_game_with_timer(Game.LADDER_TYPE_RAPID)
+
+        GameService.process_command(game.id, {'type': 'cmd_extend_time'}, 'side_a')
+
+        game.refresh_from_db()
+        self.assertEqual(game.turn_expires, start_expires + timedelta(seconds=30))
+        self.assertEqual(game.game_state.turn_expires, game.turn_expires.isoformat())
+
+    def test_extension_rejected_for_non_ranked_game(self):
+        game, _ = self._create_ranked_game_with_timer(Game.LADDER_TYPE_RAPID)
+        game.type = Game.GAME_TYPE_FRIENDLY
+        game.ladder_type = None
+        game.save(update_fields=['type', 'ladder_type'])
+
+        with self.assertRaises(ValueError) as context:
+            GameService.process_command(game.id, {'type': 'cmd_extend_time'}, 'side_a')
+
+        self.assertIn("ranked matches", str(context.exception).lower())
+
+    def test_extension_rejected_when_not_opponent_turn(self):
+        game, _ = self._create_ranked_game_with_timer(
+            Game.LADDER_TYPE_DAILY,
+            active_side='side_a',
+        )
+
+        with self.assertRaises(ValueError) as context:
+            GameService.process_command(game.id, {'type': 'cmd_extend_time'}, 'side_a')
+
+        self.assertIn("opponent's turn", str(context.exception).lower())
 
 class AttackValidationTestBase(TestCase):
     """Base test class that sets up a game with creatures on both sides."""

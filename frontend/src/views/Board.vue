@@ -234,9 +234,11 @@
             <GameMenu
                 v-if="overlay === 'menu'"
                 :can-edit-title="canEditTitle ?? false"
+                :show-extend-time="canShowExtendTime"
                 :title-slug="titleStore.titleSlug ?? undefined"
                 :game-over="gameOver.isGameOver"
                 @click-updates="handleClickUpdates"
+                @click-extend-time="handleClickExtendTime"
                 @click-debug="handleClickDebug"
             />
 
@@ -313,7 +315,8 @@ const {
   bottomSide,
   displayUpdates,
   canUseHero,
-  wsStatus
+  wsStatus,
+  currentGameType
 } = storeToRefs(gameStore)
 
 // Get hero art URLs
@@ -383,6 +386,10 @@ const canEditTitle = computed(() => {
   return authStore.isAuthenticated &&
          title.value &&
          title.value.can_edit === true
+})
+
+const canShowExtendTime = computed(() => {
+  return currentGameType.value === 'ranked'
 })
 
 // Check if user has no available actions (should highlight End Turn)
@@ -773,6 +780,10 @@ const handleMenuClick = () => {
 const handleClickUpdates = () => {
     overlay.value = 'updates'
     overlayTitle.value = "Game Updates"
+}
+
+const handleClickExtendTime = () => {
+    gameStore.extendOpponentTime()
 }
 
 const handleClickDebug = () => {
