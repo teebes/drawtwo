@@ -820,6 +820,11 @@ export const useGameStore = defineStore('game', {
 
     // Initialize game connection
     async connectToGame(gameId: string): Promise<void> {
+      // Ensure no previous game session state leaks into the new game.
+      this.disconnectWebSocket()
+      this.updates = []
+      this.resetGameOverState()
+
       await this.fetchGameState(gameId)
       if (!this.error) {
         this.connectWebSocket(gameId)
@@ -847,6 +852,7 @@ export const useGameStore = defineStore('game', {
       this.cardNameMap = {}
       this.currentGameType = null
       this.currentLadderType = null
+      this.updates = []
       this.resetGameOverState()
     },
 

@@ -1061,10 +1061,18 @@ function convertAllowedTargets(targets: Array<'card' | 'hero' | 'any'>): 'creatu
 
 /* Lifecycle and Watchers */
 
-watch(title, async (newTitle) => {
-    if (newTitle) {
-        await gameStore.connectToGame(route.params.game_id as string)
+watch([title, gameId], async ([newTitle, newGameId], [, oldGameId]) => {
+    if (!newTitle || !newGameId) {
+        return
     }
+
+    // Clear any open overlays when switching games in-place.
+    if (oldGameId && oldGameId !== newGameId) {
+        clearLocalState()
+        showingGameOver.value = false
+    }
+
+    await gameStore.connectToGame(newGameId)
 }, { immediate: true })
 
 // Clear local state when game over is detected
