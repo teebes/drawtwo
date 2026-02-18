@@ -116,6 +116,8 @@
 
     <h2 class="text-center mt-8">Misc Rules</h2>
 
+    <div>If a deck runs out of cards and a card needs to be drawn, the player out of cards loses the game.</div>
+
     <div>When creatures are first played, they are in exhausted state. The exhausted state is removed at the end of each turn. A creature that is exhausted cannot attack.</div>
 
     <div>Taunt only blocks physical damage. Spell damage will bypass it.</div>
