@@ -548,6 +548,9 @@ def attack(effect: AttackEffect, state: GameState) -> Result:
     if creature.exhausted:
         return Rejected(reason="Creature is exhausted")
 
+    if creature.attack <= 0:
+        return Rejected(reason="Creature has no attack")
+
     # STEALTH VALIDATION: Cannot directly target stealthed creatures
     if effect.target_type == "creature":
         target_creature = state.creatures.get(effect.target_id)

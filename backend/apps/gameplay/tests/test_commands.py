@@ -446,6 +446,38 @@ class AttackCommandValidationTests(AttackValidationTestBase):
 
         self.assertIn("do not control", str(context.exception).lower())
 
+    def test_cannot_attack_with_zero_attack_creature(self):
+        """Test that creatures with 0 attack cannot declare an attack."""
+        self.game_state.creatures['creature_a_1'].attack = 0
+
+        command = {
+            'type': 'cmd_attack',
+            'card_id': 'creature_a_1',
+            'target_type': 'creature',
+            'target_id': 'creature_b_1',
+        }
+
+        with self.assertRaises(ValueError) as context:
+            GameService.compile_cmd(self.game_state, command, 'side_a')
+
+        self.assertIn("no attack", str(context.exception).lower())
+
+    def test_zero_attack_creature_can_attack_after_attack_increase(self):
+        """Test that an attack increase lets a formerly 0-attack creature attack."""
+        self.game_state.creatures['creature_a_1'].attack = 0
+        self.game_state.creatures['creature_a_1'].attack = 3
+
+        command = {
+            'type': 'cmd_attack',
+            'card_id': 'creature_a_1',
+            'target_type': 'creature',
+            'target_id': 'creature_b_1',
+        }
+
+        effects = GameService.compile_cmd(self.game_state, command, 'side_a')
+        self.assertEqual(len(effects), 1)
+        self.assertIsInstance(effects[0], AttackEffect)
+
 
 class AttackEffectValidationTests(AttackValidationTestBase):
     """Test validation in the attack effect handler (second line of defense)."""
@@ -493,6 +525,21 @@ class AttackEffectValidationTests(AttackValidationTestBase):
         result = resolve(effect, self.game_state)
         self.assertEqual(result.type, 'outcome_rejected')
         self.assertIn("exhausted", result.reason.lower())
+
+    def test_effect_handler_rejects_zero_attack_creature(self):
+        """Test that the effect handler rejects attacks from 0-attack creatures."""
+        self.game_state.creatures['creature_a_1'].attack = 0
+
+        effect = AttackEffect(
+            side='side_a',
+            card_id='creature_a_1',
+            target_type='creature',
+            target_id='creature_b_1',
+        )
+
+        result = resolve(effect, self.game_state)
+        self.assertEqual(result.type, 'outcome_rejected')
+        self.assertIn("no attack", result.reason.lower())
 
     def test_valid_attack_succeeds_in_handler(self):
         """Test that a valid attack succeeds in the effect handler."""
@@ -1427,6 +1474,14 @@ class AITauntTests(TestCase):
 
         # Verify that it attacked one of the taunt creatures
         self.assertIn(effect.target_id, ['taunt_b_1', 'taunt_b_2'])
+
+    def test_ai_does_not_attack_with_zero_attack_creature(self):
+        """Test that AI skips attacking when its only creature has 0 attack."""
+        self.game_state.creatures['creature_a_1'].attack = 0
+
+        effect = AIMoveChooser.choose_move(self.game_state, self.script_rush)
+
+        self.assertIsNone(effect)
 
 
 class StealthMechanicTests(AttackValidationTestBase):

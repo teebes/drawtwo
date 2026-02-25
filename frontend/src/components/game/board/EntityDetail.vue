@@ -206,6 +206,9 @@ const errorMessage = computed(() => {
         if (props.creature.exhausted) {
             return 'Creature is exhausted'
         }
+        if (props.creature.attack <= 0) {
+            return 'Creature has no attack'
+        }
     }
 
     if (props.entityType === 'hero' && props.hero) {
@@ -224,6 +227,7 @@ const canAttack = computed(() => {
     if (!props.isOwned) return false
 
     if (props.creature.exhausted) return false
+    if (props.creature.attack <= 0) return false
 
     // Check turn and phase
     if (gameStore.gameState.active !== gameStore.currentViewer) return false

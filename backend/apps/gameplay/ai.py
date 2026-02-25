@@ -91,6 +91,8 @@ class AIMoveChooser:
 
             if creature.exhausted:
                 continue
+            if creature.attack <= 0:
+                continue
 
             # If there are taunt creatures, we MUST attack one of them
             if taunt_creatures:

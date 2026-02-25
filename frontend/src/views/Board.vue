@@ -409,7 +409,9 @@ const hasNoAvailableActions = computed(() => {
 
   // Check if any creature on board can attack
   const board = ownBoard.value || []
-  const canAttackWithAny = board.some(creature => !creature.exhausted)
+  const canAttackWithAny = board.some(
+    creature => !creature.exhausted && creature.attack > 0
+  )
   if (canAttackWithAny) return false
 
   // Check if hero power can be used
@@ -464,6 +466,12 @@ const get_card = (card_id: string | number) => {
 
 const get_creature = (creature_id: string) => {
     return gameStore.getCreature(String(creature_id))
+}
+
+const getAttackUnavailableReason = (creature: Creature): string | null => {
+    if (creature.exhausted) return 'Creature is exhausted'
+    if (creature.attack <= 0) return 'Creature has no attack'
+    return null
 }
 
 const getHero = (hero_id: string) => {
@@ -525,7 +533,7 @@ const handleClickOwnCreature = (creature_id: string) => {
         allowedTypes: 'both',  // Creatures can attack both heroes and other creatures
         scope: 'enemy',
         sourceCard: creature,
-        errorMessage: creature.exhausted ? 'Creature is exhausted' : null,
+        errorMessage: getAttackUnavailableReason(creature),
         title: 'Select Attack Target'
     }
     overlay.value = 'select_target'
@@ -643,7 +651,7 @@ const handleAttack = (creature_id: string) => {
         allowedTypes: 'both',  // Creatures can attack both heroes and other creatures
         scope: 'enemy',
         sourceCard: creature,
-        errorMessage: creature.exhausted ? 'Creature is exhausted' : null,
+        errorMessage: getAttackUnavailableReason(creature),
         title: 'Select Attack Target'
     }
     overlay.value = 'select_target'

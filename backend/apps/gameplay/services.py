@@ -631,6 +631,10 @@ class GameService:
             if command.card_id not in game_state.board[game_state.active]:
                 raise ValueError(f"You do not control creature {command.card_id}")
 
+            # Creatures with no attack value cannot declare attacks.
+            if creature.attack <= 0:
+                raise ValueError(f"Creature {command.card_id} has no attack")
+
             # Validate that the target belongs to the opponent
             opposing_side = game_state.opposite_side
             if target_type == "creature":
