@@ -161,10 +161,10 @@
                     />
 
                     <!-- Hand -->
-                    <div class="hand overflow-x-auto flex flex-row flex-nowrap flex-grow items-center space-x-2 ml-2">
+                    <div class="hand min-w-0 overflow-x-auto flex flex-row flex-nowrap flex-grow items-center space-x-2 ml-2">
                         <div v-for="card_id in ownHand"
                              :key="card_id+'else'"
-                             class="w-14">
+                             class="w-14 flex-none">
                             <GameCard v-if="get_card(card_id)"
                                 class="cursor-pointer"
                                 :card="get_card(card_id)!"
