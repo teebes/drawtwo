@@ -366,6 +366,53 @@ def title_notifications(request, slug):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+def title_head_to_head(request, slug):
+    """
+    Get head-to-head record between the current user and a specific opponent.
+    Query params:
+      - opponent_name: display name of the opponent user
+    Returns wins, losses, and draws for the current user against that opponent.
+    """
+    title = get_title_or_403(slug, request.user)
+    user = request.user
+
+    opponent_name = request.query_params.get('opponent_name', '').strip()
+    if not opponent_name:
+        return Response({'error': 'opponent_name is required'}, status=400)
+
+    # Find ended PvP games between these two users for this title
+    games = Game.objects.for_title(title).filter(
+        status=Game.GAME_STATUS_ENDED,
+        type__in=[Game.GAME_TYPE_RANKED, Game.GAME_TYPE_FRIENDLY],
+    ).filter(
+        Q(player_a_user=user, player_b_user__display_name=opponent_name) |
+        Q(player_b_user=user, player_a_user__display_name=opponent_name)
+    ).select_related('side_a', 'side_b', 'winner', 'player_a_user', 'player_b_user')
+
+    wins = 0
+    losses = 0
+    draws = 0
+
+    for game in games:
+        user_deck = game.side_a if game.player_a_user == user else game.side_b
+        if game.winner == user_deck:
+            wins += 1
+        elif game.winner is not None:
+            losses += 1
+        else:
+            draws += 1
+
+    return Response({
+        'opponent_name': opponent_name,
+        'wins': wins,
+        'losses': losses,
+        'draws': draws,
+        'total': wins + losses + draws,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def title_games_history(request, slug):
     """
     Get paginated game history for a title with stats.
@@ -511,6 +558,7 @@ def title_games_history(request, slug):
             'is_user_turn': is_user_turn,
             'elo_change': elo_change,
             'created_at': game.created_at.isoformat(),
+            'is_human_opponent': not opponent_deck.is_ai_deck,
         })
 
     return Response({

@@ -140,7 +140,7 @@
               </div>
 
               <!-- Opponent Info -->
-              <div class="flex-1 ml-4">
+              <div class="flex-1 ml-4 min-w-0">
                 <div class="font-medium text-gray-900 dark:text-gray-100 truncate">
                   vs {{ game.opponent_name }}
                   <span
@@ -159,6 +159,16 @@
                   {{ game.user_hero }} vs {{ game.opponent_hero }}
                 </div>
               </div>
+
+              <!-- H2H Button (human opponents only) -->
+              <button
+                v-if="game.is_human_opponent"
+                class="flex-shrink-0 ml-3 px-2 py-1 text-xs font-semibold rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                title="View head-to-head record"
+                @click="openH2H(game.opponent_name, $event)"
+              >
+                H2H
+              </button>
 
               <!-- ELO Change (if applicable) -->
               <div
@@ -218,6 +228,14 @@
       </template>
     </main>
   </div>
+
+  <!-- Head-to-Head Modal -->
+  <HeadToHeadModal
+    :is-open="h2hModalOpen"
+    :opponent-name="h2hOpponentName"
+    :title-slug="titleSlug"
+    @close="h2hModalOpen = false"
+  />
 </template>
 
 <script setup lang="ts">
@@ -226,6 +244,7 @@ import { useRoute, useRouter } from 'vue-router'
 import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
 import GameButton from '../components/ui/GameButton.vue'
+import HeadToHeadModal from '../components/ui/HeadToHeadModal.vue'
 import { useNotificationStore } from '../stores/notifications'
 import type { LadderType } from '../types/game'
 
@@ -257,6 +276,7 @@ interface GameHistoryItem {
   is_user_turn: boolean | null
   elo_change: number | null
   created_at: string
+  is_human_opponent: boolean
 }
 
 interface Pagination {
@@ -290,6 +310,15 @@ const pagination = ref<Pagination>({
 })
 
 const titleSlug = ref(route.params.slug as string)
+
+const h2hModalOpen = ref(false)
+const h2hOpponentName = ref('')
+
+const openH2H = (opponentName: string, event: Event) => {
+  event.stopPropagation()
+  h2hOpponentName.value = opponentName
+  h2hModalOpen.value = true
+}
 
 const fetchGamesHistory = async (page: number = 1) => {
   try {
