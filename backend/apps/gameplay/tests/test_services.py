@@ -1,6 +1,8 @@
 """
 Tests for GameService - game initialization and high-level operations.
 """
+from unittest.mock import patch
+
 from django.test import TestCase
 from apps.authentication.models import User
 from apps.builder.models import Title, HeroTemplate, CardTemplate
@@ -20,6 +22,18 @@ class ServiceTests(ServiceTestsBase):
         self.assertEqual(self.game.state['phase'], 'start')
         self.assertEqual(len(self.game.state['hands']['side_a']), 0)
         self.assertEqual(len(self.game.state['hands']['side_b']), 0)
+
+    def test_create_game_does_not_auto_schedule_first_step(self):
+        self.game.status = Game.GAME_STATUS_ENDED
+        self.game.save(update_fields=["status"])
+
+        with patch("apps.gameplay.models.transaction.on_commit") as on_commit:
+            game = GameService.create_game(self.deck_a, self.deck_b)
+
+        on_commit.assert_not_called()
+        self.assertNotEqual(game.id, self.game.id)
+        self.assertEqual(len(game.queue), 1)
+        self.assertEqual(game.queue[0]["type"], "effect_start_game")
 
 
 class MatchmakingTests(TestCase):

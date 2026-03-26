@@ -264,7 +264,11 @@ class GameService:
             state=game_state.model_dump(),
         )
 
-        game.enqueue([StartGameEffect(side='side_a')])
+        # Callers still need to set game type / time controls after create_game()
+        # returns. Triggering the first step here can race with those stale-state
+        # saves and wipe out opening draws, so the caller must kick off the first
+        # step after post-create mutations are complete.
+        game.enqueue([StartGameEffect(side='side_a')], trigger=False)
 
         return game
 
