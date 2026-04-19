@@ -349,6 +349,121 @@ def create_game(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+def rematch_game(request, game_id):
+    """
+    Create a rematch challenge for a completed friendly game.
+    Creates a FriendlyChallenge (same flow as a normal challenge) using the
+    requesting user's deck from the previous game; the opponent accepts via
+    the standard challenge flow and selects their own deck.
+    """
+    import logging
+
+    from apps.authentication.models import Friendship
+    from apps.gameplay.models import FriendlyChallenge
+
+    logger = logging.getLogger(__name__)
+
+    game = get_object_or_404(
+        Game.objects.select_related("side_a", "side_b", "title"),
+        id=game_id,
+    )
+
+    # Validate game is ended
+    if game.status != Game.GAME_STATUS_ENDED:
+        return Response(
+            {"error": "Can only rematch a completed game"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Validate game is friendly
+    if game.type != Game.GAME_TYPE_FRIENDLY:
+        return Response(
+            {"error": "Rematch is only available for friendly games"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Validate user is a participant
+    if request.user != game.player_a_user and request.user != game.player_b_user:
+        return Response(
+            {"error": "You are not a participant in this game"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    # Determine opponent and challenger deck from the previous game
+    if request.user == game.player_a_user:
+        challengee = game.player_b_user
+        challenger_deck = game.side_a
+    else:
+        challengee = game.player_a_user
+        challenger_deck = game.side_b
+
+    if not challengee:
+        return Response(
+            {"error": "No opponent found for rematch"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Validate friendship still exists (same rule as create_friendly_challenge)
+    is_friend = Friendship.objects.filter(
+        user=request.user, friend=challengee, status=Friendship.STATUS_ACCEPTED
+    ).exists()
+    if not is_friend:
+        return Response(
+            {"error": "You can only challenge accepted friends"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    challenger_deck_error = _get_min_cards_error(challenger_deck, "Challenger deck")
+    if challenger_deck_error:
+        return Response(
+            {"error": challenger_deck_error}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # If a pending challenge already exists, return it (same behavior as create_friendly_challenge)
+    existing = FriendlyChallenge.objects.filter(
+        challenger=request.user,
+        challengee=challengee,
+        title=game.title,
+        status=FriendlyChallenge.STATUS_PENDING,
+    ).first()
+    if existing:
+        return Response(
+            {
+                "id": existing.id,
+                "status": existing.status,
+                "title_slug": game.title.slug,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    challenge = FriendlyChallenge.objects.create(
+        challenger=request.user,
+        challengee=challengee,
+        title=game.title,
+        challenger_deck=challenger_deck,
+        status=FriendlyChallenge.STATUS_PENDING,
+        rematch_of=game,
+    )
+    _set_last_used_friend(request.user, game.title, challengee)
+    _set_last_used_deck(request.user, challenger_deck)
+
+    logger.info(
+        f"Rematch challenge created: {challenge.id} from game {game.id} "
+        f"by user {request.user.display_name}"
+    )
+
+    return Response(
+        {
+            "id": challenge.id,
+            "status": challenge.status,
+            "title_slug": game.title.slug,
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def queue_for_ranked_match(request):
     """
     Queue a player for a ranked match.
@@ -797,10 +912,31 @@ def accept_friendly_challenge(request, challenge_id):
             {"error": challengee_deck_error}, status=status.HTTP_400_BAD_REQUEST
         )
 
-    # Create the game
-    game = GameService.create_game(
-        challenge.challenger_deck, challengee_deck, randomize_starting_player=True
-    )
+    # Create the game. For rematches, deterministically swap sides so each
+    # player takes the opposite side from the previous game.
+    if challenge.rematch_of_id:
+        previous_game = challenge.rematch_of
+        challenger_was_side_a = (
+            challenge.challenger_id == previous_game.player_a_user_id
+        )
+        if challenger_was_side_a:
+            # Challenger was side_a last game -> becomes side_b now
+            game = GameService.create_game(
+                challengee_deck,
+                challenge.challenger_deck,
+                randomize_starting_player=False,
+            )
+        else:
+            # Challenger was side_b last game -> becomes side_a now
+            game = GameService.create_game(
+                challenge.challenger_deck,
+                challengee_deck,
+                randomize_starting_player=False,
+            )
+    else:
+        game = GameService.create_game(
+            challenge.challenger_deck, challengee_deck, randomize_starting_player=True
+        )
     game.type = Game.GAME_TYPE_FRIENDLY
     game.save(update_fields=["type"])
 

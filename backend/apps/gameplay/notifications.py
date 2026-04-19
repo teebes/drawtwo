@@ -29,20 +29,24 @@ def filter_updates_for_side(updates: list, viewing_side: str) -> list:
         Filtered list of updates safe for the viewing player
     """
     filtered = []
-    opposing_side = 'side_b' if viewing_side == 'side_a' else 'side_a'
+    opposing_side = "side_b" if viewing_side == "side_a" else "side_a"
 
     for update in updates:
-        update_dict = update.model_dump(mode="json") if hasattr(update, 'model_dump') else update
+        update_dict = (
+            update.model_dump(mode="json") if hasattr(update, "model_dump") else update
+        )
 
         # DrawCardUpdate: hide card details if opponent drew
-        if update_dict.get('type') == 'update_draw_card':
-            if update_dict.get('side') == opposing_side:
+        if update_dict.get("type") == "update_draw_card":
+            if update_dict.get("side") == opposing_side:
                 # Opponent drew - hide which card
-                filtered.append({
-                    **update_dict,
-                    'card_id': None,  # Hide the actual card ID
-                    'hidden': True,  # Flag for client to show card back
-                })
+                filtered.append(
+                    {
+                        **update_dict,
+                        "card_id": None,  # Hide the actual card ID
+                        "hidden": True,  # Flag for client to show card back
+                    }
+                )
             else:
                 # We drew - show everything
                 filtered.append(update_dict)
@@ -68,36 +72,42 @@ def filter_state_for_side(state, viewing_side: str) -> dict:
     Returns:
         Filtered state dict safe for the viewing player
     """
-    state_dict = state.model_dump(mode="json") if hasattr(state, 'model_dump') else state
+    state_dict = (
+        state.model_dump(mode="json") if hasattr(state, "model_dump") else state
+    )
     return state_dict
     filtered_state = state_dict.copy()
-    opposing_side = 'side_b' if viewing_side == 'side_a' else 'side_a'
+    opposing_side = "side_b" if viewing_side == "side_a" else "side_a"
 
     # Opponent's hand: show count but not card IDs
-    if 'hands' in filtered_state:
-        opponent_hand = filtered_state['hands'].get(opposing_side, [])
-        filtered_state['hands'] = {
-            **filtered_state['hands'],
+    if "hands" in filtered_state:
+        opponent_hand = filtered_state["hands"].get(opposing_side, [])
+        filtered_state["hands"] = {
+            **filtered_state["hands"],
             opposing_side: [],  # Don't reveal opponent's cards
         }
         # Add hand count metadata
-        if 'hand_counts' not in filtered_state:
-            filtered_state['hand_counts'] = {}
-        filtered_state['hand_counts'][opposing_side] = len(opponent_hand)
-        filtered_state['hand_counts'][viewing_side] = len(filtered_state['hands'].get(viewing_side, []))
+        if "hand_counts" not in filtered_state:
+            filtered_state["hand_counts"] = {}
+        filtered_state["hand_counts"][opposing_side] = len(opponent_hand)
+        filtered_state["hand_counts"][viewing_side] = len(
+            filtered_state["hands"].get(viewing_side, [])
+        )
 
     # Opponent's deck: hide card order
-    if 'decks' in filtered_state:
-        opponent_deck = filtered_state['decks'].get(opposing_side, [])
-        filtered_state['decks'] = {
-            **filtered_state['decks'],
+    if "decks" in filtered_state:
+        opponent_deck = filtered_state["decks"].get(opposing_side, [])
+        filtered_state["decks"] = {
+            **filtered_state["decks"],
             opposing_side: [],  # Don't reveal deck order
         }
         # Add deck count metadata
-        if 'deck_counts' not in filtered_state:
-            filtered_state['deck_counts'] = {}
-        filtered_state['deck_counts'][opposing_side] = len(opponent_deck)
-        filtered_state['deck_counts'][viewing_side] = len(filtered_state['decks'].get(viewing_side, []))
+        if "deck_counts" not in filtered_state:
+            filtered_state["deck_counts"] = {}
+        filtered_state["deck_counts"][opposing_side] = len(opponent_deck)
+        filtered_state["deck_counts"][viewing_side] = len(
+            filtered_state["decks"].get(viewing_side, [])
+        )
 
     return filtered_state
 
@@ -106,8 +116,7 @@ async def _send_with_timeout(channel_layer, group_name: str, message: dict):
     """Send to channel group with timeout to prevent blocking."""
     try:
         await asyncio.wait_for(
-            channel_layer.group_send(group_name, message),
-            timeout=SEND_TIMEOUT
+            channel_layer.group_send(group_name, message), timeout=SEND_TIMEOUT
         )
     except asyncio.TimeoutError:
         logger.error(f"Timeout sending to channel group {group_name}")
@@ -134,8 +143,8 @@ def send_game_updates_to_clients(game_id: int, state, updates: list, errors: lis
     channel_layer = get_channel_layer()
 
     # Send side-specific messages to per-player groups
-    for side in ['side_a', 'side_b']:
-        side_group_name = f'game_{game_id}_{side}'
+    for side in ["side_a", "side_b"]:
+        side_group_name = f"game_{game_id}_{side}"
         filtered_updates = filter_updates_for_side(updates, side)
         filtered_state = filter_state_for_side(state, side)
 
@@ -143,27 +152,31 @@ def send_game_updates_to_clients(game_id: int, state, updates: list, errors: lis
             channel_layer,
             side_group_name,
             {
-                'type': 'game_updates',
-                'updates': filtered_updates,
-                'errors': errors,
-                'state': filtered_state,
-            }
+                "type": "game_updates",
+                "updates": filtered_updates,
+                "errors": errors,
+                "state": filtered_state,
+            },
         )
 
     # Send unfiltered state to spectators (staff viewing games)
-    spectator_group_name = f'game_{game_id}_spectator'
-    state_dict = state.model_dump(mode="json") if hasattr(state, 'model_dump') else state
-    updates_list = [u.model_dump(mode="json") if hasattr(u, 'model_dump') else u for u in updates]
+    spectator_group_name = f"game_{game_id}_spectator"
+    state_dict = (
+        state.model_dump(mode="json") if hasattr(state, "model_dump") else state
+    )
+    updates_list = [
+        u.model_dump(mode="json") if hasattr(u, "model_dump") else u for u in updates
+    ]
 
     async_to_sync(_send_with_timeout)(
         channel_layer,
         spectator_group_name,
         {
-            'type': 'game_updates',
-            'updates': updates_list,
-            'errors': errors,
-            'state': state_dict,
-        }
+            "type": "game_updates",
+            "updates": updates_list,
+            "errors": errors,
+            "state": state_dict,
+        },
     )
 
 
@@ -179,14 +192,14 @@ def send_matchmaking_success(user_id: int, game_id: int, title_slug: str):
         title_slug: The title slug for routing
     """
     channel_layer = get_channel_layer()
-    user_group_name = f'user_{user_id}'
+    user_group_name = f"user_{user_id}"
 
     async_to_sync(_send_with_timeout)(
         channel_layer,
         user_group_name,
         {
-            'type': 'matchmaking_success',
-            'game_id': game_id,
-            'title_slug': title_slug,
-        }
+            "type": "matchmaking_success",
+            "game_id": game_id,
+            "title_slug": title_slug,
+        },
     )

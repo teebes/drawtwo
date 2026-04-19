@@ -57,6 +57,15 @@
                 </router-link>
 
                 <button
+                    v-if="gameType === 'friendly'"
+                    @click="handleRematch"
+                    :disabled="rematchLoading"
+                    class="w-full px-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-800 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
+                >
+                    {{ rematchLoading ? 'Creating...' : 'Rematch' }}
+                </button>
+
+                <button
                     @click="handleReturnToGame"
                     class="w-full px-4 py-3 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors"
                 >
@@ -82,15 +91,22 @@ interface Props {
     gameOver: GameOverState
     viewer: Side | null
     eloChange?: EloChange
+    gameType?: string
+    rematchLoading?: boolean
 }
 
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
     'close': []
+    'rematch': []
 }>()
 
 const handleReturnToGame = () => {
     emit('close')
+}
+
+const handleRematch = () => {
+    emit('rematch')
 }
 </script>

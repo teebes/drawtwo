@@ -7,7 +7,10 @@
             :game-over="gameOver"
             :viewer="viewer"
             :elo-change="gameState.elo_change"
-            @close="showingGameOver = false" />
+            :game-type="currentGameType ?? undefined"
+            :rematch-loading="rematchLoading"
+            @close="showingGameOver = false"
+            @rematch="handleRematch" />
 
         <!-- Normal Mode -->
         <main v-if="!overlay" class="board flex-1 flex flex-col max-w-md w-full border-r border-l border-gray-700">
@@ -264,13 +267,15 @@
 
 <script setup lang="ts">
 import { watch, computed, ref, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import type { CardInPlay, Creature } from '../types/game'
 import { useAuthStore } from '../stores/auth'
 import { useTitleStore } from '../stores/title'
 import { useGameStore } from '../stores/game'
 import { storeToRefs } from 'pinia'
 
+import axios from '../config/api'
+import { useNotificationStore } from '../stores/notifications'
 import GameCard from '../components/game/GameCard.vue'
 import GameButton from '../components/ui/GameButton.vue'
 // Board Components
@@ -286,6 +291,7 @@ import Hero from '../components/game/board/Hero.vue'
 import GameMenu from '../components/game/board/GameMenu.vue'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const titleStore = useTitleStore()
 const gameStore = useGameStore()
@@ -378,6 +384,7 @@ const targetingState = ref<TargetingState | null>(null)
 const pendingPlay = ref<{ card_id: string; position: number } | null>(null)
 
 const showingGameOver = ref(false)
+const rematchLoading = ref(false)
 
 const title = computed(() => titleStore.currentTitle)
 
@@ -797,6 +804,27 @@ const handleClickExtendTime = () => {
 const handleClickDebug = () => {
     overlay.value = 'debug'
     overlayTitle.value = "Debug"
+}
+
+const handleRematch = async () => {
+    if (rematchLoading.value) return
+    rematchLoading.value = true
+    const notificationStore = useNotificationStore()
+    try {
+        const response = await axios.post(
+            `/gameplay/games/${gameId.value}/rematch/`,
+            {},
+            { headers: { Authorization: `Bearer ${authStore.accessToken}` } }
+        )
+        const titleSlug = response.data.title_slug
+        notificationStore.success('Rematch challenge sent!')
+        router.push({ name: 'Title', params: { slug: titleSlug } })
+    } catch (error: any) {
+        const message = error.response?.data?.error || 'Failed to send rematch challenge'
+        notificationStore.error(message)
+    } finally {
+        rematchLoading.value = false
+    }
 }
 
 /* Utility Functions */
