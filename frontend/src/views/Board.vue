@@ -297,7 +297,7 @@
 <script setup lang="ts">
 import { watch, computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { CardInPlay, Creature } from '../types/game'
+import type { CardInPlay, Creature, Side } from '../types/game'
 import { useAuthStore } from '../stores/auth'
 import { useTitleStore } from '../stores/title'
 import { useGameStore } from '../stores/game'
@@ -418,6 +418,7 @@ const pendingPlay = ref<{ card_id: string; position: number } | null>(null)
 
 interface DamageUpdate {
     type: 'update_damage'
+    side: Side
     source_type: 'card' | 'hero' | 'board' | 'creature'
     source_id: string
     target_type: 'card' | 'hero' | 'creature'
@@ -428,6 +429,7 @@ interface DamageUpdate {
 
 interface HealUpdate {
     type: 'update_heal'
+    side: Side
     source_type: 'card' | 'hero' | 'board' | 'creature'
     source_id: string
     target_type: 'card' | 'hero' | 'creature'
@@ -442,7 +444,7 @@ interface CombatPoint {
 
 interface CombatAnimationState {
     key: number
-    kind: 'damage' | 'heal'
+    kind: 'damage' | 'heal' | 'spell-damage'
     sourceId: string
     targetId: string
     source: CombatPoint
@@ -477,6 +479,7 @@ let combatValueBurstKey = 0
 const COMBAT_ENTITY_LUNGE = 14
 const COMBAT_ENTITY_RECOIL = 10
 const HEAL_ENTITY_DRIFT = 6
+const SPELL_ENTITY_PULSE = 8
 const COMBAT_ANIMATION_DURATION_MS = 620
 const COMBAT_VALUE_BURST_DURATION_MS = 2200
 
@@ -646,6 +649,15 @@ const isCombatDamageUpdate = (update: any): update is DamageUpdate => {
     return validSource && validTarget && Boolean(update.source_id) && Boolean(update.target_id)
 }
 
+const isSpellDamageUpdate = (update: DamageUpdate) => {
+    if (update.source_type !== 'card') {
+        return false
+    }
+
+    const sourceCard = get_card(update.source_id)
+    return sourceCard?.card_type === 'spell'
+}
+
 const isHealUpdate = (update: any): update is HealUpdate => {
     if (update?.type !== 'update_heal') {
         return false
@@ -673,6 +685,34 @@ const queueCombatValueBurst = (kind: 'damage' | 'heal', value: number, point: Co
     combatValueBurstTimeouts.set(key, timeoutId)
 }
 
+const getHeroCenterForSide = (side: Side): CombatPoint | null => {
+    const heroId = gameState.value.heroes[side]?.hero_id
+    if (!heroId) {
+        return null
+    }
+
+    return getEntityCenter(heroId)
+}
+
+const getSideFallbackPoint = (side: Side): CombatPoint | null => {
+    const board = boardSurface.value
+    if (!board) {
+        return null
+    }
+
+    const boardRect = board.getBoundingClientRect()
+    const isBottomSide = side === bottomSide.value
+
+    return {
+        x: boardRect.width * 0.5,
+        y: boardRect.height * (isBottomSide ? 0.84 : 0.16)
+    }
+}
+
+const getSpellSourcePoint = (side: Side): CombatPoint | null => {
+    return getHeroCenterForSide(side) ?? getSideFallbackPoint(side)
+}
+
 const queueCombatAnimation = (update: DamageUpdate) => {
     if (overlay.value) {
         return
@@ -687,7 +727,10 @@ const queueCombatAnimation = (update: DamageUpdate) => {
 
     queueCombatValueBurst('damage', update.damage, target)
 
-    const source = getEntityCenter(update.source_id)
+    const isSpellDamage = isSpellDamageUpdate(update)
+    const source = isSpellDamage
+        ? getSpellSourcePoint(update.side)
+        : getEntityCenter(update.source_id)
     if (!source) {
         return
     }
@@ -699,7 +742,7 @@ const queueCombatAnimation = (update: DamageUpdate) => {
 
     combatAnimationQueue.push({
         key: ++combatAnimationKey,
-        kind: 'damage',
+        kind: isSpellDamage ? 'spell-damage' : 'damage',
         sourceId: update.source_id,
         targetId: update.target_id,
         source,
@@ -759,6 +802,14 @@ const getCombatVectorStyle = (entityId: string): Record<string, string> | undefi
         } else {
             return undefined
         }
+    } else if (animation.kind === 'spell-damage') {
+        if (animation.targetId === entityId) {
+            from = animation.target
+            to = animation.source
+            magnitude = SPELL_ENTITY_PULSE
+        } else {
+            return undefined
+        }
     } else if (animation.sourceId === entityId) {
         from = animation.source
         to = animation.target
@@ -794,6 +845,14 @@ const getCombatEntityClass = (entityId: string) => {
 
         if (animation.sourceId === entityId && animation.sourceId !== animation.targetId) {
             return 'combat-entity combat-entity--heal-source'
+        }
+
+        return ''
+    }
+
+    if (animation.kind === 'spell-damage') {
+        if (animation.targetId === entityId) {
+            return 'combat-entity combat-entity--spell-target'
         }
 
         return ''
@@ -1485,7 +1544,7 @@ watch(
         }
 
         for (const update of liveUpdateBatch.value) {
-            if (isCombatDamageUpdate(update)) {
+            if (isCombatDamageUpdate(update) || (update?.type === 'update_damage' && isSpellDamageUpdate(update))) {
                 queueCombatAnimation(update)
             } else if (isHealUpdate(update)) {
                 queueHealAnimation(update)
@@ -1565,6 +1624,10 @@ onUnmounted(() => {
 
 .combat-entity--heal-target {
     animation: combat-entity-heal-target 620ms cubic-bezier(0.2, 0.82, 0.32, 1);
+}
+
+.combat-entity--spell-target {
+    animation: combat-entity-spell-target 620ms cubic-bezier(0.2, 0.82, 0.32, 1);
 }
 
 @keyframes combat-entity-lunge {
@@ -1652,6 +1715,32 @@ onUnmounted(() => {
 
     78% {
         transform: translate3d(0, -2px, 0) scale(1.02);
+    }
+}
+
+@keyframes combat-entity-spell-target {
+    0%,
+    100% {
+        transform: translate3d(0, 0, 0) scale(1);
+        filter: brightness(1) saturate(1);
+    }
+
+    42% {
+        transform: translate3d(
+            calc(var(--combat-offset-x, 0px) * 0.32),
+            calc(var(--combat-offset-y, 0px) * 0.32),
+            0
+        ) scale(0.985);
+        filter: brightness(1.12) saturate(1.16);
+    }
+
+    62% {
+        transform: translate3d(0, 0, 0) scale(1.04);
+        filter: brightness(1.22) saturate(1.24);
+    }
+
+    80% {
+        transform: translate3d(0, 0, 0) scale(1.015);
     }
 }
 </style>

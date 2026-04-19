@@ -8,6 +8,14 @@
             <div v-if="hasTravel" class="heal-orb" :style="boltStyle"></div>
             <div class="heal-impact" :style="impactStyle"></div>
         </template>
+        <template v-else-if="isSpellDamage">
+            <div class="spell-origin-flash" :style="originStyle"></div>
+            <div class="spell-line" :style="trailStyle">
+                <div class="spell-line-core"></div>
+            </div>
+            <div class="spell-bolt" :style="boltStyle"></div>
+            <div class="spell-impact" :style="impactStyle"></div>
+        </template>
         <template v-else>
             <div class="combat-origin-flash" :class="variantClass" :style="originStyle"></div>
             <div class="combat-line" :style="trailStyle">
@@ -29,7 +37,7 @@ interface CombatPoint {
 
 interface CombatAnimationState {
     key: number
-    kind: 'damage' | 'heal'
+    kind: 'damage' | 'heal' | 'spell-damage'
     sourceId: string
     targetId: string
     source: CombatPoint
@@ -46,6 +54,7 @@ const dy = computed(() => props.animation.target.y - props.animation.source.y)
 const distance = computed(() => Math.hypot(dx.value, dy.value))
 const angle = computed(() => `${Math.atan2(dy.value, dx.value)}rad`)
 const isHeal = computed(() => props.animation.kind === 'heal')
+const isSpellDamage = computed(() => props.animation.kind === 'spell-damage')
 const hasTravel = computed(() => distance.value >= 16 && props.animation.sourceId !== props.animation.targetId)
 const variantClass = computed(() => props.animation.isRetaliation ? 'is-retaliation' : '')
 
@@ -79,6 +88,10 @@ const impactStyle = computed(() => ({
 .combat-line,
 .combat-bolt,
 .combat-impact,
+.spell-origin-flash,
+.spell-line,
+.spell-bolt,
+.spell-impact,
 .heal-origin-flash,
 .heal-line,
 .heal-orb,
@@ -218,6 +231,70 @@ const impactStyle = computed(() => ({
     animation: heal-impact 620ms cubic-bezier(0.2, 0.82, 0.32, 1);
 }
 
+.spell-origin-flash {
+    width: 34px;
+    height: 34px;
+    border-radius: 9999px;
+    background: radial-gradient(
+        circle,
+        rgba(244, 247, 255, 0.98) 0%,
+        rgba(129, 140, 248, 0.6) 34%,
+        rgba(56, 189, 248, 0.24) 58%,
+        rgba(56, 189, 248, 0) 82%
+    );
+    filter: blur(1px);
+    animation: spell-origin-flash 620ms cubic-bezier(0.2, 0.82, 0.32, 1);
+}
+
+.spell-line {
+    height: 4px;
+    transform: translateY(-50%) rotate(var(--attack-angle));
+    transform-origin: left center;
+    animation: spell-line 620ms cubic-bezier(0.2, 0.82, 0.32, 1);
+}
+
+.spell-line-core {
+    width: 100%;
+    height: 100%;
+    border-radius: 9999px;
+    background: linear-gradient(
+        90deg,
+        rgba(129, 140, 248, 0) 0%,
+        rgba(129, 140, 248, 0.3) 18%,
+        rgba(244, 247, 255, 0.94) 52%,
+        rgba(34, 211, 238, 0.76) 100%
+    );
+    box-shadow:
+        0 0 12px rgba(129, 140, 248, 0.28),
+        0 0 24px rgba(34, 211, 238, 0.18);
+}
+
+.spell-bolt {
+    width: 20px;
+    height: 20px;
+    border-radius: 9999px;
+    background:
+        radial-gradient(circle, rgba(255, 255, 255, 0.98) 0%, rgba(191, 219, 254, 0.9) 34%, rgba(99, 102, 241, 0.66) 68%, rgba(99, 102, 241, 0) 100%);
+    box-shadow:
+        0 0 14px rgba(255, 255, 255, 0.32),
+        0 0 28px rgba(99, 102, 241, 0.3);
+    animation: spell-bolt 620ms cubic-bezier(0.14, 0.9, 0.26, 1);
+}
+
+.spell-impact {
+    width: 72px;
+    height: 72px;
+    border-radius: 9999px;
+    border: 2px solid rgba(191, 219, 254, 0.74);
+    background:
+        radial-gradient(circle, rgba(244, 247, 255, 0.92) 0%, rgba(96, 165, 250, 0.24) 30%, rgba(96, 165, 250, 0) 68%),
+        radial-gradient(circle, rgba(129, 140, 248, 0.18) 10%, rgba(129, 140, 248, 0) 62%);
+    box-shadow:
+        0 0 28px rgba(96, 165, 250, 0.16),
+        0 0 44px rgba(129, 140, 248, 0.12);
+    animation: spell-impact 620ms cubic-bezier(0.2, 0.82, 0.32, 1);
+}
+
 .is-retaliation.combat-origin-flash {
     background: radial-gradient(
         circle,
@@ -345,6 +422,23 @@ const impactStyle = computed(() => ({
     }
 }
 
+@keyframes spell-origin-flash {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.34);
+    }
+
+    16% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1.46);
+    }
+}
+
 @keyframes heal-line {
     0% {
         opacity: 0;
@@ -353,6 +447,22 @@ const impactStyle = computed(() => ({
 
     16% {
         opacity: 0.88;
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateY(-50%) rotate(var(--attack-angle)) scaleX(1);
+    }
+}
+
+@keyframes spell-line {
+    0% {
+        opacity: 0;
+        transform: translateY(-50%) rotate(var(--attack-angle)) scaleX(0.1);
+    }
+
+    14% {
+        opacity: 0.92;
     }
 
     100% {
@@ -377,6 +487,22 @@ const impactStyle = computed(() => ({
     }
 }
 
+@keyframes spell-bolt {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) rotate(var(--attack-angle)) translateX(0) scale(0.48);
+    }
+
+    18% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) rotate(var(--attack-angle)) translateX(var(--travel-distance)) scale(1.12);
+    }
+}
+
 @keyframes heal-impact {
     0%,
     24% {
@@ -392,6 +518,24 @@ const impactStyle = computed(() => ({
     100% {
         opacity: 0;
         transform: translate(-50%, -50%) scale(1.28);
+    }
+}
+
+@keyframes spell-impact {
+    0%,
+    24% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.2);
+    }
+
+    52% {
+        opacity: 0.98;
+        transform: translate(-50%, -50%) scale(0.94);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1.34);
     }
 }
 
