@@ -204,6 +204,9 @@
                 v-if="activeCombatAnimation"
                 :key="activeCombatAnimation.key"
                 :animation="activeCombatAnimation" />
+            <CombatValueBursts
+                v-if="combatValueBursts.length > 0"
+                :bursts="combatValueBursts" />
 
         </main>
 
@@ -316,6 +319,7 @@ import DebugOverlay from '../components/game/board/DebugOverlay.vue'
 import Hero from '../components/game/board/Hero.vue'
 import GameMenu from '../components/game/board/GameMenu.vue'
 import CombatAnimationLayer from '../components/game/board/CombatAnimationLayer.vue'
+import CombatValueBursts from '../components/game/board/CombatValueBursts.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -347,6 +351,8 @@ const {
   topSide,
   bottomSide,
   displayUpdates,
+  liveUpdateBatch,
+  liveUpdateBatchId,
   canUseHero,
   wsStatus,
   currentGameType
@@ -420,6 +426,15 @@ interface DamageUpdate {
     is_retaliation?: boolean
 }
 
+interface HealUpdate {
+    type: 'update_heal'
+    source_type: 'card' | 'hero' | 'board' | 'creature'
+    source_id: string
+    target_type: 'card' | 'hero' | 'creature'
+    target_id: string
+    amount: number
+}
+
 interface CombatPoint {
     x: number
     y: number
@@ -427,29 +442,43 @@ interface CombatPoint {
 
 interface CombatAnimationState {
     key: number
+    kind: 'damage' | 'heal'
     sourceId: string
     targetId: string
     source: CombatPoint
     target: CombatPoint
-    damage: number
+    value: number
     isRetaliation: boolean
+}
+
+interface CombatValueBurst {
+    key: number
+    kind: 'damage' | 'heal'
+    value: number
+    x: number
+    y: number
 }
 
 const showingGameOver = ref(false)
 const rematchLoading = ref(false)
 const boardSurface = ref<HTMLElement | null>(null)
 const activeCombatAnimation = ref<CombatAnimationState | null>(null)
+const combatValueBursts = ref<CombatValueBurst[]>([])
 
 const combatAnimationQueue: CombatAnimationState[] = []
 const entityElements = new Map<string, HTMLElement>()
 const entityFrames = new Map<string, DOMRect>()
+const combatValueBurstTimeouts = new Map<number, number>()
 
 let combatAnimationKey = 0
 let combatAnimationTimeout: number | null = null
+let combatValueBurstKey = 0
 
 const COMBAT_ENTITY_LUNGE = 14
 const COMBAT_ENTITY_RECOIL = 10
+const HEAL_ENTITY_DRIFT = 6
 const COMBAT_ANIMATION_DURATION_MS = 620
+const COMBAT_VALUE_BURST_DURATION_MS = 2200
 
 const title = computed(() => titleStore.currentTitle)
 
@@ -573,10 +602,19 @@ const clearCombatAnimationTimeout = () => {
     }
 }
 
+const clearCombatValueBurstTimeouts = () => {
+    for (const timeoutId of combatValueBurstTimeouts.values()) {
+        clearTimeout(timeoutId)
+    }
+    combatValueBurstTimeouts.clear()
+}
+
 const resetCombatAnimations = () => {
     clearCombatAnimationTimeout()
     activeCombatAnimation.value = null
     combatAnimationQueue.length = 0
+    clearCombatValueBurstTimeouts()
+    combatValueBursts.value = []
 }
 
 const playNextCombatAnimation = () => {
@@ -608,6 +646,33 @@ const isCombatDamageUpdate = (update: any): update is DamageUpdate => {
     return validSource && validTarget && Boolean(update.source_id) && Boolean(update.target_id)
 }
 
+const isHealUpdate = (update: any): update is HealUpdate => {
+    if (update?.type !== 'update_heal') {
+        return false
+    }
+
+    const validTarget = update.target_type === 'hero' || update.target_type === 'creature' || update.target_type === 'card'
+    return validTarget && Boolean(update.target_id)
+}
+
+const queueCombatValueBurst = (kind: 'damage' | 'heal', value: number, point: CombatPoint) => {
+    const key = ++combatValueBurstKey
+    combatValueBursts.value.push({
+        key,
+        kind,
+        value,
+        x: point.x,
+        y: point.y,
+    })
+
+    const timeoutId = window.setTimeout(() => {
+        combatValueBursts.value = combatValueBursts.value.filter((burst) => burst.key !== key)
+        combatValueBurstTimeouts.delete(key)
+    }, COMBAT_VALUE_BURST_DURATION_MS)
+
+    combatValueBurstTimeouts.set(key, timeoutId)
+}
+
 const queueCombatAnimation = (update: DamageUpdate) => {
     if (overlay.value) {
         return
@@ -615,9 +680,15 @@ const queueCombatAnimation = (update: DamageUpdate) => {
 
     syncEntityFrames()
 
-    const source = getEntityCenter(update.source_id)
     const target = getEntityCenter(update.target_id)
-    if (!source || !target) {
+    if (!target) {
+        return
+    }
+
+    queueCombatValueBurst('damage', update.damage, target)
+
+    const source = getEntityCenter(update.source_id)
+    if (!source) {
         return
     }
 
@@ -628,12 +699,43 @@ const queueCombatAnimation = (update: DamageUpdate) => {
 
     combatAnimationQueue.push({
         key: ++combatAnimationKey,
+        kind: 'damage',
         sourceId: update.source_id,
         targetId: update.target_id,
         source,
         target,
-        damage: update.damage,
+        value: update.damage,
         isRetaliation: Boolean(update.is_retaliation)
+    })
+
+    playNextCombatAnimation()
+}
+
+const queueHealAnimation = (update: HealUpdate) => {
+    if (overlay.value) {
+        return
+    }
+
+    syncEntityFrames()
+
+    const target = getEntityCenter(update.target_id)
+    if (!target) {
+        return
+    }
+
+    queueCombatValueBurst('heal', update.amount, target)
+
+    const source = getEntityCenter(update.source_id) ?? target
+
+    combatAnimationQueue.push({
+        key: ++combatAnimationKey,
+        kind: 'heal',
+        sourceId: update.source_id,
+        targetId: update.target_id,
+        source,
+        target,
+        value: update.amount,
+        isRetaliation: false
     })
 
     playNextCombatAnimation()
@@ -649,7 +751,15 @@ const getCombatVectorStyle = (entityId: string): Record<string, string> | undefi
     let to: CombatPoint
     let magnitude: number
 
-    if (animation.sourceId === entityId) {
+    if (animation.kind === 'heal') {
+        if (animation.sourceId !== animation.targetId && animation.sourceId === entityId) {
+            from = animation.source
+            to = animation.target
+            magnitude = HEAL_ENTITY_DRIFT
+        } else {
+            return undefined
+        }
+    } else if (animation.sourceId === entityId) {
         from = animation.source
         to = animation.target
         magnitude = COMBAT_ENTITY_LUNGE
@@ -672,11 +782,28 @@ const getCombatVectorStyle = (entityId: string): Record<string, string> | undefi
 }
 
 const getCombatEntityClass = (entityId: string) => {
-    if (activeCombatAnimation.value?.sourceId === entityId) {
+    const animation = activeCombatAnimation.value
+    if (!animation) {
+        return ''
+    }
+
+    if (animation.kind === 'heal') {
+        if (animation.targetId === entityId) {
+            return 'combat-entity combat-entity--heal-target'
+        }
+
+        if (animation.sourceId === entityId && animation.sourceId !== animation.targetId) {
+            return 'combat-entity combat-entity--heal-source'
+        }
+
+        return ''
+    }
+
+    if (animation.sourceId === entityId) {
         return 'combat-entity combat-entity--source'
     }
 
-    if (activeCombatAnimation.value?.targetId === entityId) {
+    if (animation.targetId === entityId) {
         return 'combat-entity combat-entity--target'
     }
 
@@ -1351,17 +1478,17 @@ watch(() => overlay.value, (currentOverlay) => {
 })
 
 watch(
-    () => displayUpdates.value.length,
-    (newLength, oldLength) => {
-        const previousLength = oldLength ?? 0
-        if (newLength <= previousLength) {
+    () => liveUpdateBatchId.value,
+    (batchId, previousBatchId) => {
+        if (batchId === previousBatchId) {
             return
         }
 
-        const recentUpdates = displayUpdates.value.slice(previousLength, newLength)
-        for (const update of recentUpdates) {
+        for (const update of liveUpdateBatch.value) {
             if (isCombatDamageUpdate(update)) {
                 queueCombatAnimation(update)
+            } else if (isHealUpdate(update)) {
+                queueHealAnimation(update)
             }
         }
     },
@@ -1432,6 +1559,14 @@ onUnmounted(() => {
     animation: combat-entity-hit 620ms cubic-bezier(0.2, 0.82, 0.32, 1);
 }
 
+.combat-entity--heal-source {
+    animation: combat-entity-heal-source 620ms cubic-bezier(0.2, 0.82, 0.32, 1);
+}
+
+.combat-entity--heal-target {
+    animation: combat-entity-heal-target 620ms cubic-bezier(0.2, 0.82, 0.32, 1);
+}
+
 @keyframes combat-entity-lunge {
     0%,
     100% {
@@ -1473,6 +1608,50 @@ onUnmounted(() => {
             calc(var(--combat-offset-y, 0px) * -0.28),
             0
         ) scale(1.01);
+    }
+}
+
+@keyframes combat-entity-heal-source {
+    0%,
+    100% {
+        transform: translate3d(0, 0, 0) scale(1);
+        filter: brightness(1) saturate(1);
+    }
+
+    30% {
+        transform: translate3d(
+            calc(var(--combat-offset-x, 0px) * 0.5),
+            calc(var(--combat-offset-y, 0px) * 0.5),
+            0
+        ) scale(1.02);
+        filter: brightness(1.08) saturate(1.1);
+    }
+
+    54% {
+        transform: translate3d(var(--combat-offset-x, 0px), var(--combat-offset-y, 0px), 0) scale(1.03);
+        filter: brightness(1.14) saturate(1.22);
+    }
+}
+
+@keyframes combat-entity-heal-target {
+    0%,
+    100% {
+        transform: translate3d(0, 0, 0) scale(1);
+        filter: brightness(1) saturate(1);
+    }
+
+    32% {
+        transform: translate3d(0, -2px, 0) scale(1.02);
+        filter: brightness(1.08) saturate(1.12);
+    }
+
+    56% {
+        transform: translate3d(0, -5px, 0) scale(1.05);
+        filter: brightness(1.18) saturate(1.26);
+    }
+
+    78% {
+        transform: translate3d(0, -2px, 0) scale(1.02);
     }
 }
 </style>

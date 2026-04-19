@@ -44,6 +44,9 @@ interface GameStoreState {
   currentLadderType: LadderType | null
 
   updates: any[]
+  liveUpdateBatch: any[]
+  liveUpdateBatchId: number
+  awaitingInitialUpdateSnapshot: boolean
 }
 
 // Create a safe default game state so consumers can assume non-null
@@ -109,7 +112,10 @@ export const useGameStore = defineStore('game', {
     currentGameId: null,
     currentGameType: null,
     currentLadderType: null,
-    updates: []
+    updates: [],
+    liveUpdateBatch: [],
+    liveUpdateBatchId: 0,
+    awaitingInitialUpdateSnapshot: false
   }),
 
   getters: {
@@ -386,6 +392,7 @@ export const useGameStore = defineStore('game', {
       // Store game ID for reconnection attempts
       this.currentGameId = gameId
       this.intentionalDisconnect = false
+      this.awaitingInitialUpdateSnapshot = true
 
       const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
       const baseUrl = getBaseUrl().replace(/^https?:/, protocol + ':')
@@ -644,6 +651,9 @@ export const useGameStore = defineStore('game', {
         return
       }
 
+      const isInitialSnapshot = this.awaitingInitialUpdateSnapshot
+      this.awaitingInitialUpdateSnapshot = false
+
       // Handle errors first
       if (data.errors && Array.isArray(data.errors)) {
         const notificationStore = this.getNotificationStore()
@@ -704,6 +714,8 @@ export const useGameStore = defineStore('game', {
 
       // Process any updates that came with the message
       if (data.updates && Array.isArray(data.updates)) {
+        const newUpdates: any[] = []
+
         for (const update of data.updates) {
           if (update.type === 'update_game_over') {
             this.setGameOver(update.winner)
@@ -716,7 +728,13 @@ export const useGameStore = defineStore('game', {
           const existingUpdate = this.updates.find(existing => existing.timestamp === update.timestamp)
           if (!existingUpdate) {
             this.updates.push(update)
+            newUpdates.push(update)
           }
+        }
+
+        if (newUpdates.length > 0 && !isInitialSnapshot) {
+          this.liveUpdateBatch = newUpdates
+          this.liveUpdateBatchId++
         }
 
       }
@@ -900,6 +918,7 @@ export const useGameStore = defineStore('game', {
       // Ensure no previous game session state leaks into the new game.
       this.disconnectWebSocket()
       this.updates = []
+      this.liveUpdateBatch = []
       this.resetGameOverState()
 
       await this.fetchGameState(gameId)
@@ -930,6 +949,7 @@ export const useGameStore = defineStore('game', {
       this.currentGameType = null
       this.currentLadderType = null
       this.updates = []
+      this.liveUpdateBatch = []
       this.resetGameOverState()
     },
 
