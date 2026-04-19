@@ -13,7 +13,10 @@
             @rematch="handleRematch" />
 
         <!-- Normal Mode -->
-        <main v-if="!overlay" class="board flex-1 flex flex-col max-w-md w-full border-r border-l border-gray-700">
+        <main
+            v-if="!overlay"
+            ref="boardSurface"
+            class="board relative isolate flex-1 flex flex-col max-w-md w-full overflow-hidden border-r border-l border-gray-700">
 
             <!-- Opponent Side -->
             <div class="side-b flex-1 flex flex-col">
@@ -21,14 +24,20 @@
                 <!-- Header -->
                  <div class="h-24 flex flex-row justify-between border-b border-gray-700">
                     <!-- Enemy Hero-->
-                    <Hero
-                        :hero="opposingHero"
-                        :hero-art-url="opposingHeroArtUrl"
-                        :hero-name="opposingHeroName"
-                        :health="opposingHero?.health"
-                        :active="gameState.active === topSide"
-                        @click="handleClickOpposingHero"
-                    />
+                    <div
+                        class="h-full shrink-0"
+                        :ref="(el) => setEntityElement(opposingHero?.hero_id, el)"
+                        :class="opposingHero?.hero_id ? getCombatEntityClass(opposingHero.hero_id) : undefined"
+                        :style="opposingHero?.hero_id ? getCombatEntityStyle(opposingHero.hero_id) : undefined">
+                        <Hero
+                            :hero="opposingHero"
+                            :hero-art-url="opposingHeroArtUrl"
+                            :hero-name="opposingHeroName"
+                            :health="opposingHero?.health"
+                            :active="gameState.active === topSide"
+                            @click="handleClickOpposingHero"
+                        />
+                    </div>
 
                     <!-- Recent Updates -->
                     <div class="flex flex-1 flex-col p-2 justify-center items-center cursor-pointer" @click="handleClickUpdates">
@@ -84,7 +93,10 @@
                         <div
                             v-for="creature in opposingBoard"
                             :key="creature.creature_id"
-                            class="w-14">
+                            class="w-14 shrink-0"
+                            :ref="(el) => setEntityElement(creature.creature_id, el)"
+                            :class="getCombatEntityClass(creature.creature_id)"
+                            :style="getCombatEntityStyle(creature.creature_id)">
                             <GameCard v-if="creature"
                                       class="cursor-pointer"
                                       :card="creature"
@@ -124,7 +136,10 @@
                         <div
                             v-for="creature in ownBoard"
                             :key="creature.creature_id"
-                            class="w-14">
+                            class="w-14 shrink-0"
+                            :ref="(el) => setEntityElement(creature.creature_id, el)"
+                            :class="getCombatEntityClass(creature.creature_id)"
+                            :style="getCombatEntityStyle(creature.creature_id)">
                             <GameCard v-if="creature"
                                       class="cursor-pointer"
                                       :card="creature"
@@ -153,15 +168,21 @@
                 <!-- Footer -->
                 <div class="h-24 flex flex-row border-t border-gray-700">
                     <!-- Viewer Hero -->
-                    <Hero
-                        :hero="ownHero"
-                        :hero-art-url="ownHeroArtUrl"
-                        :hero-name="ownHeroName"
-                        :health="ownHero?.health"
-                        :active="gameState.active === bottomSide"
-                        :opacity="!canUseHero"
-                        @click="handleClickOwnHero"
-                    />
+                    <div
+                        class="h-full shrink-0"
+                        :ref="(el) => setEntityElement(ownHero?.hero_id, el)"
+                        :class="ownHero?.hero_id ? getCombatEntityClass(ownHero.hero_id) : undefined"
+                        :style="ownHero?.hero_id ? getCombatEntityStyle(ownHero.hero_id) : undefined">
+                        <Hero
+                            :hero="ownHero"
+                            :hero-art-url="ownHeroArtUrl"
+                            :hero-name="ownHeroName"
+                            :health="ownHero?.health"
+                            :active="gameState.active === bottomSide"
+                            :opacity="!canUseHero"
+                            @click="handleClickOwnHero"
+                        />
+                    </div>
 
                     <!-- Hand -->
                     <div class="hand min-w-0 overflow-x-auto flex flex-row flex-nowrap flex-grow items-center space-x-2 ml-2">
@@ -178,6 +199,11 @@
                     </div>
                 </div>
             </div>
+
+            <CombatAnimationLayer
+                v-if="activeCombatAnimation"
+                :key="activeCombatAnimation.key"
+                :animation="activeCombatAnimation" />
 
         </main>
 
@@ -266,7 +292,7 @@
 </template>
 
 <script setup lang="ts">
-import { watch, computed, ref, onMounted, onUnmounted } from 'vue'
+import { watch, computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { CardInPlay, Creature } from '../types/game'
 import { useAuthStore } from '../stores/auth'
@@ -289,6 +315,7 @@ import OverlayHeader from '../components/game/board/OverlayHeader.vue'
 import DebugOverlay from '../components/game/board/DebugOverlay.vue'
 import Hero from '../components/game/board/Hero.vue'
 import GameMenu from '../components/game/board/GameMenu.vue'
+import CombatAnimationLayer from '../components/game/board/CombatAnimationLayer.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -383,8 +410,46 @@ const targetingState = ref<TargetingState | null>(null)
 // Pending play context when battlecry target is required
 const pendingPlay = ref<{ card_id: string; position: number } | null>(null)
 
+interface DamageUpdate {
+    type: 'update_damage'
+    source_type: 'card' | 'hero' | 'board' | 'creature'
+    source_id: string
+    target_type: 'card' | 'hero' | 'creature'
+    target_id: string
+    damage: number
+    is_retaliation?: boolean
+}
+
+interface CombatPoint {
+    x: number
+    y: number
+}
+
+interface CombatAnimationState {
+    key: number
+    sourceId: string
+    targetId: string
+    source: CombatPoint
+    target: CombatPoint
+    damage: number
+    isRetaliation: boolean
+}
+
 const showingGameOver = ref(false)
 const rematchLoading = ref(false)
+const boardSurface = ref<HTMLElement | null>(null)
+const activeCombatAnimation = ref<CombatAnimationState | null>(null)
+
+const combatAnimationQueue: CombatAnimationState[] = []
+const entityElements = new Map<string, HTMLElement>()
+const entityFrames = new Map<string, DOMRect>()
+
+let combatAnimationKey = 0
+let combatAnimationTimeout: number | null = null
+
+const COMBAT_ENTITY_LUNGE = 14
+const COMBAT_ENTITY_RECOIL = 10
+const COMBAT_ANIMATION_DURATION_MS = 620
 
 const title = computed(() => titleStore.currentTitle)
 
@@ -465,6 +530,162 @@ const timeLeftString = computed(() => {
         return `${minutes}:${seconds.toString().padStart(2, '0')}`
     }
 })
+
+const setEntityElement = (entityId: string | undefined, element: Element | null) => {
+    if (!entityId) return
+
+    if (element instanceof HTMLElement) {
+        entityElements.set(entityId, element)
+        entityFrames.set(entityId, element.getBoundingClientRect())
+        return
+    }
+
+    entityElements.delete(entityId)
+}
+
+const syncEntityFrames = () => {
+    for (const [entityId, element] of entityElements.entries()) {
+        entityFrames.set(entityId, element.getBoundingClientRect())
+    }
+}
+
+const getEntityCenter = (entityId: string): CombatPoint | null => {
+    const board = boardSurface.value
+    if (!board) return null
+
+    const liveRect = entityElements.get(entityId)?.getBoundingClientRect()
+    const rect = liveRect ?? entityFrames.get(entityId)
+    if (!rect) return null
+
+    entityFrames.set(entityId, rect)
+
+    const boardRect = board.getBoundingClientRect()
+    return {
+        x: rect.left - boardRect.left + (rect.width / 2),
+        y: rect.top - boardRect.top + (rect.height / 2)
+    }
+}
+
+const clearCombatAnimationTimeout = () => {
+    if (combatAnimationTimeout !== null) {
+        clearTimeout(combatAnimationTimeout)
+        combatAnimationTimeout = null
+    }
+}
+
+const resetCombatAnimations = () => {
+    clearCombatAnimationTimeout()
+    activeCombatAnimation.value = null
+    combatAnimationQueue.length = 0
+}
+
+const playNextCombatAnimation = () => {
+    if (activeCombatAnimation.value || combatAnimationQueue.length === 0) {
+        return
+    }
+
+    activeCombatAnimation.value = combatAnimationQueue.shift() ?? null
+    if (!activeCombatAnimation.value) {
+        return
+    }
+
+    clearCombatAnimationTimeout()
+    combatAnimationTimeout = window.setTimeout(() => {
+        activeCombatAnimation.value = null
+        combatAnimationTimeout = null
+        playNextCombatAnimation()
+    }, COMBAT_ANIMATION_DURATION_MS)
+}
+
+const isCombatDamageUpdate = (update: any): update is DamageUpdate => {
+    if (update?.type !== 'update_damage') {
+        return false
+    }
+
+    const validSource = update.source_type === 'hero' || update.source_type === 'creature'
+    const validTarget = update.target_type === 'hero' || update.target_type === 'creature' || update.target_type === 'card'
+
+    return validSource && validTarget && Boolean(update.source_id) && Boolean(update.target_id)
+}
+
+const queueCombatAnimation = (update: DamageUpdate) => {
+    if (overlay.value) {
+        return
+    }
+
+    syncEntityFrames()
+
+    const source = getEntityCenter(update.source_id)
+    const target = getEntityCenter(update.target_id)
+    if (!source || !target) {
+        return
+    }
+
+    const distance = Math.hypot(target.x - source.x, target.y - source.y)
+    if (distance < 16) {
+        return
+    }
+
+    combatAnimationQueue.push({
+        key: ++combatAnimationKey,
+        sourceId: update.source_id,
+        targetId: update.target_id,
+        source,
+        target,
+        damage: update.damage,
+        isRetaliation: Boolean(update.is_retaliation)
+    })
+
+    playNextCombatAnimation()
+}
+
+const getCombatVectorStyle = (entityId: string): Record<string, string> | undefined => {
+    const animation = activeCombatAnimation.value
+    if (!animation) {
+        return undefined
+    }
+
+    let from: CombatPoint
+    let to: CombatPoint
+    let magnitude: number
+
+    if (animation.sourceId === entityId) {
+        from = animation.source
+        to = animation.target
+        magnitude = COMBAT_ENTITY_LUNGE
+    } else if (animation.targetId === entityId) {
+        from = animation.target
+        to = animation.source
+        magnitude = COMBAT_ENTITY_RECOIL
+    } else {
+        return undefined
+    }
+
+    const dx = to.x - from.x
+    const dy = to.y - from.y
+    const distance = Math.hypot(dx, dy) || 1
+
+    return {
+        '--combat-offset-x': `${(dx / distance) * magnitude}px`,
+        '--combat-offset-y': `${(dy / distance) * magnitude}px`,
+    }
+}
+
+const getCombatEntityClass = (entityId: string) => {
+    if (activeCombatAnimation.value?.sourceId === entityId) {
+        return 'combat-entity combat-entity--source'
+    }
+
+    if (activeCombatAnimation.value?.targetId === entityId) {
+        return 'combat-entity combat-entity--target'
+    }
+
+    return ''
+}
+
+const getCombatEntityStyle = (entityId: string) => {
+    return getCombatVectorStyle(entityId)
+}
 
 // Helper methods from store
 const get_card = (card_id: string | number) => {
@@ -1123,6 +1344,44 @@ watch(() => gameOver.value.isGameOver, (isGameOver) => {
     }
 })
 
+watch(() => overlay.value, (currentOverlay) => {
+    if (currentOverlay) {
+        resetCombatAnimations()
+    }
+})
+
+watch(
+    () => displayUpdates.value.length,
+    (newLength, oldLength) => {
+        const previousLength = oldLength ?? 0
+        if (newLength <= previousLength) {
+            return
+        }
+
+        const recentUpdates = displayUpdates.value.slice(previousLength, newLength)
+        for (const update of recentUpdates) {
+            if (isCombatDamageUpdate(update)) {
+                queueCombatAnimation(update)
+            }
+        }
+    },
+    { flush: 'sync' }
+)
+
+watch(
+    () => [
+        ownBoard.value.map((creature) => creature.creature_id).join(','),
+        opposingBoard.value.map((creature) => creature.creature_id).join(','),
+        ownHero.value?.hero_id ?? '',
+        opposingHero.value?.hero_id ?? ''
+    ],
+    async () => {
+        await nextTick()
+        syncEntityFrames()
+    },
+    { flush: 'post' }
+)
+
 // Handle escape key to close overlay
 const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Escape' && overlay.value) {
@@ -1135,18 +1394,23 @@ let timeInterval: number | null = null
 
 onMounted(() => {
     window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('resize', syncEntityFrames)
 
     // Update current time every second for countdown timer
     timeInterval = window.setInterval(() => {
         currentTime.value = Date.now()
     }, 1000)
+
+    nextTick(syncEntityFrames)
 })
 
 onUnmounted(() => {
     window.removeEventListener('keydown', handleKeyDown)
+    window.removeEventListener('resize', syncEntityFrames)
     if (timeInterval !== null) {
         clearInterval(timeInterval)
     }
+    resetCombatAnimations()
     gameStore.disconnect()
 })
 </script>
@@ -1154,5 +1418,61 @@ onUnmounted(() => {
 <style scoped>
 .board {
     height: 100svh;
+}
+
+.combat-entity {
+    will-change: transform, filter;
+}
+
+.combat-entity--source {
+    animation: combat-entity-lunge 620ms cubic-bezier(0.2, 0.82, 0.32, 1);
+}
+
+.combat-entity--target {
+    animation: combat-entity-hit 620ms cubic-bezier(0.2, 0.82, 0.32, 1);
+}
+
+@keyframes combat-entity-lunge {
+    0%,
+    100% {
+        transform: translate3d(0, 0, 0) scale(1);
+        filter: brightness(1);
+    }
+
+    28% {
+        transform: translate3d(
+            calc(var(--combat-offset-x, 0px) * 0.4),
+            calc(var(--combat-offset-y, 0px) * 0.4),
+            0
+        ) scale(1.03);
+        filter: brightness(1.1);
+    }
+
+    52% {
+        transform: translate3d(var(--combat-offset-x, 0px), var(--combat-offset-y, 0px), 0) scale(1.05);
+        filter: brightness(1.18);
+    }
+}
+
+@keyframes combat-entity-hit {
+    0%,
+    36%,
+    100% {
+        transform: translate3d(0, 0, 0) scale(1);
+        filter: brightness(1);
+    }
+
+    58% {
+        transform: translate3d(var(--combat-offset-x, 0px), var(--combat-offset-y, 0px), 0) scale(0.97);
+        filter: brightness(1.24);
+    }
+
+    74% {
+        transform: translate3d(
+            calc(var(--combat-offset-x, 0px) * -0.28),
+            calc(var(--combat-offset-y, 0px) * -0.28),
+            0
+        ) scale(1.01);
+    }
 }
 </style>

@@ -1171,6 +1171,7 @@ class GameService:
                     target_type=event.target_type,
                     target_id=event.target_id,
                     damage=event.damage,
+                    is_retaliation=event.is_retaliation,
                 ))
             elif event.type == "event_heal":
                 updates.append(HealUpdate(
