@@ -36,6 +36,8 @@ interface GameStoreState {
   maxReconnectAttempts: number
   reconnectTimeoutId: number | null
   heartbeatIntervalId: number | null
+  pongTimeoutId: number | null
+  visibilityHandler: (() => void) | null
   messageQueue: WebSocketMessage[]
   currentGameId: string | null
   currentGameType: GameType | null
@@ -101,6 +103,8 @@ export const useGameStore = defineStore('game', {
     maxReconnectAttempts: 10,
     reconnectTimeoutId: null,
     heartbeatIntervalId: null,
+    pongTimeoutId: null,
+    visibilityHandler: null,
     messageQueue: [],
     currentGameId: null,
     currentGameType: null,
@@ -408,6 +412,11 @@ export const useGameStore = defineStore('game', {
         this.socket.close()
       }
 
+      // Ensure visibility handler is attached so returning to the tab
+      // forces a fresh socket (mobile browsers often leave zombie sockets
+      // after a background suspend)
+      this.attachVisibilityHandler()
+
       // WebSocket connection with JWT token in query params
       this.socket = new WebSocket(wsUrl)
 
@@ -466,6 +475,7 @@ export const useGameStore = defineStore('game', {
       console.log('🛑 Intentionally disconnecting WebSocket...')
       this.intentionalDisconnect = true
       this.stopHeartbeat()
+      this.detachVisibilityHandler()
 
       if (this.reconnectTimeoutId) {
         clearTimeout(this.reconnectTimeoutId)
@@ -479,6 +489,37 @@ export const useGameStore = defineStore('game', {
 
       this.wsStatus = 'disconnected'
       this.resetReconnectionState()
+    },
+
+    attachVisibilityHandler(): void {
+      // Idempotent — only attach once per game session
+      if (this.visibilityHandler) return
+
+      this.visibilityHandler = () => {
+        if (document.visibilityState !== 'visible') return
+        if (!this.currentGameId || this.intentionalDisconnect) return
+
+        const socket = this.socket
+        if (!socket) return
+
+        // Only interfere with a socket that *thinks* it's open. A CONNECTING
+        // socket is mid-handshake; CLOSING/CLOSED will reconnect on its own.
+        // On mobile, an OPEN socket may be a zombie after tab suspension, so
+        // force a clean reconnect before the user's next interaction.
+        if (socket.readyState === WebSocket.OPEN) {
+          console.log('👁️ Tab visible — force-reconnecting WebSocket to avoid stale connection')
+          socket.close()
+        }
+      }
+
+      document.addEventListener('visibilitychange', this.visibilityHandler)
+    },
+
+    detachVisibilityHandler(): void {
+      if (this.visibilityHandler) {
+        document.removeEventListener('visibilitychange', this.visibilityHandler)
+        this.visibilityHandler = null
+      }
     },
 
     attemptReconnect(): void {
@@ -517,14 +558,42 @@ export const useGameStore = defineStore('game', {
 
       // Send ping every 30 seconds to keep connection alive
       this.heartbeatIntervalId = window.setInterval(() => {
-        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-          console.log('💓 Sending heartbeat ping...')
-          this.socket.send(JSON.stringify({ type: 'ping' }))
-        } else {
-          console.warn('⚠️ Heartbeat: WebSocket not open, stopping heartbeat')
-          this.stopHeartbeat()
-        }
+        this.sendHeartbeatPing()
       }, 30000) // 30 seconds
+    },
+
+    // Sends a ping and arms a pong-timeout. If no pong arrives within
+    // PONG_TIMEOUT_MS, the socket is considered stale (zombie) and force-closed
+    // so the reconnect path can take over. Mobile browsers often keep
+    // readyState === OPEN after a real disconnect, so we can't trust it alone.
+    sendHeartbeatPing(): void {
+      // Capture the socket locally so stale timers operate on the socket that
+      // sent the ping, not whatever `this.socket` points to later after a
+      // reconnect has swapped it out.
+      const socket = this.socket
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        console.warn('⚠️ Heartbeat: WebSocket not open, stopping heartbeat')
+        this.stopHeartbeat()
+        return
+      }
+
+      console.log('💓 Sending heartbeat ping...')
+      socket.send(JSON.stringify({ type: 'ping' }))
+
+      // Only track the most recent outstanding ping
+      if (this.pongTimeoutId) {
+        clearTimeout(this.pongTimeoutId)
+      }
+
+      this.pongTimeoutId = window.setTimeout(() => {
+        this.pongTimeoutId = null
+        // Only act if this is still the active socket and it still thinks it's
+        // open. If a reconnect already swapped the socket, do nothing.
+        if (this.socket === socket && socket.readyState === WebSocket.OPEN) {
+          console.warn('⚠️ No pong within timeout — force-closing stale socket')
+          socket.close()
+        }
+      }, 5000) // 5s pong deadline
     },
 
     stopHeartbeat(): void {
@@ -532,6 +601,10 @@ export const useGameStore = defineStore('game', {
         clearInterval(this.heartbeatIntervalId)
         this.heartbeatIntervalId = null
         console.log('🛑 Heartbeat stopped')
+      }
+      if (this.pongTimeoutId) {
+        clearTimeout(this.pongTimeoutId)
+        this.pongTimeoutId = null
       }
     },
 
@@ -564,6 +637,10 @@ export const useGameStore = defineStore('game', {
       // Handle pong responses (heartbeat acknowledgement)
       if (data.type === 'pong') {
         console.log('💓 Received pong response (heartbeat acknowledged)')
+        if (this.pongTimeoutId) {
+          clearTimeout(this.pongTimeoutId)
+          this.pongTimeoutId = null
+        }
         return
       }
 
