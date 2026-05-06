@@ -8,11 +8,18 @@ from rest_framework.response import Response
 from apps.builder.models import Title
 from apps.builder.schemas import TitleConfig
 from apps.collection.models import Deck, UserTitleDeckPreference
-from apps.gameplay.models import Game, MatchmakingQueue, UserTitleRating
+from apps.gameplay.models import (
+    FriendlyChallenge,
+    Game,
+    MatchmakingQueue,
+    UserTitleRating,
+)
 from apps.gameplay.schemas import GameList, GameSummary
 from apps.gameplay.schemas.game import GameState
 from apps.gameplay.services import GameService
 from apps.gameplay.tasks import step
+
+FRIENDLY_GAME_ACTIVITY_LIMIT = 5
 
 
 def _update_game_time_per_turn(game: Game):
@@ -63,6 +70,43 @@ def _get_min_cards_error(deck: Deck, deck_label: str = "Deck") -> str | None:
             f"{deck_label} must have at least {config.min_cards_in_deck} cards "
             f"({deck.deck_size} currently)"
         )
+    return None
+
+
+def _friendly_activity_count(user, title) -> int:
+    active_games = (
+        Game.objects.filter(
+            Q(player_a_user=user) | Q(player_b_user=user),
+            title=title,
+            type=Game.GAME_TYPE_FRIENDLY,
+        )
+        .exclude(status__in=[Game.GAME_STATUS_ENDED, Game.GAME_STATUS_ABORTED])
+        .count()
+    )
+    pending_challenges = FriendlyChallenge.objects.filter(
+        Q(challenger=user) | Q(challengee=user),
+        title=title,
+        status=FriendlyChallenge.STATUS_PENDING,
+    ).count()
+    return active_games + pending_challenges
+
+
+def _get_friendly_activity_limit_error(challenger, challengee, title) -> str | None:
+    for user in (challenger, challengee):
+        if _friendly_activity_count(user, title) < FRIENDLY_GAME_ACTIVITY_LIMIT:
+            continue
+
+        if user.id == challenger.id:
+            return (
+                f"You already have {FRIENDLY_GAME_ACTIVITY_LIMIT} active or pending "
+                f"friendly games for {title.name}."
+            )
+
+        return (
+            f"{user.display_name} already has {FRIENDLY_GAME_ACTIVITY_LIMIT} active "
+            f"or pending friendly games for {title.name}."
+        )
+
     return None
 
 
@@ -442,6 +486,12 @@ def rematch_game(request, game_id):
             status=status.HTTP_200_OK,
         )
 
+    limit_error = _get_friendly_activity_limit_error(
+        request.user, challengee, game.title
+    )
+    if limit_error:
+        return Response({"error": limit_error}, status=status.HTTP_400_BAD_REQUEST)
+
     challenge = FriendlyChallenge.objects.create(
         challenger=request.user,
         challengee=challengee,
@@ -768,6 +818,10 @@ def create_friendly_challenge(request):
             status=status.HTTP_200_OK,
         )
 
+    limit_error = _get_friendly_activity_limit_error(request.user, challengee, title)
+    if limit_error:
+        return Response({"error": limit_error}, status=status.HTTP_400_BAD_REQUEST)
+
     challenge = FriendlyChallenge.objects.create(
         challenger=request.user,
         challengee=challengee,
@@ -989,4 +1043,32 @@ def decline_friendly_challenge(request, challenge_id):
 
     return Response(
         {"success": True, "message": "Challenge declined"}, status=status.HTTP_200_OK
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def cancel_friendly_challenge(request, challenge_id):
+    """
+    Withdraw a pending friendly challenge. Only the challenger can cancel.
+    """
+    challenge = get_object_or_404(FriendlyChallenge, id=challenge_id)
+
+    if challenge.challenger != request.user:
+        return Response(
+            {"error": "Only the challenger can withdraw this challenge"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    if challenge.status != FriendlyChallenge.STATUS_PENDING:
+        return Response(
+            {"error": "Challenge is not pending"}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    challenge.status = FriendlyChallenge.STATUS_CANCELLED
+    challenge.save(update_fields=["status"])
+
+    return Response(
+        {"success": True, "message": "Challenge withdrawn"},
+        status=status.HTTP_200_OK,
     )

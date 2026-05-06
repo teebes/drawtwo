@@ -6,7 +6,8 @@ from rest_framework.test import APIClient
 from apps.authentication.models import Friendship
 from apps.builder.models import CardTemplate, HeroTemplate, Title
 from apps.collection.models import Deck, DeckCard
-from apps.gameplay.models import ELORatingChange, Game
+from apps.gameplay.models import ELORatingChange, FriendlyChallenge, Game
+from apps.gameplay.services import GameService
 
 User = get_user_model()
 
@@ -64,6 +65,23 @@ class FriendlyChallengesAPITests(TestCase):
             initiated_by=self.user_a,
             status=Friendship.STATUS_ACCEPTED,
         )
+
+    def _create_extra_user(self, index):
+        return User.objects.create_user(
+            email=f"extra-{index}@example.com",
+            username=f"extra-{index}",
+        )
+
+    def _create_deck_for_user(self, user, index):
+        deck = Deck.objects.create(
+            title=self.title,
+            user=user,
+            name=f"Extra Deck {index}",
+            hero=self.hero_b,
+        )
+        for card in CardTemplate.objects.filter(title=self.title):
+            DeckCard.objects.create(deck=deck, card=card)
+        return deck
 
     def test_create_challenge(self):
         self.client.force_authenticate(self.user_a)
@@ -175,3 +193,129 @@ class FriendlyChallengesAPITests(TestCase):
 
         self.assertEqual(resp.status_code, 400, resp.content)
         self.assertIn("at least 10 cards", resp.json()["error"])
+
+    def test_create_challenge_rejects_when_challenger_has_five_pending(self):
+        for i in range(5):
+            FriendlyChallenge.objects.create(
+                challenger=self.user_a,
+                challengee=self._create_extra_user(i),
+                title=self.title,
+                challenger_deck=self.deck_a,
+                status=FriendlyChallenge.STATUS_PENDING,
+            )
+
+        self.client.force_authenticate(self.user_a)
+        resp = self.client.post(
+            reverse("friendly-challenge-create"),
+            {
+                "title_slug": self.title.slug,
+                "challengee_user_id": self.user_b.id,
+                "challenger_deck_id": self.deck_a.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, 400, resp.content)
+        self.assertIn("You already have 5 active or pending", resp.json()["error"])
+
+    def test_create_challenge_rejects_when_challengee_has_five_pending(self):
+        for i in range(5):
+            extra_user = self._create_extra_user(i)
+            extra_deck = self._create_deck_for_user(extra_user, i)
+            FriendlyChallenge.objects.create(
+                challenger=extra_user,
+                challengee=self.user_b,
+                title=self.title,
+                challenger_deck=extra_deck,
+                status=FriendlyChallenge.STATUS_PENDING,
+            )
+
+        self.client.force_authenticate(self.user_a)
+        resp = self.client.post(
+            reverse("friendly-challenge-create"),
+            {
+                "title_slug": self.title.slug,
+                "challengee_user_id": self.user_b.id,
+                "challenger_deck_id": self.deck_a.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, 400, resp.content)
+        self.assertIn("already has 5 active or pending", resp.json()["error"])
+
+    def test_create_challenge_rejects_when_challenger_has_five_active_friendlies(
+        self,
+    ):
+        for i in range(5):
+            extra_user = self._create_extra_user(i)
+            extra_deck = self._create_deck_for_user(extra_user, i)
+            game = GameService.create_game(
+                self.deck_a,
+                extra_deck,
+                randomize_starting_player=False,
+            )
+            game.type = Game.GAME_TYPE_FRIENDLY
+            game.status = Game.GAME_STATUS_IN_PROGRESS
+            game.save(update_fields=["type", "status"])
+
+        self.client.force_authenticate(self.user_a)
+        resp = self.client.post(
+            reverse("friendly-challenge-create"),
+            {
+                "title_slug": self.title.slug,
+                "challengee_user_id": self.user_b.id,
+                "challenger_deck_id": self.deck_a.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, 400, resp.content)
+        self.assertIn("You already have 5 active or pending", resp.json()["error"])
+
+    def test_challenger_can_cancel_pending_challenge(self):
+        self.client.force_authenticate(self.user_a)
+        create_resp = self.client.post(
+            reverse("friendly-challenge-create"),
+            {
+                "title_slug": self.title.slug,
+                "challengee_user_id": self.user_b.id,
+                "challenger_deck_id": self.deck_a.id,
+            },
+            format="json",
+        )
+        challenge_id = create_resp.json()["id"]
+
+        cancel_resp = self.client.post(
+            reverse("friendly-challenge-cancel", kwargs={"challenge_id": challenge_id})
+        )
+
+        self.assertEqual(cancel_resp.status_code, 200, cancel_resp.content)
+        self.assertEqual(cancel_resp.json()["message"], "Challenge withdrawn")
+        challenge = FriendlyChallenge.objects.get(id=challenge_id)
+        self.assertEqual(challenge.status, FriendlyChallenge.STATUS_CANCELLED)
+
+        pending_resp = self.client.get(
+            reverse(
+                "friendly-challenge-pending", kwargs={"title_slug": self.title.slug}
+            )
+        )
+        self.assertEqual(len(pending_resp.json()["outgoing"]), 0)
+
+    def test_challengee_cannot_cancel_pending_challenge(self):
+        challenge = FriendlyChallenge.objects.create(
+            challenger=self.user_a,
+            challengee=self.user_b,
+            title=self.title,
+            challenger_deck=self.deck_a,
+            status=FriendlyChallenge.STATUS_PENDING,
+        )
+
+        self.client.force_authenticate(self.user_b)
+        resp = self.client.post(
+            reverse("friendly-challenge-cancel", kwargs={"challenge_id": challenge.id})
+        )
+
+        self.assertEqual(resp.status_code, 403, resp.content)
+        challenge.refresh_from_db()
+        self.assertEqual(challenge.status, FriendlyChallenge.STATUS_PENDING)

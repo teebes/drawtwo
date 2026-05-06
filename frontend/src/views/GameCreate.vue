@@ -320,17 +320,21 @@
                         </div>
                       </div>
                       <button
+                        v-if="isFriendChallenged(selectedFriend)"
                         type="button"
-                        class="inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2"
-                        :class="[
-                          isFriendChallenged(selectedFriend)
-                            ? 'border-gray-300 text-gray-400 cursor-not-allowed'
-                            : 'border-secondary-500 text-secondary-600 hover:bg-secondary-50 focus:ring-secondary-500'
-                        ]"
-                        :disabled="isFriendChallenged(selectedFriend)"
+                        class="inline-flex items-center rounded-md border border-amber-500 px-4 py-2 text-sm font-medium text-amber-600 transition-colors hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60 dark:hover:bg-amber-900/20"
+                        :disabled="isWithdrawingFriendChallenge(selectedFriend)"
+                        @click="withdrawChallenge(selectedFriend)"
+                      >
+                        {{ isWithdrawingFriendChallenge(selectedFriend) ? 'Withdrawing...' : 'Withdraw' }}
+                      </button>
+                      <button
+                        v-else
+                        type="button"
+                        class="inline-flex items-center rounded-md border border-secondary-500 px-4 py-2 text-sm font-medium text-secondary-600 transition-colors hover:bg-secondary-50 focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2"
                         @click="challengeFriend(selectedFriend)"
                       >
-                        {{ isFriendChallenged(selectedFriend) ? 'Challenged' : 'Challenge' }}
+                        Challenge
                       </button>
                     </div>
 
@@ -347,6 +351,9 @@
                           </div>
                           <div class="text-sm text-gray-600 dark:text-gray-400">
                             {{ friend.friend_data.email }}
+                          </div>
+                          <div v-if="isFriendChallenged(friend)" class="mt-1 text-xs font-medium text-amber-600">
+                            Challenge sent
                           </div>
                         </div>
                         <button
@@ -458,6 +465,7 @@ const rankedQueueLoading = ref<boolean>(false)
 const rankedQueueError = ref<string | null>(null)
 // Friendly challenges (outgoing only - incoming handled on Title page)
 const pendingOutgoingChallenges = ref<FriendlyChallenge[]>([])
+const withdrawingChallengeId = ref<number | null>(null)
 const showAllPlayerDecks = ref<boolean>(true)
 const lastUsedDeckId = ref<number | null>(null)
 const showAllFriends = ref<boolean>(true)
@@ -485,11 +493,10 @@ const isRankedButtonDisabled = computed(() => {
   return queueingRanked.value || rankedQueueLoading.value || hasQueueEntry.value
 })
 
-const outgoingPendingByUserId = computed<Record<number, boolean>>(() => {
-  const map: Record<number, boolean> = {}
+const outgoingPendingByUserId = computed<Record<number, FriendlyChallenge>>(() => {
+  const map: Record<number, FriendlyChallenge> = {}
   for (const c of pendingOutgoingChallenges.value) {
-    // Disable by the challengee's user id
-    map[c.challengee.id] = true
+    map[c.challengee.id] = c
   }
   return map
 })
@@ -693,7 +700,37 @@ const queueForRanked = async (ladderType: LadderType): Promise<void> => {
 
 const isFriendChallenged = (friend: Friendship): boolean => {
   const friendUserId = getFriendUserId(friend)
-  return !!outgoingPendingByUserId.value[friendUserId]
+  return !!getOutgoingChallenge(friendUserId)
+}
+
+const getOutgoingChallenge = (friendUserId: number): FriendlyChallenge | null => {
+  return outgoingPendingByUserId.value[friendUserId] || null
+}
+
+const getOutgoingChallengeForFriend = (friend: Friendship): FriendlyChallenge | null => {
+  return getOutgoingChallenge(getFriendUserId(friend))
+}
+
+const isWithdrawingFriendChallenge = (friend: Friendship): boolean => {
+  const challenge = getOutgoingChallengeForFriend(friend)
+  return !!challenge && withdrawingChallengeId.value === challenge.id
+}
+
+const withdrawChallenge = async (friend: Friendship): Promise<void> => {
+  const challenge = getOutgoingChallengeForFriend(friend)
+  if (!challenge) return
+
+  try {
+    withdrawingChallengeId.value = challenge.id
+    await challengesApi.cancelChallenge(challenge.id)
+    notificationStore.success('Challenge withdrawn')
+    await fetchPendingChallenges()
+  } catch (err) {
+    console.error('Error withdrawing challenge:', err)
+    notificationStore.handleApiError(err as Error)
+  } finally {
+    withdrawingChallengeId.value = null
+  }
 }
 
 const challengeFriend = async (friend: Friendship): Promise<void> => {

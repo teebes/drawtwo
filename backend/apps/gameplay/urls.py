@@ -49,6 +49,11 @@ urlpatterns = [
         views.decline_friendly_challenge,
         name="friendly-challenge-decline",
     ),
+    path(
+        "challenges/<int:challenge_id>/cancel/",
+        views.cancel_friendly_challenge,
+        name="friendly-challenge-cancel",
+    ),
     # Title-specific leaderboard and user rating
     path(
         "<slug:title_slug>/leaderboard/", LeaderboardView.as_view(), name="leaderboard"

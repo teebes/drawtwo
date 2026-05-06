@@ -26,5 +26,10 @@ export const challengesApi = {
   async declineChallenge(challengeId: number): Promise<{ success: boolean; message: string }> {
     const response = await axios.post(`/gameplay/challenges/${challengeId}/decline/`)
     return response.data
+  },
+
+  async cancelChallenge(challengeId: number): Promise<{ success: boolean; message: string }> {
+    const response = await axios.post(`/gameplay/challenges/${challengeId}/cancel/`)
+    return response.data
   }
 }
