@@ -1,4 +1,5 @@
-from typing import Literal, Annotated, Union, Optional
+from typing import Annotated, Literal, Optional, Union
+
 from pydantic import BaseModel, Discriminator, Field
 
 from apps.builder.schemas import DeckScript
@@ -6,7 +7,7 @@ from apps.builder.schemas import DeckScript
 
 class EffectBase(BaseModel):
     type: str
-    side: Literal['side_a', 'side_b']
+    side: Literal["side_a", "side_b"]
 
 
 class ActionSourceEffect(EffectBase):
@@ -14,6 +15,7 @@ class ActionSourceEffect(EffectBase):
     Base class for effects that trigger actions (battlecry, spells, hero powers).
     Provides common fields needed by action handlers to generate child effects.
     """
+
     source_type: Literal["card", "hero"]
     source_id: str
     target_type: Optional[Literal["creature", "card", "hero"]] = None
@@ -22,13 +24,14 @@ class ActionSourceEffect(EffectBase):
 
 # ==== Internal State Effects ====
 
+
 class StartGameEffect(EffectBase):
     type: Literal["effect_start_game"] = "effect_start_game"
 
 
 class NewPhaseEffect(EffectBase):
     type: Literal["effect_phase"] = "effect_phase"
-    phase: Literal["start", "refresh", "draw", "main"]
+    phase: Literal["mulligan", "start", "refresh", "draw", "main"]
 
 
 class EndTurnEffect(EffectBase):
@@ -39,7 +42,13 @@ class ConcedeEffect(EffectBase):
     type: Literal["effect_concede"] = "effect_concede"
 
 
+class MulliganEffect(EffectBase):
+    type: Literal["effect_mulligan"] = "effect_mulligan"
+    card_ids: list[str] = Field(default_factory=list)
+
+
 # ==== Command / Action driven Effects ====
+
 
 class DamageEffect(EffectBase):
     type: Literal["effect_damage"] = "effect_damage"
@@ -165,6 +174,7 @@ Effect = Annotated[
         EndTurnEffect,
         HealEffect,
         MarkExhaustedEffect,
+        MulliganEffect,
         NewPhaseEffect,
         PlayEffect,
         RemoveEffect,
@@ -173,5 +183,5 @@ Effect = Annotated[
         TempManaBoostEffect,
         UseHeroEffect,
     ],
-    Discriminator('type')
+    Discriminator("type"),
 ]

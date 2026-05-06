@@ -62,7 +62,10 @@ function createInitialGameState(): GameState {
     heroes: {},
     board: { side_a: [], side_b: [] },
     hands: { side_a: [], side_b: [] },
+    mulligan_done: { side_a: false, side_b: false },
+    mulligan_options: { side_a: [], side_b: [] },
     decks: { side_a: [], side_b: [] },
+    graveyard: { side_a: [], side_b: [] },
     mana_pool: { side_a: 0, side_b: 0 },
     mana_used: { side_a: 0, side_b: 0 },
     winner: 'none',
@@ -810,6 +813,15 @@ export const useGameStore = defineStore('game', {
 
       this.sendWebSocketMessage({
         type: 'cmd_extend_time',
+      })
+    },
+
+    submitMulligan(cardIds: string[]): void {
+      if (this.gameOver.isGameOver) return
+
+      this.sendWebSocketMessage({
+        type: 'cmd_mulligan',
+        card_ids: cardIds,
       })
     },
 

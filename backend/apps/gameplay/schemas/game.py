@@ -1,26 +1,28 @@
-from typing import Literal, List, Dict, Union, Annotated, Literal, Optional
-from pydantic import BaseModel, Field, Discriminator, model_validator
+from typing import Annotated, Dict, List, Literal, Optional, Union
 
-from apps.builder.schemas import (
-    Action,
-    TitleConfig,
-    Trait,
-    HeroPower,
-)
+from pydantic import BaseModel, Discriminator, Field, model_validator
 
-PHASE_ORDER = ['start', 'refresh', 'draw', 'main',]
+from apps.builder.schemas import Action, HeroPower, TitleConfig, Trait
 
-Phase = Literal['start', 'refresh', 'draw', 'main', 'combat', 'end']
+PHASE_ORDER = [
+    "mulligan",
+    "start",
+    "refresh",
+    "draw",
+    "main",
+]
+
+Phase = Literal["mulligan", "start", "refresh", "draw", "main", "combat", "end"]
 
 from apps.gameplay.schemas.effects import Effect
 
 
 class CardInPlay(BaseModel):
-    card_type: Literal['creature', 'spell']
-    card_id: str # Interal card ID for that game
-    template_slug: str # ID of the card template
+    card_type: Literal["creature", "spell"]
+    card_id: str  # Interal card ID for that game
+    template_slug: str  # ID of the card template
     name: str
-    description: str = ''
+    description: str = ""
     attack: int = 0
     health: int = 0
     cost: int = 0
@@ -36,7 +38,7 @@ class Creature(BaseModel):
     creature_id: str
     card_id: str
     name: str
-    description: str = ''
+    description: str = ""
     attack: int = 0
     attack_max: Optional[int] = None
     health: int = 0
@@ -46,7 +48,7 @@ class Creature(BaseModel):
     art_url: Optional[str] = None
 
     @model_validator(mode="after")
-    def _set_max_stats(self) -> 'Creature':
+    def _set_max_stats(self) -> "Creature":
         if self.attack_max is None:
             self.attack_max = self.attack
         if self.health_max is None:
@@ -55,20 +57,20 @@ class Creature(BaseModel):
 
 
 class HeroInPlay(BaseModel):
-    hero_id: str # Internal hero ID for that game
-    template_slug: str # ID of the hero template
+    hero_id: str  # Internal hero ID for that game
+    template_slug: str  # ID of the hero template
     health: int
     health_max: Optional[int] = None
     name: str
     player_name: Optional[str] = None
-    description: str = ''
+    description: str = ""
     exhausted: bool = True
     actions: List[Action] = Field(default_factory=list)
     hero_power: HeroPower
     art_url: Optional[str] = None
 
     @model_validator(mode="after")
-    def _set_health_max(self) -> 'HeroInPlay':
+    def _set_health_max(self) -> "HeroInPlay":
         if self.health_max is None:
             self.health_max = self.health
         return self
@@ -87,7 +89,7 @@ class GameState(BaseModel):
 
     heroes: Dict[str, HeroInPlay]
 
-    ai_sides: List[Literal['side_a', 'side_b']] = Field(default_factory=list)
+    ai_sides: List[Literal["side_a", "side_b"]] = Field(default_factory=list)
 
     # Card templates that can be summoned by slug (for summon effects)
     summonable_cards: Dict[str, CardInPlay] = Field(default_factory=dict)
@@ -99,6 +101,18 @@ class GameState(BaseModel):
         }
     )
     hands: Dict[str, List[str]] = Field(
+        default_factory=lambda: {
+            "side_a": [],
+            "side_b": [],
+        }
+    )
+    mulligan_done: Dict[str, bool] = Field(
+        default_factory=lambda: {
+            "side_a": False,
+            "side_b": False,
+        }
+    )
+    mulligan_options: Dict[str, List[str]] = Field(
         default_factory=lambda: {
             "side_a": [],
             "side_b": [],
@@ -130,7 +144,7 @@ class GameState(BaseModel):
         }
     )
 
-    winner: Literal['side_a', 'side_b', 'none'] = 'none'
+    winner: Literal["side_a", "side_b", "none"] = "none"
 
     config: TitleConfig = Field(default_factory=TitleConfig)
 
@@ -145,11 +159,12 @@ class GameState(BaseModel):
 class Notification(BaseModel):
     ref_id: int
     type: Literal[
-        'game_friendly',
-        'game_challenge',
-        'game_ranked',
-        'game_ranked_queued',
-        'game_pve',
-        'friend_request']
+        "game_friendly",
+        "game_challenge",
+        "game_ranked",
+        "game_ranked_queued",
+        "game_pve",
+        "friend_request",
+    ]
     message: str
     is_user_turn: bool | None = None

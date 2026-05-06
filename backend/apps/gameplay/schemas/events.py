@@ -1,14 +1,14 @@
-from typing import Literal, Annotated, Union, Optional
+from typing import Annotated, Literal, Optional, Union
+
 from pydantic import BaseModel, Discriminator, Field
 
 from apps.builder.schemas import DeckScript
 from apps.gameplay.schemas.game import Creature
 
 
-
 class EventBase(BaseModel):
     type: str
-    side: Literal['side_a', 'side_b']
+    side: Literal["side_a", "side_b"]
 
 
 class DamageEvent(EventBase):
@@ -54,7 +54,14 @@ class NewPhaseEvent(EventBase):
     type: Literal["event_phase"] = "event_phase"
     phase: str
 
+
+class MulliganEvent(EventBase):
+    type: Literal["event_mulligan"] = "event_mulligan"
+    card_ids: list[str] = Field(default_factory=list)
+
+
 # Actionable Events
+
 
 class ActionableEvent(EventBase):
     source_type: Literal["card", "hero", "board", "creature"] = "card"
@@ -84,6 +91,7 @@ class CreatureDeathEvent(ActionableEvent):
     * target_type / target_id: The creature that was killed
     * creature: data snapshot of the creature that was killed
     """
+
     type: Literal["event_creature_death"] = "event_creature_death"
     creature: Creature
 
@@ -92,6 +100,7 @@ class RemoveEvent(EventBase):
     """
     A creature is removed from the board without triggering death effects.
     """
+
     type: Literal["event_remove"] = "event_remove"
     source_type: Literal["card", "hero", "board", "creature"] = "creature"
     source_id: str
@@ -139,6 +148,7 @@ Event = Annotated[
         EndTurnEvent,
         GameOverEvent,
         HealEvent,
+        MulliganEvent,
         NewPhaseEvent,
         PlayEvent,
         RemoveEvent,
@@ -146,5 +156,5 @@ Event = Annotated[
         TempManaBoostEvent,
         UseHeroEvent,
     ],
-    Discriminator('type')
+    Discriminator("type"),
 ]

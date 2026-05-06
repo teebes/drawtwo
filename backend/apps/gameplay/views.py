@@ -66,6 +66,12 @@ def _get_min_cards_error(deck: Deck, deck_label: str = "Deck") -> str | None:
     return None
 
 
+def _is_user_action_required(game_state: GameState, user_side: str) -> bool:
+    if game_state.phase == "mulligan":
+        return not game_state.mulligan_done.get(user_side, False)
+    return game_state.active == user_side
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def game_detail(request, game_id):
@@ -151,7 +157,7 @@ def current_games(request):
 
         # Determine if it's the user's turn
         game_state = game.game_state
-        is_user_turn = game_state.active == user_side
+        is_user_turn = _is_user_action_required(game_state, user_side)
 
         game_summaries.append(
             GameSummary(

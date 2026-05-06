@@ -74,8 +74,16 @@ class ProcessCommandTests(ServiceTestsBase):
         self.game.refresh_from_db()
         self.assertEqual(self.game.status, 'in_progress')
 
-        self.assertEqual(self.game.state['turn'], 1)
+        self.assertEqual(self.game.state['turn'], 0)
         self.assertEqual(self.game.state['active'], 'side_a')
+        self.assertEqual(self.game.state['phase'], 'mulligan')
+
+        command = {'type': 'cmd_mulligan', 'card_ids': []}
+        GameService.process_command(self.game.id, command, 'side_a')
+        GameService.step(self.game.id)
+        self.game.refresh_from_db()
+
+        self.assertEqual(self.game.state['turn'], 1)
         self.assertEqual(self.game.state['phase'], 'main')
 
         command = {'type': 'cmd_end_turn'}

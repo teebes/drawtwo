@@ -6,6 +6,7 @@ from apps.gameplay.engine.dispatcher import resolve
 from apps.gameplay.schemas.engine import Success, Prevented, Rejected
 from apps.gameplay.schemas.effects import (
     BuffEffect,
+    MulliganEffect,
     StartGameEffect,
     PlayEffect,
     UseHeroEffect,
@@ -20,22 +21,41 @@ class EngineTests(GamePlayTestBase):
 
     def test_start_game_effect(self):
         effect = StartGameEffect(side='side_a')
+        self.game_state.decks["side_a"] = ["a1", "a2", "a3"]
+        self.game_state.decks["side_b"] = ["b1", "b2", "b3"]
         result = resolve(effect, self.game_state)
         self.assertTrue(isinstance(result, Success))
-        self.assertEqual(len(result.child_effects), 7)
-        self.assertEqual(result.child_effects[0].type, 'effect_draw')
-        self.assertEqual(result.child_effects[0].side, 'side_a')
-        self.assertEqual(result.child_effects[1].type, 'effect_draw')
-        self.assertEqual(result.child_effects[1].side, 'side_a')
-        self.assertEqual(result.child_effects[2].type, 'effect_draw')
-        self.assertEqual(result.child_effects[2].side, 'side_a')
-        self.assertEqual(result.child_effects[3].type, 'effect_draw')
-        self.assertEqual(result.child_effects[3].side, 'side_b')
-        self.assertEqual(result.child_effects[4].type, 'effect_draw')
-        self.assertEqual(result.child_effects[4].side, 'side_b')
-        self.assertEqual(result.child_effects[5].type, 'effect_draw')
-        self.assertEqual(result.child_effects[5].side, 'side_b')
-        self.assertEqual(result.child_effects[6].type, 'effect_phase')
+        self.assertEqual(result.new_state.phase, "mulligan")
+        self.assertEqual(result.events[-1].type, "event_phase")
+        self.assertEqual(result.events[-1].phase, "mulligan")
+        self.assertEqual(result.new_state.hands["side_a"], ["a1", "a2", "a3"])
+        self.assertEqual(result.new_state.hands["side_b"], ["b1", "b2", "b3"])
+        self.assertEqual(
+            result.new_state.mulligan_options["side_a"],
+            ["a1", "a2", "a3"],
+        )
+        self.assertEqual(
+            result.new_state.mulligan_options["side_b"],
+            ["b1", "b2", "b3"],
+        )
+        self.assertEqual(len(result.events), 7)
+
+    def test_mulligan_replaces_selected_cards_and_starts_after_both_sides(self):
+        self.game_state.phase = "mulligan"
+        self.game_state.hands["side_a"] = ["a1", "a2", "a3"]
+        self.game_state.decks["side_a"] = ["a4", "a5"]
+        self.game_state.mulligan_options["side_a"] = ["a1", "a2", "a3"]
+        self.game_state.mulligan_done = {"side_a": False, "side_b": True}
+
+        effect = MulliganEffect(side="side_a", card_ids=["a2"])
+        result = resolve(effect, self.game_state)
+
+        self.assertTrue(isinstance(result, Success))
+        self.assertTrue(result.new_state.mulligan_done["side_a"])
+        self.assertEqual(len(result.new_state.hands["side_a"]), 3)
+        self.assertNotIn("a2", result.new_state.hands["side_a"])
+        self.assertEqual(result.child_effects[0].type, "effect_phase")
+        self.assertEqual(result.child_effects[0].phase, "start")
 
     def test_play_creature_card_to_board(self):
         creature = CardInPlay(

@@ -4,7 +4,7 @@ import traceback
 import uuid
 from datetime import timedelta
 
-from django.db import transaction, DatabaseError
+from django.db import DatabaseError, transaction
 from django.db.models import Q
 from pydantic import TypeAdapter, ValidationError
 
@@ -14,31 +14,30 @@ from apps.builder.models import CardTemplate
 from apps.builder.schemas import (
     Action,
     BuffAction,
+    Card,
     ClearAction,
+    DamageAction,
     DeckScript,
     DrawAction,
-    DamageAction,
     HealAction,
     HeroPower,
     RemoveAction,
     SummonAction,
-    TitleConfig,
     TempManaBoostAction,
+    TitleConfig,
 )
+from apps.core.card_assets import get_hero_art_url
 from apps.core.serializers import serialize_cards_with_traits, to_card_schema
 from apps.gameplay.engine.dispatcher import resolve
 from apps.gameplay.models import Game
-from apps.gameplay.schemas.game import (
-    CardInPlay,
-    GameState,
-    HeroInPlay,
-)
+from apps.gameplay.notifications import send_game_updates_to_clients
 from apps.gameplay.schemas.commands import (
     AttackCommand,
     Command,
     ConcedeCommand,
-    PlayCardCommand,
     EndTurnCommand,
+    MulliganCommand,
+    PlayCardCommand,
     UseHeroCommand,
 )
 from apps.gameplay.schemas.effects import (
@@ -51,6 +50,7 @@ from apps.gameplay.schemas.effects import (
     Effect,
     EndTurnEffect,
     HealEffect,
+    MulliganEffect,
     PlayEffect,
     RemoveEffect,
     StartGameEffect,
@@ -58,7 +58,7 @@ from apps.gameplay.schemas.effects import (
     TempManaBoostEffect,
     UseHeroEffect,
 )
-from apps.gameplay.schemas.engine import Success, Result, Prevented, Rejected, Fault
+from apps.gameplay.schemas.engine import Fault, Prevented, Rejected, Result, Success
 from apps.gameplay.schemas.events import (
     ActionableEvent,
     CreatureDeathEvent,
@@ -66,15 +66,9 @@ from apps.gameplay.schemas.events import (
     GameOverEvent,
     NewPhaseEvent,
 )
-
+from apps.gameplay.schemas.game import CardInPlay, GameState, HeroInPlay
 
 # Moved to avoid circular import - imported where needed
-
-
-from apps.builder.schemas import Card
-from apps.core.card_assets import get_hero_art_url
-from apps.gameplay.notifications import send_game_updates_to_clients
-from apps.gameplay.schemas.game import GameState
 
 
 class GameService:
@@ -95,18 +89,18 @@ class GameService:
 
     @staticmethod
     @transaction.atomic
-    def create_game(
-        deck_a,
-        deck_b,
-        randomize_starting_player: bool = False
-    ) -> Game:
+    def create_game(deck_a, deck_b, randomize_starting_player: bool = False) -> Game:
 
-        existing_game = Game.objects.filter(
-            side_a=deck_a,
-            side_b=deck_b,
-        ).exclude(
-            status=Game.GAME_STATUS_ENDED,
-        ).first()
+        existing_game = (
+            Game.objects.filter(
+                side_a=deck_a,
+                side_b=deck_b,
+            )
+            .exclude(
+                status=Game.GAME_STATUS_ENDED,
+            )
+            .first()
+        )
         if existing_game:
             return existing_game
 
@@ -134,34 +128,38 @@ class GameService:
 
         card_id = 0
         cards_in_play = {}
-        decks = {'side_a': [], 'side_b': []}
+        decks = {"side_a": [], "side_b": []}
 
         for card in cards_a:
             for _ in range(deck_a_card_copies[card.id]):
                 card_id += 1
-                cards_in_play[str(card_id)] = GameService.get_card_in_play(card, card_id)
-                decks['side_a'].append(str(card_id))
+                cards_in_play[str(card_id)] = GameService.get_card_in_play(
+                    card, card_id
+                )
+                decks["side_a"].append(str(card_id))
 
         for card in cards_b:
             for _ in range(deck_b_card_copies[card.id]):
                 card_id += 1
-                cards_in_play[str(card_id)] = GameService.get_card_in_play(card, card_id)
-                decks['side_b'].append(str(card_id))
+                cards_in_play[str(card_id)] = GameService.get_card_in_play(
+                    card, card_id
+                )
+                decks["side_b"].append(str(card_id))
 
         # Get the side b compensation card if it exists
         comp_card = None
         if config.side_b_compensation:
             card = CardTemplate.objects.get(
-                slug=config.side_b_compensation,
-                is_latest=True)
+                slug=config.side_b_compensation, is_latest=True
+            )
             comp_card = to_card_schema(card)
             card_id += 1
             comp_card_in_play = GameService.get_card_in_play(comp_card, card_id)
             cards_in_play[str(card_id)] = comp_card_in_play
 
         # shuffle both decks
-        random.shuffle(decks['side_a'])
-        random.shuffle(decks['side_b'])
+        random.shuffle(decks["side_a"])
+        random.shuffle(decks["side_b"])
 
         # Collect all summonable card slugs from cards and heroes
         summonable_slugs = set()
@@ -207,7 +205,7 @@ class GameService:
         hero_id_b = f"hero_{deck_b.id}_b"
 
         heroes = {
-            'side_a': HeroInPlay(
+            "side_a": HeroInPlay(
                 hero_id=hero_id_a,
                 template_slug=deck_a.hero.slug,
                 health=deck_a.hero.health,
@@ -219,7 +217,7 @@ class GameService:
                 art_url=get_hero_art_url(deck_a.title.slug, deck_a.hero.slug),
                 player_name=deck_a.owner_name,
             ),
-            'side_b': HeroInPlay(
+            "side_b": HeroInPlay(
                 hero_id=hero_id_b,
                 template_slug=deck_b.hero.slug,
                 health=deck_b.hero.health,
@@ -230,24 +228,23 @@ class GameService:
                 exhausted=False,
                 art_url=get_hero_art_url(deck_b.title.slug, deck_b.hero.slug),
                 player_name=deck_b.owner_name,
-
             ),
         }
 
         ai_sides = []
         if deck_a.is_ai_deck:
-            ai_sides.append('side_a')
+            ai_sides.append("side_a")
         if deck_b.is_ai_deck:
-            ai_sides.append('side_b')
+            ai_sides.append("side_b")
 
-        hands = {'side_a': [], 'side_b': []}
+        hands = {"side_a": [], "side_b": []}
         if comp_card:
-            hands['side_b'].append(comp_card_in_play.card_id)
+            hands["side_b"].append(comp_card_in_play.card_id)
 
         game_state = GameState(
             turn=0,
-            active='side_a',
-            phase='start',
+            active="side_a",
+            phase="start",
             cards=cards_in_play,
             heroes=heroes,
             hands=hands,
@@ -268,7 +265,7 @@ class GameService:
         # returns. Triggering the first step here can race with those stale-state
         # saves and wipe out opening draws, so the caller must kick off the first
         # step after post-create mutations are complete.
-        game.enqueue([StartGameEffect(side='side_a')], trigger=False)
+        game.enqueue([StartGameEffect(side="side_a")], trigger=False)
 
         return game
 
@@ -277,9 +274,7 @@ class GameService:
     def step(game_id: int):
 
         try:
-            game = (Game.objects
-                        .select_for_update(nowait=True)
-                        .get(id=game_id))
+            game = Game.objects.select_for_update(nowait=True).get(id=game_id)
         except DatabaseError:
             return
 
@@ -288,22 +283,28 @@ class GameService:
             logger.debug(queue_item)
         logger.debug("===================================")
 
-        if game.status == Game.GAME_STATUS_ENDED: return
+        if game.status == Game.GAME_STATUS_ENDED:
+            return
         game.status = Game.GAME_STATUS_IN_PROGRESS
         game_state = GameState.model_validate(game.state)
         previous_phase = game_state.phase
 
         # Check for turn timeout - automatically concede if time expired
-        if (game_state.phase == 'main'
+        if (
+            game_state.phase == "main"
             and game_state.time_per_turn > 0
             and game.turn_expires
-            and game.status != Game.GAME_STATUS_ENDED):
+            and game.status != Game.GAME_STATUS_ENDED
+        ):
             from django.utils import timezone
+
             if timezone.now() >= game.turn_expires:
                 # Check for abort condition: ranked game, turn 1, side_a timing out
-                if (game.type == Game.GAME_TYPE_RANKED and
-                        game_state.turn == 1 and
-                        game_state.active == 'side_a'):
+                if (
+                    game.type == Game.GAME_TYPE_RANKED
+                    and game_state.turn == 1
+                    and game_state.active == "side_a"
+                ):
                     logger.info(
                         f"Ranked game {game_id} aborted: side_a timed out on turn 1 "
                         f"(no winner, no rating changes)"
@@ -314,19 +315,21 @@ class GameService:
                     game.status = Game.GAME_STATUS_ABORTED
                     game.queue = []
                     game.turn_expires = None
-                    game.save(update_fields=['status', 'queue', 'turn_expires'])
+                    game.save(update_fields=["status", "queue", "turn_expires"])
 
                     # Notify clients
                     abort_update = GameAbortedUpdate(
-                        side=game_state.active,
-                        reason="first_turn_timeout"
+                        side=game_state.active, reason="first_turn_timeout"
                     )
                     send_game_updates_to_clients(game.id, game_state, [abort_update])
                     return  # Game is done, exit step
 
                 # Time expired - automatically concede for the active player
                 from apps.gameplay.schemas.effects import ConcedeEffect
-                logger.info(f"Turn expired for {game_state.active} in game {game_id}, auto-conceding")
+
+                logger.info(
+                    f"Turn expired for {game_state.active} in game {game_id}, auto-conceding"
+                )
                 game.enqueue([ConcedeEffect(side=game_state.active)], trigger=False)
                 # Continue processing to handle the concede effect
 
@@ -374,7 +377,9 @@ class GameService:
                             try:
                                 GameService._update_elo_ratings(game)
                             except Exception as e:
-                                logger.error(f"Failed to update ELO ratings for game {game.id}: {e}")
+                                logger.error(
+                                    f"Failed to update ELO ratings for game {game.id}: {e}"
+                                )
                                 # Continue - game has ended, ELO update is secondary
                             # Break out of the effect processing loop - game is over
                             break
@@ -395,13 +400,19 @@ class GameService:
                     for event in result.events:
                         trait_result = traits.apply(game_state, event)
                         if trait_result.child_effects:
-                            game.enqueue(trait_result.child_effects, trigger=False, prepend=True)
+                            game.enqueue(
+                                trait_result.child_effects, trigger=False, prepend=True
+                            )
 
                         if isinstance(event, NewPhaseEvent):
-                            if event.phase == 'main' and game_state.time_per_turn > 0:
-                                from django.utils import timezone
+                            if event.phase == "main" and game_state.time_per_turn > 0:
                                 from datetime import timedelta
-                                turn_expires_dt = timezone.now() + timedelta(seconds=game_state.time_per_turn)
+
+                                from django.utils import timezone
+
+                                turn_expires_dt = timezone.now() + timedelta(
+                                    seconds=game_state.time_per_turn
+                                )
                                 game.turn_expires = turn_expires_dt
                                 # Also set in GameState so it's sent to frontend
                                 game_state.turn_expires = turn_expires_dt.isoformat()
@@ -410,7 +421,6 @@ class GameService:
                             game.turn_expires = None
                             game_state.turn_expires = None
 
-
                 elif isinstance(result, (Prevented, Rejected)):
                     # Domain-level prevention or rejection
                     # State doesn't change, but we send user feedback and emit any events
@@ -418,26 +428,34 @@ class GameService:
                     all_events.extend(result.events)
 
                     # Add user-visible error message
-                    all_errors.append({
-                        'type': result.type,
-                        'reason': result.reason,
-                        'details': result.details,
-                    })
+                    all_errors.append(
+                        {
+                            "type": result.type,
+                            "reason": result.reason,
+                            "details": result.details,
+                        }
+                    )
                     # Continue processing (these are not critical failures)
 
                 elif isinstance(result, Fault):
                     # System/engine error - this is a bug
-                    logger.error(f"⚠️  FAULT: {result.reason} (error_id: {result.error_id})")
-                    all_errors.append({
-                        'error_id': result.error_id,
-                        'reason': result.reason,
-                        'details': result.details,
-                        'effect': effect.model_dump(mode="json"),
-                    })
+                    logger.error(
+                        f"⚠️  FAULT: {result.reason} (error_id: {result.error_id})"
+                    )
+                    all_errors.append(
+                        {
+                            "error_id": result.error_id,
+                            "reason": result.reason,
+                            "details": result.details,
+                            "effect": effect.model_dump(mode="json"),
+                        }
+                    )
 
                     # If unrecoverable, stop processing to avoid cascading failures
                     if not result.retryable:
-                        logger.error(f"Non-retryable fault encountered, stopping effect processing")
+                        logger.error(
+                            f"Non-retryable fault encountered, stopping effect processing"
+                        )
                         break
                     # Otherwise continue processing (retryable faults)
 
@@ -448,17 +466,19 @@ class GameService:
                 logger.error(traceback.format_exc())
 
                 # Create a Fault response
-                all_errors.append({
-                    'type': 'outcome_fault',
-                    'error_id': error_id,
-                    'reason': f'System error: {type(e).__name__}',
-                    'details': {
-                        'exception_type': type(e).__name__,
-                        'exception_message': str(e),
-                        'traceback': traceback.format_exc(),
-                    },
-                    'effect': effect.model_dump(mode="json"),
-                })
+                all_errors.append(
+                    {
+                        "type": "outcome_fault",
+                        "error_id": error_id,
+                        "reason": f"System error: {type(e).__name__}",
+                        "details": {
+                            "exception_type": type(e).__name__,
+                            "exception_message": str(e),
+                            "traceback": traceback.format_exc(),
+                        },
+                        "effect": effect.model_dump(mode="json"),
+                    }
+                )
 
                 # Stop processing to avoid cascading failures
                 logger.error(f"Stopping effect processing due to unhandled exception")
@@ -470,6 +490,7 @@ class GameService:
         # Persist updates to database
         for update in all_updates:
             from apps.gameplay.models import GameUpdate
+
             GameUpdate.objects.create(
                 game=game,
                 update=update.model_dump(mode="json"),
@@ -481,28 +502,29 @@ class GameService:
 
         # Send filtered updates to clients
         send_game_updates_to_clients(
-            game_id=game.id,
-            state=game_state,
-            updates=all_updates,
-            errors=all_errors
+            game_id=game.id, state=game_state, updates=all_updates, errors=all_errors
         )
 
         # See if we need to choose an AI move
-        if (len(game.queue) == 0
-            and game.state['phase'] == 'main'
-            and game.state['active'] in game.state['ai_sides']):
-            deck = getattr(game, game.state['active'])
-            script=DeckScript.model_validate(deck.script or {})
+        if (
+            len(game.queue) == 0
+            and game.state["phase"] == "main"
+            and game.state["active"] in game.state["ai_sides"]
+        ):
+            deck = getattr(game, game.state["active"])
+            script = DeckScript.model_validate(deck.script or {})
             from apps.gameplay.ai import AIMoveChooser
+
             ai_event = AIMoveChooser.choose_move(game_state, script)
             if ai_event:
                 game.enqueue([ai_event], trigger=False)
             else:
-                game.enqueue([EndTurnEffect(side=game.state['active'])], trigger=False)
+                game.enqueue([EndTurnEffect(side=game.state["active"])], trigger=False)
 
         # Continue processing if there are more effects in queue
         if len(game.queue) > 0:
             from apps.gameplay.tasks import step
+
             step.apply_async(args=[game_id], countdown=0.1)
 
     @staticmethod
@@ -520,16 +542,21 @@ class GameService:
         game_state = GameState.model_validate(game.state)
 
         # Check for turn timeout before processing command
-        if (game_state.phase == 'main'
+        if (
+            game_state.phase == "main"
             and game_state.time_per_turn > 0
             and game.turn_expires
-            and side == game_state.active):
+            and side == game_state.active
+        ):
             from django.utils import timezone
+
             if timezone.now() >= game.turn_expires:
                 # Check for abort condition: ranked game, turn 1, side_a timing out
-                if (game.type == Game.GAME_TYPE_RANKED and
-                        game_state.turn == 1 and
-                        game_state.active == 'side_a'):
+                if (
+                    game.type == Game.GAME_TYPE_RANKED
+                    and game_state.turn == 1
+                    and game_state.active == "side_a"
+                ):
                     logger.info(
                         f"Ranked game {game_id} aborted: side_a timed out on turn 1 "
                         f"(no winner, no rating changes)"
@@ -540,19 +567,21 @@ class GameService:
                     game.status = Game.GAME_STATUS_ABORTED
                     game.queue = []
                     game.turn_expires = None
-                    game.save(update_fields=['status', 'queue', 'turn_expires'])
+                    game.save(update_fields=["status", "queue", "turn_expires"])
 
                     # Notify clients
                     abort_update = GameAbortedUpdate(
-                        side=game_state.active,
-                        reason="first_turn_timeout"
+                        side=game_state.active, reason="first_turn_timeout"
                     )
                     send_game_updates_to_clients(game.id, game_state, [abort_update])
                     return  # Game is aborted
 
                 # Time expired - automatically concede
                 from apps.gameplay.schemas.effects import ConcedeEffect
-                logger.info(f"Turn expired for {side} in game {game_id} when processing command, auto-conceding")
+
+                logger.info(
+                    f"Turn expired for {side} in game {game_id} when processing command, auto-conceding"
+                )
                 game.enqueue([ConcedeEffect(side=side)], trigger=True)
                 return  # Don't process the command, the concede will be handled
 
@@ -563,21 +592,25 @@ class GameService:
             if game.ladder_type not in (Game.LADDER_TYPE_DAILY, Game.LADDER_TYPE_RAPID):
                 raise ValueError("This ranked game does not support time extension.")
 
-            if (game_state.phase != "main"
+            if (
+                game_state.phase != "main"
                 or game_state.time_per_turn <= 0
-                or not game.turn_expires):
+                or not game.turn_expires
+            ):
                 raise ValueError("There is no active turn timer to extend right now.")
 
             opponent_side = "side_b" if side == "side_a" else "side_a"
             if game_state.active != opponent_side:
-                raise ValueError("You can only extend time during your opponent's turn.")
+                raise ValueError(
+                    "You can only extend time during your opponent's turn."
+                )
 
             extension_seconds = (
-                6 * 60 * 60
-                if game.ladder_type == Game.LADDER_TYPE_DAILY
-                else 30
+                6 * 60 * 60 if game.ladder_type == Game.LADDER_TYPE_DAILY else 30
             )
-            extended_turn_expires = game.turn_expires + timedelta(seconds=extension_seconds)
+            extended_turn_expires = game.turn_expires + timedelta(
+                seconds=extension_seconds
+            )
 
             game.turn_expires = extended_turn_expires
             game_state.turn_expires = extended_turn_expires.isoformat()
@@ -603,28 +636,41 @@ class GameService:
             effects.append(ConcedeEffect(side=side))
             return effects
 
+        if isinstance(command, MulliganCommand):
+            if game_state.phase != "mulligan":
+                raise ValueError("Mulligan is not active.")
+            effects.append(MulliganEffect(side=side, card_ids=command.card_ids))
+            return effects
+
+        if game_state.phase == "mulligan":
+            raise ValueError("Finish your mulligan before taking game actions.")
+
         if side != game_state.active:
             raise ValueError(f"It is not your turn.")
 
         # Because we're transitioning to a system where the cards on the
         # board are creatures and not just cards, we make the transition
         # easier for the frontend by translating the target when possible.
-        target_type = getattr(command, 'target_type', None)
+        target_type = getattr(command, "target_type", None)
         if target_type == "card":
             target_type = "creature"
 
         if isinstance(command, PlayCardCommand):
-            effects.append(PlayEffect(
-                side=game_state.active,
-                source_id=command.card_id,
-                position=command.position,
-                target_type=target_type,
-                target_id=command.target_id,
-            ))
+            effects.append(
+                PlayEffect(
+                    side=game_state.active,
+                    source_id=command.card_id,
+                    position=command.position,
+                    target_type=target_type,
+                    target_id=command.target_id,
+                )
+            )
         elif isinstance(command, EndTurnCommand):
-            effects.append(EndTurnEffect(
-                side=game_state.active,
-            ))
+            effects.append(
+                EndTurnEffect(
+                    side=game_state.active,
+                )
+            )
         elif isinstance(command, AttackCommand):
             # Validate that the creature belongs to the active player
             creature = game_state.creatures.get(command.card_id)
@@ -643,21 +689,27 @@ class GameService:
             opposing_side = game_state.opposite_side
             if target_type == "creature":
                 if command.target_id not in game_state.board[opposing_side]:
-                    raise ValueError(f"Target creature {command.target_id} is not on opponent's board")
+                    raise ValueError(
+                        f"Target creature {command.target_id} is not on opponent's board"
+                    )
             elif target_type == "hero":
                 # Hero must belong to opposing side
                 opposing_hero = game_state.heroes.get(opposing_side)
                 if not opposing_hero or opposing_hero.hero_id != command.target_id:
-                    raise ValueError(f"Target hero {command.target_id} is not the opponent's hero")
+                    raise ValueError(
+                        f"Target hero {command.target_id} is not the opponent's hero"
+                    )
 
-            effects.append(AttackEffect(
-                side=game_state.active,
-                card_id=command.card_id,
-                target_type=target_type,
-                target_id=command.target_id,
-            ))
+            effects.append(
+                AttackEffect(
+                    side=game_state.active,
+                    card_id=command.card_id,
+                    target_type=target_type,
+                    target_id=command.target_id,
+                )
+            )
         elif isinstance(command, UseHeroCommand):
-            from apps.builder.schemas import HealAction, BuffAction
+            from apps.builder.schemas import BuffAction, HealAction
 
             # Validate that the hero belongs to the active player
             active_hero = game_state.heroes.get(game_state.active)
@@ -666,9 +718,11 @@ class GameService:
 
             # Determine if this hero power targets friendlies
             targets_friendly = any(
-                ((isinstance(action, HealAction) and action.target == 'friendly') or
-                (isinstance(action, DamageAction) and action.target == 'self') or
-                isinstance(action, BuffAction))
+                (
+                    (isinstance(action, HealAction) and action.target == "friendly")
+                    or (isinstance(action, DamageAction) and action.target == "self")
+                    or isinstance(action, BuffAction)
+                )
                 for action in active_hero.hero_power.actions
             )
 
@@ -678,40 +732,51 @@ class GameService:
                     # For healing/friendly powers, target must be on own side
                     if target_type == "creature":
                         if command.target_id not in game_state.board[game_state.active]:
-                            raise ValueError(f"Target creature {command.target_id} is not on your board")
+                            raise ValueError(
+                                f"Target creature {command.target_id} is not on your board"
+                            )
                     elif target_type == "hero":
                         if not active_hero or active_hero.hero_id != command.target_id:
-                            raise ValueError(f"Target hero {command.target_id} is not your hero")
+                            raise ValueError(
+                                f"Target hero {command.target_id} is not your hero"
+                            )
                 else:
                     # For damage/enemy powers, target must be on opponent's side
                     opposing_side = game_state.opposite_side
                     if target_type == "creature":
                         if command.target_id not in game_state.board[opposing_side]:
-                            raise ValueError(f"Target creature {command.target_id} is not on opponent's board")
+                            raise ValueError(
+                                f"Target creature {command.target_id} is not on opponent's board"
+                            )
                     elif target_type == "hero":
                         # Hero must belong to opposing side
                         opposing_hero = game_state.heroes.get(opposing_side)
-                        if not opposing_hero or opposing_hero.hero_id != command.target_id:
-                            raise ValueError(f"Target hero {command.target_id} is not the opponent's hero")
+                        if (
+                            not opposing_hero
+                            or opposing_hero.hero_id != command.target_id
+                        ):
+                            raise ValueError(
+                                f"Target hero {command.target_id} is not the opponent's hero"
+                            )
 
-            effects.append(UseHeroEffect(
-                side=game_state.active,
-                source_id=command.hero_id,
-                target_type=target_type,
-                target_id=command.target_id,
-            ))
+            effects.append(
+                UseHeroEffect(
+                    side=game_state.active,
+                    source_id=command.hero_id,
+                    target_type=target_type,
+                    target_id=command.target_id,
+                )
+            )
         else:
             raise ValueError(f"Invalid command: {command}")
 
-        logger.debug('effects: %s' % effects)
+        logger.debug("effects: %s" % effects)
 
         return effects
 
     @staticmethod
     def compile_action(
-        state: GameState,
-        event: ActionableEvent,
-        action: Action
+        state: GameState, event: ActionableEvent, action: Action
     ) -> list[Effect]:
         """
         Compile an action into one or more effects.
@@ -735,10 +800,12 @@ class GameService:
             is_deathrattle = False
 
         if isinstance(action, DrawAction):
-            return [DrawEffect(
-                side=event.side,
-                amount=action.amount,
-            )]
+            return [
+                DrawEffect(
+                    side=event.side,
+                    amount=action.amount,
+                )
+            ]
 
         if isinstance(action, DamageAction):
             opposing_side = "side_b" if event.side == "side_a" else "side_a"
@@ -749,7 +816,11 @@ class GameService:
                 base_target_id = state.heroes[opposing_side].hero_id
             elif action.target == "creature":
                 base_target_type = "creature"
-                base_target_id = event.target_id or (state.board[opposing_side][0] if state.board[opposing_side] else None)
+                base_target_id = event.target_id or (
+                    state.board[opposing_side][0]
+                    if state.board[opposing_side]
+                    else None
+                )
             elif action.target == "enemy":
                 # 'enemy' can be hero or creature, use event target
                 base_target_type = event.target_type or "hero"
@@ -768,28 +839,35 @@ class GameService:
             # Get all targets based on scope
             targets = []
 
-            if action.scope == 'single':
+            if action.scope == "single":
                 if base_target_id:
                     targets = [(base_target_type, base_target_id)]
 
-            elif action.scope == 'all':
+            elif action.scope == "all":
                 # Hit all enemies (all creatures + hero on opposing side)
                 for creature_id in state.board[opposing_side]:
                     targets.append(("creature", creature_id))
                 targets.append(("hero", state.heroes[opposing_side].hero_id))
 
-            elif action.scope == 'cleave':
+            elif action.scope == "cleave":
                 # Hit target and adjacent creatures
-                if base_target_type == "creature" and base_target_id in state.board[opposing_side]:
+                if (
+                    base_target_type == "creature"
+                    and base_target_id in state.board[opposing_side]
+                ):
                     target_index = state.board[opposing_side].index(base_target_id)
                     # Add the main target
                     targets.append((base_target_type, base_target_id))
                     # Add left neighbor
                     if target_index > 0:
-                        targets.append(("creature", state.board[opposing_side][target_index - 1]))
+                        targets.append(
+                            ("creature", state.board[opposing_side][target_index - 1])
+                        )
                     # Add right neighbor
                     if target_index < len(state.board[opposing_side]) - 1:
-                        targets.append(("creature", state.board[opposing_side][target_index + 1]))
+                        targets.append(
+                            ("creature", state.board[opposing_side][target_index + 1])
+                        )
                 elif base_target_id:
                     # If not a creature, just hit the single target
                     targets = [(base_target_type, base_target_id)]
@@ -797,16 +875,18 @@ class GameService:
             # Create damage effects for each target
             effects = []
             for target_type, target_id in targets:
-                effects.append(DamageEffect(
-                    side=event.side,
-                    damage_type=action.damage_type,
-                    source_type=source_type,
-                    source_id=source_id,
-                    target_type=target_type,
-                    target_id=target_id,
-                    damage=action.amount,
-                    retaliate=not is_deathrattle,
-                ))
+                effects.append(
+                    DamageEffect(
+                        side=event.side,
+                        damage_type=action.damage_type,
+                        source_type=source_type,
+                        source_id=source_id,
+                        target_type=target_type,
+                        target_id=target_id,
+                        damage=action.amount,
+                        retaliate=not is_deathrattle,
+                    )
+                )
             return effects
 
         if isinstance(action, HealAction):
@@ -818,7 +898,9 @@ class GameService:
                 base_target_id = state.heroes[same_side].hero_id
             elif action.target == "creature":
                 base_target_type = "creature"
-                base_target_id = event.target_id or (state.board[same_side][0] if state.board[same_side] else None)
+                base_target_id = event.target_id or (
+                    state.board[same_side][0] if state.board[same_side] else None
+                )
             elif action.target == "friendly":
                 # 'friendly' can be hero or creature, use event target
                 base_target_type = event.target_type or "hero"
@@ -830,28 +912,35 @@ class GameService:
             # Get all targets based on scope
             targets = []
 
-            if action.scope == 'single':
+            if action.scope == "single":
                 if base_target_id:
                     targets = [(base_target_type, base_target_id)]
 
-            elif action.scope == 'all':
+            elif action.scope == "all":
                 # Heal all friendlies (all creatures + hero on same side)
                 for creature_id in state.board[same_side]:
                     targets.append(("creature", creature_id))
                 targets.append(("hero", state.heroes[same_side].hero_id))
 
-            elif action.scope == 'cleave':
+            elif action.scope == "cleave":
                 # Heal target and adjacent creatures
-                if base_target_type == "creature" and base_target_id in state.board[same_side]:
+                if (
+                    base_target_type == "creature"
+                    and base_target_id in state.board[same_side]
+                ):
                     target_index = state.board[same_side].index(base_target_id)
                     # Add the main target
                     targets.append((base_target_type, base_target_id))
                     # Add left neighbor
                     if target_index > 0:
-                        targets.append(("creature", state.board[same_side][target_index - 1]))
+                        targets.append(
+                            ("creature", state.board[same_side][target_index - 1])
+                        )
                     # Add right neighbor
                     if target_index < len(state.board[same_side]) - 1:
-                        targets.append(("creature", state.board[same_side][target_index + 1]))
+                        targets.append(
+                            ("creature", state.board[same_side][target_index + 1])
+                        )
                 elif base_target_id:
                     # If not a creature, just heal the single target
                     targets = [(base_target_type, base_target_id)]
@@ -859,14 +948,16 @@ class GameService:
             # Create heal effects for each target
             effects = []
             for target_type, target_id in targets:
-                effects.append(HealEffect(
-                    side=event.side,
-                    source_type=source_type,
-                    source_id=source_id,
-                    target_type=target_type,
-                    target_id=target_id,
-                    amount=action.amount,
-                ))
+                effects.append(
+                    HealEffect(
+                        side=event.side,
+                        source_type=source_type,
+                        source_id=source_id,
+                        target_type=target_type,
+                        target_id=target_id,
+                        amount=action.amount,
+                    )
+                )
             return effects
 
         if isinstance(action, RemoveAction):
@@ -875,7 +966,11 @@ class GameService:
             # Determine base target
             if action.target == "creature":
                 base_target_type = "creature"
-                base_target_id = event.target_id or (state.board[opposing_side][0] if state.board[opposing_side] else None)
+                base_target_id = event.target_id or (
+                    state.board[opposing_side][0]
+                    if state.board[opposing_side]
+                    else None
+                )
             elif action.target == "enemy":
                 # 'enemy' can be creature, use event target (remove doesn't affect heroes)
                 base_target_type = event.target_type or "creature"
@@ -887,27 +982,34 @@ class GameService:
             # Get all targets based on scope
             targets = []
 
-            if action.scope == 'single':
+            if action.scope == "single":
                 if base_target_id and base_target_type == "creature":
                     targets = [(base_target_type, base_target_id)]
 
-            elif action.scope == 'all':
+            elif action.scope == "all":
                 # Remove all enemy creatures
                 for creature_id in state.board[opposing_side]:
                     targets.append(("creature", creature_id))
 
-            elif action.scope == 'cleave':
+            elif action.scope == "cleave":
                 # Remove target and adjacent creatures
-                if base_target_type == "creature" and base_target_id in state.board[opposing_side]:
+                if (
+                    base_target_type == "creature"
+                    and base_target_id in state.board[opposing_side]
+                ):
                     target_index = state.board[opposing_side].index(base_target_id)
                     # Add the main target
                     targets.append((base_target_type, base_target_id))
                     # Add left neighbor
                     if target_index > 0:
-                        targets.append(("creature", state.board[opposing_side][target_index - 1]))
+                        targets.append(
+                            ("creature", state.board[opposing_side][target_index - 1])
+                        )
                     # Add right neighbor
                     if target_index < len(state.board[opposing_side]) - 1:
-                        targets.append(("creature", state.board[opposing_side][target_index + 1]))
+                        targets.append(
+                            ("creature", state.board[opposing_side][target_index + 1])
+                        )
                 elif base_target_id:
                     # If not a creature, just remove the single target
                     targets = [(base_target_type, base_target_id)]
@@ -915,13 +1017,15 @@ class GameService:
             # Create remove effects for each target
             effects = []
             for target_type, target_id in targets:
-                effects.append(RemoveEffect(
-                    side=event.side,
-                    source_type=source_type,
-                    source_id=source_id,
-                    target_type=target_type,
-                    target_id=target_id,
-                ))
+                effects.append(
+                    RemoveEffect(
+                        side=event.side,
+                        source_type=source_type,
+                        source_id=source_id,
+                        target_type=target_type,
+                        target_id=target_id,
+                    )
+                )
             return effects
 
         if isinstance(action, TempManaBoostAction):
@@ -975,11 +1079,11 @@ class GameService:
             # Get all targets based on scope
             targets = []
 
-            if action.scope == 'single':
+            if action.scope == "single":
                 if base_target_id:
                     targets = [(base_target_type, base_target_id)]
 
-            elif action.scope == 'all':
+            elif action.scope == "all":
                 if action.target == "hero":
                     # Buff own hero only
                     targets.append(("hero", state.heroes[same_side].hero_id))
@@ -993,18 +1097,25 @@ class GameService:
                     for creature_id in state.board[same_side]:
                         targets.append(("creature", creature_id))
 
-            elif action.scope == 'cleave':
+            elif action.scope == "cleave":
                 # Buff target and adjacent creatures
-                if base_target_type == "creature" and base_target_id in state.board[same_side]:
+                if (
+                    base_target_type == "creature"
+                    and base_target_id in state.board[same_side]
+                ):
                     target_index = state.board[same_side].index(base_target_id)
                     # Add the main target
                     targets.append((base_target_type, base_target_id))
                     # Add left neighbor
                     if target_index > 0:
-                        targets.append(("creature", state.board[same_side][target_index - 1]))
+                        targets.append(
+                            ("creature", state.board[same_side][target_index - 1])
+                        )
                     # Add right neighbor
                     if target_index < len(state.board[same_side]) - 1:
-                        targets.append(("creature", state.board[same_side][target_index + 1]))
+                        targets.append(
+                            ("creature", state.board[same_side][target_index + 1])
+                        )
                 elif base_target_id:
                     # If not a creature, just buff the single target
                     targets = [(base_target_type, base_target_id)]
@@ -1012,19 +1123,20 @@ class GameService:
             # Create buff effects for each target
             effects = []
             for target_type, target_id in targets:
-                effects.append(BuffEffect(
-                    side=event.side,
-                    source_type=source_type,
-                    source_id=source_id,
-                    target_type=target_type,
-                    target_id=target_id,
-                    attribute=action.attribute,
-                    amount=action.amount,
-                ))
+                effects.append(
+                    BuffEffect(
+                        side=event.side,
+                        source_type=source_type,
+                        source_id=source_id,
+                        target_type=target_type,
+                        target_id=target_id,
+                        attribute=action.attribute,
+                        amount=action.amount,
+                    )
+                )
             return effects
 
         raise ValueError(f"Invalid action: {action}")
-
 
     @staticmethod
     def _update_elo_ratings(game):
@@ -1033,8 +1145,8 @@ class GameService:
         Only processes games between two human players (not vs AI).
         Updates ratings per-title (each user has a separate rating for each title).
         """
-        from apps.gameplay.models import ELORatingChange, UserTitleRating
         from apps.gameplay.elo import ELOCalculator
+        from apps.gameplay.models import ELORatingChange, UserTitleRating
 
         # Skip if this is a PvE game (vs AI)
         if game.is_vs_ai:
@@ -1057,7 +1169,7 @@ class GameService:
             return
 
         # Skip if ELO change already exists (idempotency)
-        if hasattr(game, 'elo_change') and game.elo_change:
+        if hasattr(game, "elo_change") and game.elo_change:
             logger.info(f"ELO change already exists for game {game.id}")
             return
 
@@ -1078,13 +1190,13 @@ class GameService:
             user=winner_user,
             title=title,
             ladder_type=ladder_type,
-            defaults={'elo_rating': 1200}
+            defaults={"elo_rating": 1200},
         )
         loser_rating, _ = UserTitleRating.objects.get_or_create(
             user=loser_user,
             title=title,
             ladder_type=ladder_type,
-            defaults={'elo_rating': 1200}
+            defaults={"elo_rating": 1200},
         )
 
         # Get current ratings
@@ -1093,15 +1205,14 @@ class GameService:
 
         # Calculate new ratings
         winner_new_rating, loser_new_rating = ELOCalculator.calculate_new_ratings(
-            winner_old_rating,
-            loser_old_rating
+            winner_old_rating, loser_old_rating
         )
 
         # Update title ratings
         winner_rating.elo_rating = winner_new_rating
         loser_rating.elo_rating = loser_new_rating
-        winner_rating.save(update_fields=['elo_rating'])
-        loser_rating.save(update_fields=['elo_rating'])
+        winner_rating.save(update_fields=["elo_rating"])
+        loser_rating.save(update_fields=["elo_rating"])
 
         # Create ELO change record
         ELORatingChange.objects.create(
@@ -1132,12 +1243,12 @@ class GameService:
         """
         from apps.gameplay.schemas.updates import (
             ClearUpdate,
+            DamageUpdate,
             DrawCardUpdate,
             EndTurnUpdate,
-            PlayCardUpdate,
             GameOverUpdate,
-            DamageUpdate,
             HealUpdate,
+            PlayCardUpdate,
             RemoveUpdate,
             SummonUpdate,
             TempManaBoostUpdate,
@@ -1147,62 +1258,76 @@ class GameService:
         for event in events:
             # Map events to corresponding updates
             if event.type == "event_draw":
-                updates.append(DrawCardUpdate(
-                    side=event.side,
-                    card_id=event.card_id,
-                    target_type=event.target_type,
-                    target_id=event.target_id,
-                ))
+                updates.append(
+                    DrawCardUpdate(
+                        side=event.side,
+                        card_id=event.card_id,
+                        target_type=event.target_type,
+                        target_id=event.target_id,
+                    )
+                )
             elif event.type == "event_play":
-                updates.append(PlayCardUpdate(
-                    side=event.side,
-                    source_type=event.source_type,
-                    source_id=event.source_id,
-                    card_id=event.source_id,
-                    position=event.position,
-                    target_type=event.target_type,
-                    target_id=event.target_id,
-                ))
+                updates.append(
+                    PlayCardUpdate(
+                        side=event.side,
+                        source_type=event.source_type,
+                        source_id=event.source_id,
+                        card_id=event.source_id,
+                        position=event.position,
+                        target_type=event.target_type,
+                        target_id=event.target_id,
+                    )
+                )
             elif event.type == "event_damage":
-                updates.append(DamageUpdate(
-                    side=event.side,
-                    source_type=event.source_type,
-                    source_id=event.source_id,
-                    target_type=event.target_type,
-                    target_id=event.target_id,
-                    damage=event.damage,
-                    is_retaliation=event.is_retaliation,
-                ))
+                updates.append(
+                    DamageUpdate(
+                        side=event.side,
+                        source_type=event.source_type,
+                        source_id=event.source_id,
+                        target_type=event.target_type,
+                        target_id=event.target_id,
+                        damage=event.damage,
+                        is_retaliation=event.is_retaliation,
+                    )
+                )
             elif event.type == "event_heal":
-                updates.append(HealUpdate(
-                    side=event.side,
-                    source_type=event.source_type,
-                    source_id=event.source_id,
-                    target_type=event.target_type,
-                    target_id=event.target_id,
-                    amount=event.amount,
-                ))
+                updates.append(
+                    HealUpdate(
+                        side=event.side,
+                        source_type=event.source_type,
+                        source_id=event.source_id,
+                        target_type=event.target_type,
+                        target_id=event.target_id,
+                        amount=event.amount,
+                    )
+                )
             elif event.type == "event_remove":
-                updates.append(RemoveUpdate(
-                    side=event.side,
-                    source_type=event.source_type,
-                    source_id=event.source_id,
-                    target_type=event.target_type,
-                    target_id=event.target_id,
-                ))
+                updates.append(
+                    RemoveUpdate(
+                        side=event.side,
+                        source_type=event.source_type,
+                        source_id=event.source_id,
+                        target_type=event.target_type,
+                        target_id=event.target_id,
+                    )
+                )
             elif event.type == "event_temp_mana_boost":
-                updates.append(TempManaBoostUpdate(
-                    side=event.side,
-                    amount=event.amount,
-                ))
+                updates.append(
+                    TempManaBoostUpdate(
+                        side=event.side,
+                        amount=event.amount,
+                    )
+                )
             elif event.type == "event_summon":
-                updates.append(SummonUpdate(
-                    side=event.side,
-                    source_type=event.source_type,
-                    source_id=event.source_id,
-                    target_type=event.target_type,
-                    target_id=event.target_id,
-                ))
+                updates.append(
+                    SummonUpdate(
+                        side=event.side,
+                        source_type=event.source_type,
+                        source_id=event.source_id,
+                        target_type=event.target_type,
+                        target_id=event.target_id,
+                    )
+                )
             elif event.type == "event_clear":
                 # Get cleared creature IDs from the state before the event
                 opposing_side = "side_b" if event.side == "side_a" else "side_a"
@@ -1211,22 +1336,28 @@ class GameService:
                 # For now, we'll rely on the event having this info or deduce from sides
                 # Since the event doesn't carry this info, we'll leave it empty
                 # The frontend can deduce which creatures disappeared from the state
-                updates.append(ClearUpdate(
-                    side=event.side,
-                    source_type=event.source_type,
-                    source_id=event.source_id,
-                    target=event.target,
-                    cleared_creature_ids=[],  # Frontend will detect from state diff
-                ))
+                updates.append(
+                    ClearUpdate(
+                        side=event.side,
+                        source_type=event.source_type,
+                        source_id=event.source_id,
+                        target=event.target,
+                        cleared_creature_ids=[],  # Frontend will detect from state diff
+                    )
+                )
             elif event.type == "event_game_over":
-                updates.append(GameOverUpdate(
-                    side=event.side,
-                    winner=event.winner,
-                ))
+                updates.append(
+                    GameOverUpdate(
+                        side=event.side,
+                        winner=event.winner,
+                    )
+                )
             elif event.type == "event_end_turn":
-                updates.append(EndTurnUpdate(
-                    side=event.side,
-                ))
+                updates.append(
+                    EndTurnUpdate(
+                        side=event.side,
+                    )
+                )
 
         return updates
 
@@ -1243,8 +1374,8 @@ class GameService:
         3. Match players with closest ratings
         4. Create game and notify both players
         """
-        from apps.gameplay.models import MatchmakingQueue, Game
         from apps.builder.models import Title
+        from apps.gameplay.models import Game, MatchmakingQueue
 
         if ladder_type not in dict(Game.LADDER_TYPE_CHOICES):
             ladder_type = Game.LADDER_TYPE_RAPID
@@ -1262,12 +1393,14 @@ class GameService:
                 status=MatchmakingQueue.STATUS_QUEUED,
                 ladder_type=ladder_type,
             )
-            .select_related('user', 'deck', 'deck__hero', 'deck__title')
-            .order_by('elo_rating')
+            .select_related("user", "deck", "deck__hero", "deck__title")
+            .order_by("elo_rating")
         )
 
         if len(queued_entries) < 2:
-            logger.info(f"Not enough players in queue ({len(queued_entries)}), skipping matchmaking")
+            logger.info(
+                f"Not enough players in queue ({len(queued_entries)}), skipping matchmaking"
+            )
             return 0
 
         # Simple matchmaking: pair closest ELO ratings
@@ -1281,7 +1414,7 @@ class GameService:
 
             entry_a = queued_entries[i]
             best_match = None
-            best_diff = float('inf')
+            best_diff = float("inf")
             best_index = None
 
             # Find closest ELO opponent
@@ -1298,8 +1431,8 @@ class GameService:
                 # For daily ladder, don't match if they already have an active game
                 if ladder_type == Game.LADDER_TYPE_DAILY:
                     existing_game = Game.objects.filter(
-                        Q(player_a_user=entry_a.user, player_b_user=entry_b.user) |
-                        Q(player_a_user=entry_b.user, player_b_user=entry_a.user),
+                        Q(player_a_user=entry_a.user, player_b_user=entry_b.user)
+                        | Q(player_a_user=entry_b.user, player_b_user=entry_a.user),
                         status=Game.GAME_STATUS_IN_PROGRESS,
                         type=Game.GAME_TYPE_RANKED,
                         ladder_type=Game.LADDER_TYPE_DAILY,
@@ -1336,38 +1469,41 @@ class GameService:
                 # Set game type to ranked for matchmaking games
                 game.type = Game.GAME_TYPE_RANKED
                 game.ladder_type = ladder_type
-                game.save(update_fields=['type', 'ladder_type'])
+                game.save(update_fields=["type", "ladder_type"])
 
                 # Update time_per_turn in game state based on title config
                 from apps.gameplay.schemas.game import GameState
+
                 game_state = GameState.model_validate(game.state)
                 if ladder_type == Game.LADDER_TYPE_DAILY:
                     game_state.time_per_turn = 60 * 60 * 24
                 else:
                     game_state.time_per_turn = game_state.config.ranked_time_per_turn
                 game.state = game_state.model_dump()
-                game.save(update_fields=['state'])
+                game.save(update_fields=["state"])
 
                 # Update both queue entries
                 entry_a.status = MatchmakingQueue.STATUS_MATCHED
                 entry_a.matched_with = entry_b
                 entry_a.game = game
-                entry_a.save(update_fields=['status', 'matched_with', 'game'])
+                entry_a.save(update_fields=["status", "matched_with", "game"])
 
                 entry_b.status = MatchmakingQueue.STATUS_MATCHED
                 entry_b.matched_with = entry_a
                 entry_b.game = game
-                entry_b.save(update_fields=['status', 'matched_with', 'game'])
+                entry_b.save(update_fields=["status", "matched_with", "game"])
 
                 logger.info(f"Created ranked game {game.id} for matched players")
 
                 # Kick off first step to initialize the game
                 from apps.gameplay.tasks import step
+
                 step.delay(game.id)
 
                 # Notify both players via websocket
                 from apps.gameplay.notifications import send_matchmaking_success
-                title_slug = getattr(entry_a.deck.title, 'slug', None)
+
+                title_slug = getattr(entry_a.deck.title, "slug", None)
                 if title_slug:
                     send_matchmaking_success(entry_a.user_id, game.id, title_slug)
                     send_matchmaking_success(entry_b.user_id, game.id, title_slug)
@@ -1376,9 +1512,9 @@ class GameService:
                 logger.error(f"Failed to create game for matched pair: {e}")
                 # Reset queue entries on failure
                 entry_a.status = MatchmakingQueue.STATUS_QUEUED
-                entry_a.save(update_fields=['status'])
+                entry_a.save(update_fields=["status"])
                 entry_b.status = MatchmakingQueue.STATUS_QUEUED
-                entry_b.save(update_fields=['status'])
+                entry_b.save(update_fields=["status"])
 
         matches_created = len(matched_pairs)
         logger.info(f"Matchmaking complete: created {matches_created} games")
@@ -1395,6 +1531,7 @@ class GameService:
         the game is aborted (no winner, no rating changes).
         """
         from django.utils import timezone
+
         from apps.gameplay.schemas.effects import ConcedeEffect
         from apps.gameplay.schemas.updates import GameAbortedUpdate
 
@@ -1404,7 +1541,7 @@ class GameService:
         expired_games = Game.objects.filter(
             status=Game.GAME_STATUS_IN_PROGRESS,
             turn_expires__isnull=False,
-            turn_expires__lte=now
+            turn_expires__lte=now,
         ).select_for_update(nowait=False)
 
         for game in expired_games:
@@ -1412,12 +1549,14 @@ class GameService:
                 game_state = GameState.model_validate(game.state)
 
                 # Only process if in main phase and has time control
-                if game_state.phase == 'main' and game_state.time_per_turn > 0:
+                if game_state.phase == "main" and game_state.time_per_turn > 0:
                     # Check for abort condition: ranked game, turn 1, side_a timing out
                     # This handles the case where someone queued but never came back
-                    if (game.type == Game.GAME_TYPE_RANKED and
-                            game_state.turn == 1 and
-                            game_state.active == 'side_a'):
+                    if (
+                        game.type == Game.GAME_TYPE_RANKED
+                        and game_state.turn == 1
+                        and game_state.active == "side_a"
+                    ):
                         logger.info(
                             f"Ranked game {game.id} aborted: side_a timed out on turn 1 "
                             f"(no winner, no rating changes)"
@@ -1426,22 +1565,21 @@ class GameService:
                         game.status = Game.GAME_STATUS_ABORTED
                         game.queue = []
                         game.turn_expires = None
-                        game.save(update_fields=['status', 'queue', 'turn_expires'])
+                        game.save(update_fields=["status", "queue", "turn_expires"])
 
                         # Notify clients
                         abort_update = GameAbortedUpdate(
-                            side=game_state.active,
-                            reason="first_turn_timeout"
+                            side=game_state.active, reason="first_turn_timeout"
                         )
                         send_game_updates_to_clients(
-                            game.id,
-                            game_state,
-                            [abort_update]
+                            game.id, game_state, [abort_update]
                         )
                         continue  # Don't process as normal timeout
 
                     # Normal timeout - concede for the active player
-                    logger.info(f"Turn expired for {game_state.active} in game {game.id}, auto-conceding")
+                    logger.info(
+                        f"Turn expired for {game_state.active} in game {game.id}, auto-conceding"
+                    )
                     game.enqueue([ConcedeEffect(side=game_state.active)], trigger=True)
             except Exception as e:
                 logger.error(f"Error checking expired turn for game {game.id}: {e}")

@@ -2,8 +2,17 @@
 Effect handlers for the engine.
 """
 
+import random
+
 from pydantic import TypeAdapter, ValidationError
-from apps.builder.schemas import Action, DamageAction, HealAction, RemoveAction, BuffAction
+
+from apps.builder.schemas import (
+    Action,
+    BuffAction,
+    DamageAction,
+    HealAction,
+    RemoveAction,
+)
 from apps.gameplay.engine.dispatcher import register
 from apps.gameplay.schemas.effects import (
     AttackEffect,
@@ -11,10 +20,11 @@ from apps.gameplay.schemas.effects import (
     ClearEffect,
     ConcedeEffect,
     DamageEffect,
-    EndTurnEffect,
     DrawEffect,
+    EndTurnEffect,
     HealEffect,
     MarkExhaustedEffect,
+    MulliganEffect,
     NewPhaseEffect,
     PlayEffect,
     RemoveEffect,
@@ -23,6 +33,7 @@ from apps.gameplay.schemas.effects import (
     TempManaBoostEffect,
     UseHeroEffect,
 )
+from apps.gameplay.schemas.engine import Rejected, Result, Success
 from apps.gameplay.schemas.events import (
     BuffEvent,
     ClearEvent,
@@ -32,6 +43,7 @@ from apps.gameplay.schemas.events import (
     EndTurnEvent,
     GameOverEvent,
     HealEvent,
+    MulliganEvent,
     NewPhaseEvent,
     PlayEvent,
     RemoveEvent,
@@ -39,14 +51,12 @@ from apps.gameplay.schemas.events import (
     TempManaBoostEvent,
     UseHeroEvent,
 )
-from apps.gameplay.schemas.game import GameState, CardInPlay, Creature
-from apps.gameplay.schemas.engine import (
-    Result,
-    Success,
-    Rejected,
-)
+from apps.gameplay.schemas.game import CardInPlay, Creature, GameState
 
-def spawn_creature(card: CardInPlay, state: GameState, side, position: int=0) -> Creature:
+
+def spawn_creature(
+    card: CardInPlay, state: GameState, side, position: int = 0
+) -> Creature:
     # Creature being spawned
     creature_id = str(int(state.last_creature_id) + 1)
     state.last_creature_id = int(creature_id)
@@ -68,37 +78,40 @@ def spawn_creature(card: CardInPlay, state: GameState, side, position: int=0) ->
     return creature
 
 
+def draw_card_for_side(state: GameState, side: str):
+    try:
+        card_id = state.decks[side].pop(0)
+    except IndexError:
+        opposing_side = "side_b" if side == "side_a" else "side_a"
+        return None, GameOverEvent(side=side, winner=opposing_side)
+
+    state.hands[side].append(card_id)
+    return card_id, DrawEvent(
+        side=side,
+        card_id=card_id,
+        target_type="card",
+        target_id=card_id,
+    )
+
+
 @register("effect_draw")
 def draw(effect: DrawEffect, state: GameState) -> Result:
 
-    deck = state.decks[effect.side]
     events = []
 
     for _ in range(effect.amount):
-        try:
-            card_id = deck.pop(0)
-        except IndexError:
-            opposing_side = "side_b" if effect.side == "side_a" else "side_a"
-            go_event = GameOverEvent(side=effect.side, winner=opposing_side)
-            return Success(new_state = state, events=[go_event])
+        _, event = draw_card_for_side(state, effect.side)
+        events.append(event)
+        if isinstance(event, GameOverEvent):
+            return Success(new_state=state, events=events)
 
-        state.hands[effect.side].append(card_id)
-        events.append(
-            DrawEvent(
-                side=effect.side,
-                card_id=card_id,
-                target_type="card",
-                target_id=card_id,
-            ))
+    return Success(new_state=state, events=events)
 
-    return Success(
-        new_state=state,
-        events=events
-    )
 
 def has_stealth(creature: Creature) -> bool:
     """Check if a creature has the stealth trait."""
     return any(trait.type == "stealth" for trait in creature.traits)
+
 
 def _iter_validated_actions(card: CardInPlay) -> list[Action]:
     """
@@ -107,8 +120,8 @@ def _iter_validated_actions(card: CardInPlay) -> list[Action]:
     serialization boundaries, so we validate defensively.
     """
     actions: list[Action] = []
-    for trait in (card.traits or []):
-        for raw_action in (getattr(trait, "actions", None) or []):
+    for trait in card.traits or []:
+        for raw_action in getattr(trait, "actions", None) or []:
             try:
                 actions.append(TypeAdapter(Action).validate_python(raw_action))
             except ValidationError:
@@ -232,7 +245,7 @@ def play(effect: PlayEffect, state: GameState) -> Result:
         state.graveyard[effect.side].append(effect.source_id)
     else:
         # The old way was to add the same card object that was in hand to the board
-        #state.board[effect.side].insert(effect.position, effect.source_id)
+        # state.board[effect.side].insert(effect.position, effect.source_id)
         # Now we create a new creature object and add it to the board
         creature = spawn_creature(
             card=card,
@@ -246,16 +259,19 @@ def play(effect: PlayEffect, state: GameState) -> Result:
 
     return Success(
         new_state=state,
-        events=[PlayEvent(
-            side=effect.side,
-            source_type="card",
-            source_id=effect.source_id,
-            position=effect.position,
-            target_type=effect.target_type,
-            target_id=effect.target_id,
-            creature_id=creature_id,
-        )]
+        events=[
+            PlayEvent(
+                side=effect.side,
+                source_type="card",
+                source_id=effect.source_id,
+                position=effect.position,
+                target_type=effect.target_type,
+                target_id=effect.target_id,
+                creature_id=creature_id,
+            )
+        ],
     )
+
 
 @register("effect_damage")
 def damage(effect: DamageEffect, state: GameState) -> Result:
@@ -277,7 +293,11 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
 
     # Get the target
     if effect.target_type == "hero":
-        hero_side = effect.side if state.heroes[effect.side].hero_id == effect.target_id else opposing_side
+        hero_side = (
+            effect.side
+            if state.heroes[effect.side].hero_id == effect.target_id
+            else opposing_side
+        )
         target = state.heroes[hero_side]
     elif effect.target_type == "card":
         target = state.cards[effect.target_id]
@@ -293,15 +313,17 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
         hero = target
         hero.health -= effect.damage
 
-        events.append(DamageEvent(
-            side=effect.side,
-            source_type=effect.source_type,
-            source_id=effect.source_id,
-            target_type=effect.target_type,
-            target_id=effect.target_id,
-            damage=effect.damage,
-            is_retaliation=effect.is_retaliation,
-        ))
+        events.append(
+            DamageEvent(
+                side=effect.side,
+                source_type=effect.source_type,
+                source_id=effect.source_id,
+                target_type=effect.target_type,
+                target_id=effect.target_id,
+                damage=effect.damage,
+                is_retaliation=effect.is_retaliation,
+            )
+        )
 
         if hero.health <= 0:
             # If the hero dies, that is a game over event
@@ -315,21 +337,23 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
         # we don't want to the user to see an error message.
         if target_type == "creature":
             if effect.target_id not in (
-                state.board[opposing_side] + state.board[effect.side]):
+                state.board[opposing_side] + state.board[effect.side]
+            ):
                 return Success(
-                    new_state=state,
-                    events=events,
-                    child_effects=child_effects)
+                    new_state=state, events=events, child_effects=child_effects
+                )
 
-        events.append(DamageEvent(
-            side=effect.side,
-            source_type=effect.source_type,
-            source_id=effect.source_id,
-            target_type=effect.target_type,
-            target_id=effect.target_id,
-            damage=effect.damage,
-            is_retaliation=effect.is_retaliation,
-        ))
+        events.append(
+            DamageEvent(
+                side=effect.side,
+                source_type=effect.source_type,
+                source_id=effect.source_id,
+                target_type=effect.target_type,
+                target_id=effect.target_id,
+                damage=effect.damage,
+                is_retaliation=effect.is_retaliation,
+            )
+        )
 
         # Target is a creature on the board (we already fetched it above)
         target.health -= effect.damage
@@ -340,14 +364,16 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
             if effect.target_id in state.board[opposing_side]:
                 state.board[opposing_side].remove(effect.target_id)
 
-                events.append(CreatureDeathEvent(
-                    side=opposing_side,
-                    source_type=effect.source_type,
-                    source_id=effect.source_id,
-                    creature=target,
-                    target_type=effect.target_type,
-                    target_id=effect.target_id,
-                ))
+                events.append(
+                    CreatureDeathEvent(
+                        side=opposing_side,
+                        source_type=effect.source_type,
+                        source_id=effect.source_id,
+                        creature=target,
+                        target_type=effect.target_type,
+                        target_id=effect.target_id,
+                    )
+                )
 
         if target.health > 0 or state.config.death_retaliation:
             # Determine if we need to retaliate
@@ -359,35 +385,38 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
             )
 
             # Ranged trait doesn't get retaliated against
-            if ((effect.source_type == "card" or effect.source_type == "creature")
-            and should_retaliate):
+            if (
+                effect.source_type == "card" or effect.source_type == "creature"
+            ) and should_retaliate:
                 has_ranged_trait = lambda trait: trait.type == "ranged"
                 # Source is already fetched above
                 source_has_ranged_trait = any(
-                    has_ranged_trait(trait)
-                    for trait in source.traits
+                    has_ranged_trait(trait) for trait in source.traits
                 )
                 if source_has_ranged_trait:
                     should_retaliate = False
 
             if should_retaliate:
-                child_effects.append(DamageEffect(
-                    side=opposing_side,
-                    damage_type="physical",
-                    source_type="creature",
-                    source_id=effect.target_id,
-                    target_type=effect.source_type,
-                    target_id=effect.source_id,
-                    damage=target.attack,
-                    retaliate=False,
-                    is_retaliation=True
-                ))
+                child_effects.append(
+                    DamageEffect(
+                        side=opposing_side,
+                        damage_type="physical",
+                        source_type="creature",
+                        source_id=effect.target_id,
+                        target_type=effect.source_type,
+                        target_id=effect.source_id,
+                        damage=target.attack,
+                        retaliate=False,
+                        is_retaliation=True,
+                    )
+                )
 
     return Success(
         new_state=state,
         events=events,
         child_effects=child_effects,
     )
+
 
 @register("effect_heal")
 def heal(effect: HealEffect, state: GameState) -> Result:
@@ -425,19 +454,22 @@ def heal(effect: HealEffect, state: GameState) -> Result:
     if target.health > target.health_max:
         target.health = target.health_max
 
-    events = [HealEvent(
-        side=effect.side,
-        source_type=effect.source_type,
-        source_id=effect.source_id,
-        target_type=effect.target_type,
-        target_id=effect.target_id,
-        amount=effect.amount
-    )]
+    events = [
+        HealEvent(
+            side=effect.side,
+            source_type=effect.source_type,
+            source_id=effect.source_id,
+            target_type=effect.target_type,
+            target_id=effect.target_id,
+            amount=effect.amount,
+        )
+    ]
 
     return Success(
         new_state=state,
         events=events,
     )
+
 
 @register("effect_buff")
 def buff(effect: BuffEffect, state: GameState) -> Result:
@@ -483,20 +515,23 @@ def buff(effect: BuffEffect, state: GameState) -> Result:
     else:
         return Rejected(reason=f"Unknown buff attribute: {effect.attribute}")
 
-    events = [BuffEvent(
-        side=effect.side,
-        source_type=effect.source_type,
-        source_id=effect.source_id,
-        target_type=effect.target_type,
-        target_id=effect.target_id,
-        attribute=effect.attribute,
-        amount=effect.amount
-    )]
+    events = [
+        BuffEvent(
+            side=effect.side,
+            source_type=effect.source_type,
+            source_id=effect.source_id,
+            target_type=effect.target_type,
+            target_id=effect.target_id,
+            attribute=effect.attribute,
+            amount=effect.amount,
+        )
+    ]
 
     return Success(
         new_state=state,
         events=events,
     )
+
 
 @register("effect_mark_exhausted")
 def mark_exhausted(effect: MarkExhaustedEffect, state: GameState) -> Result:
@@ -507,6 +542,7 @@ def mark_exhausted(effect: MarkExhaustedEffect, state: GameState) -> Result:
     elif effect.target_type == "hero":
         state.heroes[effect.side].exhausted = True
     return Success(new_state=state)
+
 
 def has_taunt(creature: Creature) -> bool:
     """Check if a creature has the taunt trait."""
@@ -562,7 +598,9 @@ def attack(effect: AttackEffect, state: GameState) -> Result:
     if taunt_creatures:
         # If there are taunt creatures, the target must be one of them
         if effect.target_type == "hero":
-            return Rejected(reason="Cannot attack hero while enemy has creatures with Taunt")
+            return Rejected(
+                reason="Cannot attack hero while enemy has creatures with Taunt"
+            )
         elif effect.target_type == "creature":
             if effect.target_id not in taunt_creatures:
                 return Rejected(reason="Must attack a creature with Taunt")
@@ -577,12 +615,10 @@ def attack(effect: AttackEffect, state: GameState) -> Result:
         source_id=effect.card_id,
         target_type=effect.target_type,
         target_id=effect.target_id,
-        damage=creature.attack
+        damage=creature.attack,
     )
     mark_exhausted_effect = MarkExhaustedEffect(
-        side=effect.side,
-        target_type="creature",
-        target_id=effect.card_id
+        side=effect.side, target_type="creature", target_id=effect.card_id
     )
     child_effects = [mark_exhausted_effect, damage_effect]
     return Success(new_state=state, child_effects=child_effects)
@@ -591,8 +627,8 @@ def attack(effect: AttackEffect, state: GameState) -> Result:
 @register("effect_use_hero")
 def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
     # Lazy import to avoid circular dependency
-    from apps.gameplay.services import GameService
     from apps.builder.schemas import HealAction
+    from apps.gameplay.services import GameService
 
     hero = state.heroes.get(effect.side)
     if not hero:
@@ -604,12 +640,12 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
 
     # Determine if this hero power targets friendlies, enemies, or self
     targets_friendly = any(
-        (isinstance(action, HealAction) and action.target == 'friendly')
+        (isinstance(action, HealAction) and action.target == "friendly")
         or isinstance(action, BuffAction)
         for action in hero.hero_power.actions
     )
     targets_self = any(
-        isinstance(action, DamageAction) and getattr(action, "target", None) == 'self'
+        isinstance(action, DamageAction) and getattr(action, "target", None) == "self"
         for action in hero.hero_power.actions
     )
 
@@ -629,7 +665,9 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
             opposing_side = state.opposite_side
             if effect.target_type == "creature":
                 if effect.target_id not in state.board[opposing_side]:
-                    return Rejected(reason=f"Target creature is not on opponent's board")
+                    return Rejected(
+                        reason=f"Target creature is not on opponent's board"
+                    )
                 # STEALTH VALIDATION: Cannot directly target stealthed creatures with hero powers
                 target_creature = state.creatures.get(effect.target_id)
                 if target_creature and has_stealth(target_creature):
@@ -674,10 +712,9 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
     child_effects.append(mark_exhausted_effect)
 
     return Success(
-        new_state=state,
-        child_effects=child_effects,
-        events=[use_hero_event]
+        new_state=state, child_effects=child_effects, events=[use_hero_event]
     )
+
 
 @register("effect_concede")
 def concede(effect: ConcedeEffect, state: GameState) -> Result:
@@ -685,8 +722,7 @@ def concede(effect: ConcedeEffect, state: GameState) -> Result:
     opposing_side = "side_b" if effect.side == "side_a" else "side_a"
 
     return Success(
-        new_state=state,
-        events=[GameOverEvent(side=effect.side, winner=opposing_side)]
+        new_state=state, events=[GameOverEvent(side=effect.side, winner=opposing_side)]
     )
 
 
@@ -708,55 +744,134 @@ def end_turn(effect: EndTurnEffect, state: GameState) -> Result:
         new_state=state,
     )
 
+
+@register("effect_mulligan")
+def mulligan(effect: MulliganEffect, state: GameState) -> Result:
+    if state.phase != "mulligan":
+        return Rejected(reason="Mulligan is not active")
+
+    if state.mulligan_done.get(effect.side, False):
+        return Rejected(reason="Mulligan already submitted")
+
+    if len(effect.card_ids) != len(set(effect.card_ids)):
+        return Rejected(reason="Mulligan contains duplicate cards")
+
+    eligible_cards = set(state.mulligan_options.get(effect.side, []))
+    invalid_cards = [
+        card_id
+        for card_id in effect.card_ids
+        if card_id not in eligible_cards or card_id not in state.hands[effect.side]
+    ]
+    if invalid_cards:
+        return Rejected(reason="Mulligan contains cards that cannot be replaced")
+
+    selected_cards = list(effect.card_ids)
+    for card_id in selected_cards:
+        state.hands[effect.side].remove(card_id)
+
+    events = [
+        MulliganEvent(
+            side=effect.side,
+            card_ids=effect.card_ids,
+        )
+    ]
+
+    for _ in effect.card_ids:
+        if not state.decks[effect.side] and selected_cards:
+            state.decks[effect.side].extend(selected_cards)
+            selected_cards = []
+            random.shuffle(state.decks[effect.side])
+        _, event = draw_card_for_side(state, effect.side)
+        events.append(event)
+        if isinstance(event, GameOverEvent):
+            return Success(new_state=state, events=events)
+
+    if selected_cards:
+        state.decks[effect.side].extend(selected_cards)
+        random.shuffle(state.decks[effect.side])
+
+    state.mulligan_options[effect.side] = []
+    state.mulligan_done[effect.side] = True
+
+    child_effects = []
+    if all(state.mulligan_done.get(side, False) for side in ("side_a", "side_b")):
+        child_effects.append(NewPhaseEffect(side=state.active, phase="start"))
+
+    return Success(
+        new_state=state,
+        child_effects=child_effects,
+        events=events,
+    )
+
+
 @register("effect_phase")
 def new_phase(effect: NewPhaseEffect, state: GameState) -> Result:
     child_effects = []
 
-    if effect.phase == 'start':
+    if effect.phase == "mulligan":
+        pass
+
+    elif effect.phase == "start":
         state.active = effect.side
         if state.active == "side_a":
             state.turn += 1
-        refresh_phase = NewPhaseEffect(side=effect.side, phase='refresh')
+        refresh_phase = NewPhaseEffect(side=effect.side, phase="refresh")
         child_effects.append(refresh_phase)
 
-    elif effect.phase == 'refresh':
+    elif effect.phase == "refresh":
         state.mana_pool[effect.side] = min(state.turn, 10)
         state.mana_used[effect.side] = 0
-        draw_phase = NewPhaseEffect(side=effect.side, phase='draw')
+        draw_phase = NewPhaseEffect(side=effect.side, phase="draw")
         child_effects.append(draw_phase)
 
-    elif effect.phase == 'draw':
-        child_effects.extend([
-            DrawEffect(side=effect.side),
-            NewPhaseEffect(side=effect.side, phase='main'),
-        ])
+    elif effect.phase == "draw":
+        child_effects.extend(
+            [
+                DrawEffect(side=effect.side),
+                NewPhaseEffect(side=effect.side, phase="main"),
+            ]
+        )
 
     state.phase = effect.phase
 
     return Success(
         new_state=state,
         child_effects=child_effects,
-        events=[NewPhaseEvent(side=effect.side, phase=effect.phase)]
+        events=[NewPhaseEvent(side=effect.side, phase=effect.phase)],
     )
+
 
 @register("effect_start_game")
 def start_game(effect: StartGameEffect, state: GameState) -> Result:
     hand_size = max(state.config.hand_start_size, 0)
     child_effects = []
-    # Starting side draws cards
-    child_effects.extend([
-        DrawEffect(side=effect.side)
-        for _ in range(hand_size)
-    ])
-    # Opposing side draws cards
+    events = []
     opposite_side = "side_b" if effect.side == "side_a" else "side_a"
-    child_effects.extend([
-        DrawEffect(side=opposite_side)
-        for _ in range(hand_size)
-    ])
-    # Start phase
-    child_effects.append(NewPhaseEffect(side=effect.side, phase='start'))
-    return Success(new_state=state, child_effects=child_effects)
+    state.mulligan_done = {
+        "side_a": "side_a" in state.ai_sides,
+        "side_b": "side_b" in state.ai_sides,
+    }
+    state.mulligan_options = {
+        "side_a": [],
+        "side_b": [],
+    }
+
+    for side in (effect.side, opposite_side):
+        for _ in range(hand_size):
+            card_id, event = draw_card_for_side(state, side)
+            events.append(event)
+            if isinstance(event, GameOverEvent):
+                return Success(new_state=state, events=events)
+            if card_id is not None:
+                state.mulligan_options[side].append(card_id)
+
+    state.phase = "mulligan"
+    events.append(NewPhaseEvent(side=effect.side, phase="mulligan"))
+
+    if all(state.mulligan_done.get(side, False) for side in ("side_a", "side_b")):
+        child_effects.append(NewPhaseEffect(side=effect.side, phase="start"))
+
+    return Success(new_state=state, child_effects=child_effects, events=events)
 
 
 @register("effect_remove")
@@ -774,7 +889,9 @@ def remove(effect: RemoveEffect, state: GameState) -> Result:
 
     # Validate that the target exists and is on the board
     if effect.target_id not in state.board[opposing_side]:
-        return Rejected(reason=f"Target creature {effect.target_id} is not on the board")
+        return Rejected(
+            reason=f"Target creature {effect.target_id} is not on the board"
+        )
 
     # Get the target creature
     target_creature = state.creatures.get(effect.target_id)
@@ -785,28 +902,27 @@ def remove(effect: RemoveEffect, state: GameState) -> Result:
     state.board[opposing_side].remove(effect.target_id)
 
     # Emit RemoveEvent (does NOT trigger deathrattle)
-    events.append(RemoveEvent(
-        side=effect.side,
-        source_type=effect.source_type,
-        source_id=effect.source_id,
-        target_type=effect.target_type,
-        target_id=effect.target_id,
-    ))
-
-    return Success(
-        new_state=state,
-        events=events,
-        child_effects=[]
+    events.append(
+        RemoveEvent(
+            side=effect.side,
+            source_type=effect.source_type,
+            source_id=effect.source_id,
+            target_type=effect.target_type,
+            target_id=effect.target_id,
+        )
     )
+
+    return Success(new_state=state, events=events, child_effects=[])
+
 
 @register("effect_temp_mana_boost")
 def temp_mana_boost(effect: TempManaBoostEffect, state: GameState) -> Result:
     state.mana_pool[effect.side] += effect.amount
     return Success(
         new_state=state,
-        events=[
-            TempManaBoostEvent(side=effect.side, amount=effect.amount)
-        ])
+        events=[TempManaBoostEvent(side=effect.side, amount=effect.amount)],
+    )
+
 
 @register("effect_summon")
 def summon(effect: SummonEffect, state: GameState) -> Result:
@@ -819,7 +935,7 @@ def summon(effect: SummonEffect, state: GameState) -> Result:
     template = state.summonable_cards[card_slug]
 
     # Summon only works for creatures
-    if template.card_type != 'creature':
+    if template.card_type != "creature":
         return Rejected(reason=f"Cannot summon non-creature card '{card_slug}'")
 
     # Create a new card instance with a unique card_id
@@ -847,13 +963,15 @@ def summon(effect: SummonEffect, state: GameState) -> Result:
 
     return Success(
         new_state=state,
-        events=[SummonEvent(
-            side=effect.side,
-            source_type="card",
-            source_id=effect.source_id,
-            target_type="card",
-            target_id=card.card_id,
-        )]
+        events=[
+            SummonEvent(
+                side=effect.side,
+                source_type="card",
+                source_id=effect.source_id,
+                target_type="card",
+                target_id=card.card_id,
+            )
+        ],
     )
 
 
@@ -891,15 +1009,13 @@ def clear(effect: ClearEffect, state: GameState) -> Result:
             cleared_creature_ids.append(creature_id)
 
     # Emit ClearEvent
-    events.append(ClearEvent(
-        side=effect.side,
-        source_type=effect.source_type,
-        source_id=effect.source_id,
-        target=effect.target,
-    ))
-
-    return Success(
-        new_state=state,
-        events=events,
-        child_effects=[]
+    events.append(
+        ClearEvent(
+            side=effect.side,
+            source_type=effect.source_type,
+            source_id=effect.source_id,
+            target=effect.target,
+        )
     )
+
+    return Success(new_state=state, events=events, child_effects=[])

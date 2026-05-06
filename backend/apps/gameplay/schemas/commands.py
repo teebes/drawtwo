@@ -1,14 +1,22 @@
-from typing import Literal, List, Dict, Union, Annotated, Literal, Optional
-from pydantic import BaseModel, Field, Discriminator
+from typing import Annotated, Dict, List, Literal, Optional, Union
+
+from pydantic import BaseModel, Discriminator, Field
 
 from apps.builder.schemas import TitleConfig, Trait
 
-PHASE_ORDER = ['start', 'refresh', 'draw', 'main',]
+PHASE_ORDER = [
+    "mulligan",
+    "start",
+    "refresh",
+    "draw",
+    "main",
+]
 
-Phase = Literal['start', 'refresh', 'draw', 'main', 'combat', 'end']
+Phase = Literal["mulligan", "start", "refresh", "draw", "main", "combat", "end"]
 
 
 # ==== Actions ====
+
 
 class CommandBase(BaseModel):
     type: str
@@ -44,12 +52,19 @@ class ConcedeCommand(CommandBase):
     type: Literal["cmd_concede"] = "cmd_concede"
 
 
+class MulliganCommand(CommandBase):
+    type: Literal["cmd_mulligan"] = "cmd_mulligan"
+    card_ids: List[str] = Field(default_factory=list)
+
+
 Command = Annotated[
     Union[
         AttackCommand,
         ConcedeCommand,
         EndTurnCommand,
+        MulliganCommand,
         PlayCardCommand,
         UseHeroCommand,
     ],
-    Discriminator('type')]
+    Discriminator("type"),
+]

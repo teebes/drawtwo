@@ -117,7 +117,7 @@
                     <span v-else class="text-gray-500 ml-2">[ {{ gameState.phase }} ]</span>
                 </div>
                 <GameButton
-                    v-if="gameState.winner === 'none' && gameState.active === bottomSide"
+                    v-if="gameState.winner === 'none' && gameState.active === bottomSide && gameState.phase === 'main'"
                     variant="secondary"
                     class="m-2"
                     :class="{ 'ring-2 ring-primary-500': hasNoAvailableActions }"
@@ -196,6 +196,58 @@
                                 @click="handleClickHandCard(card_id)"
                                 compact />
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mulligan Overlay -->
+            <div
+                v-if="isMulliganPhase"
+                class="absolute inset-0 z-40 flex items-center justify-center bg-gray-950/85 p-4">
+                <div class="w-full max-w-sm rounded-lg border border-gray-700 bg-gray-900 p-4 shadow-2xl">
+                    <div class="mb-4 text-center">
+                        <div class="text-lg font-semibold text-white">Opening Hand</div>
+                        <div class="mt-1 text-sm text-gray-400">
+                            <span v-if="!ownMulliganDone">Select cards to replace.</span>
+                            <span v-else>Waiting for opponent.</span>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-center gap-3">
+                        <button
+                            v-for="cardId in mulliganCards"
+                            :key="`mulligan-${cardId}`"
+                            type="button"
+                            class="relative w-20 shrink-0 rounded-lg transition-transform"
+                            :class="{
+                                'scale-[1.03]': isMulliganCardSelected(cardId),
+                                'opacity-60': ownMulliganDone || mulliganSubmitting
+                            }"
+                            :disabled="ownMulliganDone || mulliganSubmitting"
+                            @click="toggleMulliganCard(cardId)">
+                            <GameCard
+                                v-if="get_card(cardId)"
+                                :card="get_card(cardId)!"
+                                :active="isMulliganCardSelected(cardId)"
+                                compact />
+                        </button>
+                    </div>
+
+                    <div
+                        v-if="!ownMulliganDone"
+                        class="mt-5 flex items-center justify-between gap-3">
+                        <div class="text-sm text-gray-400">
+                            {{ selectedMulliganCount }} selected
+                        </div>
+                        <GameButton
+                            variant="primary"
+                            :disabled="mulliganSubmitting"
+                            @click="handleSubmitMulligan">
+                            {{ mulliganSubmitting ? 'Submitting' : selectedMulliganCount > 0 ? 'Replace Selected' : 'Keep Hand' }}
+                        </GameButton>
+                    </div>
+                    <div v-else class="mt-5 text-center text-sm text-gray-400">
+                        Hand submitted.
                     </div>
                 </div>
             </div>
@@ -466,6 +518,8 @@ const rematchLoading = ref(false)
 const boardSurface = ref<HTMLElement | null>(null)
 const activeCombatAnimation = ref<CombatAnimationState | null>(null)
 const combatValueBursts = ref<CombatValueBurst[]>([])
+const mulliganSelectedCardIds = ref<string[]>([])
+const mulliganSubmitting = ref(false)
 
 const combatAnimationQueue: CombatAnimationState[] = []
 const entityElements = new Map<string, HTMLElement>()
@@ -484,6 +538,27 @@ const COMBAT_ANIMATION_DURATION_MS = 620
 const COMBAT_VALUE_BURST_DURATION_MS = 2200
 
 const title = computed(() => titleStore.currentTitle)
+
+const isMulliganPhase = computed(() => gameState.value.phase === 'mulligan')
+
+const ownMulliganDone = computed(() => {
+    if (!viewer.value) return false
+    return Boolean(gameState.value.mulligan_done?.[viewer.value])
+})
+
+const mulliganCards = computed(() => {
+    if (!viewer.value) return []
+    if (ownMulliganDone.value) {
+        return ownHand.value
+    }
+    const options = gameState.value.mulligan_options?.[viewer.value]
+    if (options !== undefined) {
+        return options
+    }
+    return ownHand.value.slice(0, 3)
+})
+
+const selectedMulliganCount = computed(() => mulliganSelectedCardIds.value.length)
 
 // Check if user can edit this title (for debug features)
 const canEditTitle = computed(() => {
@@ -894,6 +969,30 @@ const getHero = (hero_id: string) => {
 
 const isHandCardActive = (card_id: string | number) => {
     return gameStore.isHandCardActive(String(card_id))
+}
+
+const isMulliganCardSelected = (cardId: string) => {
+    return mulliganSelectedCardIds.value.includes(cardId)
+}
+
+const toggleMulliganCard = (cardId: string) => {
+    if (ownMulliganDone.value || mulliganSubmitting.value) return
+    if (!mulliganCards.value.includes(cardId)) return
+
+    if (isMulliganCardSelected(cardId)) {
+        mulliganSelectedCardIds.value = mulliganSelectedCardIds.value.filter(
+            selectedCardId => selectedCardId !== cardId
+        )
+        return
+    }
+
+    mulliganSelectedCardIds.value = [...mulliganSelectedCardIds.value, cardId]
+}
+
+const handleSubmitMulligan = () => {
+    if (ownMulliganDone.value || mulliganSubmitting.value) return
+    mulliganSubmitting.value = true
+    gameStore.submitMulligan([...mulliganSelectedCardIds.value])
 }
 
 /* Click Handlers - Opening Entity Details or Initiating Actions */
@@ -1529,6 +1628,32 @@ watch(() => gameOver.value.isGameOver, (isGameOver) => {
         }
     }
 })
+
+watch(
+    () => [
+        isMulliganPhase.value,
+        ownMulliganDone.value,
+        mulliganCards.value.join(','),
+    ],
+    ([inMulligan, done]) => {
+        if (!inMulligan) {
+            mulliganSelectedCardIds.value = []
+            mulliganSubmitting.value = false
+            return
+        }
+
+        const eligibleCards = new Set(mulliganCards.value)
+        mulliganSelectedCardIds.value = mulliganSelectedCardIds.value.filter(
+            cardId => eligibleCards.has(cardId)
+        )
+
+        if (done) {
+            mulliganSelectedCardIds.value = []
+            mulliganSubmitting.value = false
+        }
+    },
+    { immediate: true }
+)
 
 watch(() => overlay.value, (currentOverlay) => {
     if (currentOverlay) {

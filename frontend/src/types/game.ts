@@ -1,4 +1,4 @@
-export type Phase = 'start' | 'refresh' | 'draw' | 'main' | 'combat' | 'end'
+export type Phase = 'mulligan' | 'start' | 'refresh' | 'draw' | 'main' | 'combat' | 'end'
 export type Side = 'side_a' | 'side_b'
 export type Winner = 'side_a' | 'side_b' | 'none'
 export type LadderType = 'rapid' | 'daily'
@@ -93,7 +93,10 @@ export interface GameState {
   heroes: Record<string, HeroInPlay>
   board: Record<string, string[]>
   hands: Record<string, string[]>
+  mulligan_done?: Record<Side, boolean>
+  mulligan_options?: Record<Side, string[]>
   decks: Record<string, string[]>
+  graveyard?: Record<string, string[]>
   mana_pool: Record<string, number>
   mana_used: Record<string, number>
   winner: Winner
