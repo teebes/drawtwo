@@ -91,6 +91,15 @@
                     Friends
                   </button>
                   <button
+                    v-if="gameConfigPath"
+                    type="button"
+                    class="flex w-full items-center rounded-xl px-4 py-2 text-sm font-medium text-secondary-600 transition hover:bg-secondary-50 dark:text-secondary-400 dark:hover:bg-secondary-950/30"
+                    @click="openGameConfig"
+                    role="menuitem"
+                  >
+                    Game Config
+                  </button>
+                  <button
                     v-if="authStore.user?.is_staff"
                     type="button"
                     class="flex w-full items-center rounded-xl px-4 py-2 text-sm font-medium text-purple-600 transition hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-950/30"
@@ -160,10 +169,23 @@ const profileInitial = computed(() => {
   return 'P'
 })
 
-const canEditTitle = computed(() => {
+const canEditCurrentTitle = computed(() => {
   return authStore.isAuthenticated &&
          titleStore.currentTitle &&
          (titleStore.currentTitle as any).can_edit === true
+})
+
+const canEditTitle = computed(() => canEditCurrentTitle.value)
+
+const gameConfigPath = computed(() => {
+  if (!authStore.isAuthenticated) return null
+  if (canEditCurrentTitle.value && titleStore.titleSlug) {
+    return `/${titleStore.titleSlug}/config`
+  }
+  if (!titleStore.currentTitle && titleStore.editableTitleSlug) {
+    return `/${titleStore.editableTitleSlug}/config`
+  }
+  return null
 })
 
 const toggleProfileMenu = () => {
@@ -181,8 +203,15 @@ const goToRoute = (path: string) => {
   closeProfileMenu()
 }
 
+const openGameConfig = () => {
+  if (gameConfigPath.value) {
+    goToRoute(gameConfigPath.value)
+  }
+}
+
 const handleSignOut = async () => {
   await authStore.logout()
+  titleStore.clearEditableTitleContext()
   closeProfileMenu()
   router.push('/')
 }

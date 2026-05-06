@@ -20,6 +20,7 @@ import CardDetails from '../views/CardDetails.vue'
 import DeckDetail from '../views/DeckDetail.vue'
 import DeckEdit from '../views/DeckEdit.vue'
 import GameCreate from '../views/GameCreate.vue'
+import GameConfig from '../views/GameConfig.vue'
 import RankedQueue from '../views/RankedQueue.vue'
 import Board from '../views/Board.vue'
 import Friends from '../views/Friends.vue'
@@ -87,6 +88,12 @@ const routes = [
     path: '/:slug/edit',
     name: 'TitleEdit',
     component: TitleEdit,
+    meta: { requiresAuth: true, isTitleRoute: true }
+  },
+  {
+    path: '/:slug/config',
+    name: 'GameConfig',
+    component: GameConfig,
     meta: { requiresAuth: true, isTitleRoute: true }
   },
   {

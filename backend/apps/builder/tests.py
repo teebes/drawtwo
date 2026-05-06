@@ -158,6 +158,77 @@ class TestTitleAPIPermissions(APITestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_author_can_read_title_config(self):
+        self.client.force_authenticate(user=self.author)
+        url = reverse("title-config", kwargs={"title_slug": self.draft_title.slug})
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["config"]["deck_size_limit"], 30)
+        self.assertEqual(response.data["config"]["min_cards_in_deck"], 10)
+        self.assertEqual(response.data["config"]["ranked_time_per_turn"], 60)
+
+    def test_builder_can_update_title_config(self):
+        self.client.force_authenticate(user=self.builder)
+        url = reverse("title-config", kwargs={"title_slug": self.draft_title.slug})
+
+        response = self.client.put(
+            url,
+            {
+                "config": {
+                    "deck_size_limit": 40,
+                    "min_cards_in_deck": 12,
+                    "deck_card_max_count": 3,
+                    "hand_start_size": 4,
+                    "side_b_compensation": "coin",
+                    "death_retaliation": True,
+                    "ranked_time_per_turn": 75,
+                }
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        self.draft_title.refresh_from_db()
+        self.assertEqual(self.draft_title.config["deck_size_limit"], 40)
+        self.assertEqual(self.draft_title.config["min_cards_in_deck"], 12)
+        self.assertEqual(self.draft_title.config["deck_card_max_count"], 3)
+        self.assertEqual(self.draft_title.config["hand_start_size"], 4)
+        self.assertEqual(self.draft_title.config["side_b_compensation"], "coin")
+        self.assertTrue(self.draft_title.config["death_retaliation"])
+        self.assertEqual(self.draft_title.config["ranked_time_per_turn"], 75)
+
+    def test_other_user_cannot_update_title_config(self):
+        self.client.force_authenticate(user=self.other_user)
+        url = reverse("title-config", kwargs={"title_slug": self.draft_title.slug})
+
+        response = self.client.put(
+            url,
+            {"config": {"deck_size_limit": 40}},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_title_config_rejects_min_cards_above_deck_limit(self):
+        self.client.force_authenticate(user=self.author)
+        url = reverse("title-config", kwargs={"title_slug": self.draft_title.slug})
+
+        response = self.client.put(
+            url,
+            {
+                "config": {
+                    "deck_size_limit": 10,
+                    "min_cards_in_deck": 11,
+                }
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("cannot exceed", response.data["error"])
+
 
 class TestIngestion(TestCase):
 
@@ -221,6 +292,7 @@ class TestIngestion(TestCase):
           deck_size_limit: 30
           min_cards_in_deck: 12
           deck_card_max_count: 2
+          ranked_time_per_turn: 90
         """
 
         ingestion_service = IngestionService(self.title)
@@ -228,6 +300,7 @@ class TestIngestion(TestCase):
 
         self.title.refresh_from_db()
         self.assertEqual(self.title.config["min_cards_in_deck"], 12)
+        self.assertEqual(self.title.config["ranked_time_per_turn"], 90)
 
 
 # API Test examples for when you implement models and views:

@@ -2,6 +2,7 @@ import yaml
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.shortcuts import get_object_or_404, render
+from pydantic import ValidationError
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied
@@ -14,6 +15,37 @@ from .serializers import CardTemplateSerializer, TitleSerializer
 from .services import TitleService
 
 User = get_user_model()
+
+
+def _title_config_from_data(config_data) -> TitleConfig:
+    config_data = config_data or {}
+    return TitleConfig(
+        deck_size_limit=config_data.get("deck_size_limit", 30),
+        min_cards_in_deck=config_data.get("min_cards_in_deck", 10),
+        deck_card_max_count=config_data.get("deck_card_max_count", 9),
+        hand_start_size=config_data.get("hand_start_size", 3),
+        side_b_compensation=config_data.get("side_b_compensation"),
+        death_retaliation=config_data.get("death_retaliation", False),
+        ranked_time_per_turn=config_data.get("ranked_time_per_turn", 60),
+    )
+
+
+def _validate_title_config(config: TitleConfig) -> str | None:
+    if config.deck_size_limit < 1:
+        return "Deck size limit must be at least 1."
+    if config.min_cards_in_deck < 0:
+        return "Minimum cards in deck cannot be negative."
+    if config.min_cards_in_deck > config.deck_size_limit:
+        return "Minimum cards in deck cannot exceed the deck size limit."
+    if config.deck_card_max_count < 1:
+        return "Maximum copies of a card must be at least 1."
+    if config.hand_start_size < 0:
+        return "Starting hand size cannot be negative."
+    if config.hand_start_size > config.deck_size_limit:
+        return "Starting hand size cannot exceed the deck size limit."
+    if config.ranked_time_per_turn < 0:
+        return "Ranked time per turn cannot be negative."
+    return None
 
 
 def get_title_or_403(slug, user):
@@ -347,6 +379,65 @@ def ingest_yaml(request, title_slug):
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
+@api_view(["GET", "PUT"])
+@permission_classes([IsAuthenticated])
+def title_config(request, title_slug):
+    """
+    Read or update a title's game configuration.
+    """
+    title = get_object_or_404(Title, slug=title_slug, is_latest=True)
+
+    if not title.can_be_edited_by(request.user):
+        return Response(
+            {"error": "You do not have permission to edit this title"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    if request.method == "GET":
+        title_config = _title_config_from_data(title.config)
+        return Response(
+            {
+                "title": {"slug": title.slug, "name": title.name},
+                "config": title_config.model_dump(exclude={"type"}),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    config_payload = request.data.get("config", request.data)
+    if not isinstance(config_payload, dict):
+        return Response(
+            {"error": "config must be an object"}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if config_payload.get("side_b_compensation") == "":
+        config_payload = {**config_payload, "side_b_compensation": None}
+
+    try:
+        updated_config = TitleConfig.model_validate(
+            {
+                **_title_config_from_data(title.config).model_dump(),
+                **config_payload,
+            }
+        )
+    except ValidationError as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    validation_error = _validate_title_config(updated_config)
+    if validation_error:
+        return Response({"error": validation_error}, status=status.HTTP_400_BAD_REQUEST)
+
+    title.config = updated_config.model_dump(exclude={"type"}, exclude_none=True)
+    title.save(update_fields=["config"])
+
+    return Response(
+        {
+            "title": {"slug": title.slug, "name": title.name},
+            "config": updated_config.model_dump(exclude={"type"}),
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def title_config_yaml(request, title_slug):
@@ -365,17 +456,7 @@ def title_config_yaml(request, title_slug):
             status=status.HTTP_403_FORBIDDEN,
         )
 
-    # Get config from title.config JSONField and create TitleConfig schema
-    # Use defaults from TitleConfig schema if fields are missing
-    config_data = title.config or {}
-    title_config = TitleConfig(
-        deck_size_limit=config_data.get("deck_size_limit", 30),
-        min_cards_in_deck=config_data.get("min_cards_in_deck", 10),
-        deck_card_max_count=config_data.get("deck_card_max_count", 9),
-        hand_start_size=config_data.get("hand_start_size", 3),
-        side_b_compensation=config_data.get("side_b_compensation"),
-        death_retaliation=config_data.get("death_retaliation", False),
-    )
+    title_config = _title_config_from_data(title.config)
 
     # Serialize to YAML (exclude None values and use the schema's dict representation)
     yaml_content = yaml.dump(
