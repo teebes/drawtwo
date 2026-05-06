@@ -3,19 +3,19 @@
     <Panel title="Matchmaking Controls">
       <div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
         <div class="grid gap-4 sm:grid-cols-3 flex-1">
-          <div class="stat-tile">
+          <div class="ui-panel-muted">
             <p class="text-sm text-gray-500 dark:text-gray-400">Queued Players</p>
             <p class="text-3xl font-bold text-primary-600 dark:text-primary-400">
               {{ summary?.queued ?? 0 }}
             </p>
           </div>
-          <div class="stat-tile">
+          <div class="ui-panel-muted">
             <p class="text-sm text-gray-500 dark:text-gray-400">Matched (pending)</p>
             <p class="text-3xl font-bold text-green-600 dark:text-green-400">
               {{ summary?.matched ?? 0 }}
             </p>
           </div>
-          <div class="stat-tile">
+          <div class="ui-panel-muted">
             <p class="text-sm text-gray-500 dark:text-gray-400">Cancelled</p>
             <p class="text-3xl font-bold text-gray-900 dark:text-gray-100">
               {{ summary?.cancelled ?? 0 }}
@@ -25,10 +25,10 @@
 
         <div class="flex flex-col gap-4 lg:w-96">
           <div>
-            <label class="control-label">Status Filter</label>
+            <label class="ui-label mb-1">Status Filter</label>
             <select
               v-model="statusFilter"
-              class="control-select"
+              class="ui-select"
             >
               <option value="queued">Queued</option>
               <option value="matched">Matched</option>
@@ -38,7 +38,7 @@
 
           <div class="flex gap-3">
             <button
-              class="btn btn-secondary flex-1"
+              class="ui-btn ui-btn-md ui-btn-secondary flex-1"
               :disabled="refreshing"
               @click="fetchQueue(true)"
             >
@@ -47,7 +47,7 @@
             </button>
 
             <button
-              class="btn btn-primary flex-1"
+              class="ui-btn ui-btn-md ui-btn-primary flex-1"
               :disabled="isRunning || disableRunButton"
               @click="runMatchmaking()"
             >
@@ -57,10 +57,10 @@
           </div>
 
           <div>
-            <label class="control-label">Title Scope</label>
+            <label class="ui-label mb-1">Title Scope</label>
             <select
               v-model="selectedTitle"
-              class="control-select"
+              class="ui-select"
             >
               <option value="all">All Titles (queued only)</option>
               <option
@@ -88,7 +88,7 @@
         <div
           v-for="title in titleSummary"
           :key="title.title_id"
-          class="rounded-lg border border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between"
+          class="ui-panel-muted flex items-center justify-between"
         >
           <div>
             <p class="text-base font-semibold text-gray-900 dark:text-white">
@@ -99,7 +99,7 @@
             </p>
           </div>
           <button
-            class="btn btn-outline"
+            class="ui-btn ui-btn-sm ui-btn-outline"
             :disabled="isRunning"
             @click="runMatchmaking(title.title_id)"
           >
@@ -120,39 +120,39 @@
         <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
           Showing up to {{ limit }} entries • Last updated {{ formatTimestamp(lastRefreshed) }}
         </p>
-        <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-          <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <div class="ui-table-wrap">
+          <table class="ui-table">
             <thead class="bg-gray-50 dark:bg-gray-800/70">
               <tr>
-                <th class="table-head">Player</th>
-                <th class="table-head">Deck</th>
-                <th class="table-head">Title</th>
-                <th class="table-head text-right">ELO</th>
-                <th class="table-head text-right">Queued</th>
-                <th class="table-head">Match</th>
+                <th class="ui-table-head">Player</th>
+                <th class="ui-table-head">Deck</th>
+                <th class="ui-table-head">Title</th>
+                <th class="ui-table-head text-right">ELO</th>
+                <th class="ui-table-head text-right">Queued</th>
+                <th class="ui-table-head">Match</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
               <tr v-for="entry in entries" :key="entry.id" class="bg-white dark:bg-gray-900/40">
-                <td class="table-cell">
+                <td class="ui-table-cell">
                   <div class="font-medium text-gray-900 dark:text-white">{{ entry.user_display_name }}</div>
                   <div class="text-xs text-gray-500">{{ entry.user_email }}</div>
                 </td>
-                <td class="table-cell">
+                <td class="ui-table-cell">
                   <div class="text-gray-900 dark:text-gray-100">{{ entry.deck_name }}</div>
                   <div class="text-xs text-gray-500 dark:text-gray-400">{{ entry.hero_name }}</div>
                 </td>
-                <td class="table-cell">
+                <td class="ui-table-cell">
                   <div class="text-gray-900 dark:text-gray-100">{{ entry.title_name }}</div>
                   <div class="text-xs text-gray-500 dark:text-gray-400">{{ entry.title_slug }}</div>
                 </td>
-                <td class="table-cell text-right font-semibold text-gray-900 dark:text-white">
+                <td class="ui-table-cell text-right font-semibold text-gray-900 dark:text-white">
                   {{ entry.elo_rating }}
                 </td>
-                <td class="table-cell text-right text-sm text-gray-600 dark:text-gray-300">
+                <td class="ui-table-cell text-right text-sm text-gray-600 dark:text-gray-300">
                   {{ formatWait(entry.wait_seconds) }}
                 </td>
-                <td class="table-cell">
+                <td class="ui-table-cell">
                   <div v-if="entry.game_id" class="text-sm text-green-600 dark:text-green-400">
                     Game #{{ entry.game_id }}
                   </div>
@@ -165,7 +165,7 @@
                 </td>
               </tr>
               <tr v-if="!entries.length">
-                <td class="table-cell text-center text-gray-500 dark:text-gray-400" colspan="6">
+                <td class="ui-table-cell text-center text-gray-500 dark:text-gray-400" colspan="6">
                   No entries for this filter.
                 </td>
               </tr>
@@ -294,41 +294,3 @@ onMounted(() => {
   fetchQueue()
 })
 </script>
-
-<style scoped>
-.matchmaking-queue-admin .stat-tile {
-  @apply rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 p-4;
-}
-
-.control-label {
-  @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1;
-}
-
-.control-select {
-  @apply w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500;
-}
-
-.btn {
-  @apply inline-flex justify-center items-center rounded-lg px-4 py-2 text-sm font-semibold transition;
-}
-
-.btn-primary {
-  @apply bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed;
-}
-
-.btn-secondary {
-  @apply bg-gray-100 text-gray-900 hover:bg-gray-200 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed;
-}
-
-.btn-outline {
-  @apply border border-primary-500 text-primary-600 dark:text-primary-400 rounded-lg px-3 py-2 text-sm hover:bg-primary-50 dark:hover:bg-primary-500/10 disabled:opacity-60 disabled:cursor-not-allowed;
-}
-
-.table-head {
-  @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-300;
-}
-
-.table-cell {
-  @apply px-4 py-3 align-top;
-}
-</style>

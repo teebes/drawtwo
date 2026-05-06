@@ -182,9 +182,6 @@ const gameConfigPath = computed(() => {
   if (canEditCurrentTitle.value && titleStore.titleSlug) {
     return `/${titleStore.titleSlug}/config`
   }
-  if (!titleStore.currentTitle && titleStore.editableTitleSlug) {
-    return `/${titleStore.editableTitleSlug}/config`
-  }
   return null
 })
 
@@ -211,7 +208,6 @@ const openGameConfig = () => {
 
 const handleSignOut = async () => {
   await authStore.logout()
-  titleStore.clearEditableTitleContext()
   closeProfileMenu()
   router.push('/')
 }

@@ -1,11 +1,10 @@
 <template>
   <div :class="[
-    'rounded-xl p-6 shadow-sm flex flex-col',
     variantClass,
     paddingClass,
     customClass
   ]">
-    <h3 v-if="title" :class="titleClass">{{ title }}</h3>
+    <h3 v-if="title" class="ui-panel-title mb-4">{{ title }}</h3>
     <slot />
   </div>
 </template>
@@ -37,12 +36,10 @@ const paddingClass = computed(() => {
 
 const variantClass = computed(() => {
   const variantMap = {
-    default: 'bg-white dark:bg-gray-800',
-    error: 'bg-red-500/20 border border-red-400/30',
-    success: 'bg-green-500/20 border border-green-400/30'
+    default: 'ui-panel',
+    error: 'ui-alert ui-alert-error',
+    success: 'ui-alert ui-alert-success'
   }
   return variantMap[props.variant]
 })
-
-const titleClass = 'mb-4 text-lg font-semibold text-gray-900 dark:text-white'
 </script>

@@ -49,10 +49,10 @@
               <span class="text-sm font-medium">Whitelist Mode</span>
               <span
                 :class="[
-                  'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
+                  'ui-status-badge',
                   overview?.site_settings.whitelist_mode_enabled
-                    ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                    : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                    ? 'ui-status-danger'
+                    : 'ui-status-success'
                 ]"
               >
                 {{ overview?.site_settings.whitelist_mode_enabled ? 'ENABLED' : 'DISABLED' }}
@@ -63,10 +63,10 @@
               <span class="text-sm font-medium">User Signups</span>
               <span
                 :class="[
-                  'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
+                  'ui-status-badge',
                   overview?.site_settings.signup_disabled
-                    ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                    : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                    ? 'ui-status-danger'
+                    : 'ui-status-success'
                 ]"
               >
                 {{ overview?.site_settings.signup_disabled ? 'DISABLED' : 'ENABLED' }}
@@ -93,7 +93,7 @@
                 </div>
                 <span
                   :class="[
-                    'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
+                    'ui-status-badge',
                     USER_STATUS_COLORS[user.status]
                   ]"
                 >

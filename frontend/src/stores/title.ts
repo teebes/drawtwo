@@ -15,7 +15,6 @@ interface Title {
 
 interface TitleState {
   currentTitle: Title | null
-  editableTitleContext: Title | null
   loading: boolean
   error: string | null
   errorStatus: number | null
@@ -24,7 +23,6 @@ interface TitleState {
 export const useTitleStore = defineStore('title', {
   state: (): TitleState => ({
     currentTitle: null,
-    editableTitleContext: null,
     loading: false,
     error: null,
     errorStatus: null
@@ -33,8 +31,7 @@ export const useTitleStore = defineStore('title', {
   getters: {
     isViewingTitle: (state): boolean => state.currentTitle !== null,
     titleName: (state): string | null => state.currentTitle?.name || null,
-    titleSlug: (state): string | null => state.currentTitle?.slug || null,
-    editableTitleSlug: (state): string | null => state.editableTitleContext?.slug || null
+    titleSlug: (state): string | null => state.currentTitle?.slug || null
   },
 
   actions: {
@@ -52,9 +49,6 @@ export const useTitleStore = defineStore('title', {
         // const response = await axios.get(`/builder/titles/${slug}/`)
         const response = await axios.get(`/titles/${slug}/`)
         this.currentTitle = response.data as Title
-        if (this.currentTitle.can_edit === true) {
-          this.editableTitleContext = this.currentTitle
-        }
         return this.currentTitle
       } catch (error: any) {
         this.error = error.response?.data?.detail || error.response?.data?.message || error.message || 'Failed to load title'
@@ -69,9 +63,6 @@ export const useTitleStore = defineStore('title', {
     setCurrentTitle(titleData: Title): void {
       this.currentTitle = titleData
       this.error = null
-      if (titleData.can_edit === true) {
-        this.editableTitleContext = titleData
-      }
     },
 
     clearCurrentTitle(): void {
@@ -79,10 +70,6 @@ export const useTitleStore = defineStore('title', {
       this.error = null
       this.errorStatus = null
       this.loading = false
-    },
-
-    clearEditableTitleContext(): void {
-      this.editableTitleContext = null
     }
   }
 })

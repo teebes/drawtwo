@@ -1,30 +1,28 @@
 <template>
-  <div class="control-panel min-h-screen bg-gray-50 dark:bg-gray-900">
-    <div class="py-8">
-      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  <div class="control-panel ui-page">
+    <div>
+      <div class="ui-page-container">
         <!-- Header -->
-        <header class="mb-8">
-          <h1 class="font-display text-3xl font-bold text-gray-900 dark:text-white lg:text-4xl">
+        <header class="ui-page-header">
+          <h1 class="ui-page-title">
             Control Panel
           </h1>
-          <p class="mt-2 text-lg text-gray-600 dark:text-gray-300">
+          <p class="ui-page-subtitle">
             Site administration and user management
           </p>
         </header>
 
         <!-- Navigation Tabs -->
-        <div class="mb-8 overflow-hidden">
-          <div class="overflow-x-auto pb-2 -mb-2">
-            <nav class="flex space-x-8 border-b border-gray-200 dark:border-gray-700" aria-label="Tabs">
+        <div class="ui-tabs-shell">
+          <div class="ui-tabs-scroll">
+            <nav class="ui-tabs" aria-label="Tabs">
               <button
                 v-for="tab in tabs"
                 :key="tab.id"
                 @click="activeTab = tab.id"
                 :class="[
-                  'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200',
-                  activeTab === tab.id
-                    ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:border-gray-300'
+                  'ui-tab',
+                  activeTab === tab.id ? 'ui-tab-active' : 'ui-tab-inactive'
                 ]"
               >
                 {{ tab.name }}

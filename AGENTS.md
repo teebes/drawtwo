@@ -34,3 +34,4 @@ Run commands inside Docker containers (preferred workflow uses `make` targets).
 ## Agent-Specific Notes
 - Commands are expected to run inside Docker containers; avoid host-only workflows.
 - Refer to `frontend/src/views/DesignReference.vue` for frontend styling guidance.
+- For frontend changes or new frontend screens, review `frontend/src/views/Styleguide.vue` first and use centralized UI classes from `frontend/src/style.css` where possible.

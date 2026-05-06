@@ -6,6 +6,7 @@ import Login from '../views/Login.vue'
 import EmailConfirm from '../views/EmailConfirm.vue'
 import ControlPanel from '../views/ControlPanel.vue'
 import DesignReference from '../views/DesignReference.vue'
+import Styleguide from '../views/Styleguide.vue'
 import GameCard from '../views/CardReference.vue'
 import Lobby from '../views/Lobby.vue'
 import Template from '../views/Template.vue'
@@ -112,6 +113,12 @@ const routes = [
     path: '/design-reference',
     name: 'DesignReference',
     component: DesignReference,
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/styleguide',
+    name: 'Styleguide',
+    component: Styleguide,
     meta: { requiresAuth: false }
   },
   {

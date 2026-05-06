@@ -10,14 +10,14 @@
     </div>
 
     <!-- Error State -->
-    <div v-else-if="error" class="rounded-lg bg-red-50 p-6 dark:bg-red-900/30">
+    <div v-else-if="error" class="ui-alert ui-alert-error p-6">
       <div class="flex items-center">
         <svg class="h-6 w-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
         </svg>
         <span class="ml-3 text-red-800 dark:text-red-200">{{ error }}</span>
       </div>
-      <button @click="fetchStatus" class="mt-4 text-sm text-red-600 hover:text-red-800 dark:text-red-400">
+      <button @click="fetchStatus" class="ui-btn ui-btn-sm ui-btn-secondary mt-4">
         Retry
       </button>
     </div>
@@ -26,7 +26,7 @@
     <div v-else class="space-y-8">
       <!-- Overall Status Banner -->
       <div
-        class="rounded-2xl p-6 shadow-sm"
+        class="ui-panel"
         :class="{
           'bg-green-50 dark:bg-green-900/30': statusData?.status === 'healthy',
           'bg-yellow-50 dark:bg-yellow-900/30': statusData?.status === 'degraded',
@@ -58,7 +58,7 @@
             <button
               @click="fetchStatus"
               :disabled="loading"
-              class="rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              class="ui-btn ui-btn-sm ui-btn-secondary"
             >
               Refresh
             </button>
@@ -68,8 +68,8 @@
 
       <div class="grid gap-6 lg:grid-cols-2">
         <!-- Service Health Checks -->
-        <div class="rounded-2xl bg-white p-6 shadow-sm dark:bg-gray-900">
-          <h3 class="mb-4 font-display text-lg font-semibold text-gray-900 dark:text-white">
+        <div class="ui-panel">
+          <h3 class="ui-panel-title mb-4">
             Service Health
           </h3>
           <div class="space-y-3">
@@ -97,8 +97,8 @@
         </div>
 
         <!-- Game Metrics -->
-        <div class="rounded-2xl bg-white p-6 shadow-sm dark:bg-gray-900">
-          <h3 class="mb-4 font-display text-lg font-semibold text-gray-900 dark:text-white">
+        <div class="ui-panel">
+          <h3 class="ui-panel-title mb-4">
             Game Metrics
           </h3>
           <div class="space-y-4">
@@ -128,24 +128,24 @@
       </div>
 
       <!-- Redis Details (expanded) -->
-      <div v-if="statusData?.checks?.redis?.status === 'ok'" class="rounded-2xl bg-white p-6 shadow-sm dark:bg-gray-900">
-        <h3 class="mb-4 font-display text-lg font-semibold text-gray-900 dark:text-white">
+      <div v-if="statusData?.checks?.redis?.status === 'ok'" class="ui-panel">
+        <h3 class="ui-panel-title mb-4">
           Redis Details
         </h3>
         <div class="grid gap-4 sm:grid-cols-3">
-          <div class="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
+          <div class="ui-panel-muted">
             <div class="text-sm text-gray-500 dark:text-gray-400">Connected Clients</div>
             <div class="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">
               {{ statusData?.checks?.redis?.connected_clients ?? '-' }}
             </div>
           </div>
-          <div class="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
+          <div class="ui-panel-muted">
             <div class="text-sm text-gray-500 dark:text-gray-400">Memory Usage</div>
             <div class="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">
               {{ statusData?.checks?.redis?.used_memory_human ?? '-' }}
             </div>
           </div>
-          <div class="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
+          <div class="ui-panel-muted">
             <div class="text-sm text-gray-500 dark:text-gray-400">Uptime</div>
             <div class="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">
               {{ formatUptime(statusData?.checks?.redis?.uptime_in_seconds) }}
@@ -155,15 +155,15 @@
       </div>
 
       <!-- Celery Worker Details -->
-      <div v-if="statusData?.checks?.celery?.workers" class="rounded-2xl bg-white p-6 shadow-sm dark:bg-gray-900">
-        <h3 class="mb-4 font-display text-lg font-semibold text-gray-900 dark:text-white">
+      <div v-if="statusData?.checks?.celery?.workers" class="ui-panel">
+        <h3 class="ui-panel-title mb-4">
           Celery Workers
         </h3>
         <div class="space-y-2">
           <div
             v-for="(info, workerName) in statusData?.checks?.celery?.workers"
             :key="workerName"
-            class="flex items-center justify-between rounded-lg bg-gray-50 p-3 dark:bg-gray-800"
+            class="ui-panel-muted flex items-center justify-between p-3"
           >
             <div class="flex items-center">
               <div class="h-2 w-2 rounded-full bg-green-500"></div>
@@ -177,8 +177,8 @@
       </div>
 
       <!-- Troubleshooting Guide -->
-      <div v-if="statusData?.status === 'degraded'" class="rounded-2xl border border-yellow-200 bg-yellow-50 p-6 dark:border-yellow-700 dark:bg-yellow-900/30">
-        <h3 class="mb-3 font-display text-lg font-semibold text-yellow-800 dark:text-yellow-200">
+      <div v-if="statusData?.status === 'degraded'" class="ui-alert ui-alert-warning p-6">
+        <h3 class="mb-3 text-lg font-semibold">
           Troubleshooting
         </h3>
         <ul class="space-y-2 text-sm text-yellow-700 dark:text-yellow-300">
@@ -216,21 +216,21 @@ const ServiceCheck = defineComponent({
         'bg-gray-400': !props.status
       }
       const badgeClass = {
-        'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': props.status === 'ok',
-        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': props.status === 'warning',
-        'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': props.status === 'error',
-        'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200': !props.status
+        'ui-status-success': props.status === 'ok',
+        'ui-status-warning': props.status === 'warning',
+        'ui-status-danger': props.status === 'error',
+        'ui-status-neutral': !props.status
       }
       const statusText = props.status === 'ok' ? 'Healthy' : props.status === 'warning' ? 'Warning' : props.status === 'error' ? 'Error' : 'Unknown'
 
-      return h('div', { class: 'flex items-center justify-between rounded-lg bg-gray-50 p-4 dark:bg-gray-800' }, [
+      return h('div', { class: 'ui-panel-muted flex items-center justify-between' }, [
         h('div', { class: 'flex items-center' }, [
           h('div', { class: ['h-2.5 w-2.5 rounded-full', statusClass] }),
           h('span', { class: 'ml-3 font-medium text-gray-900 dark:text-white' }, props.name)
         ]),
         h('div', { class: 'flex items-center' }, [
           props.details ? h('span', { class: 'mr-2 text-xs text-gray-500 dark:text-gray-400' }, props.details) : null,
-          h('span', { class: ['inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', badgeClass] }, statusText)
+          h('span', { class: ['ui-status-badge', badgeClass] }, statusText)
         ])
       ])
     }

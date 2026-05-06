@@ -14,7 +14,7 @@
                 id="whitelist-mode"
                 v-model="formData.whitelist_mode_enabled"
                 type="checkbox"
-                class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-700"
+                class="ui-checkbox"
               />
             </div>
             <div class="ml-3">
@@ -35,7 +35,7 @@
                 id="signup-disabled"
                 v-model="formData.signup_disabled"
                 type="checkbox"
-                class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-700"
+                class="ui-checkbox"
               />
             </div>
             <div class="ml-3">
@@ -49,17 +49,13 @@
           </div>
 
           <!-- Error Display -->
-          <div v-if="error" class="rounded-md bg-red-50 dark:bg-red-900 p-4">
-            <div class="text-sm text-red-700 dark:text-red-200">
-              {{ error }}
-            </div>
+          <div v-if="error" class="ui-alert ui-alert-error">
+            {{ error }}
           </div>
 
           <!-- Success Display -->
-          <div v-if="successMessage" class="rounded-md bg-green-50 dark:bg-green-900 p-4">
-            <div class="text-sm text-green-700 dark:text-green-200">
-              {{ successMessage }}
-            </div>
+          <div v-if="successMessage" class="ui-alert ui-alert-success">
+            {{ successMessage }}
           </div>
 
           <!-- Submit Button -->
@@ -79,17 +75,17 @@
       <div class="mt-8">
         <Panel title="Current Status" class="space-y-4">
           <div class="grid gap-4 md:grid-cols-2">
-            <div class="p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+            <div class="ui-panel-muted">
               <div class="flex items-center justify-between">
                 <span class="text-sm font-medium text-gray-900 dark:text-white">
                   Whitelist Mode
                 </span>
                 <span
                   :class="[
-                    'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
+                    'ui-status-badge',
                     settings?.whitelist_mode_enabled
-                      ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                      : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                      ? 'ui-status-danger'
+                      : 'ui-status-success'
                   ]"
                 >
                   {{ settings?.whitelist_mode_enabled ? 'ENABLED' : 'DISABLED' }}
@@ -102,17 +98,17 @@
               </p>
             </div>
 
-            <div class="p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+            <div class="ui-panel-muted">
               <div class="flex items-center justify-between">
                 <span class="text-sm font-medium text-gray-900 dark:text-white">
                   User Signups
                 </span>
                 <span
                   :class="[
-                    'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
+                    'ui-status-badge',
                     settings?.signup_disabled
-                      ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                      : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                      ? 'ui-status-danger'
+                      : 'ui-status-success'
                   ]"
                 >
                   {{ settings?.signup_disabled ? 'DISABLED' : 'ENABLED' }}

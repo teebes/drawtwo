@@ -10,7 +10,7 @@
             v-model="searchQuery"
             type="text"
             placeholder="Search by email or username..."
-            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            class="ui-input"
             @input="debouncedSearch"
           />
         </div>
@@ -20,7 +20,7 @@
           <select
             v-model="statusFilter"
             @change="fetchUsers"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            class="ui-select"
           >
             <option value="">All Status</option>
             <option
@@ -41,28 +41,26 @@
 
       <!-- Error State -->
       <div v-else-if="error" class="mb-6">
-        <div class="rounded-md bg-red-50 dark:bg-red-900 p-4">
-          <div class="text-sm text-red-700 dark:text-red-200">
-            {{ error }}
-          </div>
+        <div class="ui-alert ui-alert-error">
+          {{ error }}
         </div>
       </div>
 
       <!-- Users Table -->
-      <div v-else class="overflow-x-auto shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-        <table class="min-w-full divide-y divide-gray-300 dark:divide-gray-600">
+      <div v-else class="ui-table-wrap">
+        <table class="ui-table">
           <thead class="bg-gray-50 dark:bg-gray-800">
             <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+              <th class="ui-table-head">
                 User
               </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+              <th class="ui-table-head">
                 Status
               </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+              <th class="ui-table-head">
                 Joined
               </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+              <th class="ui-table-head">
                 Last Login
               </th>
             </tr>
@@ -70,7 +68,7 @@
           <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
             <tr v-for="user in users" :key="user.id" class="hover:bg-gray-50 dark:hover:bg-gray-800">
               <!-- User Info -->
-              <td class="px-6 py-4 whitespace-nowrap">
+              <td class="ui-table-cell whitespace-nowrap">
                 <div class="flex items-center">
                   <div class="flex-shrink-0 h-10 w-10">
                     <div class="h-10 w-10 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
@@ -91,13 +89,13 @@
               </td>
 
               <!-- Status -->
-              <td class="px-6 py-4 whitespace-nowrap">
+              <td class="ui-table-cell whitespace-nowrap">
                 <div class="flex items-center space-x-2">
                   <select
                     :value="user.status"
                     @change="updateUserStatus(user, ($event.target as HTMLSelectElement).value)"
                     :disabled="updatingUser === user.id"
-                    class="text-xs px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    class="ui-select py-1 text-xs"
                     :class="USER_STATUS_COLORS[user.status].replace('bg-', 'border-').replace('text-', 'text-').split(' ')[1]"
                   >
                     <option
@@ -120,12 +118,12 @@
               </td>
 
                             <!-- Joined Date -->
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+              <td class="ui-table-cell whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                 {{ formatDateShort(user.created_at) }}
               </td>
 
               <!-- Last Login -->
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+              <td class="ui-table-cell whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                 {{ user.last_login ? formatDateShort(user.last_login) : 'Never' }}
               </td>
             </tr>

@@ -1,12 +1,12 @@
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
-    <main class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-      <header class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+  <div class="ui-page">
+    <main class="ui-page-container ui-page-container-narrow">
+      <header class="ui-page-header-row">
         <div>
-          <h1 class="font-display text-3xl font-bold text-gray-900 dark:text-white">
+          <h1 class="ui-page-title">
             Game Config
           </h1>
-          <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+          <p class="ui-page-meta">
             {{ title?.name || 'World' }}
           </p>
         </div>
@@ -14,7 +14,7 @@
         <div class="flex items-center gap-3">
           <button
             type="button"
-            class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+            class="ui-btn ui-btn-md ui-btn-secondary"
             :disabled="loading || saving || !loadedConfig"
             @click="resetForm"
           >
@@ -23,7 +23,7 @@
           </button>
           <button
             type="button"
-            class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+            class="ui-btn ui-btn-md ui-btn-primary"
             :disabled="!canSave"
             @click="saveConfig"
           >
@@ -34,92 +34,92 @@
         </div>
       </header>
 
-      <div v-if="loading" class="flex min-h-64 items-center justify-center rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+      <div v-if="loading" class="ui-panel min-h-64 items-center justify-center">
         <Loader2 class="h-6 w-6 animate-spin text-primary-600" aria-hidden="true" />
       </div>
 
-      <div v-else-if="error" class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
+      <div v-else-if="error" class="ui-alert ui-alert-error">
         {{ error }}
       </div>
 
       <form v-else class="space-y-8" @submit.prevent="saveConfig">
-        <section class="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-          <div class="mb-6 flex items-center gap-3">
-            <Settings class="h-5 w-5 text-primary-600" aria-hidden="true" />
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Deck Rules</h2>
+        <section class="ui-panel">
+          <div class="ui-panel-heading">
+            <Settings class="ui-panel-icon" aria-hidden="true" />
+            <h2 class="ui-panel-title">Deck Rules</h2>
           </div>
 
           <div class="grid gap-5 md:grid-cols-3">
             <label class="block">
-              <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Max cards per deck</span>
+              <span class="ui-label">Max cards per deck</span>
               <input
                 v-model.number="form.deck_size_limit"
                 type="number"
                 min="1"
                 step="1"
-                class="mt-2 block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                class="ui-input mt-2"
               />
             </label>
 
             <label class="block">
-              <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Min cards per deck</span>
+              <span class="ui-label">Min cards per deck</span>
               <input
                 v-model.number="form.min_cards_in_deck"
                 type="number"
                 min="0"
                 step="1"
-                class="mt-2 block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                class="ui-input mt-2"
               />
             </label>
 
             <label class="block">
-              <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Max copies per card</span>
+              <span class="ui-label">Max copies per card</span>
               <input
                 v-model.number="form.deck_card_max_count"
                 type="number"
                 min="1"
                 step="1"
-                class="mt-2 block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                class="ui-input mt-2"
               />
             </label>
           </div>
         </section>
 
-        <section class="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-          <div class="mb-6 flex items-center gap-3">
-            <SlidersHorizontal class="h-5 w-5 text-primary-600" aria-hidden="true" />
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Opening And Turns</h2>
+        <section class="ui-panel">
+          <div class="ui-panel-heading">
+            <SlidersHorizontal class="ui-panel-icon" aria-hidden="true" />
+            <h2 class="ui-panel-title">Opening And Turns</h2>
           </div>
 
           <div class="grid gap-5 md:grid-cols-3">
             <label class="block">
-              <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Starting hand size</span>
+              <span class="ui-label">Starting hand size</span>
               <input
                 v-model.number="form.hand_start_size"
                 type="number"
                 min="0"
                 step="1"
-                class="mt-2 block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                class="ui-input mt-2"
               />
             </label>
 
             <label class="block">
-              <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Rapid turn timer seconds</span>
+              <span class="ui-label">Rapid turn timer seconds</span>
               <input
                 v-model.number="form.ranked_time_per_turn"
                 type="number"
                 min="0"
                 step="1"
-                class="mt-2 block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                class="ui-input mt-2"
               />
             </label>
 
             <label class="block">
-              <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Side B compensation slug</span>
+              <span class="ui-label">Side B compensation slug</span>
               <input
                 v-model.trim="form.side_b_compensation"
                 type="text"
-                class="mt-2 block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                class="ui-input mt-2"
                 placeholder="none"
               />
             </label>
@@ -129,15 +129,15 @@
             <input
               v-model="form.death_retaliation"
               type="checkbox"
-              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-900"
+              class="ui-checkbox"
             />
-            <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Death retaliation</span>
+            <span class="ui-label">Death retaliation</span>
           </label>
         </section>
 
         <div
           v-if="validationError"
-          class="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"
+          class="ui-alert ui-alert-warning flex items-start gap-3"
         >
           <AlertCircle class="mt-0.5 h-4 w-4 flex-none" aria-hidden="true" />
           <span>{{ validationError }}</span>
