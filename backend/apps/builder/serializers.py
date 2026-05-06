@@ -1,9 +1,16 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 import yaml
-from apps.builder.models import Title, CardTemplate, Faction, Tag, CardTrait
+from apps.builder.models import (
+    CardTemplate,
+    CardTrait,
+    Faction,
+    HeroTemplate,
+    Tag,
+    Title,
+)
 from apps.builder.trait_definitions import validate_trait_slug
-from apps.core.card_assets import get_card_art_url
+from apps.core.card_assets import get_card_art_url, get_hero_art_url
 
 
 User = get_user_model()
@@ -247,3 +254,37 @@ class CardTemplateSerializer(serializers.ModelSerializer):
             )
 
         return instance
+
+
+class HeroTemplateSerializer(serializers.ModelSerializer):
+    """Serializer for hero template summaries used by builder tooling."""
+
+    title_slug = serializers.CharField(source='title.slug', read_only=True)
+    faction_slug = serializers.CharField(
+        source='faction.slug', read_only=True, allow_null=True
+    )
+    art_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = HeroTemplate
+        fields = [
+            'id',
+            'slug',
+            'name',
+            'description',
+            'version',
+            'is_latest',
+            'health',
+            'hero_power',
+            'spec',
+            'title_slug',
+            'faction_slug',
+            'art_url',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'version', 'created_at', 'updated_at']
+
+    def get_art_url(self, obj):
+        """Get the art URL for the hero."""
+        return get_hero_art_url(obj.title.slug, obj.slug)

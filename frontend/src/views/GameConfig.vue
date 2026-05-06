@@ -135,6 +135,28 @@
           </label>
         </section>
 
+        <section class="ui-panel">
+          <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div class="ui-panel-heading mb-2">
+                <BookOpen class="ui-panel-icon" aria-hidden="true" />
+                <h2 class="ui-panel-title">Heroes & Cards</h2>
+              </div>
+              <p class="ui-panel-subtitle">
+                Manage the title's playable heroes and card library.
+              </p>
+            </div>
+
+            <router-link
+              :to="{ name: 'GameContentConfig', params: { slug } }"
+              class="ui-btn ui-btn-md ui-btn-secondary self-start sm:self-auto"
+            >
+              Open Content
+              <ArrowRight class="h-4 w-4" aria-hidden="true" />
+            </router-link>
+          </div>
+        </section>
+
         <div
           v-if="validationError"
           class="ui-alert ui-alert-warning flex items-start gap-3"
@@ -150,7 +172,16 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { AlertCircle, Loader2, RotateCcw, Save, Settings, SlidersHorizontal } from 'lucide-vue-next'
+import {
+  AlertCircle,
+  ArrowRight,
+  BookOpen,
+  Loader2,
+  RotateCcw,
+  Save,
+  Settings,
+  SlidersHorizontal
+} from 'lucide-vue-next'
 import axios from '../config/api'
 import { useNotificationStore } from '../stores/notifications'
 import { useTitleStore } from '../stores/title'

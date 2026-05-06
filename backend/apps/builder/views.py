@@ -9,9 +9,9 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from .models import CardTemplate, CardTrait, Title
+from .models import CardTemplate, CardTrait, HeroTemplate, Title
 from .schemas import Card, TitleConfig
-from .serializers import CardTemplateSerializer, TitleSerializer
+from .serializers import CardTemplateSerializer, HeroTemplateSerializer, TitleSerializer
 from .services import TitleService
 
 User = get_user_model()
@@ -433,6 +433,42 @@ def title_config(request, title_slug):
         {
             "title": {"slug": title.slug, "name": title.name},
             "config": updated_config.model_dump(exclude={"type"}),
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def title_content_config(request, title_slug):
+    """
+    Read builder-facing hero and card configuration for a title.
+    """
+    title = get_object_or_404(Title, slug=title_slug, is_latest=True)
+
+    if not title.can_be_edited_by(request.user):
+        return Response(
+            {"error": "You do not have permission to edit this title"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    heroes = (
+        HeroTemplate.objects.filter(title=title, is_latest=True)
+        .select_related("title", "faction")
+        .order_by("name")
+    )
+    cards = (
+        CardTemplate.objects.filter(title=title, is_latest=True)
+        .select_related("title", "faction")
+        .prefetch_related("cardtrait_set")
+        .order_by("cost", "card_type", "attack", "health", "name")
+    )
+
+    return Response(
+        {
+            "title": {"slug": title.slug, "name": title.name},
+            "heroes": HeroTemplateSerializer(heroes, many=True).data,
+            "cards": CardTemplateSerializer(cards, many=True).data,
         },
         status=status.HTTP_200_OK,
     )

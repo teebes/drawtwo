@@ -4,7 +4,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .models import Builder, CardTemplate, CardTrait, Title
+from .models import Builder, CardTemplate, CardTrait, HeroTemplate, Title
 from .schemas import TitleConfig
 from .services import IngestionService
 
@@ -228,6 +228,50 @@ class TestTitleAPIPermissions(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("cannot exceed", response.data["error"])
+
+    def test_author_can_read_title_content_config(self):
+        HeroTemplate.objects.create(
+            title=self.draft_title,
+            slug="warrior",
+            name="Warrior",
+            description="Front line hero",
+            health=30,
+            hero_power={"name": "Strike", "actions": []},
+        )
+        CardTemplate.objects.create(
+            title=self.draft_title,
+            slug="shield-slam",
+            name="Shield Slam",
+            description="Hero scoped card",
+            card_type=CardTemplate.CARD_TYPE_SPELL,
+            cost=2,
+            spec={"hero_slugs": ["warrior"]},
+        )
+
+        self.client.force_authenticate(user=self.author)
+        url = reverse(
+            "title-content-config", kwargs={"title_slug": self.draft_title.slug}
+        )
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["title"]["slug"], self.draft_title.slug)
+        self.assertEqual(len(response.data["heroes"]), 1)
+        self.assertEqual(response.data["heroes"][0]["slug"], "warrior")
+        self.assertEqual(len(response.data["cards"]), 1)
+        self.assertEqual(response.data["cards"][0]["slug"], "shield-slam")
+        self.assertEqual(response.data["cards"][0]["spec"]["hero_slugs"], ["warrior"])
+
+    def test_other_user_cannot_read_title_content_config(self):
+        self.client.force_authenticate(user=self.other_user)
+        url = reverse(
+            "title-content-config", kwargs={"title_slug": self.draft_title.slug}
+        )
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class TestIngestion(TestCase):
