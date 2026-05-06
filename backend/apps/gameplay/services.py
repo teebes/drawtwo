@@ -405,6 +405,22 @@ class GameService:
                             )
 
                         if isinstance(event, NewPhaseEvent):
+                            if (
+                                event.phase == "mulligan"
+                                and GameService._uses_rapid_mulligan_timer(
+                                    game, game_state
+                                )
+                            ):
+                                from datetime import timedelta
+
+                                from django.utils import timezone
+
+                                turn_expires_dt = timezone.now() + timedelta(
+                                    seconds=game_state.time_per_turn
+                                )
+                                game.turn_expires = turn_expires_dt
+                                game_state.turn_expires = turn_expires_dt.isoformat()
+
                             if event.phase == "main" and game_state.time_per_turn > 0:
                                 from datetime import timedelta
 
@@ -540,6 +556,9 @@ class GameService:
             raise ValueError("The game has already ended.")
 
         game_state = GameState.model_validate(game.state)
+
+        if GameService._enqueue_expired_mulligans(game, game_state):
+            return
 
         # Check for turn timeout before processing command
         if (
@@ -773,6 +792,57 @@ class GameService:
         logger.debug("effects: %s" % effects)
 
         return effects
+
+    @staticmethod
+    def _uses_rapid_mulligan_timer(game, game_state: GameState) -> bool:
+        return (
+            game.type == Game.GAME_TYPE_RANKED
+            and game.ladder_type == Game.LADDER_TYPE_RAPID
+            and game_state.phase == "mulligan"
+            and game_state.time_per_turn > 0
+        )
+
+    @staticmethod
+    def _enqueue_expired_mulligans(game, game_state: GameState, now=None) -> bool:
+        if not GameService._uses_rapid_mulligan_timer(game, game_state):
+            return False
+
+        if not game.turn_expires:
+            return False
+
+        if now is None:
+            from django.utils import timezone
+
+            now = timezone.now()
+
+        if now < game.turn_expires:
+            return False
+
+        queued_mulligan_sides = {
+            item.get("side")
+            for item in game.queue
+            if item.get("type") == "effect_mulligan"
+        }
+        pending_sides = [
+            side
+            for side in ("side_a", "side_b")
+            if not game_state.mulligan_done.get(side, False)
+            and side not in queued_mulligan_sides
+        ]
+
+        if pending_sides:
+            game.enqueue(
+                [
+                    MulliganEffect(
+                        side=side,
+                        card_ids=[],
+                    )
+                    for side in pending_sides
+                ],
+                trigger=True,
+            )
+
+        return True
 
     @staticmethod
     def compile_action(
@@ -1547,6 +1617,9 @@ class GameService:
         for game in expired_games:
             try:
                 game_state = GameState.model_validate(game.state)
+
+                if GameService._enqueue_expired_mulligans(game, game_state, now=now):
+                    continue
 
                 # Only process if in main phase and has time control
                 if game_state.phase == "main" and game_state.time_per_turn > 0:
