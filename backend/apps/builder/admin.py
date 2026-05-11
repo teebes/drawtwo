@@ -188,7 +188,7 @@ class CardTemplateAdmin(admin.ModelAdmin):
     search_fields = ('slug', 'name', 'description', 'title__slug', 'title__name')
     readonly_fields = ('created_at', 'updated_at')
     ordering = ('-created_at',)
-    filter_horizontal = ('tags',)
+    filter_horizontal = ('tags', 'allowed_heroes')
     inlines = [CardTraitInline]
 
     fieldsets = (
@@ -206,7 +206,7 @@ class CardTemplateAdmin(admin.ModelAdmin):
             'description': 'Attack and Health are only applicable to creature cards'
         }),
         ('Classification', {
-            'fields': ('tags',),
+            'fields': ('tags', 'allowed_heroes'),
             'description': 'Note: Traits with data are configured in the "Card traits" section below'
         }),
         ('Advanced Configuration', {

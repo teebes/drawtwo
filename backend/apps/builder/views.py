@@ -286,6 +286,7 @@ def card_template_to_schema(card: CardTemplate) -> Card:
         faction=card.faction.slug if card.faction else None,
         art_url=card.art_url if hasattr(card, "art_url") and card.art_url else None,
         is_collectible=card.is_collectible,
+        hero_slugs=list(card.allowed_heroes.values_list("slug", flat=True)),
     )
 
 
@@ -460,7 +461,7 @@ def title_content_config(request, title_slug):
     cards = (
         CardTemplate.objects.filter(title=title, is_latest=True)
         .select_related("title", "faction")
-        .prefetch_related("cardtrait_set")
+        .prefetch_related("cardtrait_set", "allowed_heroes")
         .order_by("cost", "card_type", "attack", "health", "name")
     )
 

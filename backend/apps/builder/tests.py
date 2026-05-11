@@ -230,7 +230,7 @@ class TestTitleAPIPermissions(APITestCase):
         self.assertIn("cannot exceed", response.data["error"])
 
     def test_author_can_read_title_content_config(self):
-        HeroTemplate.objects.create(
+        hero = HeroTemplate.objects.create(
             title=self.draft_title,
             slug="warrior",
             name="Warrior",
@@ -238,15 +238,15 @@ class TestTitleAPIPermissions(APITestCase):
             health=30,
             hero_power={"name": "Strike", "actions": []},
         )
-        CardTemplate.objects.create(
+        card = CardTemplate.objects.create(
             title=self.draft_title,
             slug="shield-slam",
             name="Shield Slam",
             description="Hero scoped card",
             card_type=CardTemplate.CARD_TYPE_SPELL,
             cost=2,
-            spec={"hero_slugs": ["warrior"]},
         )
+        card.allowed_heroes.add(hero)
 
         self.client.force_authenticate(user=self.author)
         url = reverse(
@@ -261,7 +261,7 @@ class TestTitleAPIPermissions(APITestCase):
         self.assertEqual(response.data["heroes"][0]["slug"], "warrior")
         self.assertEqual(len(response.data["cards"]), 1)
         self.assertEqual(response.data["cards"][0]["slug"], "shield-slam")
-        self.assertEqual(response.data["cards"][0]["spec"]["hero_slugs"], ["warrior"])
+        self.assertEqual(response.data["cards"][0]["hero_slugs"], ["warrior"])
 
     def test_other_user_cannot_read_title_content_config(self):
         self.client.force_authenticate(user=self.other_user)
@@ -345,6 +345,35 @@ class TestIngestion(TestCase):
         self.title.refresh_from_db()
         self.assertEqual(self.title.config["min_cards_in_deck"], 12)
         self.assertEqual(self.title.config["ranked_time_per_turn"], 90)
+
+    def test_ingest_card_sets_allowed_heroes(self):
+        HeroTemplate.objects.create(
+            title=self.title,
+            slug="warrior",
+            name="Warrior",
+            description="Front line hero",
+            health=30,
+            hero_power={"name": "Strike", "actions": []},
+        )
+        card_yaml = """
+        - type: card
+          card_type: spell
+          slug: shield-slam
+          name: Shield Slam
+          description: Warrior only spell.
+          cost: 2
+          hero_slugs:
+          - warrior
+        """
+
+        ingestion_service = IngestionService(self.title)
+        ingestion_service.ingest_yaml(card_yaml)
+
+        card_template = CardTemplate.objects.get(slug="shield-slam")
+        self.assertEqual(
+            list(card_template.allowed_heroes.values_list("slug", flat=True)),
+            ["warrior"],
+        )
 
 
 # API Test examples for when you implement models and views:

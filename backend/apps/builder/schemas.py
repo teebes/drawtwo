@@ -152,6 +152,7 @@ class Card(ResourceBase):
     faction: Optional[str] = None
     art_url: Optional[str] = None  # For future user-uploaded art
     is_collectible: bool = True
+    hero_slugs: List[str] = Field(default_factory=list)
 
 
 class Deck(ResourceBase):

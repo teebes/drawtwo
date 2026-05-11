@@ -4,7 +4,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from django.db.models import Count, Sum
+from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce
 
 from apps.builder.models import Title, CardTemplate, HeroTemplate
@@ -14,6 +14,27 @@ from apps.collection.models import Deck, DeckCard, UserTitleDeckPreference
 from apps.core.card_assets import get_hero_art_url
 from apps.core.serializers import to_card_schema, serialize_cards_with_traits
 
+
+def _card_not_available_error(card, hero) -> str:
+    return f'"{card.name}" is only available to specific heroes and cannot be used by {hero.name}'
+
+
+def _ineligible_deck_cards(deck, hero=None):
+    hero = hero or deck.hero
+    return (
+        deck.deckcard_set.filter(card__allowed_heroes__isnull=False)
+        .exclude(card__allowed_heroes=hero)
+        .select_related("card")
+        .distinct()
+    )
+
+
+def _eligible_cards_for_hero(title, hero):
+    return (
+        CardTemplate.objects.filter(title=title, is_latest=True, is_collectible=True)
+        .filter(Q(allowed_heroes__isnull=True) | Q(allowed_heroes=hero))
+        .distinct()
+    )
 
 
 @api_view(['GET', 'POST'])
@@ -162,7 +183,8 @@ def deck_detail(request, deck_id):
         deck_cards = deck.deckcard_set.select_related(
             'card', 'card__title', 'card__faction'
         ).prefetch_related(
-            'card__cardtrait_set'
+            'card__cardtrait_set',
+            'card__allowed_heroes',
         ).filter(
             card__is_collectible=True
         ).order_by('card__name')
@@ -176,9 +198,9 @@ def deck_detail(request, deck_id):
             card_data.append(data)
 
         # Get all available collectible cards for this title (for "Edit Cards" mode)
-        all_cards_queryset = (CardTemplate.objects
-                             .filter(title=deck.hero.title, is_latest=True, is_collectible=True)
-                             .order_by('cost', 'card_type', 'attack', 'health', 'name'))
+        all_cards_queryset = _eligible_cards_for_hero(
+            deck.hero.title, deck.hero
+        ).order_by('cost', 'card_type', 'attack', 'health', 'name')
         all_cards_data = serialize_cards_with_traits(all_cards_queryset)
         all_cards = [card.model_dump() for card in all_cards_data]
 
@@ -233,7 +255,26 @@ def deck_detail(request, deck_id):
 
         # Update hero if provided
         if hero_id:
-            hero = get_object_or_404(HeroTemplate, id=hero_id, title=deck.hero.title, is_latest=True)
+            hero = get_object_or_404(
+                HeroTemplate,
+                id=hero_id,
+                title=deck.hero.title,
+                is_latest=True,
+            )
+            invalid_cards = _ineligible_deck_cards(deck, hero)
+            if invalid_cards.exists():
+                invalid_names = ", ".join(
+                    deck_card.card.name for deck_card in invalid_cards[:3]
+                )
+                return Response(
+                    {
+                        'error': (
+                            f'Cannot switch to "{hero.name}" while the deck contains '
+                            f'ineligible cards: {invalid_names}'
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             deck.hero = hero
 
         deck.save()
@@ -242,7 +283,8 @@ def deck_detail(request, deck_id):
         deck_cards = deck.deckcard_set.select_related(
             'card', 'card__title', 'card__faction'
         ).prefetch_related(
-            'card__cardtrait_set'
+            'card__cardtrait_set',
+            'card__allowed_heroes',
         ).order_by('card__name')
 
         card_data = []
@@ -297,6 +339,12 @@ def update_deck_card(request, deck_id, card_id):
 
     # Get the deck card relationship
     deck_card = get_object_or_404(DeckCard, deck=deck, card=card)
+
+    if not card.is_available_to_hero(deck.hero):
+        return Response(
+            {'error': _card_not_available_error(card, deck.hero)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     # Get the new count from request data
     new_count = request.data.get('count')
@@ -428,18 +476,24 @@ def add_deck_card(request, deck_id):
         )
 
     # Get the card and verify it belongs to the same title as the deck's hero
-    card = get_object_or_404(CardTemplate, slug=card_slug, is_latest=True)
-    if card.title != deck.hero.title:
-        return Response(
-            {'error': 'Card does not belong to the same title as the deck'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    card = get_object_or_404(
+        CardTemplate,
+        slug=card_slug,
+        title=deck.hero.title,
+        is_latest=True,
+    )
 
     # Check if card is collectible
     if not card.is_collectible:
         return Response(
             {'error': f'"{card.name}" is not collectible and cannot be added to a deck'},
             status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if not card.is_available_to_hero(deck.hero):
+        return Response(
+            {'error': _card_not_available_error(card, deck.hero)},
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
     world_config = TitleConfig.model_validate(card.title.config)

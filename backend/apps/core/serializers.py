@@ -45,7 +45,8 @@ def to_card_schema(card) -> Card:
         traits=traits_list,
         faction=card.faction.slug if card.faction else None,
         art_url=get_card_art_url(card.title.slug, card.slug),
-        is_collectible=card.is_collectible
+        is_collectible=card.is_collectible,
+        hero_slugs=[hero.slug for hero in card.allowed_heroes.all()],
     )
 
 
@@ -61,7 +62,8 @@ def serialize_cards_with_traits(queryset) -> List[Card]:
     """
     # Apply efficient prefetching to the queryset
     cards = queryset.select_related('title', 'faction').prefetch_related(
-        'cardtrait_set'  # Prefetch card traits
+        'cardtrait_set',  # Prefetch card traits
+        'allowed_heroes',
     )
 
     # Transform to Card schema format

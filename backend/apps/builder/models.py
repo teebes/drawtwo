@@ -298,6 +298,12 @@ class CardTemplate(TemplateBase):
     spec = models.JSONField(default=dict, blank=True)
 
     tags = models.ManyToManyField(Tag, blank=True)
+    allowed_heroes = models.ManyToManyField(
+        HeroTemplate,
+        blank=True,
+        related_name="specific_cards",
+        help_text="If empty, this card can be used by any hero for the title.",
+    )
     # traits field removed - use cardtrait_set to access traits
     faction = models.ForeignKey(Faction, on_delete=models.PROTECT,
                                 null=True, blank=True)
@@ -349,6 +355,13 @@ class CardTemplate(TemplateBase):
             trait_info = card_trait.get_trait_info()
             result.append((trait_info, card_trait.data))
         return result
+
+    def is_available_to_hero(self, hero):
+        """Return True when this card can be included in a deck for the hero."""
+        if hero is None:
+            return False
+        allowed_hero_ids = list(self.allowed_heroes.values_list("id", flat=True))
+        return not allowed_hero_ids or hero.id in allowed_hero_ids
 
 
 class AIPlayer(TimestampedModel):

@@ -22,6 +22,7 @@ export interface Card {
   faction?: string | null
   art_url?: string | null  // For future user-uploaded art
   is_collectible?: boolean  // Defaults to true if not present
+  hero_slugs?: string[]  // Empty or omitted means available to all heroes
 }
 
 export interface DeckCard extends Card {

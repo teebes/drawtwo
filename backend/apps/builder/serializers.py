@@ -38,18 +38,55 @@ class CardTemplateSerializer(serializers.ModelSerializer):
     traits_with_data = serializers.SerializerMethodField()
 
     art_url = serializers.SerializerMethodField()
+    hero_slugs = serializers.SerializerMethodField()
 
     class Meta:
         model = CardTemplate
         fields = ['id', 'slug', 'name', 'description', 'version', 'is_latest',
                  'card_type', 'cost', 'attack', 'health', 'spec', 'is_collectible',
                  'title_slug', 'faction_slug', 'traits_with_data', 'yaml_definition',
-                 'art_url', 'created_at', 'updated_at']
+                 'hero_slugs', 'art_url', 'created_at', 'updated_at']
         read_only_fields = ['id', 'version', 'created_at', 'updated_at']
 
     def get_art_url(self, obj):
         """Get the art URL for the card."""
         return get_card_art_url(obj.title.slug, obj.slug)
+
+    def get_hero_slugs(self, obj):
+        """Get the hero slugs this card is restricted to."""
+        heroes = sorted(obj.allowed_heroes.all(), key=lambda hero: hero.name)
+        return [hero.slug for hero in heroes]
+
+    def _get_hero_slugs_from_card_data(self, card_data):
+        hero_slugs = card_data.get('hero_slugs', [])
+        if not hero_slugs:
+            hero_slugs = card_data.get('heroes', [])
+        if not hero_slugs:
+            hero_slugs = card_data.get('hero', [])
+        if isinstance(hero_slugs, str):
+            hero_slugs = [hero_slugs]
+        return [slug for slug in hero_slugs if isinstance(slug, str) and slug.strip()]
+
+    def _set_allowed_heroes_from_card_data(self, instance, card_data):
+        hero_slugs = self._get_hero_slugs_from_card_data(card_data)
+        if not hero_slugs:
+            instance.allowed_heroes.clear()
+            return
+
+        heroes = list(
+            HeroTemplate.objects.filter(
+                title=instance.title,
+                slug__in=hero_slugs,
+                is_latest=True,
+            )
+        )
+        found_slugs = {hero.slug for hero in heroes}
+        missing_slugs = sorted(set(hero_slugs) - found_slugs)
+        if missing_slugs:
+            raise serializers.ValidationError(
+                f"Hero(s) not found for this title: {', '.join(missing_slugs)}"
+            )
+        instance.allowed_heroes.set(heroes)
 
     def get_traits_with_data(self, obj):
         """Get traits with their associated data."""
@@ -99,6 +136,10 @@ class CardTemplateSerializer(serializers.ModelSerializer):
         # Add spec if present
         if obj.spec:
             card_data['spec'] = obj.spec
+
+        hero_slugs = self.get_hero_slugs(obj)
+        if hero_slugs:
+            card_data['hero_slugs'] = hero_slugs
 
         # Add is_collectible if False (True is the default, so we only show False)
         if not obj.is_collectible:
@@ -151,6 +192,7 @@ class CardTemplateSerializer(serializers.ModelSerializer):
             instance.is_collectible = card_data['is_collectible']
 
         instance.save()
+        self._set_allowed_heroes_from_card_data(instance, card_data)
 
         # Update traits
         # Clear existing traits
@@ -224,6 +266,7 @@ class CardTemplateSerializer(serializers.ModelSerializer):
             version=1,
             is_latest=True
         )
+        self._set_allowed_heroes_from_card_data(instance, card_data)
 
         # Set faction if provided
         faction_slug = card_data.get('faction')

@@ -144,6 +144,12 @@
                     {{ card.name }}
                   </button>
                 </div>
+                <span
+                  v-if="cardHeroSlugs(card).length"
+                  class="ui-status-badge ui-status-info ml-3 flex-shrink-0"
+                >
+                  {{ cardHeroScopeLabel(card) }}
+                </span>
                 <div class="text-sm text-gray-600 dark:text-gray-400 ml-4 flex-shrink-0">
                   <span v-if="card.card_type === 'creature'">
                     {{ card.attack }}/{{ card.health }}
@@ -355,13 +361,33 @@ const deckCardsMap = computed(() => {
   return map
 })
 
+const cardHeroSlugs = (card: Card | DeckCard): string[] => {
+  return Array.isArray(card.hero_slugs) ? card.hero_slugs : []
+}
+
+const isCardAvailableForDeckHero = (card: Card | DeckCard): boolean => {
+  if (!deck.value) return true
+  const heroSlugs = cardHeroSlugs(card)
+  return heroSlugs.length === 0 || heroSlugs.includes(deck.value.hero.slug)
+}
+
+const cardHeroScopeLabel = (card: Card | DeckCard): string => {
+  const heroSlugs = cardHeroSlugs(card)
+  if (!heroSlugs.length) return ''
+  if (!deck.value) return heroSlugs.join(', ')
+  if (heroSlugs.includes(deck.value.hero.slug) && heroSlugs.length === 1) {
+    return deck.value.hero.name
+  }
+  return heroSlugs.join(', ')
+}
+
 // Display cards: when in Add Card mode, show all cards; otherwise show only deck cards
 const displayCards = computed(() => {
   if (isAddCardMode.value) {
     // Merge all cards with deck cards
     // For cards in deck, use the deck card data (with count)
     // For cards not in deck, use the card data
-    return allCards.value.map(card => {
+    return allCards.value.filter(isCardAvailableForDeckHero).map(card => {
       const deckCard = deckCardsMap.value.get(card.id)
       return deckCard || card
     }).sort((a, b) => {
@@ -406,7 +432,7 @@ const fetchAllCards = async (): Promise<void> => {
     allCardsLoading.value = true
     allCardsError.value = null
     const response = await axios.get(`/titles/${titleSlug.value}/cards/`)
-    allCards.value = response.data || []
+    allCards.value = (response.data || []).filter(isCardAvailableForDeckHero)
   } catch (err: any) {
     console.error('Error fetching all cards:', err)
     allCardsError.value = err.response?.data?.message || err.message || 'Failed to load cards'

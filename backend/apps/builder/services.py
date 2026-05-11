@@ -106,6 +106,23 @@ class TitleService:
                 card_template.add_trait(trait_data.type, data=trait_data.model_dump())
 
         card_template.save()
+        if resource.hero_slugs:
+            allowed_heroes = list(
+                builder_models.HeroTemplate.objects.filter(
+                    title=self.title,
+                    slug__in=resource.hero_slugs,
+                    is_latest=True,
+                )
+            )
+            found_slugs = {hero.slug for hero in allowed_heroes}
+            missing_slugs = sorted(set(resource.hero_slugs) - found_slugs)
+            if missing_slugs:
+                raise ValueError(
+                    f"Hero(s) not found for this title: {', '.join(missing_slugs)}"
+                )
+            card_template.allowed_heroes.set(allowed_heroes)
+        else:
+            card_template.allowed_heroes.clear()
 
         return IngestedResource(
             resource_type="card",
@@ -158,6 +175,10 @@ class TitleService:
             card = CardTemplate.objects.get(
                 title=self.title, slug=card_data["card"], is_latest=True
             )
+            if not card.is_available_to_hero(hero):
+                raise ValueError(
+                    f'Card "{card.name}" is not available to hero "{hero.name}"'
+                )
 
             deck_card = collection_models.DeckCard.objects.get_or_create(
                 deck=deck, card=card

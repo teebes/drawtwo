@@ -207,6 +207,7 @@ interface CardTemplate {
     name: string
     data: Record<string, any>
   }>
+  hero_slugs: string[]
   yaml_definition: string
   created_at: string
   updated_at: string
@@ -259,7 +260,8 @@ const cardForDisplay = computed((): Card | null => {
       data: t.data
     })),
     faction: card.value.faction_slug,
-    art_url: card.value.art_url
+    art_url: card.value.art_url,
+    hero_slugs: card.value.hero_slugs
   }
 })
 

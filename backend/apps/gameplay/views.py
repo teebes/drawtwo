@@ -70,6 +70,18 @@ def _get_min_cards_error(deck: Deck, deck_label: str = "Deck") -> str | None:
             f"{deck_label} must have at least {config.min_cards_in_deck} cards "
             f"({deck.deck_size} currently)"
         )
+    invalid_cards = (
+        deck.deckcard_set.filter(card__allowed_heroes__isnull=False)
+        .exclude(card__allowed_heroes=deck.hero)
+        .select_related("card")
+        .distinct()
+    )
+    if invalid_cards.exists():
+        invalid_names = ", ".join(deck_card.card.name for deck_card in invalid_cards[:3])
+        return (
+            f"{deck_label} contains cards unavailable to {deck.hero.name}: "
+            f"{invalid_names}"
+        )
     return None
 
 
