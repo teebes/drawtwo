@@ -1,6 +1,7 @@
 """
 Tests for trait processing and effects.
 """
+
 from apps.builder.schemas import (
     Battlecry,
     BuffAction,
@@ -12,18 +13,20 @@ from apps.builder.schemas import (
     SummonAction,
     Unique,
 )
+from apps.gameplay import traits
 from apps.gameplay.engine.dispatcher import resolve
 from apps.gameplay.engine.handlers import spawn_creature
-from apps.gameplay.schemas.engine import Success
-from apps.gameplay.schemas.effects import PlayEffect, DrawEffect, RemoveEffect, SummonEffect
-from apps.gameplay.schemas.events import (
-    CreatureDeathEvent,
-    EndTurnEvent,
-    PlayEvent,
+from apps.gameplay.schemas.effects import (
+    DrawEffect,
+    PlayEffect,
+    RemoveEffect,
+    SummonEffect,
 )
+from apps.gameplay.schemas.engine import Success
+from apps.gameplay.schemas.events import CreatureDeathEvent, EndTurnEvent, PlayEvent
 from apps.gameplay.schemas.game import CardInPlay, Creature
+from apps.gameplay.services import GameService
 from apps.gameplay.tests import GamePlayTestBase
-from apps.gameplay import traits
 
 
 class TestTraits(GamePlayTestBase):
@@ -42,9 +45,7 @@ class TestTraits(GamePlayTestBase):
             traits=[
                 Battlecry(
                     type="battlecry",
-                    actions=[
-                        DrawAction()
-                    ],
+                    actions=[DrawAction()],
                 )
             ],
         )
@@ -68,7 +69,7 @@ class TestTraits(GamePlayTestBase):
         # Card is on the board
         self.assertEqual(new_state.board["side_a"], ["1"])
         # PlayEvent is generated
-        self.assertEqual(result.events[0].type, 'event_play')
+        self.assertEqual(result.events[0].type, "event_play")
 
         # Now process the PlayEvent through the trait system to trigger battlecry
         play_event = result.events[0]
@@ -76,8 +77,8 @@ class TestTraits(GamePlayTestBase):
 
         # The DrawAction should create a DrawEffect as a child effect
         self.assertEqual(len(trait_result.child_effects), 1)
-        self.assertEqual(trait_result.child_effects[0].type, 'effect_draw')
-        self.assertEqual(trait_result.child_effects[0].side, 'side_a')
+        self.assertEqual(trait_result.child_effects[0].type, "effect_draw")
+        self.assertEqual(trait_result.child_effects[0].side, "side_a")
 
 
 class TestTraitProcessing(GamePlayTestBase):
@@ -95,7 +96,7 @@ class TestTraitProcessing(GamePlayTestBase):
             health=3,
             cost=2,
             traits=[Charge()],
-            exhausted=True
+            exhausted=True,
         )
         self.game_state.cards["card_2"] = CardInPlay(
             card_type="creature",
@@ -106,7 +107,7 @@ class TestTraitProcessing(GamePlayTestBase):
             health=2,
             cost=1,
             traits=[Battlecry(actions=[DrawAction(amount=2)])],
-            exhausted=True
+            exhausted=True,
         )
 
     def test_no_trait_triggers(self):
@@ -133,14 +134,11 @@ class TestTraitProcessing(GamePlayTestBase):
             health=1,
             cost=1,
             traits=[],
-            exhausted=True
+            exhausted=True,
         )
 
         play_event = PlayEvent(
-            side="side_a",
-            source_type="card",
-            source_id="card_3",
-            position=0
+            side="side_a", source_type="card", source_id="card_3", position=0
         )
 
         # Apply traits
@@ -219,7 +217,7 @@ class TestTraitProcessing(GamePlayTestBase):
         self.assertEqual(result.child_effects[0].target_type, "creature")
         self.assertEqual(result.child_effects[0].target_id, "card_1")
         self.assertEqual(result.child_effects[0].damage, 1)
-        #self.assertEqual(result.child_effects[0].retaliate, False)
+        # self.assertEqual(result.child_effects[0].retaliate, False)
 
     def test_battlecry_draw(self):
 
@@ -369,15 +367,29 @@ class TestTraitProcessing(GamePlayTestBase):
         self.assertEqual(len(trait_result.child_effects), 1)
         summon_effect = trait_result.child_effects[0]
         self.assertIsInstance(summon_effect, SummonEffect)
+        self.assertEqual(summon_effect.source_type, "creature")
+        self.assertEqual(summon_effect.source_id, phoenix_creature.creature_id)
         self.assertEqual(summon_effect.target, "phoenix")
 
         # Trim non-numeric helper cards so the summon handler can assign a new ID.
-        non_numeric_keys = [key for key in trait_result.new_state.cards if key.startswith("card_")]
+        non_numeric_keys = [
+            key for key in trait_result.new_state.cards if key.startswith("card_")
+        ]
         for key in non_numeric_keys:
             trait_result.new_state.cards.pop(key)
 
         summon_result = resolve(summon_effect, trait_result.new_state)
         self.assertTrue(isinstance(summon_result, Success))
+        self.assertEqual(len(summon_result.events), 1)
+        summon_event = summon_result.events[0]
+        self.assertEqual(summon_event.source_type, "creature")
+        self.assertEqual(summon_event.source_id, phoenix_creature.creature_id)
+
+        summon_updates = GameService._events_to_updates(summon_result.events)
+        self.assertEqual(len(summon_updates), 1)
+        self.assertEqual(summon_updates[0].source_type, "creature")
+        self.assertEqual(summon_updates[0].source_id, phoenix_creature.creature_id)
+
         final_state = summon_result.new_state
 
         self.assertEqual(len(final_state.board["side_b"]), 1)
@@ -583,7 +595,18 @@ class TestBuffAction(GamePlayTestBase):
             attack=1,
             health=1,
             cost=3,
-            traits=[Battlecry(actions=[BuffAction(attribute="attack", amount=2, target="creature", scope="single")])],
+            traits=[
+                Battlecry(
+                    actions=[
+                        BuffAction(
+                            attribute="attack",
+                            amount=2,
+                            target="creature",
+                            scope="single",
+                        )
+                    ]
+                )
+            ],
         )
         self.game_state.cards["buffer"] = buff_card
 
@@ -643,7 +666,18 @@ class TestBuffAction(GamePlayTestBase):
             attack=1,
             health=1,
             cost=3,
-            traits=[Battlecry(actions=[BuffAction(attribute="health", amount=3, target="creature", scope="single")])],
+            traits=[
+                Battlecry(
+                    actions=[
+                        BuffAction(
+                            attribute="health",
+                            amount=3,
+                            target="creature",
+                            scope="single",
+                        )
+                    ]
+                )
+            ],
         )
         self.game_state.cards["health_buffer"] = buff_card
 
@@ -704,7 +738,15 @@ class TestBuffAction(GamePlayTestBase):
             attack=1,
             health=1,
             cost=5,
-            traits=[Battlecry(actions=[BuffAction(attribute="attack", amount=1, target="creature", scope="all")])],
+            traits=[
+                Battlecry(
+                    actions=[
+                        BuffAction(
+                            attribute="attack", amount=1, target="creature", scope="all"
+                        )
+                    ]
+                )
+            ],
         )
         self.game_state.cards["buffer_all"] = buff_all_card
 

@@ -247,6 +247,14 @@ const updateText = (update: any) => {
         if (update.source_type === "card") {
             const card = gameStore.getCard(update.source_id);
             source_name = card?.name || 'a card';
+        } else if (update.source_type === "creature") {
+            const creature = gameStore.getCreature(update.source_id);
+            source_name = creature?.name || 'a unit';
+        } else if (update.source_type === "hero") {
+            const sourceHero = gameStore.getHero(update.source_id);
+            source_name = sourceHero?.name || 'a hero';
+        } else if (update.source_type === "board") {
+            source_name = 'The board';
         }
 
         let target_name = '';

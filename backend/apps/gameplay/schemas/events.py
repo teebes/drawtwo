@@ -115,7 +115,7 @@ class TempManaBoostEvent(EventBase):
 
 class SummonEvent(EventBase):
     type: Literal["event_summon"] = "event_summon"
-    source_type: Literal["card"] = "card"
+    source_type: Literal["card", "hero", "board", "creature"] = "card"
     source_id: str
     target_type: Literal["card"] = "card"
     target_id: str

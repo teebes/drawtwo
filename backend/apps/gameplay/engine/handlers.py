@@ -966,7 +966,7 @@ def summon(effect: SummonEffect, state: GameState) -> Result:
         events=[
             SummonEvent(
                 side=effect.side,
-                source_type="card",
+                source_type=effect.source_type,
                 source_id=effect.source_id,
                 target_type="card",
                 target_id=card.card_id,

@@ -1,12 +1,12 @@
 from datetime import datetime, timezone
-from typing import Literal, Annotated, Union, Optional
+from typing import Annotated, Literal, Optional, Union
 
 from pydantic import BaseModel, Discriminator, Field
 
 
 class UpdateBase(BaseModel):
     type: Literal["update"] = "update"
-    side: Literal['side_a', 'side_b']
+    side: Literal["side_a", "side_b"]
     # Use default_factory so each instance gets a fresh timestamp
     # and ensure timezone-aware datetimes
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -91,6 +91,7 @@ class GameAbortedUpdate(UpdateBase):
     Sent when a ranked game is aborted (e.g., first player timed out on turn 1).
     No winner is declared and no rating changes occur.
     """
+
     type: Literal["update_game_aborted"] = "update_game_aborted"
     reason: str = "first_turn_timeout"
 
@@ -102,7 +103,7 @@ class TempManaBoostUpdate(UpdateBase):
 
 class SummonUpdate(UpdateBase):
     type: Literal["update_summon"] = "update_summon"
-    source_type: Literal["card"] = "card"
+    source_type: Literal["card", "hero", "board", "creature"] = "card"
     source_id: str
     target_type: Literal["card"] = "card"
     target_id: str
@@ -144,5 +145,5 @@ GameUpdate = Annotated[
         SummonUpdate,
         TempManaBoostUpdate,
     ],
-    Discriminator('type')
+    Discriminator("type"),
 ]

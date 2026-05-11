@@ -858,7 +858,7 @@ class GameService:
         """
 
         # If a creature death event is triggering an action, we can safely assume
-        # it's a deathrattle, in which case the source of the subsequent damage is
+        # it's a deathrattle, in which case the source of the subsequent effect is
         # actually the creature that died.
         if isinstance(event, CreatureDeathEvent):
             source_id = event.target_id
