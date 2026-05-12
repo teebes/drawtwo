@@ -256,6 +256,22 @@
                 v-if="activeCombatAnimation"
                 :key="activeCombatAnimation.key"
                 :animation="activeCombatAnimation" />
+            <div
+                v-if="playedSpellCards.length > 0"
+                class="played-spell-layer pointer-events-none absolute inset-0 z-30 overflow-hidden"
+                aria-hidden="true">
+                <div
+                    v-for="playedSpell in playedSpellCards"
+                    :key="playedSpell.key"
+                    class="played-spell-card"
+                    :class="[
+                        playedSpell.side === bottomSide ? 'played-spell-card--bottom' : 'played-spell-card--top',
+                        { 'is-leaving': playedSpell.leaving }
+                    ]"
+                    :style="getPlayedSpellCardStyle(playedSpell.side)">
+                    <GameCard :card="playedSpell.card" compact />
+                </div>
+            </div>
             <CombatValueBursts
                 v-if="combatValueBursts.length > 0"
                 :bursts="combatValueBursts" />
@@ -479,6 +495,15 @@ interface DamageUpdate {
     is_retaliation?: boolean
 }
 
+interface PlayCardUpdate {
+    type: 'update_play_card'
+    side: Side
+    source_type: 'card'
+    source_id: string
+    card_id: string
+    position: number
+}
+
 interface HealUpdate {
     type: 'update_heal'
     side: Side
@@ -513,11 +538,20 @@ interface CombatValueBurst {
     y: number
 }
 
+interface PlayedSpellCard {
+    key: number
+    cardId: string
+    side: Side
+    card: CardInPlay
+    leaving: boolean
+}
+
 const showingGameOver = ref(false)
 const rematchLoading = ref(false)
 const boardSurface = ref<HTMLElement | null>(null)
 const activeCombatAnimation = ref<CombatAnimationState | null>(null)
 const combatValueBursts = ref<CombatValueBurst[]>([])
+const playedSpellCards = ref<PlayedSpellCard[]>([])
 const mulliganSelectedCardIds = ref<string[]>([])
 const mulliganSubmitting = ref(false)
 
@@ -525,10 +559,13 @@ const combatAnimationQueue: CombatAnimationState[] = []
 const entityElements = new Map<string, HTMLElement>()
 const entityFrames = new Map<string, DOMRect>()
 const combatValueBurstTimeouts = new Map<number, number>()
+const playedSpellCardTimeouts = new Map<string, number>()
+const playedSpellCardExitTimeouts = new Map<string, number>()
 
 let combatAnimationKey = 0
 let combatAnimationTimeout: number | null = null
 let combatValueBurstKey = 0
+let playedSpellCardKey = 0
 
 const COMBAT_ENTITY_LUNGE = 14
 const COMBAT_ENTITY_RECOIL = 10
@@ -536,6 +573,11 @@ const HEAL_ENTITY_DRIFT = 6
 const SPELL_ENTITY_PULSE = 8
 const COMBAT_ANIMATION_DURATION_MS = 620
 const COMBAT_VALUE_BURST_DURATION_MS = 2200
+const PLAYED_SPELL_CARD_CENTER_OFFSET_PX = 76
+const PLAYED_SPELL_CARD_FLOAT_OFFSET_PX = 12
+const PLAYED_SPELL_CARD_DURATION_MS = 1700
+const PLAYED_SPELL_CARD_EXIT_MS = 260
+const PLAYED_SPELL_CARD_AFTER_ANIMATION_MS = 400
 
 const title = computed(() => titleStore.currentTitle)
 
@@ -687,12 +729,25 @@ const clearCombatValueBurstTimeouts = () => {
     combatValueBurstTimeouts.clear()
 }
 
+const clearPlayedSpellCardTimeouts = () => {
+    for (const timeoutId of playedSpellCardTimeouts.values()) {
+        clearTimeout(timeoutId)
+    }
+    for (const timeoutId of playedSpellCardExitTimeouts.values()) {
+        clearTimeout(timeoutId)
+    }
+    playedSpellCardTimeouts.clear()
+    playedSpellCardExitTimeouts.clear()
+}
+
 const resetCombatAnimations = () => {
     clearCombatAnimationTimeout()
     activeCombatAnimation.value = null
     combatAnimationQueue.length = 0
     clearCombatValueBurstTimeouts()
     combatValueBursts.value = []
+    clearPlayedSpellCardTimeouts()
+    playedSpellCards.value = []
 }
 
 const playNextCombatAnimation = () => {
@@ -731,6 +786,103 @@ const isSpellDamageUpdate = (update: DamageUpdate) => {
 
     const sourceCard = get_card(update.source_id)
     return sourceCard?.card_type === 'spell'
+}
+
+const isSpellHealUpdate = (update: HealUpdate) => {
+    if (update.source_type !== 'card') {
+        return false
+    }
+
+    const sourceCard = get_card(update.source_id)
+    return sourceCard?.card_type === 'spell'
+}
+
+const isSpellPlayUpdate = (update: any): update is PlayCardUpdate => {
+    if (update?.type !== 'update_play_card' || !update.card_id) {
+        return false
+    }
+
+    const card = get_card(update.card_id)
+    return card?.card_type === 'spell'
+}
+
+const removePlayedSpellCard = (cardId: string) => {
+    const timeoutId = playedSpellCardTimeouts.get(cardId)
+    if (timeoutId !== undefined) {
+        clearTimeout(timeoutId)
+        playedSpellCardTimeouts.delete(cardId)
+    }
+
+    const exitTimeoutId = playedSpellCardExitTimeouts.get(cardId)
+    if (exitTimeoutId !== undefined) {
+        clearTimeout(exitTimeoutId)
+        playedSpellCardExitTimeouts.delete(cardId)
+    }
+
+    playedSpellCards.value = playedSpellCards.value.filter((playedSpell) => playedSpell.cardId !== cardId)
+}
+
+const hidePlayedSpellCard = (cardId: string) => {
+    playedSpellCardTimeouts.delete(cardId)
+
+    const playedSpell = playedSpellCards.value.find((entry) => entry.cardId === cardId)
+    if (!playedSpell || playedSpell.leaving) {
+        return
+    }
+
+    playedSpellCards.value = playedSpellCards.value.map((entry) =>
+        entry.cardId === cardId ? { ...entry, leaving: true } : entry
+    )
+
+    const exitTimeoutId = window.setTimeout(() => {
+        removePlayedSpellCard(cardId)
+    }, PLAYED_SPELL_CARD_EXIT_MS)
+    playedSpellCardExitTimeouts.set(cardId, exitTimeoutId)
+}
+
+const showPlayedSpellCard = (
+    cardId: string,
+    side: Side,
+    durationMs: number = PLAYED_SPELL_CARD_DURATION_MS
+) => {
+    const card = get_card(cardId)
+    if (!card || card.card_type !== 'spell') {
+        return
+    }
+
+    const existingExitTimeoutId = playedSpellCardExitTimeouts.get(cardId)
+    if (existingExitTimeoutId !== undefined) {
+        clearTimeout(existingExitTimeoutId)
+        playedSpellCardExitTimeouts.delete(cardId)
+    }
+
+    const existingIndex = playedSpellCards.value.findIndex((entry) => entry.cardId === cardId)
+    if (existingIndex >= 0) {
+        playedSpellCards.value = playedSpellCards.value.map((entry) =>
+            entry.cardId === cardId ? { ...entry, side, card, leaving: false } : entry
+        )
+    } else {
+        playedSpellCards.value = [
+            ...playedSpellCards.value,
+            {
+                key: ++playedSpellCardKey,
+                cardId,
+                side,
+                card,
+                leaving: false
+            }
+        ]
+    }
+
+    const existingTimeoutId = playedSpellCardTimeouts.get(cardId)
+    if (existingTimeoutId !== undefined) {
+        clearTimeout(existingTimeoutId)
+    }
+
+    const timeoutId = window.setTimeout(() => {
+        hidePlayedSpellCard(cardId)
+    }, Math.max(durationMs, PLAYED_SPELL_CARD_DURATION_MS))
+    playedSpellCardTimeouts.set(cardId, timeoutId)
 }
 
 const isHealUpdate = (update: any): update is HealUpdate => {
@@ -784,8 +936,47 @@ const getSideFallbackPoint = (side: Side): CombatPoint | null => {
     }
 }
 
+const getPlayedSpellCardPoint = (side: Side): CombatPoint | null => {
+    const board = boardSurface.value
+    if (!board) {
+        return null
+    }
+
+    const boardRect = board.getBoundingClientRect()
+    const isBottomSide = side === bottomSide.value
+
+    return {
+        x: boardRect.width * 0.5,
+        y: isBottomSide
+            ? boardRect.height - PLAYED_SPELL_CARD_CENTER_OFFSET_PX - PLAYED_SPELL_CARD_FLOAT_OFFSET_PX
+            : PLAYED_SPELL_CARD_CENTER_OFFSET_PX + PLAYED_SPELL_CARD_FLOAT_OFFSET_PX
+    }
+}
+
+const getPlayedSpellCardStyle = (side: Side): Record<string, string> => {
+    const isBottomSide = side === bottomSide.value
+
+    return {
+        left: '50%',
+        top: isBottomSide
+            ? `calc(100% - ${PLAYED_SPELL_CARD_CENTER_OFFSET_PX}px)`
+            : `${PLAYED_SPELL_CARD_CENTER_OFFSET_PX}px`
+    }
+}
+
 const getSpellSourcePoint = (side: Side): CombatPoint | null => {
-    return getHeroCenterForSide(side) ?? getSideFallbackPoint(side)
+    return getPlayedSpellCardPoint(side) ?? getHeroCenterForSide(side) ?? getSideFallbackPoint(side)
+}
+
+const getSpellCardAnimationLingerMs = () => {
+    const queuedAnimationCount = combatAnimationQueue.length + (activeCombatAnimation.value ? 1 : 0)
+    const animationWaitMs = queuedAnimationCount * COMBAT_ANIMATION_DURATION_MS
+
+    return animationWaitMs + COMBAT_ANIMATION_DURATION_MS + PLAYED_SPELL_CARD_AFTER_ANIMATION_MS
+}
+
+const queuePlayedSpellCard = (update: PlayCardUpdate) => {
+    showPlayedSpellCard(update.card_id, update.side)
 }
 
 const queueCombatAnimation = (update: DamageUpdate) => {
@@ -803,6 +994,10 @@ const queueCombatAnimation = (update: DamageUpdate) => {
     queueCombatValueBurst('damage', update.damage, target)
 
     const isSpellDamage = isSpellDamageUpdate(update)
+    if (isSpellDamage) {
+        showPlayedSpellCard(update.source_id, update.side, getSpellCardAnimationLingerMs())
+    }
+
     const source = isSpellDamage
         ? getSpellSourcePoint(update.side)
         : getEntityCenter(update.source_id)
@@ -843,14 +1038,21 @@ const queueHealAnimation = (update: HealUpdate) => {
 
     queueCombatValueBurst('heal', update.amount, target)
 
-    const source = getEntityCenter(update.source_id) ?? target
+    const isSpellHeal = isSpellHealUpdate(update)
+    if (isSpellHeal) {
+        showPlayedSpellCard(update.source_id, update.side, getSpellCardAnimationLingerMs())
+    }
+
+    const source = isSpellHeal
+        ? getSpellSourcePoint(update.side)
+        : getEntityCenter(update.source_id)
 
     combatAnimationQueue.push({
         key: ++combatAnimationKey,
         kind: 'heal',
         sourceId: update.source_id,
         targetId: update.target_id,
-        source,
+        source: source ?? target,
         target,
         value: update.amount,
         isRetaliation: false
@@ -1669,6 +1871,10 @@ watch(
         }
 
         for (const update of liveUpdateBatch.value) {
+            if (isSpellPlayUpdate(update)) {
+                queuePlayedSpellCard(update)
+            }
+
             if (isCombatDamageUpdate(update) || (update?.type === 'update_damage' && isSpellDamageUpdate(update))) {
                 queueCombatAnimation(update)
             } else if (isHealUpdate(update)) {
@@ -1753,6 +1959,99 @@ onUnmounted(() => {
 
 .combat-entity--spell-target {
     animation: combat-entity-spell-target 620ms cubic-bezier(0.2, 0.82, 0.32, 1);
+}
+
+.played-spell-layer {
+    perspective: 900px;
+}
+
+.played-spell-card {
+    --played-spell-float-y: -12px;
+    --played-spell-entry-y: 14px;
+    --played-spell-exit-y: -24px;
+    --played-spell-tilt: -3deg;
+    position: absolute;
+    width: 4.75rem;
+    transform: translate(-50%, -50%);
+    transform-origin: center;
+    filter: drop-shadow(0 16px 22px rgba(0, 0, 0, 0.42));
+    animation:
+        played-spell-enter 280ms cubic-bezier(0.16, 0.84, 0.24, 1) both,
+        played-spell-hover 1300ms ease-in-out 280ms infinite alternate;
+    will-change: opacity, transform, filter;
+}
+
+.played-spell-card--top {
+    --played-spell-float-y: 12px;
+    --played-spell-entry-y: -14px;
+    --played-spell-exit-y: 24px;
+    --played-spell-tilt: 3deg;
+}
+
+.played-spell-card.is-leaving {
+    animation: played-spell-exit 260ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.played-spell-card :deep(.game-card) {
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.18),
+        0 0 24px rgba(96, 165, 250, 0.26);
+}
+
+@keyframes played-spell-enter {
+    0% {
+        opacity: 0;
+        transform:
+            translate(-50%, calc(-50% + var(--played-spell-entry-y)))
+            rotate(var(--played-spell-tilt))
+            scale(0.78);
+        filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.28));
+    }
+
+    100% {
+        opacity: 1;
+        transform:
+            translate(-50%, calc(-50% + var(--played-spell-float-y)))
+            rotate(0deg)
+            scale(1);
+        filter: drop-shadow(0 16px 22px rgba(0, 0, 0, 0.42));
+    }
+}
+
+@keyframes played-spell-hover {
+    0% {
+        transform:
+            translate(-50%, calc(-50% + var(--played-spell-float-y)))
+            rotate(-1deg)
+            scale(1);
+    }
+
+    100% {
+        transform:
+            translate(-50%, calc(-50% + var(--played-spell-float-y) - 5px))
+            rotate(1deg)
+            scale(1.02);
+    }
+}
+
+@keyframes played-spell-exit {
+    0% {
+        opacity: 1;
+        transform:
+            translate(-50%, calc(-50% + var(--played-spell-float-y)))
+            rotate(0deg)
+            scale(1);
+        filter: drop-shadow(0 16px 22px rgba(0, 0, 0, 0.42));
+    }
+
+    100% {
+        opacity: 0;
+        transform:
+            translate(-50%, calc(-50% + var(--played-spell-exit-y)))
+            rotate(var(--played-spell-tilt))
+            scale(0.84);
+        filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.22));
+    }
 }
 
 @keyframes combat-entity-lunge {
