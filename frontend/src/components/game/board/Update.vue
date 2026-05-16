@@ -47,6 +47,32 @@
         />
     </div>
 
+    <!-- Buff -->
+    <div class="game-update flex items-center" v-else-if="props.update.type === 'update_buff'">
+        <UpdateEntity
+            v-if="source && gameStore.viewer"
+            :name="source.name"
+            :art_url="'art_url' in source ? source.art_url : null"
+            :class="isViewerTurn ? 'border-green-500' : 'border-red-500'"
+        />
+        <div class="flex items-center mx-2">
+            <div
+                class="text-white font-bold px-3 py-1 rounded-lg shadow-md flex items-center gap-1.5"
+                :class="buffBadgeClass"
+            >
+                <span class="text-xs">{{ buffAttributeLabel }}</span>
+                <span>+{{ props.update.amount }}</span>
+                <span class="text-xs">→</span>
+            </div>
+        </div>
+        <UpdateEntity
+            v-if="target && gameStore.viewer"
+            :name="target.name"
+            :art_url="'art_url' in target ? target.art_url : null"
+            :class="isViewerTurn ? 'border-green-500' : 'border-red-500'"
+        />
+    </div>
+
     <!-- Draw -->
     <div class="game-update relative flex items-center" v-else-if="props.update.type === 'update_draw_card'">
 
@@ -242,6 +268,37 @@ const updateText = (update: any) => {
         return `${side_name} ${source_name} > ${target_name} (+${update.amount})`;
     }
 
+    if (update.type === "update_buff") {
+        let source_name = '';
+        if (update.source_type === "card" || update.source_type === "creature") {
+            const card = update.source_type === "creature"
+                ? gameStore.getCreature(update.source_id)
+                : gameStore.getCard(update.source_id);
+            source_name = card?.name || 'a unit';
+        } else if (update.source_type === "hero") {
+            if (update.source_id === hero.hero_id)
+                source_name = hero.name;
+            else
+                source_name = opposite_hero.name;
+        }
+
+        let target_name = '';
+        if (update.target_type === "card" || update.target_type === "creature") {
+            const card = update.target_type === "creature"
+                ? gameStore.getCreature(update.target_id)
+                : gameStore.getCard(update.target_id);
+            target_name = card?.name || 'a unit';
+        } else if (update.target_type === "hero") {
+            if (update.target_id === hero.hero_id)
+                target_name = hero.name;
+            else
+                target_name = opposite_hero.name;
+        }
+
+        const attribute = update.attribute === 'attack' ? 'attack' : 'health';
+        return `${side_name} ${source_name} > ${target_name} (+${update.amount} ${attribute})`;
+    }
+
     if (update.type === "update_summon") {
         let source_name = '';
         if (update.source_type === "card") {
@@ -309,6 +366,14 @@ const target = computed(() => {
         return gameStore.getHero(props.update.target_id)
     }
     return null
+})
+
+const buffAttributeLabel = computed(() => {
+    return props.update.attribute === 'attack' ? 'ATK' : 'HP'
+})
+
+const buffBadgeClass = computed(() => {
+    return props.update.attribute === 'attack' ? 'bg-amber-500' : 'bg-emerald-500'
 })
 
 const opposing_hero = computed(() => {

@@ -327,6 +327,7 @@ export const useGameStore = defineStore('game', {
           'update_end_turn',
           'update_damage',
           'update_heal',
+          'update_buff',
           'update_summon',
           'update_remove',
         ]
@@ -726,9 +727,11 @@ export const useGameStore = defineStore('game', {
           }
         }
 
-        // Only add updates that don't already exist (based on timestamp)
+        // Only add updates that don't already exist.
         for (const update of data.updates) {
-          const existingUpdate = this.updates.find(existing => existing.timestamp === update.timestamp)
+          const existingUpdate = this.updates.find(existing =>
+            existing.timestamp === update.timestamp && existing.type === update.type
+          )
           if (!existingUpdate) {
             this.updates.push(update)
             newUpdates.push(update)

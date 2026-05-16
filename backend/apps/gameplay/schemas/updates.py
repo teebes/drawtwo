@@ -64,6 +64,16 @@ class HealUpdate(UpdateBase):
     amount: int
 
 
+class BuffUpdate(UpdateBase):
+    type: Literal["update_buff"] = "update_buff"
+    source_type: Literal["card", "hero", "creature"] = "card"
+    source_id: str
+    target_type: Literal["hero", "creature"] = "creature"
+    target_id: str
+    attribute: Literal["attack", "health"] = "attack"
+    amount: int
+
+
 class HeroDamageUpdate(UpdateBase):
     type: Literal["update_hero_damage"] = "update_hero_damage"
     hero_id: str
@@ -127,6 +137,7 @@ class ClearUpdate(UpdateBase):
 
 GameUpdate = Annotated[
     Union[
+        BuffUpdate,
         CardDamageUpdate,
         CardDestroyedUpdate,
         ClearUpdate,

@@ -1312,6 +1312,7 @@ class GameService:
         In the future, this could handle more complex transformations.
         """
         from apps.gameplay.schemas.updates import (
+            BuffUpdate,
             ClearUpdate,
             DamageUpdate,
             DrawCardUpdate,
@@ -1368,6 +1369,18 @@ class GameService:
                         source_id=event.source_id,
                         target_type=event.target_type,
                         target_id=event.target_id,
+                        amount=event.amount,
+                    )
+                )
+            elif event.type == "event_buff":
+                updates.append(
+                    BuffUpdate(
+                        side=event.side,
+                        source_type=event.source_type,
+                        source_id=event.source_id,
+                        target_type=event.target_type,
+                        target_id=event.target_id,
+                        attribute=event.attribute,
                         amount=event.amount,
                     )
                 )

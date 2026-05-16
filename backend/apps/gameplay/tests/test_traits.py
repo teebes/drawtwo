@@ -2,6 +2,8 @@
 Tests for trait processing and effects.
 """
 
+from pydantic import TypeAdapter
+
 from apps.builder.schemas import (
     Battlecry,
     BuffAction,
@@ -23,8 +25,15 @@ from apps.gameplay.schemas.effects import (
     SummonEffect,
 )
 from apps.gameplay.schemas.engine import Success
-from apps.gameplay.schemas.events import CreatureDeathEvent, EndTurnEvent, PlayEvent
+from apps.gameplay.schemas.events import (
+    BuffEvent,
+    CreatureDeathEvent,
+    EndTurnEvent,
+    HealEvent,
+    PlayEvent,
+)
 from apps.gameplay.schemas.game import CardInPlay, Creature
+from apps.gameplay.schemas.updates import GameUpdate
 from apps.gameplay.services import GameService
 from apps.gameplay.tests import GamePlayTestBase
 
@@ -565,6 +574,40 @@ class TestRemoveAction(GamePlayTestBase):
 
 class TestBuffAction(GamePlayTestBase):
     """Tests for the Buff action (buffs creature stats)."""
+
+    def test_events_to_updates_includes_heal_and_buff(self):
+        """Combined heal/buff powers should surface both update log entries."""
+        heal_event = HealEvent(
+            side="side_a",
+            source_type="hero",
+            source_id="1",
+            target_type="hero",
+            target_id="1",
+            amount=1,
+        )
+        buff_event = BuffEvent(
+            side="side_a",
+            source_type="hero",
+            source_id="1",
+            target_type="hero",
+            target_id="1",
+            attribute="health",
+            amount=1,
+        )
+
+        updates = GameService._events_to_updates([heal_event, buff_event])
+        validated_updates = TypeAdapter(list[GameUpdate]).validate_python(
+            [update.model_dump(mode="json") for update in updates]
+        )
+
+        self.assertEqual(
+            [update.type for update in validated_updates],
+            ["update_heal", "update_buff"],
+        )
+        self.assertEqual(updates[1].source_type, "hero")
+        self.assertEqual(updates[1].target_type, "hero")
+        self.assertEqual(updates[1].attribute, "health")
+        self.assertEqual(updates[1].amount, 1)
 
     def test_battlecry_buff_attack_single(self):
         """Test buff action targeting a single creature's attack."""
