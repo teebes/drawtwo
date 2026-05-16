@@ -1,5 +1,49 @@
 <template>
   <div class="ui-page">
+    <BaseModal :show="yamlModalOpen" @close="closeYamlModal">
+      <div class="p-6">
+        <div class="mb-4 flex items-start justify-between gap-4 pr-8">
+          <div>
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+              {{ yamlModalTitle }}
+            </h2>
+            <p v-if="yamlModalMeta" class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ yamlModalMeta }}
+            </p>
+          </div>
+          <button
+            type="button"
+            :disabled="yamlLoading || Boolean(yamlError) || !yamlContent"
+            :class="[
+              'ui-btn ui-btn-sm',
+              copied
+                ? 'border border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/40 dark:text-green-200'
+                : 'ui-btn-secondary'
+            ]"
+            @click="copyYaml"
+          >
+            <Check v-if="copied" class="h-4 w-4" aria-hidden="true" />
+            <Copy v-else class="h-4 w-4" aria-hidden="true" />
+            {{ copied ? 'Copied' : 'Copy' }}
+          </button>
+        </div>
+
+        <div v-if="yamlLoading" class="flex items-center justify-center gap-3 py-12 text-gray-500 dark:text-gray-400">
+          <Loader2 class="h-5 w-5 animate-spin" aria-hidden="true" />
+          <span>Loading YAML...</span>
+        </div>
+        <div v-else-if="yamlError" class="ui-alert ui-alert-error">
+          {{ yamlError }}
+        </div>
+        <div v-else>
+          <pre class="max-h-[60vh] overflow-auto rounded-lg bg-gray-900 p-4 text-sm text-gray-100 dark:bg-gray-950"><code>{{ yamlContent }}</code></pre>
+          <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
+            Copy this YAML into the ingestion tool to update this {{ selectedYamlResource?.type || 'resource' }} or use it as a template.
+          </p>
+        </div>
+      </div>
+    </BaseModal>
+
     <main class="ui-page-container">
       <header class="ui-page-header-row">
         <div>
@@ -105,6 +149,7 @@
                   <th class="ui-table-head">Faction</th>
                   <th class="ui-table-head text-right">Scoped cards</th>
                   <th class="ui-table-head text-right">Version</th>
+                  <th class="ui-table-head text-right">Actions</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-800 dark:bg-gray-900/40">
@@ -140,6 +185,16 @@
                   </td>
                   <td class="ui-table-cell text-right text-gray-500 dark:text-gray-400">
                     v{{ hero.version }}
+                  </td>
+                  <td class="ui-table-cell text-right">
+                    <button
+                      type="button"
+                      class="ui-btn ui-btn-xs ui-btn-secondary"
+                      @click="openYamlModal('hero', hero)"
+                    >
+                      <FileCode2 class="h-3.5 w-3.5" aria-hidden="true" />
+                      YAML
+                    </button>
                   </td>
                 </tr>
               </tbody>
@@ -241,7 +296,15 @@
                     </span>
                   </td>
                   <td class="ui-table-cell text-right">
-                    <div class="flex justify-end gap-2">
+                    <div class="flex flex-wrap justify-end gap-2">
+                      <button
+                        type="button"
+                        class="ui-btn ui-btn-xs ui-btn-secondary"
+                        @click="openYamlModal('card', card)"
+                      >
+                        <FileCode2 class="h-3.5 w-3.5" aria-hidden="true" />
+                        YAML
+                      </button>
                       <router-link
                         :to="{ name: 'CardDetails', params: { slug, cardSlug: card.slug } }"
                         class="ui-btn ui-btn-xs ui-btn-secondary"
@@ -269,8 +332,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ArrowLeft, FileCode2, Loader2, Plus } from 'lucide-vue-next'
+import { ArrowLeft, Check, Copy, FileCode2, Loader2, Plus } from 'lucide-vue-next'
 import axios from '../config/api'
+import BaseModal from '../components/modals/BaseModal.vue'
 import { useNotificationStore } from '../stores/notifications'
 import { useTitleStore } from '../stores/title'
 
@@ -319,6 +383,14 @@ interface ContentConfigResponse {
   cards: CardConfig[]
 }
 
+type YamlResourceType = 'hero' | 'card'
+
+interface YamlResourceSummary {
+  type: YamlResourceType
+  slug: string
+  name: string
+}
+
 const tabs = [
   { id: 'heroes', name: 'Heroes' },
   { id: 'cards', name: 'Cards' }
@@ -338,11 +410,25 @@ const activeTab = ref<TabId>('heroes')
 const searchQuery = ref('')
 const cardTypeFilter = ref<'all' | 'creature' | 'spell'>('all')
 const scopeFilter = ref<'all' | 'global' | 'hero'>('all')
+const yamlModalOpen = ref(false)
+const selectedYamlResource = ref<YamlResourceSummary | null>(null)
+const yamlContent = ref('')
+const yamlLoading = ref(false)
+const yamlError = ref<string | null>(null)
+const copied = ref(false)
 
 const pageTitle = computed(() => content.value?.title.name || titleStore.currentTitle?.name || 'World')
 const heroes = computed(() => content.value?.heroes || [])
 const cards = computed(() => content.value?.cards || [])
 const heroLookup = computed(() => new Map(heroes.value.map(hero => [hero.slug, hero])))
+const yamlModalTitle = computed(() => (
+  selectedYamlResource.value ? `${selectedYamlResource.value.name} YAML` : 'YAML Definition'
+))
+const yamlModalMeta = computed(() => {
+  if (!selectedYamlResource.value) return ''
+  const resourceType = selectedYamlResource.value.type === 'hero' ? 'Hero' : 'Card'
+  return `${resourceType} - ${selectedYamlResource.value.slug}`
+})
 
 const collectibleCardCount = computed(() => (
   cards.value.filter(card => card.is_collectible !== false).length
@@ -440,9 +526,92 @@ const fetchContent = async (): Promise<void> => {
   }
 }
 
+const yamlEndpoint = (resource: YamlResourceSummary): string => {
+  const resourcePath = resource.type === 'hero' ? 'heroes' : 'cards'
+  return `/builder/titles/${slug.value}/${resourcePath}/${resource.slug}/yaml/`
+}
+
+const openYamlModal = async (
+  type: YamlResourceType,
+  resource: HeroConfig | CardConfig
+): Promise<void> => {
+  const resourceSummary = {
+    type,
+    slug: resource.slug,
+    name: resource.name
+  }
+  selectedYamlResource.value = resourceSummary
+  yamlModalOpen.value = true
+  yamlLoading.value = true
+  yamlError.value = null
+  yamlContent.value = ''
+  copied.value = false
+
+  try {
+    const response = await axios.get<{ yaml: string }>(yamlEndpoint(resourceSummary))
+    yamlContent.value = response.data.yaml
+  } catch (err: any) {
+    yamlError.value = err.response?.data?.error || err.message || 'Failed to load YAML.'
+    console.error('Error loading YAML:', err)
+  } finally {
+    yamlLoading.value = false
+  }
+}
+
+const closeYamlModal = (): void => {
+  yamlModalOpen.value = false
+  selectedYamlResource.value = null
+  yamlContent.value = ''
+  yamlError.value = null
+  copied.value = false
+}
+
+const writeTextWithTextarea = (text: string): boolean => {
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.top = '-9999px'
+  document.body.appendChild(textarea)
+  textarea.focus()
+  textarea.select()
+
+  const copiedToClipboard = document.execCommand('copy')
+  document.body.removeChild(textarea)
+
+  return copiedToClipboard
+}
+
+const writeTextToClipboard = async (text: string): Promise<void> => {
+  if (writeTextWithTextarea(text)) return
+
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+
+  throw new Error('Unable to copy text.')
+}
+
+const copyYaml = async (): Promise<void> => {
+  if (!yamlContent.value) return
+
+  try {
+    await writeTextToClipboard(yamlContent.value)
+    copied.value = true
+    setTimeout(() => {
+      copied.value = false
+    }, 2000)
+  } catch (err) {
+    console.error('Failed to copy YAML:', err)
+    notificationStore.error('Failed to copy YAML.')
+  }
+}
+
 onMounted(fetchContent)
 
 watch(slug, () => {
+  closeYamlModal()
   void fetchContent()
 })
 </script>

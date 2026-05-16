@@ -1,3 +1,4 @@
+import yaml
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -267,6 +268,52 @@ class TestTitleAPIPermissions(APITestCase):
         self.client.force_authenticate(user=self.other_user)
         url = reverse(
             "title-content-config", kwargs={"title_slug": self.draft_title.slug}
+        )
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_author_can_read_hero_yaml(self):
+        HeroTemplate.objects.create(
+            title=self.draft_title,
+            slug="warrior",
+            name="Warrior",
+            description="Front line hero",
+            health=30,
+            hero_power={"name": "Strike", "actions": []},
+        )
+
+        self.client.force_authenticate(user=self.author)
+        url = reverse(
+            "hero-yaml",
+            kwargs={"title_slug": self.draft_title.slug, "hero_slug": "warrior"},
+        )
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = yaml.safe_load(response.data["yaml"])
+        self.assertEqual(data["type"], "hero")
+        self.assertEqual(data["slug"], "warrior")
+        self.assertEqual(data["name"], "Warrior")
+        self.assertEqual(data["health"], 30)
+        self.assertEqual(data["hero_power"]["name"], "Strike")
+
+    def test_other_user_cannot_read_hero_yaml(self):
+        HeroTemplate.objects.create(
+            title=self.draft_title,
+            slug="warrior",
+            name="Warrior",
+            description="Front line hero",
+            health=30,
+            hero_power={"name": "Strike", "actions": []},
+        )
+
+        self.client.force_authenticate(user=self.other_user)
+        url = reverse(
+            "hero-yaml",
+            kwargs={"title_slug": self.draft_title.slug, "hero_slug": "warrior"},
         )
 
         response = self.client.get(url)

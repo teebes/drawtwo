@@ -10,7 +10,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .models import CardTemplate, CardTrait, HeroTemplate, Title
-from .schemas import Card, TitleConfig
+from .schemas import Card, Hero, TitleConfig
 from .serializers import CardTemplateSerializer, HeroTemplateSerializer, TitleSerializer
 from .services import TitleService
 
@@ -254,6 +254,41 @@ def card_yaml(request, title_slug, card_slug):
     )
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def hero_yaml(request, title_slug, hero_slug):
+    """
+    Get a hero's YAML representation in the ingestion format.
+
+    Returns the hero as YAML that can be copied and used with the ingestion endpoint.
+    """
+    title = get_object_or_404(Title, slug=title_slug, is_latest=True)
+
+    if not title.can_be_viewed_by(request.user):
+        return Response(
+            {"error": "You do not have permission to view this title"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    hero = get_object_or_404(HeroTemplate, title=title, slug=hero_slug, is_latest=True)
+    hero_schema = hero_template_to_schema(hero)
+
+    yaml_content = yaml.dump(
+        hero_schema.model_dump(exclude_none=True, exclude_defaults=False),
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True,
+    )
+
+    return Response(
+        {
+            "yaml": yaml_content,
+            "hero": {"slug": hero.slug, "name": hero.name},
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
 def card_template_to_schema(card: CardTemplate) -> Card:
     """
     Convert a CardTemplate database model to the Card Pydantic schema.
@@ -287,6 +322,22 @@ def card_template_to_schema(card: CardTemplate) -> Card:
         art_url=card.art_url if hasattr(card, "art_url") and card.art_url else None,
         is_collectible=card.is_collectible,
         hero_slugs=list(card.allowed_heroes.values_list("slug", flat=True)),
+    )
+
+
+def hero_template_to_schema(hero: HeroTemplate) -> Hero:
+    """
+    Convert a HeroTemplate database model to the Hero Pydantic schema.
+
+    This ensures the output matches the ingestion endpoint's expected format.
+    """
+    return Hero(
+        slug=hero.slug,
+        name=hero.name,
+        description=hero.description or "",
+        health=hero.health,
+        hero_power=hero.hero_power or {},
+        faction=hero.faction.slug if hero.faction else None,
     )
 
 
