@@ -2,8 +2,6 @@
 Effect handlers for the engine.
 """
 
-import random
-
 from pydantic import TypeAdapter, ValidationError
 
 from apps.builder.schemas import (
@@ -780,7 +778,7 @@ def mulligan(effect: MulliganEffect, state: GameState) -> Result:
         if not state.decks[effect.side] and selected_cards:
             state.decks[effect.side].extend(selected_cards)
             selected_cards = []
-            random.shuffle(state.decks[effect.side])
+            state.shuffle_in_place(state.decks[effect.side], "mulligan_recycle_empty")
         _, event = draw_card_for_side(state, effect.side)
         events.append(event)
         if isinstance(event, GameOverEvent):
@@ -788,7 +786,7 @@ def mulligan(effect: MulliganEffect, state: GameState) -> Result:
 
     if selected_cards:
         state.decks[effect.side].extend(selected_cards)
-        random.shuffle(state.decks[effect.side])
+        state.shuffle_in_place(state.decks[effect.side], "mulligan_reinsert")
 
     state.mulligan_options[effect.side] = []
     state.mulligan_done[effect.side] = True

@@ -1,11 +1,11 @@
 from django.contrib.auth import get_user_model
 from django.db import models, transaction
-from django.db.models import Q, Case, When, Value
+from django.db.models import Case, Q, Value, When
 
 from apps.collection.models import Deck
 from apps.core.models import TimestampedModel, list_to_choices
-from apps.gameplay.schemas.game import GameState
 from apps.gameplay.schemas.effects import Effect
+from apps.gameplay.schemas.game import GameState
 
 User = get_user_model()
 
@@ -121,6 +121,13 @@ class Game(TimestampedModel):
     )
 
     state = models.JSONField(default=dict)
+    ruleset_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Hash of engine/content compatibility for this game.",
+    )
 
     objects = GameQuerySet.as_manager()
 
@@ -210,6 +217,65 @@ class GameUpdate(TimestampedModel):
 
     def __str__(self):
         return f"{self.game.side_a.name} vs {self.game.side_b.name} - {self.update['type']}"
+
+
+class GameAction(TimestampedModel):
+    """
+    Decision log for humans, scripted AIs, and future model-driven agents.
+
+    This records the command-level action surface. Post-state hashes are filled
+    opportunistically by offline replay/simulation tooling because live command
+    processing is asynchronous.
+    """
+
+    OUTCOME_ACCEPTED = "accepted"
+    OUTCOME_REJECTED = "rejected"
+    OUTCOME_SKIPPED = "skipped"
+
+    game = models.ForeignKey(Game, on_delete=models.CASCADE, related_name="actions")
+    ruleset_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    actor_side = models.CharField(
+        max_length=10,
+        choices=list_to_choices(["side_a", "side_b"]),
+    )
+    actor_kind = models.CharField(
+        max_length=20,
+        choices=list_to_choices(["human", "scripted_ai", "model_ai", "system"]),
+        default="human",
+    )
+    turn = models.PositiveIntegerField(default=0)
+    phase = models.CharField(max_length=20, blank=True, default="")
+    command = models.JSONField(default=dict)
+    legal_commands = models.JSONField(default=list, blank=True)
+    pre_state_hash = models.CharField(max_length=64, blank=True, default="")
+    post_state_hash = models.CharField(max_length=64, blank=True, default="")
+    outcome = models.CharField(
+        max_length=20,
+        choices=list_to_choices([OUTCOME_ACCEPTED, OUTCOME_REJECTED, OUTCOME_SKIPPED]),
+        default=OUTCOME_ACCEPTED,
+    )
+    error = models.JSONField(default=dict, blank=True)
+    final_winner = models.CharField(max_length=10, blank=True, default="")
+
+    class Meta:
+        db_table = "gameplay_game_action"
+        indexes = [
+            models.Index(
+                fields=["game", "created_at"],
+                name="gameplay_ga_game_id_37ad9c_idx",
+            ),
+            models.Index(
+                fields=["ruleset_id", "actor_side"],
+                name="gameplay_ga_ruleset_89d73d_idx",
+            ),
+            models.Index(
+                fields=["actor_kind", "created_at"],
+                name="gameplay_ga_actor_k_9063a0_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Game {self.game_id} {self.actor_side} {self.command.get('type')}"
 
 
 class UserTitleRating(TimestampedModel):

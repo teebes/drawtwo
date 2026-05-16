@@ -1,4 +1,7 @@
-from typing import Annotated, Dict, List, Literal, Optional, Union
+import hashlib
+import random
+import uuid
+from typing import Annotated, Dict, List, Literal, Optional, TypeVar, Union
 
 from pydantic import BaseModel, Discriminator, Field, model_validator
 
@@ -151,9 +154,48 @@ class GameState(BaseModel):
     time_per_turn: int = 0
     turn_expires: Optional[str] = None
 
+    rng_seed: str = Field(default_factory=lambda: uuid.uuid4().hex)
+    rng_counter: int = 0
+
     @property
     def opposite_side(self) -> Literal["side_a", "side_b"]:
         return "side_b" if self.active == "side_a" else "side_a"
+
+    def next_rng(self, purpose: str = "") -> random.Random:
+        """
+        Return a deterministic RNG stream for the next stochastic engine action.
+
+        The seed and counter live in GameState so self-play and replay
+        verification can reproduce deck shuffles and other random choices
+        without storing Python's non-JSON-serializable RNG state.
+        """
+        material = f"{self.rng_seed}:{self.rng_counter}:{purpose}"
+        digest = hashlib.sha256(material.encode("utf-8")).hexdigest()
+        self.rng_counter += 1
+        return random.Random(int(digest, 16))
+
+    def shuffle_in_place(self, items: list, purpose: str = "") -> None:
+        self.next_rng(purpose).shuffle(items)
+
+
+T = TypeVar("T")
+
+
+def deterministic_choice(state: GameState, items: list[T], purpose: str = "") -> T:
+    """
+    Deterministically choose an item for policy tie-breaks without advancing
+    engine RNG state.
+    """
+    item_material = "|".join(
+        item.model_dump_json() if hasattr(item, "model_dump_json") else repr(item)
+        for item in items
+    )
+    material = (
+        f"{state.rng_seed}:{state.rng_counter}:{purpose}:"
+        f"{len(items)}:{item_material}"
+    )
+    digest = hashlib.sha256(material.encode("utf-8")).hexdigest()
+    return items[int(digest, 16) % len(items)]
 
 
 class Notification(BaseModel):

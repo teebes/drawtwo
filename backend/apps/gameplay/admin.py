@@ -5,6 +5,7 @@ from .models import (
     ELORatingChange,
     FriendlyChallenge,
     Game,
+    GameAction,
     GameUpdate,
     MatchmakingQueue,
     UserTitleRating,
@@ -13,8 +14,8 @@ from .models import (
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
-    list_display = ['id', '__str__', 'status', 'get_game_type', 'ladder_type', 'get_winner', 'created_at']
-    list_filter = ['status', 'created_at']
+    list_display = ['id', '__str__', 'status', 'get_game_type', 'ladder_type', 'ruleset_id', 'get_winner', 'created_at']
+    list_filter = ['status', 'ladder_type', 'ruleset_id', 'created_at']
     search_fields = [
         'side_a__name',
         'side_b__name',
@@ -23,11 +24,11 @@ class GameAdmin(admin.ModelAdmin):
         'side_a__ai_player__name',
         'side_b__ai_player__name'
     ]
-    readonly_fields = ['created_at', 'updated_at', 'is_vs_ai']
+    readonly_fields = ['created_at', 'updated_at', 'is_vs_ai', 'ruleset_id']
 
     fieldsets = (
         ('Game Setup', {
-            'fields': ('type', 'ladder_type', 'status', 'side_a', 'side_b')
+            'fields': ('type', 'ladder_type', 'status', 'side_a', 'side_b', 'ruleset_id')
         }),
         ('Game State', {
             'fields': ('state',),
@@ -94,6 +95,29 @@ class GameUpdateAdmin(admin.ModelAdmin):
         except Exception:
             return None
     get_update_type.short_description = "Update Type"
+
+
+@admin.register(GameAction)
+class GameActionAdmin(admin.ModelAdmin):
+    list_display = [
+        'id',
+        'game',
+        'actor_side',
+        'actor_kind',
+        'turn',
+        'phase',
+        'get_command_type',
+        'outcome',
+        'created_at',
+    ]
+    list_filter = ['actor_kind', 'outcome', 'ruleset_id', 'created_at']
+    search_fields = ['game__side_a__name', 'game__side_b__name']
+    readonly_fields = ['created_at', 'updated_at']
+    raw_id_fields = ['game']
+
+    def get_command_type(self, obj):
+        return obj.command.get('type')
+    get_command_type.short_description = "Command"
 
 
 @admin.register(UserTitleRating)

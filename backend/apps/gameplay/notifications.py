@@ -7,8 +7,9 @@ including filtering state and updates based on what each player should see.
 
 import asyncio
 import logging
-from channels.layers import get_channel_layer
+
 from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 
 logger = logging.getLogger(__name__)
 
@@ -72,44 +73,9 @@ def filter_state_for_side(state, viewing_side: str) -> dict:
     Returns:
         Filtered state dict safe for the viewing player
     """
-    state_dict = (
-        state.model_dump(mode="json") if hasattr(state, "model_dump") else state
-    )
-    return state_dict
-    filtered_state = state_dict.copy()
-    opposing_side = "side_b" if viewing_side == "side_a" else "side_a"
+    from apps.gameplay.agents.observation import filter_state_for_player
 
-    # Opponent's hand: show count but not card IDs
-    if "hands" in filtered_state:
-        opponent_hand = filtered_state["hands"].get(opposing_side, [])
-        filtered_state["hands"] = {
-            **filtered_state["hands"],
-            opposing_side: [],  # Don't reveal opponent's cards
-        }
-        # Add hand count metadata
-        if "hand_counts" not in filtered_state:
-            filtered_state["hand_counts"] = {}
-        filtered_state["hand_counts"][opposing_side] = len(opponent_hand)
-        filtered_state["hand_counts"][viewing_side] = len(
-            filtered_state["hands"].get(viewing_side, [])
-        )
-
-    # Opponent's deck: hide card order
-    if "decks" in filtered_state:
-        opponent_deck = filtered_state["decks"].get(opposing_side, [])
-        filtered_state["decks"] = {
-            **filtered_state["decks"],
-            opposing_side: [],  # Don't reveal deck order
-        }
-        # Add deck count metadata
-        if "deck_counts" not in filtered_state:
-            filtered_state["deck_counts"] = {}
-        filtered_state["deck_counts"][opposing_side] = len(opponent_deck)
-        filtered_state["deck_counts"][viewing_side] = len(
-            filtered_state["decks"].get(viewing_side, [])
-        )
-
-    return filtered_state
+    return filter_state_for_player(state, viewing_side)
 
 
 async def _send_with_timeout(channel_layer, group_name: str, message: dict):

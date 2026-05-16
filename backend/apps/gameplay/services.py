@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import random
 import traceback
@@ -106,11 +107,20 @@ class GameService:
 
         # Load world config
         config = TitleConfig.model_validate(deck_a.title.config)
+        rng_seed = uuid.uuid4().hex
+        rng_counter = 0
+
+        def creation_rng(purpose: str) -> random.Random:
+            nonlocal rng_counter
+            material = f"{rng_seed}:{rng_counter}:{purpose}"
+            digest = hashlib.sha256(material.encode("utf-8")).hexdigest()
+            rng_counter += 1
+            return random.Random(int(digest, 16))
 
         # Optionally randomize which deck goes first (50/50 chance)
         # By default, deck_a always goes first for deterministic behavior
         # This allows for future enhancements like alternating starts between same players
-        if randomize_starting_player and random.random() < 0.5:
+        if randomize_starting_player and creation_rng("starting_player").random() < 0.5:
             # Swap the decks so deck_b starts
             deck_a, deck_b = deck_b, deck_a
 
@@ -158,8 +168,8 @@ class GameService:
             cards_in_play[str(card_id)] = comp_card_in_play
 
         # shuffle both decks
-        random.shuffle(decks["side_a"])
-        random.shuffle(decks["side_b"])
+        creation_rng("shuffle_side_a_deck").shuffle(decks["side_a"])
+        creation_rng("shuffle_side_b_deck").shuffle(decks["side_b"])
 
         # Collect all summonable card slugs from cards and heroes
         summonable_slugs = set()
@@ -252,13 +262,18 @@ class GameService:
             ai_sides=ai_sides,
             config=config,
             summonable_cards=summonable_cards,
+            rng_seed=rng_seed,
+            rng_counter=rng_counter,
         )
+
+        from apps.gameplay.agents.ruleset import compute_ruleset_id
 
         game = Game.objects.create(
             status=Game.GAME_STATUS_INIT,
             side_a=deck_a,
             side_b=deck_b,
             state=game_state.model_dump(),
+            ruleset_id=compute_ruleset_id(deck_a.title),
         )
 
         # Callers still need to set game type / time controls after create_game()
@@ -366,6 +381,7 @@ class GameService:
                             game.status = Game.GAME_STATUS_ENDED
                             game.winner = getattr(game, event.winner)
                             game.save(update_fields=["status", "winner"])
+                            GameService._mark_actions_final_winner(game, event.winner)
                             game_state.winner = event.winner
                             game_state.queue = []
                             # Clear the queue immediately to prevent processing any remaining effects
@@ -531,11 +547,40 @@ class GameService:
             script = DeckScript.model_validate(deck.script or {})
             from apps.gameplay.ai import AIMoveChooser
 
-            ai_event = AIMoveChooser.choose_move(game_state, script)
-            if ai_event:
-                game.enqueue([ai_event], trigger=False)
+            active_side = game.state["active"]
+            ai_command = AIMoveChooser.choose_command(game_state, script)
+            if ai_command is None:
+                ai_command = EndTurnCommand()
+
+            command_dict = ai_command.model_dump(mode="json")
+            try:
+                ai_effects = GameService.compile_cmd(
+                    game_state,
+                    command_dict,
+                    active_side,
+                )
+            except Exception as exc:
+                GameService._record_action_decision(
+                    game=game,
+                    game_state=game_state,
+                    side=active_side,
+                    command=command_dict,
+                    actor_kind="scripted_ai",
+                    outcome="rejected",
+                    error={"reason": str(exc)},
+                )
+                ai_effects = [EndTurnEffect(side=active_side)]
             else:
-                game.enqueue([EndTurnEffect(side=game.state["active"])], trigger=False)
+                GameService._record_action_decision(
+                    game=game,
+                    game_state=game_state,
+                    side=active_side,
+                    command=command_dict,
+                    actor_kind="scripted_ai",
+                    outcome="accepted",
+                )
+
+            game.enqueue(ai_effects, trigger=False)
 
         # Continue processing if there are more effects in queue
         if len(game.queue) > 0:
@@ -639,8 +684,78 @@ class GameService:
             send_game_updates_to_clients(game.id, game_state, [])
             return
 
-        effects = GameService.compile_cmd(game_state, command, side)
+        try:
+            effects = GameService.compile_cmd(game_state, command, side)
+        except Exception as exc:
+            GameService._record_action_decision(
+                game=game,
+                game_state=game_state,
+                side=side,
+                command=command,
+                actor_kind="scripted_ai" if side in game_state.ai_sides else "human",
+                outcome="rejected",
+                error={"reason": str(exc)},
+            )
+            raise
+
+        GameService._record_action_decision(
+            game=game,
+            game_state=game_state,
+            side=side,
+            command=command,
+            actor_kind="scripted_ai" if side in game_state.ai_sides else "human",
+            outcome="accepted",
+        )
         game.enqueue(effects)
+
+    @staticmethod
+    def _record_action_decision(
+        game,
+        game_state: GameState,
+        side: str,
+        command: dict,
+        actor_kind: str,
+        outcome: str,
+        error: dict | None = None,
+    ):
+        from apps.gameplay.agents.hash import state_hash
+        from apps.gameplay.agents.legal import list_legal_commands
+        from apps.gameplay.models import GameAction
+
+        try:
+            legal_commands = [
+                legal_command.model_dump(mode="json")
+                for legal_command in list_legal_commands(
+                    game_state,
+                    side,
+                    include_concede=True,
+                )
+            ]
+        except Exception as exc:
+            logger.warning("Failed to enumerate legal commands: %s", exc)
+            legal_commands = []
+
+        GameAction.objects.create(
+            game=game,
+            ruleset_id=game.ruleset_id,
+            actor_side=side,
+            actor_kind=actor_kind,
+            turn=game_state.turn,
+            phase=game_state.phase,
+            command=command,
+            legal_commands=legal_commands,
+            pre_state_hash=state_hash(game_state),
+            outcome=outcome,
+            error=error or {},
+        )
+
+    @staticmethod
+    def _mark_actions_final_winner(game, winner: str):
+        from apps.gameplay.models import GameAction
+
+        GameAction.objects.filter(game=game, final_winner="").update(
+            final_winner=winner
+        )
 
     @staticmethod
     def compile_cmd(game_state: GameState, command: dict, side) -> list[Effect]:

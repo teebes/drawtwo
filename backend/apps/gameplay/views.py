@@ -77,7 +77,9 @@ def _get_min_cards_error(deck: Deck, deck_label: str = "Deck") -> str | None:
         .distinct()
     )
     if invalid_cards.exists():
-        invalid_names = ", ".join(deck_card.card.name for deck_card in invalid_cards[:3])
+        invalid_names = ", ".join(
+            deck_card.card.name for deck_card in invalid_cards[:3]
+        )
         return (
             f"{deck_label} contains cards unavailable to {deck.hero.name}: "
             f"{invalid_names}"
@@ -143,17 +145,17 @@ def game_detail(request, game_id):
         id=game_id,
     )
 
-    game_data = GameState.model_validate(game.state).model_dump()
+    game_state = GameState.model_validate(game.state)
 
     # Determine which side the viewing user is on
     # Verify the user has access to this game
     if game.player_a_user == request.user:
-        game_data["viewer"] = "side_a"
+        viewer = "side_a"
     elif game.player_b_user == request.user:
-        game_data["viewer"] = "side_b"
+        viewer = "side_b"
     elif request.user.is_staff or request.user.is_superuser:
         # Staff/superuser can view any game as spectator (read-only)
-        game_data["viewer"] = "spectator"
+        viewer = "spectator"
     else:
         # User is not a participant in this game
         return Response(
@@ -161,6 +163,14 @@ def game_detail(request, game_id):
             status=status.HTTP_403_FORBIDDEN,
         )
 
+    if viewer == "spectator":
+        game_data = game_state.model_dump(mode="json")
+    else:
+        from apps.gameplay.notifications import filter_state_for_side
+
+        game_data = filter_state_for_side(game_state, viewer)
+
+    game_data["viewer"] = viewer
     game_data["is_vs_ai"] = game.is_vs_ai
     game_data["game_type"] = game.type
     game_data["ladder_type"] = game.ladder_type
