@@ -131,6 +131,11 @@ const handleAcceptWithDeck = async (deck: DeckData) => {
     router.push({ name: 'Board', params: { game_id, slug: props.titleSlug } })
   } catch (err) {
     console.error('Error accepting challenge:', err)
+    const errorResponse = (err as any)?.response
+    if (errorResponse?.data?.challenge_cancelled && selectedChallengeId.value) {
+      emit('challenge-declined', selectedChallengeId.value)
+      closeDeckModal()
+    }
     notificationStore.handleApiError(err as Error)
   } finally {
     acceptingChallenge.value = false

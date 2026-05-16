@@ -27,6 +27,11 @@ from apps.builder.schemas import (
     TempManaBoostAction,
     TitleConfig,
 )
+from apps.collection.validation import (
+    DeckValidationError,
+    validate_deck_for_play,
+    validate_deck_for_play_or_raise,
+)
 from apps.core.card_assets import get_hero_art_url
 from apps.core.serializers import serialize_cards_with_traits, to_card_schema
 from apps.gameplay.engine.dispatcher import resolve
@@ -91,6 +96,11 @@ class GameService:
     @staticmethod
     @transaction.atomic
     def create_game(deck_a, deck_b, randomize_starting_player: bool = False) -> Game:
+        if deck_a.title_id != deck_b.title_id:
+            raise DeckValidationError("Both decks must be from the same title")
+
+        validate_deck_for_play_or_raise(deck_a, "Side A deck")
+        validate_deck_for_play_or_raise(deck_b, "Side B deck")
 
         existing_game = (
             Game.objects.filter(
@@ -1595,6 +1605,22 @@ class GameService:
             .order_by("elo_rating")
         )
 
+        valid_entries = []
+        for entry in queued_entries:
+            deck_error = validate_deck_for_play(entry.deck)
+            if deck_error:
+                logger.info(
+                    "Cancelling invalid matchmaking queue entry %s: %s",
+                    entry.id,
+                    deck_error,
+                )
+                entry.status = MatchmakingQueue.STATUS_CANCELLED
+                entry.save(update_fields=["status"])
+            else:
+                valid_entries.append(entry)
+
+        queued_entries = valid_entries
+
         if len(queued_entries) < 2:
             logger.info(
                 f"Not enough players in queue ({len(queued_entries)}), skipping matchmaking"
@@ -1655,6 +1681,7 @@ class GameService:
                 )
 
         # Create games for each matched pair
+        matches_created = 0
         for entry_a, entry_b in matched_pairs:
             try:
                 # Create the game
@@ -1706,6 +1733,28 @@ class GameService:
                     send_matchmaking_success(entry_a.user_id, game.id, title_slug)
                     send_matchmaking_success(entry_b.user_id, game.id, title_slug)
 
+                matches_created += 1
+
+            except DeckValidationError as e:
+                logger.info(f"Cancelling invalid matched queue pair: {e}")
+                cancelled_any = False
+                for entry in (entry_a, entry_b):
+                    deck_error = validate_deck_for_play(entry.deck)
+                    if deck_error:
+                        entry.status = MatchmakingQueue.STATUS_CANCELLED
+                        entry.save(update_fields=["status"])
+                        cancelled_any = True
+                        logger.info(
+                            "Cancelled queue entry %s after validation failure: %s",
+                            entry.id,
+                            deck_error,
+                        )
+                if not cancelled_any:
+                    entry_a.status = MatchmakingQueue.STATUS_QUEUED
+                    entry_a.save(update_fields=["status"])
+                    entry_b.status = MatchmakingQueue.STATUS_QUEUED
+                    entry_b.save(update_fields=["status"])
+
             except Exception as e:
                 logger.error(f"Failed to create game for matched pair: {e}")
                 # Reset queue entries on failure
@@ -1714,7 +1763,6 @@ class GameService:
                 entry_b.status = MatchmakingQueue.STATUS_QUEUED
                 entry_b.save(update_fields=["status"])
 
-        matches_created = len(matched_pairs)
         logger.info(f"Matchmaking complete: created {matches_created} games")
         return matches_created
 

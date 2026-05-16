@@ -620,6 +620,10 @@ const fetchRankedQueueStatus = async (ladderType: LadderType): Promise<void> => 
       params: { ladder_type: ladderType }
     })
     const entry = response.data.in_queue ? response.data.queue_entry : null
+    if (response.data.error) {
+      rankedQueueError.value = response.data.error
+      notificationStore.warning(response.data.error)
+    }
     if (ladderType === 'rapid') {
       rapidQueueEntry.value = entry
     } else {

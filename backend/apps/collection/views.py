@@ -1,22 +1,24 @@
-from django.shortcuts import render
+from django.db.models import Q, Sum
+from django.db.models.functions import Coalesce
+from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from django.shortcuts import get_object_or_404
-from django.db.models import Q, Sum
-from django.db.models.functions import Coalesce
 
-from apps.builder.models import Title, CardTemplate, HeroTemplate
 from apps.authentication.models import Friendship
-from apps.builder.schemas import TitleConfig
+from apps.builder.models import CardTemplate, HeroTemplate, Title
 from apps.collection.models import Deck, DeckCard, UserTitleDeckPreference
+from apps.collection.validation import get_title_config, validate_deck_card_count
 from apps.core.card_assets import get_hero_art_url
-from apps.core.serializers import to_card_schema, serialize_cards_with_traits
+from apps.core.serializers import serialize_cards_with_traits, to_card_schema
 
 
 def _card_not_available_error(card, hero) -> str:
-    return f'"{card.name}" is only available to specific heroes and cannot be used by {hero.name}'
+    return (
+        f'"{card.name}" is only available to specific heroes and cannot be used '
+        f"by {hero.name}"
+    )
 
 
 def _ineligible_deck_cards(deck, hero=None):
@@ -179,6 +181,8 @@ def deck_detail(request, deck_id):
     deck = get_object_or_404(Deck, id=deck_id, user=request.user)
 
     if request.method == 'GET':
+        config = get_title_config(deck.title)
+
         # Get deck cards with counts
         deck_cards = deck.deckcard_set.select_related(
             'card', 'card__title', 'card__faction'
@@ -220,8 +224,10 @@ def deck_detail(request, deck_id):
                 'health': deck.hero.health,
                 'art_url': get_hero_art_url(deck.hero.title.slug, deck.hero.slug),
             },
+            'config': config.model_dump(exclude={"type"}),
             'cards': card_data,
-            'all_cards': all_cards,  # All available collectible cards for adding to deck
+            # All available collectible cards for adding to deck.
+            'all_cards': all_cards,
             'total_cards': sum(card['count'] for card in card_data),
             'created_at': deck.created_at.isoformat(),
             'updated_at': deck.updated_at.isoformat(),
@@ -242,7 +248,10 @@ def deck_detail(request, deck_id):
             )
 
         # Check if deck name already exists for this user (excluding current deck)
-        if Deck.objects.filter(user=request.user, name=name).exclude(id=deck.id).exists():
+        name_exists = Deck.objects.filter(user=request.user, name=name).exclude(
+            id=deck.id
+        ).exists()
+        if name_exists:
             return Response(
                 {'error': 'A deck with this name already exists'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -335,16 +344,13 @@ def update_deck_card(request, deck_id, card_id):
     Update the count of a specific card in a deck.
     """
     deck = get_object_or_404(Deck, id=deck_id, user=request.user)
-    card = get_object_or_404(CardTemplate, id=card_id)
-
     # Get the deck card relationship
-    deck_card = get_object_or_404(DeckCard, deck=deck, card=card)
-
-    if not card.is_available_to_hero(deck.hero):
-        return Response(
-            {'error': _card_not_available_error(card, deck.hero)},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    deck_card = get_object_or_404(
+        DeckCard.objects.select_related('card'),
+        deck=deck,
+        card_id=card_id,
+    )
+    card = deck_card.card
 
     # Get the new count from request data
     new_count = request.data.get('count')
@@ -357,22 +363,21 @@ def update_deck_card(request, deck_id, card_id):
     # Validate count
     try:
         new_count = int(new_count)
-        if new_count < 1 or new_count > 10:
-            return Response(
-                {'error': 'count must be between 1 and 10'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
     except (ValueError, TypeError):
         return Response(
             {'error': 'count must be a valid integer'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # Check if card has Unique trait
-    has_unique = card.cardtrait_set.filter(trait_slug='unique').exists()
-    if has_unique and new_count > 1:
+    validation_error = validate_deck_card_count(
+        deck,
+        card,
+        new_count,
+        current_count=deck_card.count,
+    )
+    if validation_error:
         return Response(
-            {'error': f'"{card.name}" has the Unique trait and can only have 1 copy in a deck'},
+            {'error': validation_error},
             status=status.HTTP_400_BAD_REQUEST
         )
 
@@ -485,8 +490,9 @@ def add_deck_card(request, deck_id):
 
     # Check if card is collectible
     if not card.is_collectible:
+        error = f'"{card.name}" is not collectible and cannot be added to a deck'
         return Response(
-            {'error': f'"{card.name}" is not collectible and cannot be added to a deck'},
+            {'error': error},
             status=status.HTTP_400_BAD_REQUEST
         )
 
@@ -495,8 +501,6 @@ def add_deck_card(request, deck_id):
             {'error': _card_not_available_error(card, deck.hero)},
             status=status.HTTP_400_BAD_REQUEST,
         )
-
-    world_config = TitleConfig.model_validate(card.title.config)
 
     # Get count from request (default to 1)
     count = request.data.get('count', 1)
@@ -507,52 +511,34 @@ def add_deck_card(request, deck_id):
                 {'error': 'count must be at least 1'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        if count > world_config.deck_card_max_count:
-            return Response(
-                {'error': 'Cannot have more than %s copies of a card'
-                            % world_config.deck_card_max_count},
-            )
     except (ValueError, TypeError):
         return Response(
             {'error': 'count must be a valid integer'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # Check if card has Unique trait
-    has_unique = card.cardtrait_set.filter(trait_slug='unique').exists()
-    if has_unique and count > 1:
-        return Response(
-            {'error': f'"{card.name}" has the Unique trait and can only have 1 copy in a deck'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    # See if the operation would put the deck over the size limit
-    if deck.deck_size + count > world_config.deck_size_limit:
-        return Response(
-            {'error': 'Deck size would exceed the limit'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    # Check if card is already in deck
-    deck_card, created = DeckCard.objects.get_or_create(
-        deck=deck,
-        card=card,
-        defaults={'count': count}
+    deck_card = DeckCard.objects.filter(deck=deck, card=card).first()
+    current_count = deck_card.count if deck_card else 0
+    new_total = current_count + count
+    validation_error = validate_deck_card_count(
+        deck,
+        card,
+        new_total,
+        current_count=current_count,
     )
+    if validation_error:
+        return Response(
+            {'error': validation_error},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
-    if not created:
-        # Check if adding more would violate Unique trait
-        new_total = deck_card.count + count
-        if has_unique and new_total > 1:
-            return Response(
-                {'error': f'"{card.name}" has the Unique trait and can only have 1 copy in a deck'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+    if deck_card:
         # Update existing card count
-        deck_card.count += count
+        deck_card.count = new_total
         deck_card.save()
         message = f'Updated "{card.name}" count to {deck_card.count}'
     else:
+        deck_card = DeckCard.objects.create(deck=deck, card=card, count=count)
         message = f'Added "{card.name}" to deck with count {count}'
 
     return Response({

@@ -106,7 +106,11 @@ class ExtendTimeCommandTests(TestCase):
             username="extend_b"
         )
 
-        self.title = Title.objects.create(slug='extend-time-title', author=self.user_a)
+        self.title = Title.objects.create(
+            slug='extend-time-title',
+            author=self.user_a,
+            config={"min_cards_in_deck": 4},
+        )
         self.hero_a = HeroTemplate.objects.create(
             title=self.title,
             slug='extend-hero-a',
@@ -217,7 +221,11 @@ class AttackValidationTestBase(TestCase):
         )
         self.ai_player = AIPlayer.objects.create(name='AI')
 
-        self.title = Title.objects.create(slug='title', author=self.user)
+        self.title = Title.objects.create(
+            slug='title',
+            author=self.user,
+            config={"min_cards_in_deck": 4},
+        )
 
         # Create heroes with simple hero powers
         self.hero_a = HeroTemplate.objects.create(

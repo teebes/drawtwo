@@ -9,6 +9,7 @@ from django.test import TestCase
 from apps.authentication.models import User
 from apps.builder.models import CardTemplate, HeroTemplate, Title
 from apps.collection.models import Deck, DeckCard
+from apps.collection.validation import DeckValidationError
 from apps.gameplay.models import Game, MatchmakingQueue
 from apps.gameplay.services import GameService
 from apps.gameplay.tests import ServiceTestsBase
@@ -52,7 +53,11 @@ class MatchmakingTests(TestCase):
         )
 
         # Create title and heroes
-        self.title = Title.objects.create(slug="test-title", author=self.user_a)
+        self.title = Title.objects.create(
+            slug="test-title",
+            author=self.user_a,
+            config={"min_cards_in_deck": 4},
+        )
         self.hero_a = HeroTemplate.objects.create(
             title=self.title, slug="hero-a", name="Hero A", health=30
         )
@@ -244,6 +249,55 @@ class MatchmakingTests(TestCase):
         ).count()
         self.assertEqual(game_count, 2)
 
+    def test_create_game_rejects_deck_with_too_many_copies(self):
+        deck_card = self.deck_a.deckcard_set.first()
+        deck_card.count = 10
+        deck_card.save(update_fields=["count"])
+
+        with self.assertRaises(DeckValidationError):
+            GameService.create_game(
+                self.deck_a,
+                self.deck_b,
+                randomize_starting_player=False,
+            )
+
+    def test_matchmaking_cancels_invalid_queued_deck(self):
+        self.title.config = {
+            "min_cards_in_deck": 4,
+            "deck_size_limit": 30,
+            "deck_card_max_count": 1,
+        }
+        self.title.save(update_fields=["config"])
+
+        deck_card = self.deck_a2.deckcard_set.first()
+        deck_card.count = 2
+        deck_card.save(update_fields=["count"])
+
+        queue_a = MatchmakingQueue.objects.create(
+            user=self.user_a,
+            deck=self.deck_a2,
+            elo_rating=1500,
+            status=MatchmakingQueue.STATUS_QUEUED,
+            ladder_type=Game.LADDER_TYPE_RAPID,
+        )
+        queue_b = MatchmakingQueue.objects.create(
+            user=self.user_b,
+            deck=self.deck_b2,
+            elo_rating=1500,
+            status=MatchmakingQueue.STATUS_QUEUED,
+            ladder_type=Game.LADDER_TYPE_RAPID,
+        )
+
+        matches_created = GameService.process_matchmaking(
+            self.title.id, ladder_type=Game.LADDER_TYPE_RAPID
+        )
+
+        self.assertEqual(matches_created, 0)
+        queue_a.refresh_from_db()
+        queue_b.refresh_from_db()
+        self.assertEqual(queue_a.status, MatchmakingQueue.STATUS_CANCELLED)
+        self.assertEqual(queue_b.status, MatchmakingQueue.STATUS_QUEUED)
+
 
 class RankedGameAbortTests(TestCase):
     """Tests for ranked game abort functionality when side_a times out on turn 1."""
@@ -263,7 +317,11 @@ class RankedGameAbortTests(TestCase):
         )
 
         # Create title and heroes
-        self.title = Title.objects.create(slug="abort-test-title", author=self.user_a)
+        self.title = Title.objects.create(
+            slug="abort-test-title",
+            author=self.user_a,
+            config={"min_cards_in_deck": 4},
+        )
         self.hero_a = HeroTemplate.objects.create(
             title=self.title, slug="abort-hero-a", name="Hero A", health=30
         )

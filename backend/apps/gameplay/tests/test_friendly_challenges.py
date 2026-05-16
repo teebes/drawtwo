@@ -4,7 +4,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.authentication.models import Friendship
-from apps.builder.models import CardTemplate, HeroTemplate, Title
+from apps.builder.models import CardTemplate, CardTrait, HeroTemplate, Title
 from apps.collection.models import Deck, DeckCard
 from apps.gameplay.models import ELORatingChange, FriendlyChallenge, Game
 from apps.gameplay.services import GameService
@@ -193,6 +193,72 @@ class FriendlyChallengesAPITests(TestCase):
 
         self.assertEqual(resp.status_code, 400, resp.content)
         self.assertIn("at least 10 cards", resp.json()["error"])
+
+    def test_accept_cancels_challenge_when_challenger_deck_becomes_invalid(self):
+        self.client.force_authenticate(self.user_a)
+        create_resp = self.client.post(
+            reverse("friendly-challenge-create"),
+            {
+                "title_slug": self.title.slug,
+                "challengee_user_id": self.user_b.id,
+                "challenger_deck_id": self.deck_a.id,
+            },
+            format="json",
+        )
+        challenge_id = create_resp.json()["id"]
+
+        self.title.config = {
+            "min_cards_in_deck": 4,
+            "deck_size_limit": 30,
+            "deck_card_max_count": 1,
+        }
+        self.title.save(update_fields=["config"])
+        deck_card = self.deck_a.deckcard_set.first()
+        deck_card.count = 2
+        deck_card.save(update_fields=["count"])
+
+        self.client.force_authenticate(self.user_b)
+        accept_resp = self.client.post(
+            reverse("friendly-challenge-accept", kwargs={"challenge_id": challenge_id}),
+            {"challengee_deck_id": self.deck_b.id},
+            format="json",
+        )
+
+        self.assertEqual(accept_resp.status_code, 400, accept_resp.content)
+        self.assertTrue(accept_resp.json()["challenge_cancelled"])
+        challenge = FriendlyChallenge.objects.get(id=challenge_id)
+        self.assertEqual(challenge.status, FriendlyChallenge.STATUS_CANCELLED)
+
+    def test_list_pending_cancels_challenge_when_card_becomes_unique(self):
+        self.client.force_authenticate(self.user_a)
+        create_resp = self.client.post(
+            reverse("friendly-challenge-create"),
+            {
+                "title_slug": self.title.slug,
+                "challengee_user_id": self.user_b.id,
+                "challenger_deck_id": self.deck_a.id,
+            },
+            format="json",
+        )
+        challenge_id = create_resp.json()["id"]
+
+        deck_card = self.deck_a.deckcard_set.first()
+        deck_card.count = 2
+        deck_card.save(update_fields=["count"])
+        CardTrait.objects.create(card=deck_card.card, trait_slug="unique")
+
+        self.client.force_authenticate(self.user_b)
+        response = self.client.get(
+            reverse(
+                "friendly-challenge-pending",
+                kwargs={"title_slug": self.title.slug},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["incoming"], [])
+        challenge = FriendlyChallenge.objects.get(id=challenge_id)
+        self.assertEqual(challenge.status, FriendlyChallenge.STATUS_CANCELLED)
 
     def test_create_challenge_rejects_when_challenger_has_five_pending(self):
         for i in range(5):

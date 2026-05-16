@@ -3,8 +3,9 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from apps.builder.models import AIPlayer, CardTemplate, HeroTemplate, Title
+from apps.builder.models import AIPlayer, CardTemplate, CardTrait, HeroTemplate, Title
 from apps.collection.models import Deck, DeckCard
+from apps.gameplay.models import Game, MatchmakingQueue
 
 User = get_user_model()
 
@@ -90,3 +91,193 @@ class DeckMinimumCardsAPITests(TestCase):
         self.assertIn(
             "Player deck must have at least 10 cards", response.json()["error"]
         )
+
+    def test_queue_rejects_deck_above_maximum(self):
+        self.title.config = {
+            "min_cards_in_deck": 1,
+            "deck_size_limit": 3,
+            "deck_card_max_count": 9,
+        }
+        self.title.save(update_fields=["config"])
+
+        response = self.client.post(
+            reverse("queue-ranked-match"),
+            {"deck_id": self.player_deck.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("cannot have more than 3 cards", response.json()["error"])
+
+    def test_game_create_rejects_deck_above_maximum(self):
+        self.title.config = {
+            "min_cards_in_deck": 1,
+            "deck_size_limit": 3,
+            "deck_card_max_count": 9,
+        }
+        self.title.save(update_fields=["config"])
+
+        response = self.client.post(
+            reverse("game-create"),
+            {
+                "player_deck_id": self.player_deck.id,
+                "ai_deck_id": self.ai_deck.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn(
+            "Player deck cannot have more than 3 cards", response.json()["error"]
+        )
+
+    def test_queue_rejects_deck_above_copy_limit(self):
+        self.title.config = {
+            "min_cards_in_deck": 1,
+            "deck_size_limit": 30,
+            "deck_card_max_count": 1,
+        }
+        self.title.save(update_fields=["config"])
+        deck_card = self.player_deck.deckcard_set.first()
+        deck_card.count = 2
+        deck_card.save(update_fields=["count"])
+
+        response = self.client.post(
+            reverse("queue-ranked-match"),
+            {"deck_id": self.player_deck.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("cannot have more than 1 copy", response.json()["error"])
+
+    def test_queue_rejects_deck_when_card_becomes_unique(self):
+        self.title.config = {
+            "min_cards_in_deck": 1,
+            "deck_size_limit": 30,
+            "deck_card_max_count": 9,
+        }
+        self.title.save(update_fields=["config"])
+        deck_card = self.player_deck.deckcard_set.first()
+        deck_card.count = 2
+        deck_card.save(update_fields=["count"])
+        CardTrait.objects.create(card=deck_card.card, trait_slug="unique")
+
+        response = self.client.post(
+            reverse("queue-ranked-match"),
+            {"deck_id": self.player_deck.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("Unique", response.json()["error"])
+
+    def test_game_create_rejects_deck_when_card_becomes_unique(self):
+        self.title.config = {
+            "min_cards_in_deck": 1,
+            "deck_size_limit": 30,
+            "deck_card_max_count": 9,
+        }
+        self.title.save(update_fields=["config"])
+        deck_card = self.player_deck.deckcard_set.first()
+        deck_card.count = 2
+        deck_card.save(update_fields=["count"])
+        CardTrait.objects.create(card=deck_card.card, trait_slug="unique")
+
+        response = self.client.post(
+            reverse("game-create"),
+            {
+                "player_deck_id": self.player_deck.id,
+                "ai_deck_id": self.ai_deck.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("Unique", response.json()["error"])
+
+    def test_queue_status_cancels_entry_when_deck_becomes_invalid(self):
+        queue_entry = MatchmakingQueue.objects.create(
+            user=self.user,
+            deck=self.player_deck,
+            elo_rating=1200,
+            status=MatchmakingQueue.STATUS_QUEUED,
+            ladder_type=Game.LADDER_TYPE_RAPID,
+        )
+        self.title.config = {
+            "min_cards_in_deck": 1,
+            "deck_size_limit": 3,
+            "deck_card_max_count": 9,
+        }
+        self.title.save(update_fields=["config"])
+
+        response = self.client.get(
+            reverse("matchmaking-status", kwargs={"title_slug": self.title.slug}),
+            {"ladder_type": Game.LADDER_TYPE_RAPID},
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(response.json()["in_queue"])
+        self.assertIn("Removed from queue", response.json()["error"])
+        queue_entry.refresh_from_db()
+        self.assertEqual(queue_entry.status, MatchmakingQueue.STATUS_CANCELLED)
+
+    def test_queue_status_cancels_entry_when_card_becomes_unique(self):
+        queue_entry = MatchmakingQueue.objects.create(
+            user=self.user,
+            deck=self.player_deck,
+            elo_rating=1200,
+            status=MatchmakingQueue.STATUS_QUEUED,
+            ladder_type=Game.LADDER_TYPE_RAPID,
+        )
+        self.title.config = {
+            "min_cards_in_deck": 1,
+            "deck_size_limit": 30,
+            "deck_card_max_count": 9,
+        }
+        self.title.save(update_fields=["config"])
+        deck_card = self.player_deck.deckcard_set.first()
+        deck_card.count = 2
+        deck_card.save(update_fields=["count"])
+        CardTrait.objects.create(card=deck_card.card, trait_slug="unique")
+
+        response = self.client.get(
+            reverse("matchmaking-status", kwargs={"title_slug": self.title.slug}),
+            {"ladder_type": Game.LADDER_TYPE_RAPID},
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(response.json()["in_queue"])
+        self.assertIn("Unique", response.json()["error"])
+        queue_entry.refresh_from_db()
+        self.assertEqual(queue_entry.status, MatchmakingQueue.STATUS_CANCELLED)
+
+    def test_queue_request_cancels_existing_entry_when_card_becomes_unique(self):
+        queue_entry = MatchmakingQueue.objects.create(
+            user=self.user,
+            deck=self.player_deck,
+            elo_rating=1200,
+            status=MatchmakingQueue.STATUS_QUEUED,
+            ladder_type=Game.LADDER_TYPE_RAPID,
+        )
+        self.title.config = {
+            "min_cards_in_deck": 1,
+            "deck_size_limit": 30,
+            "deck_card_max_count": 9,
+        }
+        self.title.save(update_fields=["config"])
+        deck_card = self.player_deck.deckcard_set.first()
+        deck_card.count = 2
+        deck_card.save(update_fields=["count"])
+        CardTrait.objects.create(card=deck_card.card, trait_slug="unique")
+
+        response = self.client.post(
+            reverse("queue-ranked-match"),
+            {"deck_id": self.player_deck.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("Unique", response.json()["error"])
+        queue_entry.refresh_from_db()
+        self.assertEqual(queue_entry.status, MatchmakingQueue.STATUS_CANCELLED)

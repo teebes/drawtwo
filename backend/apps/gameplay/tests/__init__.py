@@ -23,7 +23,11 @@ class ServiceTestsBase(TestCase):
         )
         self.ai_player = AIPlayer.objects.create(name='AI')
 
-        self.title = Title.objects.create(slug='title', author=self.user)
+        self.title = Title.objects.create(
+            slug='title',
+            author=self.user,
+            config={"min_cards_in_deck": 4},
+        )
 
         self.hero_a = HeroTemplate.objects.create(
             title=self.title, slug='hero-a', name="Hero A", health=10)

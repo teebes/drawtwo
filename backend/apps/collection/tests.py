@@ -154,6 +154,119 @@ class UniqueTraitDeckValidationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['count'], 1)
 
+    def test_existing_regular_card_obeys_unique_trait_added_later(self):
+        """Test that new Unique traits invalidate existing duplicate counts."""
+        DeckCard.objects.create(deck=self.deck, card=self.regular_card, count=2)
+        CardTrait.objects.create(card=self.regular_card, trait_slug='unique')
+
+        response = self.client.put(
+            f'/api/collection/decks/{self.deck.id}/cards/{self.regular_card.id}/',
+            {'count': 2},
+            format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Unique', response.data['error'])
+
+
+class DeckConfigValidationTests(TestCase):
+    """Test that title deck limits are enforced during deck building."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="config-user@example.com",
+            username="config-user",
+            password="testpass123",
+        )
+        self.title = Title.objects.create(
+            slug="config-title",
+            name="Config Title",
+            author=self.user,
+            is_latest=True,
+            config={
+                "deck_size_limit": 3,
+                "min_cards_in_deck": 0,
+                "deck_card_max_count": 2,
+            },
+        )
+        self.hero = HeroTemplate.objects.create(
+            title=self.title,
+            slug="config-hero",
+            name="Config Hero",
+            health=30,
+            is_latest=True,
+        )
+        self.card_a = CardTemplate.objects.create(
+            title=self.title,
+            slug="config-card-a",
+            name="Config Card A",
+            cost=1,
+            is_latest=True,
+            is_collectible=True,
+        )
+        self.card_b = CardTemplate.objects.create(
+            title=self.title,
+            slug="config-card-b",
+            name="Config Card B",
+            cost=2,
+            is_latest=True,
+            is_collectible=True,
+        )
+        self.deck = Deck.objects.create(
+            user=self.user,
+            title=self.title,
+            name="Config Deck",
+            hero=self.hero,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def test_repeated_add_cannot_exceed_configured_copy_limit(self):
+        first_response = self.client.post(
+            f"/api/collection/decks/{self.deck.id}/cards/add/",
+            {"card_slug": self.card_a.slug, "count": 2},
+            format="json",
+        )
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+
+        response = self.client.post(
+            f"/api/collection/decks/{self.deck.id}/cards/add/",
+            {"card_slug": self.card_a.slug, "count": 1},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("more than 2 copies", response.data["error"])
+        self.assertEqual(
+            DeckCard.objects.get(deck=self.deck, card=self.card_a).count,
+            2,
+        )
+
+    def test_count_update_cannot_exceed_configured_copy_limit(self):
+        DeckCard.objects.create(deck=self.deck, card=self.card_a, count=1)
+
+        response = self.client.put(
+            f"/api/collection/decks/{self.deck.id}/cards/{self.card_a.id}/",
+            {"count": 3},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("more than 2 copies", response.data["error"])
+
+    def test_count_update_cannot_exceed_configured_deck_size_limit(self):
+        DeckCard.objects.create(deck=self.deck, card=self.card_a, count=2)
+        DeckCard.objects.create(deck=self.deck, card=self.card_b, count=1)
+
+        response = self.client.put(
+            f"/api/collection/decks/{self.deck.id}/cards/{self.card_b.id}/",
+            {"count": 2},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Deck size would exceed", response.data["error"])
+
 
 class CollectibleCardDeckValidationTests(TestCase):
     """Test that non-collectible cards cannot be added to player decks."""

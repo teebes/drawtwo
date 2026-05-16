@@ -6,8 +6,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.builder.models import Title
-from apps.builder.schemas import TitleConfig
 from apps.collection.models import Deck, UserTitleDeckPreference
+from apps.collection.validation import DeckValidationError, validate_deck_for_play
 from apps.gameplay.models import (
     FriendlyChallenge,
     Game,
@@ -63,28 +63,18 @@ def _set_last_used_friend(user, title, friend_user) -> None:
     )
 
 
-def _get_min_cards_error(deck: Deck, deck_label: str = "Deck") -> str | None:
-    config = TitleConfig.model_validate(deck.title.config)
-    if deck.deck_size < config.min_cards_in_deck:
-        return (
-            f"{deck_label} must have at least {config.min_cards_in_deck} cards "
-            f"({deck.deck_size} currently)"
-        )
-    invalid_cards = (
-        deck.deckcard_set.filter(card__allowed_heroes__isnull=False)
-        .exclude(card__allowed_heroes=deck.hero)
-        .select_related("card")
-        .distinct()
+def _get_deck_validation_error(deck: Deck, deck_label: str = "Deck") -> str | None:
+    return validate_deck_for_play(deck, deck_label)
+
+
+def _cancel_invalid_challenge(challenge: FriendlyChallenge) -> str | None:
+    deck_error = _get_deck_validation_error(
+        challenge.challenger_deck, "Challenger deck"
     )
-    if invalid_cards.exists():
-        invalid_names = ", ".join(
-            deck_card.card.name for deck_card in invalid_cards[:3]
-        )
-        return (
-            f"{deck_label} contains cards unavailable to {deck.hero.name}: "
-            f"{invalid_names}"
-        )
-    return None
+    if deck_error:
+        challenge.status = FriendlyChallenge.STATUS_CANCELLED
+        challenge.save(update_fields=["status"])
+    return deck_error
 
 
 def _friendly_activity_count(user, title) -> int:
@@ -353,13 +343,13 @@ def create_game(request):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        player_deck_error = _get_min_cards_error(player_deck, "Player deck")
+        player_deck_error = _get_deck_validation_error(player_deck, "Player deck")
         if player_deck_error:
             return Response(
                 {"error": player_deck_error}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        opponent_deck_error = _get_min_cards_error(opponent_deck, "Opponent deck")
+        opponent_deck_error = _get_deck_validation_error(opponent_deck, "Opponent deck")
         if opponent_deck_error:
             return Response(
                 {"error": opponent_deck_error}, status=status.HTTP_400_BAD_REQUEST
@@ -411,6 +401,8 @@ def create_game(request):
             status=status.HTTP_201_CREATED,
         )
 
+    except DeckValidationError as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.exception(f"Error creating game: {str(e)}")
         return Response(
@@ -485,7 +477,9 @@ def rematch_game(request, game_id):
             status=status.HTTP_403_FORBIDDEN,
         )
 
-    challenger_deck_error = _get_min_cards_error(challenger_deck, "Challenger deck")
+    challenger_deck_error = _get_deck_validation_error(
+        challenger_deck, "Challenger deck"
+    )
     if challenger_deck_error:
         return Response(
             {"error": challenger_deck_error}, status=status.HTTP_400_BAD_REQUEST
@@ -498,6 +492,9 @@ def rematch_game(request, game_id):
         title=game.title,
         status=FriendlyChallenge.STATUS_PENDING,
     ).first()
+    if existing and _cancel_invalid_challenge(existing):
+        existing = None
+
     if existing:
         return Response(
             {
@@ -573,9 +570,38 @@ def queue_for_ranked_match(request):
         deck = get_object_or_404(Deck, id=deck_id, user=request.user)
         logger.debug(f"Found deck: {deck}")
 
-        deck_error = _get_min_cards_error(deck)
+        existing_queue = (
+            MatchmakingQueue.objects.select_related("deck", "deck__hero")
+            .filter(
+                user=request.user,
+                deck__title=deck.title,
+                status=MatchmakingQueue.STATUS_QUEUED,
+            )
+            .first()
+        )
+
+        if existing_queue:
+            existing_deck_error = _get_deck_validation_error(existing_queue.deck)
+            if existing_deck_error:
+                existing_queue.status = MatchmakingQueue.STATUS_CANCELLED
+                existing_queue.save(update_fields=["status"])
+                existing_queue = None
+
+        deck_error = _get_deck_validation_error(deck)
         if deck_error:
             return Response({"error": deck_error}, status=status.HTTP_400_BAD_REQUEST)
+
+        if existing_queue:
+            logger.info(f"User already in queue: {existing_queue}")
+            ladder_msg = f" for {existing_queue.get_ladder_type_display()}"
+            return Response(
+                {
+                    "error": f"You are already in queue for this title{ladder_msg}",
+                    "queue_entry_id": existing_queue.id,
+                    "ladder_type": existing_queue.ladder_type,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if ladder_type == Game.LADDER_TYPE_DAILY:
             active_daily_games = Game.objects.filter(
@@ -589,25 +615,6 @@ def queue_for_ranked_match(request):
                     {"error": "Daily ladder limit reached (5 active games)."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-
-        # Check if the user is already in queue for this title
-        existing_queue = MatchmakingQueue.objects.filter(
-            user=request.user,
-            deck__title=deck.title,
-            status=MatchmakingQueue.STATUS_QUEUED,
-        ).first()
-
-        if existing_queue:
-            logger.info(f"User already in queue: {existing_queue}")
-            ladder_msg = f" for {existing_queue.get_ladder_type_display()}"
-            return Response(
-                {
-                    "error": f"You are already in queue for this title{ladder_msg}",
-                    "queue_entry_id": existing_queue.id,
-                    "ladder_type": existing_queue.ladder_type,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
         # Get or create the user's rating for this title
         user_rating, created = UserTitleRating.objects.get_or_create(
@@ -682,6 +689,19 @@ def matchmaking_queue_status(request, title_slug):
 
     if not queue_entry:
         return Response({"in_queue": False, "queue_entry": None})
+
+    deck_error = _get_deck_validation_error(queue_entry.deck)
+    if deck_error:
+        queue_entry.status = MatchmakingQueue.STATUS_CANCELLED
+        queue_entry.save(update_fields=["status"])
+        error = f"Removed from queue because deck is no longer valid: {deck_error}"
+        return Response(
+            {
+                "in_queue": False,
+                "queue_entry": None,
+                "error": error,
+            }
+        )
 
     return Response(
         {
@@ -786,7 +806,9 @@ def create_friendly_challenge(request):
         Deck, id=challenger_deck_id, user=request.user, title=title
     )
 
-    challenger_deck_error = _get_min_cards_error(challenger_deck, "Challenger deck")
+    challenger_deck_error = _get_deck_validation_error(
+        challenger_deck, "Challenger deck"
+    )
     if challenger_deck_error:
         return Response(
             {"error": challenger_deck_error}, status=status.HTTP_400_BAD_REQUEST
@@ -815,6 +837,9 @@ def create_friendly_challenge(request):
         title=title,
         status=FriendlyChallenge.STATUS_PENDING,
     ).first()
+    if existing and _cancel_invalid_challenge(existing):
+        existing = None
+
     if existing:
         _set_last_used_friend(request.user, title, challengee)
         _set_last_used_deck(request.user, challenger_deck)
@@ -888,15 +913,24 @@ def list_pending_friendly_challenges(request, title_slug):
     title = get_object_or_404(Title, slug=title_slug)
 
     incoming = FriendlyChallenge.objects.select_related(
-        "challenger", "challenger_deck"
+        "challenger",
+        "challenger_deck",
+        "challenger_deck__hero",
+        "challenger_deck__title",
     ).filter(
         challengee=request.user, title=title, status=FriendlyChallenge.STATUS_PENDING
     )
     outgoing = FriendlyChallenge.objects.select_related(
-        "challengee", "challenger_deck"
+        "challengee",
+        "challenger_deck",
+        "challenger_deck__hero",
+        "challenger_deck__title",
     ).filter(
         challenger=request.user, title=title, status=FriendlyChallenge.STATUS_PENDING
     )
+
+    incoming = [c for c in incoming if not _cancel_invalid_challenge(c)]
+    outgoing = [c for c in outgoing if not _cancel_invalid_challenge(c)]
 
     incoming_payload = [
         {
@@ -980,15 +1014,23 @@ def accept_friendly_challenge(request, challenge_id):
         Deck, id=challengee_deck_id, user=request.user, title=challenge.title
     )
 
-    challenger_deck_error = _get_min_cards_error(
+    challenger_deck_error = _get_deck_validation_error(
         challenge.challenger_deck, "Challenger deck"
     )
     if challenger_deck_error:
+        challenge.status = FriendlyChallenge.STATUS_CANCELLED
+        challenge.save(update_fields=["status"])
         return Response(
-            {"error": challenger_deck_error}, status=status.HTTP_400_BAD_REQUEST
+            {
+                "error": f"{challenger_deck_error}. Challenge cancelled.",
+                "challenge_cancelled": True,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
-    challengee_deck_error = _get_min_cards_error(challengee_deck, "Challengee deck")
+    challengee_deck_error = _get_deck_validation_error(
+        challengee_deck, "Challengee deck"
+    )
     if challengee_deck_error:
         return Response(
             {"error": challengee_deck_error}, status=status.HTTP_400_BAD_REQUEST
@@ -996,28 +1038,41 @@ def accept_friendly_challenge(request, challenge_id):
 
     # Create the game. For rematches, deterministically swap sides so each
     # player takes the opposite side from the previous game.
-    if challenge.rematch_of_id:
-        previous_game = challenge.rematch_of
-        challenger_was_side_a = (
-            challenge.challenger_id == previous_game.player_a_user_id
-        )
-        if challenger_was_side_a:
-            # Challenger was side_a last game -> becomes side_b now
-            game = GameService.create_game(
-                challengee_deck,
-                challenge.challenger_deck,
-                randomize_starting_player=False,
+    try:
+        if challenge.rematch_of_id:
+            previous_game = challenge.rematch_of
+            challenger_was_side_a = (
+                challenge.challenger_id == previous_game.player_a_user_id
             )
+            if challenger_was_side_a:
+                # Challenger was side_a last game -> becomes side_b now
+                game = GameService.create_game(
+                    challengee_deck,
+                    challenge.challenger_deck,
+                    randomize_starting_player=False,
+                )
+            else:
+                # Challenger was side_b last game -> becomes side_a now
+                game = GameService.create_game(
+                    challenge.challenger_deck,
+                    challengee_deck,
+                    randomize_starting_player=False,
+                )
         else:
-            # Challenger was side_b last game -> becomes side_a now
             game = GameService.create_game(
                 challenge.challenger_deck,
                 challengee_deck,
-                randomize_starting_player=False,
+                randomize_starting_player=True,
             )
-    else:
-        game = GameService.create_game(
-            challenge.challenger_deck, challengee_deck, randomize_starting_player=True
+    except DeckValidationError as e:
+        challenge.status = FriendlyChallenge.STATUS_CANCELLED
+        challenge.save(update_fields=["status"])
+        return Response(
+            {
+                "error": f"{str(e)}. Challenge cancelled.",
+                "challenge_cancelled": True,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
         )
     game.type = Game.GAME_TYPE_FRIENDLY
     game.save(update_fields=["type"])

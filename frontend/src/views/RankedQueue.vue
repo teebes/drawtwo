@@ -207,6 +207,10 @@ const fetchQueueStatus = async (): Promise<void> => {
     })
     inQueue.value = response.data.in_queue
     queueEntry.value = response.data.queue_entry
+    if (response.data.error) {
+      error.value = response.data.error
+      notificationStore.warning(response.data.error)
+    }
 
     // If we find a matched game, redirect to it
     if (queueEntry.value && queueEntry.value.status === 'matched') {

@@ -20,7 +20,7 @@
         <Panel>
           <div class="grid gap-4 grid-cols-4 sm:grid-cols-4">
             <div class="text-center">
-              <div class="text-2xl font-bold text-500">{{ deck.total_cards }}</div>
+              <div class="text-2xl font-bold text-500">{{ deck.total_cards }}/{{ deckConfig.deck_size_limit }}</div>
               <div class="text-xs text-gray-500">Total Cards</div>
             </div>
             <div class="text-center">
@@ -107,7 +107,9 @@
                 <div class="flex flex-col flex-shrink-0">
                   <button
                     @click="incrementCard(card as DeckCard)"
+                    :disabled="!canIncrementCard(card as DeckCard)"
                     class="flex h-4 w-8 items-center justify-center rounded-t bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 transition-colors"
+                    :class="{ 'cursor-not-allowed opacity-40': !canIncrementCard(card as DeckCard) }"
                     title="Increase count"
                   >
                     <span class="text-sm leading-none">▲</span>
@@ -127,6 +129,7 @@
                 <GameButton
                   variant="primary"
                   @click="addCardToDeck(card)"
+                  :disabled="!canAddCardToDeck"
                   class="flex-shrink-0"
                 >
                   Add Card
@@ -241,11 +244,18 @@ interface DeckData {
     health: number
     art_url?: string | null
   }
+  config: DeckConfig
   cards: DeckCard[]
   all_cards?: Card[]  // All available collectible cards for adding to deck
   total_cards: number
   created_at: string
   updated_at: string
+}
+
+interface DeckConfig {
+  deck_size_limit: number
+  min_cards_in_deck: number
+  deck_card_max_count: number
 }
 
 const route = useRoute()
@@ -273,6 +283,12 @@ const allCardsError = ref<string | null>(null)
 const selectedCard = ref<Card | null>(null)
 const showCardModal = ref(false)
 
+const fallbackDeckConfig: DeckConfig = {
+  deck_size_limit: 30,
+  min_cards_in_deck: 10,
+  deck_card_max_count: 9
+}
+
 const openCardModal = (card: Card) => {
   console.log('openCardModal', card)
   selectedCard.value = card
@@ -298,6 +314,31 @@ const averageCost = computed(() => {
   const totalCost = deck.value.cards.reduce((sum, card) => sum + (card.cost * card.count), 0)
   return totalCost / deck.value.total_cards
 })
+
+const deckConfig = computed(() => deck.value?.config || fallbackDeckConfig)
+
+const canAddCardToDeck = computed(() => {
+  if (!deck.value) return false
+  return deck.value.total_cards < deckConfig.value.deck_size_limit
+})
+
+const isUniqueCard = (card: Card | DeckCard): boolean => {
+  return card.traits?.some(trait => trait.type === 'unique') || false
+}
+
+const copyLabel = (count: number): string => (count === 1 ? 'copy' : 'copies')
+
+const maxCountForCard = (card: DeckCard): number => {
+  if (!deck.value) return 0
+
+  const availableDeckSlots = deckConfig.value.deck_size_limit - (deck.value.total_cards - card.count)
+  const cardCopyLimit = isUniqueCard(card) ? 1 : deckConfig.value.deck_card_max_count
+  return Math.max(0, Math.min(cardCopyLimit, availableDeckSlots))
+}
+
+const canIncrementCard = (card: DeckCard): boolean => {
+  return card.count < maxCountForCard(card)
+}
 
 type PowerCurveBucket = {
   cost: number
@@ -444,6 +485,10 @@ const fetchAllCards = async (): Promise<void> => {
 
 const addCardToDeck = async (card: Card): Promise<void> => {
   if (!deck.value) return
+  if (!canAddCardToDeck.value) {
+    notificationStore.warning(`Deck cannot have more than ${deckConfig.value.deck_size_limit} cards`)
+    return
+  }
 
   try {
     const response = await axios.post(`/collection/decks/${deck.value.id}/cards/add/`, {
@@ -478,7 +523,13 @@ const addCardToDeck = async (card: Card): Promise<void> => {
 }
 
 const updateCardCount = async (card: DeckCard, newCount: number): Promise<void> => {
-  if (!deck.value || newCount < 1 || newCount > 10) return
+  if (!deck.value || newCount < 1) return
+
+  const maxCount = maxCountForCard(card)
+  if (newCount > maxCount) {
+    notificationStore.warning(`This deck can only use ${maxCount} ${copyLabel(maxCount)} of ${card.name}`)
+    return
+  }
 
   try {
     const response = await axios.put(`/collection/decks/${deck.value.id}/cards/${card.id}/`, {
@@ -501,7 +552,7 @@ const updateCardCount = async (card: DeckCard, newCount: number): Promise<void> 
 }
 
 const incrementCard = async (card: DeckCard): Promise<void> => {
-  const newCount = Math.min(card.count + 1, 10)
+  const newCount = Math.min(card.count + 1, maxCountForCard(card))
   if (newCount !== card.count) {
     await updateCardCount(card, newCount)
   }
@@ -537,10 +588,16 @@ const saveCountEdit = async (card: DeckCard): Promise<void> => {
   if (editingCardId.value !== card.id || isSavingCountEdit.value) return
 
   const newCount = parseInt(editingCount.value, 10)
+  const maxCount = maxCountForCard(card)
 
   // Validate the input
-  if (isNaN(newCount) || newCount < 1 || newCount > 10) {
-    // Invalid input, just cancel
+  if (isNaN(newCount) || newCount < 1) {
+    cancelCountEdit()
+    return
+  }
+
+  if (newCount > maxCount) {
+    notificationStore.warning(`This deck can only use ${maxCount} ${copyLabel(maxCount)} of ${card.name}`)
     cancelCountEdit()
     return
   }
