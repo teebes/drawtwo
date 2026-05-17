@@ -1,0 +1,42 @@
+# ~/.bashrc for interactive backend container shells.
+
+case "$-" in
+  *i*) ;;
+  *) return ;;
+esac
+
+export SHELL=/bin/bash
+export EDITOR="${EDITOR:-vi}"
+export VISUAL="${VISUAL:-vi}"
+export PAGER="${PAGER:-less}"
+
+HISTFILE="${HISTFILE:-$HOME/.bash_history}"
+HISTSIZE=10000
+HISTFILESIZE=20000
+HISTCONTROL=ignoreboth:erasedups
+shopt -s histappend
+shopt -s checkwinsize
+shopt -s cmdhist
+
+bind "set completion-ignore-case on"
+bind "set show-all-if-ambiguous on"
+bind "set colored-stats on"
+bind "set mark-symlinked-directories on"
+
+if [ -f /usr/share/bash-completion/bash_completion ]; then
+  . /usr/share/bash-completion/bash_completion
+fi
+
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'
+alias manage='python manage.py'
+alias dj='python manage.py'
+
+if [ -n "${DJANGO_SETTINGS_MODULE:-}" ]; then
+  PS1='\[\e[32m\]\u@drawtwo-backend\[\e[0m\]:\[\e[34m\]\w\[\e[0m\]$ '
+else
+  PS1='\[\e[32m\]\u@backend\[\e[0m\]:\[\e[34m\]\w\[\e[0m\]$ '
+fi
+
+PROMPT_COMMAND='history -a; history -n'
