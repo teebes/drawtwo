@@ -38,6 +38,23 @@ class ServiceTests(ServiceTestsBase):
         self.assertEqual(len(game.queue), 1)
         self.assertEqual(game.queue[0]["type"], "effect_start_game")
 
+    def test_record_action_decision_includes_training_observation(self):
+        game_state = self.game.game_state
+
+        GameService._record_action_decision(
+            game=self.game,
+            game_state=game_state,
+            side="side_a",
+            command={"type": "cmd_end_turn"},
+            actor_kind="human",
+            outcome="accepted",
+        )
+
+        action = self.game.actions.get()
+        self.assertEqual(action.observation["side"], "side_a")
+        self.assertIn("public_state", action.observation)
+        self.assertEqual(action.observation["public_state"]["phase"], "start")
+
 
 class MatchmakingTests(TestCase):
     """Tests for matchmaking functionality."""

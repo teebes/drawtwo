@@ -50,6 +50,7 @@ services:
       - GOOGLE_OAUTH2_CLIENT_SECRET=${GOOGLE_OAUTH2_CLIENT_SECRET:-}
     volumes:
       - ./backend:/app
+      - ./ai:/app/ai
       - static_volume:/app/staticfiles
       - media_volume:/app/media
     ports:
@@ -83,6 +84,7 @@ services:
       - GOOGLE_OAUTH2_CLIENT_SECRET=${GOOGLE_OAUTH2_CLIENT_SECRET:-}
     volumes:
       - ./backend:/app
+      - ./ai:/app/ai
     depends_on:
       db:
         condition: service_healthy
@@ -106,6 +108,7 @@ services:
       - GOOGLE_OAUTH2_CLIENT_SECRET=${GOOGLE_OAUTH2_CLIENT_SECRET:-}
     volumes:
       - ./backend:/app
+      - ./ai:/app/ai
     depends_on:
       db:
         condition: service_healthy

@@ -247,6 +247,11 @@ class GameAction(TimestampedModel):
     phase = models.CharField(max_length=20, blank=True, default="")
     command = models.JSONField(default=dict)
     legal_commands = models.JSONField(default=list, blank=True)
+    observation = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Player-perspective observation at decision time for training.",
+    )
     pre_state_hash = models.CharField(max_length=64, blank=True, default="")
     post_state_hash = models.CharField(max_length=64, blank=True, default="")
     outcome = models.CharField(

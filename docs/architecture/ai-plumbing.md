@@ -49,6 +49,7 @@ Staff/superuser spectators still receive full state.
 - turn and phase
 - submitted command
 - legal command list at decision time
+- player-perspective observation snapshot at decision time
 - pre-state hash
 - outcome and error
 - final winner once the live game ends
@@ -82,6 +83,8 @@ docker-compose exec backend python manage.py export_replays \
   --output /tmp/archetype-human-actions.jsonl
 ```
 
+Additional filters include `--game-type` and `--ladder-type`.
+
 Run a local scripted self-play smoke test:
 
 ```bash
@@ -97,20 +100,23 @@ unless `--keep-games` is passed.
 
 ## AI Directory
 
-The project-level `ai/` directory is a placeholder for future training code.
-For now, training code should import the backend agent APIs instead of
-reimplementing rules.
+The project-level `ai/` directory now contains the first local training loop.
+It is mounted into the backend container by Docker Compose so scripts can run
+with the normal Django/gameplay imports.
 
-Expected future layout:
+Current layout:
 
 ```text
 ai/
-  envs/
-  encoders/
-  training/
+  archetype/
+  data/
   evaluation/
   models/
+  selfplay/
+  training/
 ```
+
+See `docs/architecture/ai-training-loop.md` for the current workflow.
 
 ## Current Boundaries
 
@@ -121,7 +127,6 @@ The next implementation layer should add:
 
 1. stronger legality coverage for every card/action edge case
 2. replay verification that re-simulates `GameAction` rows
-3. a heuristic/search policy for Archetype
-4. model-serving adapters under `backend/apps/gameplay/agents/policies/`
-5. training datasets and encoders under `ai/`
-
+3. replay verification that re-simulates `GameAction` rows
+4. a heuristic/search policy for Archetype
+5. model-serving adapters under `backend/apps/gameplay/agents/policies/`

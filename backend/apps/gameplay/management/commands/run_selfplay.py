@@ -10,6 +10,14 @@ from apps.gameplay.schemas.effects import StartGameEffect
 from apps.gameplay.services import GameService
 
 
+def _decision_side(state):
+    if state.phase == "mulligan":
+        for side in ("side_a", "side_b"):
+            if not state.mulligan_done.get(side, False):
+                return side
+    return state.active
+
+
 class Command(BaseCommand):
     help = "Run local scripted self-play through the agent simulator."
 
@@ -52,6 +60,7 @@ class Command(BaseCommand):
             )
             try:
                 state = game.game_state
+                state.ai_sides = []
                 start_result = apply_effects(state, [StartGameEffect(side="side_a")])
                 state = start_result.state
 
@@ -66,7 +75,7 @@ class Command(BaseCommand):
 
                 decisions = 0
                 while state.winner == "none" and decisions < options["max_decisions"]:
-                    side = state.active
+                    side = _decision_side(state)
                     legal_commands = list_legal_commands(state, side)
                     command = policies[side].select_command(state, legal_commands)
                     if command is None:

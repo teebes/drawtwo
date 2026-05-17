@@ -2,7 +2,7 @@ from django.test import TestCase
 
 from apps.builder.schemas import DamageAction, DrawAction, HeroPower, Taunt
 from apps.gameplay.agents.legal import list_legal_commands
-from apps.gameplay.agents.observation import filter_state_for_player
+from apps.gameplay.agents.observation import filter_state_for_player, make_observation
 from apps.gameplay.agents.simulator import apply_command
 from apps.gameplay.schemas.commands import AttackCommand
 from apps.gameplay.schemas.game import CardInPlay, Creature, GameState, HeroInPlay
@@ -97,6 +97,24 @@ class AgentObservationTests(TestCase):
         self.assertEqual(len(filtered["decks"]["side_a"]), 1)
         self.assertEqual(len(filtered["decks"]["side_b"]), 2)
         self.assertNotEqual(filtered["decks"]["side_b"], ["deck_b_1", "deck_b_2"])
+
+    def test_agent_observation_redacts_hidden_card_records(self):
+        state = make_agent_test_state()
+        state.cards["hidden_b_1"] = CardInPlay(
+            card_id="hidden_b_1",
+            card_type="creature",
+            template_slug="hidden-enemy-card",
+            name="Hidden Enemy Card",
+            attack=9,
+            health=9,
+            cost=9,
+        )
+        state.hands["side_b"].append("hidden_b_1")
+
+        observation = make_observation(state, "side_a")
+
+        self.assertIn("card_a_1", observation.public_state["cards"])
+        self.assertNotIn("hidden_b_1", observation.public_state["cards"])
 
 
 class LegalCommandTests(TestCase):

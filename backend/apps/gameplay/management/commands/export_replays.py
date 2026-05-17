@@ -14,6 +14,8 @@ class Command(BaseCommand):
         parser.add_argument("--title", help="Filter by title slug.")
         parser.add_argument("--ruleset-id", help="Filter by exact ruleset id.")
         parser.add_argument("--actor-kind", help="Filter by actor kind.")
+        parser.add_argument("--game-type", help="Filter by game type.")
+        parser.add_argument("--ladder-type", help="Filter by ranked ladder type.")
         parser.add_argument("--limit", type=int, help="Maximum rows to export.")
 
     def handle(self, *args, **options):
@@ -30,6 +32,10 @@ class Command(BaseCommand):
             queryset = queryset.filter(ruleset_id=options["ruleset_id"])
         if options.get("actor_kind"):
             queryset = queryset.filter(actor_kind=options["actor_kind"])
+        if options.get("game_type"):
+            queryset = queryset.filter(game__type=options["game_type"])
+        if options.get("ladder_type"):
+            queryset = queryset.filter(game__ladder_type=options["ladder_type"])
         if options.get("limit"):
             queryset = queryset[: options["limit"]]
 
@@ -39,6 +45,8 @@ class Command(BaseCommand):
                 row = {
                     "game_id": action.game_id,
                     "title_slug": action.game.title.slug,
+                    "game_type": action.game.type,
+                    "ladder_type": action.game.ladder_type,
                     "ruleset_id": action.ruleset_id,
                     "actor_side": action.actor_side,
                     "actor_kind": action.actor_kind,
@@ -46,6 +54,7 @@ class Command(BaseCommand):
                     "phase": action.phase,
                     "command": action.command,
                     "legal_commands": action.legal_commands,
+                    "observation": action.observation,
                     "pre_state_hash": action.pre_state_hash,
                     "post_state_hash": action.post_state_hash,
                     "outcome": action.outcome,

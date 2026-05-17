@@ -730,6 +730,7 @@ class GameService:
     ):
         from apps.gameplay.agents.hash import state_hash
         from apps.gameplay.agents.legal import list_legal_commands
+        from apps.gameplay.agents.observation import make_observation
         from apps.gameplay.models import GameAction
 
         try:
@@ -745,6 +746,12 @@ class GameService:
             logger.warning("Failed to enumerate legal commands: %s", exc)
             legal_commands = []
 
+        try:
+            observation = make_observation(game_state, side).model_dump(mode="json")
+        except Exception as exc:
+            logger.warning("Failed to build agent observation: %s", exc)
+            observation = {}
+
         GameAction.objects.create(
             game=game,
             ruleset_id=game.ruleset_id,
@@ -754,6 +761,7 @@ class GameService:
             phase=game_state.phase,
             command=command,
             legal_commands=legal_commands,
+            observation=observation,
             pre_state_hash=state_hash(game_state),
             outcome=outcome,
             error=error or {},

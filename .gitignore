@@ -42,6 +42,10 @@ db.sqlite3-journal
 backend/dev_data/
 !backend/dev_data/README.md
 !backend/dev_data/.gitkeep
+ai/runs/
+ai/exports/
+ai/checkpoints/
+ai/**/*.jsonl
 
 # But keep the management command structure
 !backend/apps/*/management/
