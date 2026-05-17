@@ -368,7 +368,6 @@ interface SnapshotCounts {
   resources: number
   cards: number
   heroes: number
-  decks: number
 }
 
 interface SnapshotResponse {
@@ -384,7 +383,6 @@ type SnapshotResourceType =
   | 'trait_override'
   | 'hero'
   | 'card'
-  | 'deck'
 
 interface SnapshotResource {
   resource_type: SnapshotResourceType
@@ -477,8 +475,8 @@ const canSave = computed(() => {
 
 const snapshotCountLabel = computed(() => {
   if (!snapshotCounts.value) return ''
-  const { resources, cards, heroes, decks } = snapshotCounts.value
-  return `${resources} resources - ${heroes} heroes, ${cards} cards, ${decks} AI decks`
+  const { resources, cards, heroes } = snapshotCounts.value
+  return `${resources} resources - ${heroes} heroes, ${cards} cards`
 })
 
 const fetchConfig = async (): Promise<void> => {

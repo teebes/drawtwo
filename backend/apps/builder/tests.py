@@ -520,7 +520,6 @@ class TestIngestion(TestCase):
         deck = Deck.objects.create(
             ai_player=IngestionService(self.title).get_default_ai_player(),
             title=self.title,
-            slug="starter-deck",
             name="Starter Deck",
             description="AI starter deck",
             hero=hero,
@@ -540,10 +539,7 @@ class TestIngestion(TestCase):
         self.assertEqual(resources_by_type["hero"]["spec"], {"armor": 1})
         self.assertEqual(resources_by_type["card"]["hero_slugs"], ["warrior"])
         self.assertEqual(resources_by_type["card"]["tags"], ["starter"])
-        self.assertEqual(resources_by_type["deck"]["slug"], "starter-deck")
-        self.assertEqual(
-            resources_by_type["deck"]["cards"], [{"card": "shield-slam", "count": 2}]
-        )
+        self.assertNotIn("deck", resources_by_type)
 
     def test_snapshot_import_updates_by_slug_and_preserves_ids(self):
         faction = Faction.objects.create(
@@ -633,7 +629,7 @@ class TestIngestion(TestCase):
         )
 
         self.assertEqual(removed, [])
-        self.assertEqual(len(ingested), 8)
+        self.assertEqual(len(ingested), 7)
         self.title.refresh_from_db()
         self.assertEqual(self.title.name, "Snapshot Title")
         self.assertEqual(self.title.config["min_cards_in_deck"], 12)
@@ -654,12 +650,12 @@ class TestIngestion(TestCase):
             list(card.allowed_heroes.values_list("slug", flat=True)), ["warrior"]
         )
         self.assertEqual(card.cardtrait_set.get().trait_slug, "taunt")
-        deck = Deck.objects.get(title=self.title, slug="starter-deck")
-        self.assertEqual(deck.hero.slug, "warrior")
-        self.assertEqual(deck.deckcard_set.get().count, 2)
+        self.assertFalse(
+            Deck.objects.filter(title=self.title, name="Starter Deck").exists()
+        )
 
     def test_replace_snapshot_deactivates_missing_latest_templates(self):
-        HeroTemplate.objects.create(
+        old_hero = HeroTemplate.objects.create(
             title=self.title,
             slug="old-hero",
             name="Old Hero",
@@ -677,6 +673,13 @@ class TestIngestion(TestCase):
             attack=1,
             health=1,
         )
+        deck = Deck.objects.create(
+            ai_player=IngestionService(self.title).get_default_ai_player(),
+            title=self.title,
+            name="Practice",
+            hero=old_hero,
+        )
+        DeckCard.objects.create(deck=deck, card=old_card, count=1)
         snapshot_yaml = """
         - type: title
           slug: test-title
@@ -718,6 +721,7 @@ class TestIngestion(TestCase):
         self.assertTrue(
             CardTemplate.objects.get(title=self.title, slug="footman").is_latest
         )
+        self.assertTrue(Deck.objects.filter(id=deck.id).exists())
         self.assertEqual(
             {(resource["resource_type"], resource["slug"]) for resource in removed},
             {("card", "old-card"), ("hero", "old-hero")},

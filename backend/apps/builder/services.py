@@ -2,7 +2,6 @@ from typing import List, Sequence
 
 import yaml
 from django.contrib.auth import get_user_model
-from django.utils.text import slugify
 from pydantic import TypeAdapter
 
 from apps.builder import models as builder_models
@@ -60,7 +59,11 @@ class TitleService:
     def import_snapshot_yaml(
         self, yaml_data: str, replace_missing: bool = False
     ) -> tuple[List[IngestedResource], list[dict]]:
-        resources = self.parse_yaml_resources(yaml_data)
+        resources = [
+            resource
+            for resource in self.parse_yaml_resources(yaml_data)
+            if not isinstance(resource, Deck)
+        ]
         if replace_missing and not any(
             isinstance(resource, TitleMetadata) for resource in resources
         ):
@@ -137,7 +140,6 @@ class TitleService:
             "resources": len(resources),
             "cards": sum(isinstance(resource, Card) for resource in resources),
             "heroes": sum(isinstance(resource, Hero) for resource in resources),
-            "decks": sum(isinstance(resource, Deck) for resource in resources),
         }
 
     def export_snapshot_resources(self) -> List[Resource]:
@@ -196,16 +198,6 @@ class TitleService:
         )
         resources.extend(self.card_to_resource(card) for card in cards)
 
-        ai_decks = (
-            collection_models.Deck.objects.filter(
-                title=self.title, ai_player__isnull=False
-            )
-            .select_related("hero")
-            .prefetch_related("deckcard_set__card")
-            .order_by("slug", "name")
-        )
-        resources.extend(self.deck_to_resource(deck) for deck in ai_decks)
-
         return resources
 
     def get_default_ai_player(self):
@@ -246,21 +238,6 @@ class TitleService:
                 }
             )
             trait.delete()
-
-        ai_decks = collection_models.Deck.objects.filter(
-            title=self.title, ai_player__isnull=False
-        )
-        for deck in ai_decks:
-            if self._deck_slug(deck) in resource_slugs["deck"]:
-                continue
-            removed.append(
-                {
-                    "resource_type": "deck",
-                    "slug": self._deck_slug(deck),
-                    "name": deck.name,
-                }
-            )
-            deck.delete()
 
         self._delete_unreferenced_tag_resources(resource_slugs["tag"], removed)
         self._delete_unreferenced_faction_resources(resource_slugs["faction"], removed)
@@ -432,35 +409,15 @@ class TitleService:
         hero = builder_models.HeroTemplate.objects.get(
             title=self.title, slug=resource.hero, is_latest=True
         )
-        deck_slug = self._normalize_slug(resource.slug or resource.name)
-        ai_player = self.get_default_ai_player()
-        deck = (
-            collection_models.Deck.objects.filter(
-                ai_player=ai_player,
-                title=self.title,
-                slug=deck_slug,
-            ).first()
-            or collection_models.Deck.objects.filter(
-                ai_player=ai_player,
-                title=self.title,
-                name=resource.name,
-            ).first()
+
+        deck, is_new = collection_models.Deck.objects.get_or_create(
+            ai_player=self.get_default_ai_player(),
+            title=self.title,
+            name=resource.name,
+            hero=hero,
         )
 
-        is_new = deck is None
-        if is_new:
-            deck = collection_models.Deck(
-                ai_player=ai_player,
-                title=self.title,
-                slug=deck_slug,
-                hero=hero,
-            )
-
-        deck.slug = deck_slug
-        deck.name = resource.name
-        deck.description = resource.description or ""
         deck.hero = hero
-        deck.script = resource.script or {}
         deck.save()
 
         seen_card_ids = set()
@@ -492,7 +449,7 @@ class TitleService:
             resource_type="deck",
             action="created" if is_new else "updated",
             id=deck.id,
-            slug=deck.slug,
+            slug="",
             name=deck.name,
         )
 
@@ -564,21 +521,6 @@ class TitleService:
             spec=hero.spec or {},
         )
 
-    def deck_to_resource(self, deck: collection_models.Deck) -> Deck:
-        cards = [
-            {"card": deck_card.card.slug, "count": deck_card.count}
-            for deck_card in deck.deckcard_set.all()
-        ]
-        cards.sort(key=lambda item: item["card"])
-        return Deck(
-            slug=self._deck_slug(deck),
-            name=deck.name,
-            description=deck.description or "",
-            hero=deck.hero.slug,
-            script=deck.script or {},
-            cards=cards,
-        )
-
     # Internal helpers
 
     def _title_config_from_data(self, config_data) -> TitleConfig:
@@ -648,7 +590,6 @@ class TitleService:
     def _resource_slugs(self, resources: Sequence[Resource]) -> dict[str, set[str]]:
         slugs = {
             "card": set(),
-            "deck": set(),
             "faction": set(),
             "hero": set(),
             "tag": set(),
@@ -657,8 +598,6 @@ class TitleService:
         for resource in resources:
             if isinstance(resource, Card):
                 slugs["card"].add(resource.slug)
-            elif isinstance(resource, Deck):
-                slugs["deck"].add(self._normalize_slug(resource.slug or resource.name))
             elif isinstance(resource, FactionResource):
                 slugs["faction"].add(resource.slug)
             elif isinstance(resource, Hero):
@@ -700,12 +639,6 @@ class TitleService:
                 }
             )
             faction.delete()
-
-    def _deck_slug(self, deck: collection_models.Deck) -> str:
-        return deck.slug or self._normalize_slug(deck.name)
-
-    def _normalize_slug(self, value: str) -> str:
-        return slugify(value) or "deck"
 
     def _resources_from_snapshot_mapping(self, snapshot: dict) -> list[dict]:
         resources: list[dict] = []

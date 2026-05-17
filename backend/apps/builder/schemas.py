@@ -217,11 +217,8 @@ class Card(ResourceBase):
 
 class Deck(ResourceBase):
     type: Literal["deck"] = "deck"
-    slug: Optional[str] = None
     name: str
-    description: str = ""
     hero: str
-    script: dict = Field(default_factory=dict)
     cards: List[dict] = Field(default_factory=list)
 
 

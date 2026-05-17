@@ -395,7 +395,7 @@ def bump_card_version(card: CardTemplate, yaml_data: str) -> CardTemplate:
 @permission_classes([IsAuthenticated])
 def ingest_yaml(request, title_slug):
     """
-    Ingest YAML manifest to create/update cards, heroes, and decks.
+    Ingest YAML manifest to create/update cards and heroes.
 
     Accepts a YAML string containing one or more resource definitions.
     Returns a list of created/updated resources with their types and IDs.
