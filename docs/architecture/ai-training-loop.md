@@ -19,6 +19,9 @@ This is intentionally not a large neural system yet. It is a small, inspectable
 baseline that proves the data shape, action scoring interface, and evaluation
 flow before adding heavier ML dependencies.
 
+For the immediate step-by-step workflow, use
+`docs/ai-local-training-runbook.md`.
+
 ## Replay Rows
 
 Future `GameAction` rows include an `observation` snapshot:
@@ -90,6 +93,32 @@ docker-compose exec backend python manage.py export_replays \
   --actor-kind human \
   --output /tmp/archetype-human-actions.jsonl
 ```
+
+## Copying Decklists From Prod
+
+Use slug-based deck manifests to copy a known prod decklist into a local deck
+ID. Card template database IDs do not need to match between environments.
+
+On prod, export a deck:
+
+```bash
+python manage.py export_deck_manifest 123 \
+  --output /tmp/prod-deck-123.yaml
+```
+
+Locally, apply that card assignment to an existing local deck with the same
+title:
+
+```bash
+docker-compose exec backend python manage.py import_deck_manifest 456 \
+  --input /app/dev_data/prod-deck-123.yaml
+```
+
+The import command validates all card slugs before clearing the local deck. By
+default it also rolls back if the resulting deck is not legal for play. Use
+`--dry-run` to validate only, `--allow-title-mismatch` when intentionally
+applying across title slugs, and `--allow-invalid` when you need to inspect an
+illegal assignment without using it for training.
 
 ## Model Shape
 
