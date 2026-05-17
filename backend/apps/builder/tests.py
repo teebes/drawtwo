@@ -5,11 +5,30 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .models import Builder, CardTemplate, CardTrait, HeroTemplate, Title
+from apps.collection.models import Deck, DeckCard
+
+from .models import (
+    Builder,
+    CardTemplate,
+    CardTrait,
+    Faction,
+    HeroTemplate,
+    Tag,
+    Title,
+    TraitOverride,
+)
 from .schemas import TitleConfig
 from .services import IngestionService
 
 User = get_user_model()
+
+
+def _contains_key(value, key: str) -> bool:
+    if isinstance(value, dict):
+        return key in value or any(_contains_key(item, key) for item in value.values())
+    if isinstance(value, list):
+        return any(_contains_key(item, key) for item in value)
+    return False
 
 
 class BuilderTestCase(TestCase):
@@ -264,6 +283,36 @@ class TestTitleAPIPermissions(APITestCase):
         self.assertEqual(response.data["cards"][0]["slug"], "shield-slam")
         self.assertEqual(response.data["cards"][0]["hero_slugs"], ["warrior"])
 
+    def test_author_can_export_title_snapshot_without_ids(self):
+        HeroTemplate.objects.create(
+            title=self.draft_title,
+            slug="warrior",
+            name="Warrior",
+            description="Front line hero",
+            health=30,
+            hero_power={"name": "Strike", "actions": []},
+        )
+        CardTemplate.objects.create(
+            title=self.draft_title,
+            slug="shield-slam",
+            name="Shield Slam",
+            description="Hero scoped card",
+            card_type=CardTemplate.CARD_TYPE_SPELL,
+            cost=2,
+        )
+
+        self.client.force_authenticate(user=self.author)
+        url = reverse("title-snapshot", kwargs={"title_slug": self.draft_title.slug})
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        manifest = yaml.safe_load(response.data["yaml"])
+        self.assertEqual(manifest[0]["type"], "title")
+        self.assertEqual(manifest[0]["slug"], self.draft_title.slug)
+        self.assertFalse(_contains_key(manifest, "id"))
+        self.assertIn("cards", response.data["counts"])
+
     def test_other_user_cannot_read_title_content_config(self):
         self.client.force_authenticate(user=self.other_user)
         url = reverse(
@@ -422,6 +471,275 @@ class TestIngestion(TestCase):
             ["warrior"],
         )
 
+    def test_snapshot_export_includes_slug_based_title_resources(self):
+        faction = Faction.objects.create(
+            title=self.title,
+            slug="guard",
+            name="Guard",
+            description="Defensive faction",
+        )
+        tag = Tag.objects.create(
+            title=self.title,
+            slug="starter",
+            name="Starter",
+            description="Starter content",
+        )
+        TraitOverride.objects.create(
+            title=self.title,
+            slug="taunt",
+            name="Guard",
+            description="Must be attacked first.",
+        )
+        hero = HeroTemplate.objects.create(
+            title=self.title,
+            slug="warrior",
+            name="Warrior",
+            description="Front line hero",
+            health=30,
+            hero_power={"name": "Strike", "actions": []},
+            faction=faction,
+            spec={"armor": 1},
+        )
+        card = CardTemplate.objects.create(
+            title=self.title,
+            slug="shield-slam",
+            name="Shield Slam",
+            description="Hero scoped card.",
+            card_type=CardTemplate.CARD_TYPE_SPELL,
+            cost=2,
+            faction=faction,
+            spec={"rarity": "common"},
+        )
+        card.tags.add(tag)
+        card.allowed_heroes.add(hero)
+        CardTrait.objects.create(
+            card=card,
+            trait_slug="battlecry",
+            data={"actions": [{"action": "damage", "amount": 1}]},
+        )
+        deck = Deck.objects.create(
+            ai_player=IngestionService(self.title).get_default_ai_player(),
+            title=self.title,
+            slug="starter-deck",
+            name="Starter Deck",
+            description="AI starter deck",
+            hero=hero,
+            script={"strategy": "control"},
+        )
+        DeckCard.objects.create(deck=deck, card=card, count=2)
+
+        snapshot_yaml = IngestionService(self.title).export_snapshot_yaml()
+        manifest = yaml.safe_load(snapshot_yaml)
+        resources_by_type = {resource["type"]: resource for resource in manifest}
+
+        self.assertFalse(_contains_key(manifest, "id"))
+        self.assertEqual(resources_by_type["title"]["slug"], self.title.slug)
+        self.assertEqual(resources_by_type["faction"]["slug"], "guard")
+        self.assertEqual(resources_by_type["tag"]["slug"], "starter")
+        self.assertEqual(resources_by_type["trait_override"]["slug"], "taunt")
+        self.assertEqual(resources_by_type["hero"]["spec"], {"armor": 1})
+        self.assertEqual(resources_by_type["card"]["hero_slugs"], ["warrior"])
+        self.assertEqual(resources_by_type["card"]["tags"], ["starter"])
+        self.assertEqual(resources_by_type["deck"]["slug"], "starter-deck")
+        self.assertEqual(
+            resources_by_type["deck"]["cards"], [{"card": "shield-slam", "count": 2}]
+        )
+
+    def test_snapshot_import_updates_by_slug_and_preserves_ids(self):
+        faction = Faction.objects.create(
+            title=self.title,
+            slug="guard",
+            name="Old Guard",
+        )
+        hero = HeroTemplate.objects.create(
+            title=self.title,
+            slug="warrior",
+            name="Old Warrior",
+            description="Old hero",
+            health=10,
+            hero_power={"name": "Old", "actions": []},
+        )
+        card = CardTemplate.objects.create(
+            title=self.title,
+            slug="shield-slam",
+            name="Old Shield Slam",
+            description="Old card.",
+            card_type=CardTemplate.CARD_TYPE_SPELL,
+            cost=9,
+        )
+        existing_card_id = card.id
+        snapshot_yaml = """
+        - type: title
+          slug: test-title
+          name: Snapshot Title
+          description: Imported snapshot
+        - type: config
+          deck_size_limit: 30
+          min_cards_in_deck: 12
+          deck_card_max_count: 2
+          hand_start_size: 4
+          ranked_time_per_turn: 90
+        - type: faction
+          slug: guard
+          name: Guard
+          description: Defensive faction
+        - type: tag
+          slug: starter
+          name: Starter
+        - type: trait_override
+          slug: taunt
+          name: Guard
+          description: Must be attacked first.
+        - type: hero
+          slug: warrior
+          name: Warrior
+          description: Front line hero
+          health: 30
+          faction: guard
+          spec:
+            armor: 1
+          hero_power:
+            name: Strike
+            actions: []
+        - type: card
+          card_type: spell
+          slug: shield-slam
+          name: Shield Slam
+          description: Warrior only spell.
+          cost: 2
+          faction: guard
+          spec:
+            rarity: common
+          tags:
+          - starter
+          hero_slugs:
+          - warrior
+          traits:
+          - type: taunt
+        - type: deck
+          slug: starter-deck
+          name: Starter Deck
+          description: AI starter deck
+          hero: warrior
+          script:
+            strategy: control
+          cards:
+          - card: shield-slam
+            count: 2
+        """
+
+        ingested, removed = IngestionService(self.title).import_snapshot_yaml(
+            snapshot_yaml
+        )
+
+        self.assertEqual(removed, [])
+        self.assertEqual(len(ingested), 8)
+        self.title.refresh_from_db()
+        self.assertEqual(self.title.name, "Snapshot Title")
+        self.assertEqual(self.title.config["min_cards_in_deck"], 12)
+        faction.refresh_from_db()
+        self.assertEqual(faction.name, "Guard")
+        hero.refresh_from_db()
+        self.assertEqual(hero.name, "Warrior")
+        self.assertEqual(hero.faction.slug, "guard")
+        self.assertEqual(hero.spec, {"armor": 1})
+        card.refresh_from_db()
+        self.assertEqual(card.id, existing_card_id)
+        self.assertEqual(card.name, "Shield Slam")
+        self.assertEqual(card.cost, 2)
+        self.assertEqual(card.faction.slug, "guard")
+        self.assertEqual(card.spec, {"rarity": "common"})
+        self.assertEqual(list(card.tags.values_list("slug", flat=True)), ["starter"])
+        self.assertEqual(
+            list(card.allowed_heroes.values_list("slug", flat=True)), ["warrior"]
+        )
+        self.assertEqual(card.cardtrait_set.get().trait_slug, "taunt")
+        deck = Deck.objects.get(title=self.title, slug="starter-deck")
+        self.assertEqual(deck.hero.slug, "warrior")
+        self.assertEqual(deck.deckcard_set.get().count, 2)
+
+    def test_replace_snapshot_deactivates_missing_latest_templates(self):
+        HeroTemplate.objects.create(
+            title=self.title,
+            slug="old-hero",
+            name="Old Hero",
+            description="Removed from snapshot",
+            health=20,
+            hero_power={"name": "Old", "actions": []},
+        )
+        old_card = CardTemplate.objects.create(
+            title=self.title,
+            slug="old-card",
+            name="Old Card",
+            description="Removed from snapshot",
+            card_type=CardTemplate.CARD_TYPE_CREATURE,
+            cost=1,
+            attack=1,
+            health=1,
+        )
+        snapshot_yaml = """
+        - type: title
+          slug: test-title
+          name: Test Title
+          description: Snapshot
+        - type: config
+          deck_size_limit: 30
+          min_cards_in_deck: 10
+          deck_card_max_count: 9
+          hand_start_size: 3
+          ranked_time_per_turn: 60
+        - type: hero
+          slug: warrior
+          name: Warrior
+          description: Front line hero
+          health: 30
+          hero_power:
+            name: Strike
+            actions: []
+        - type: card
+          card_type: creature
+          slug: footman
+          name: Footman
+          description: Basic unit.
+          cost: 1
+          attack: 1
+          health: 2
+        """
+
+        _ingested, removed = IngestionService(self.title).import_snapshot_yaml(
+            snapshot_yaml, replace_missing=True
+        )
+
+        old_card.refresh_from_db()
+        self.assertFalse(old_card.is_latest)
+        self.assertFalse(
+            HeroTemplate.objects.get(title=self.title, slug="old-hero").is_latest
+        )
+        self.assertTrue(
+            CardTemplate.objects.get(title=self.title, slug="footman").is_latest
+        )
+        self.assertEqual(
+            {(resource["resource_type"], resource["slug"]) for resource in removed},
+            {("card", "old-card"), ("hero", "old-hero")},
+        )
+
+    def test_replace_snapshot_rejects_partial_manifests(self):
+        with self.assertRaisesMessage(
+            ValueError, "Replace imports require a full title snapshot"
+        ):
+            IngestionService(self.title).import_snapshot_yaml(
+                """
+                - type: card
+                  card_type: creature
+                  slug: footman
+                  name: Footman
+                  cost: 1
+                  attack: 1
+                  health: 2
+                """,
+                replace_missing=True,
+            )
+
 
 # API Test examples for when you implement models and views:
 
@@ -493,7 +811,10 @@ class TestIngestion(TestCase):
 #         data = {
 #             'data': {
 #                 'shapes': [
-#                     {'type': 'rectangle', 'x': 10, 'y': 10, 'width': 100, 'height': 50}
+#                     {
+#                         'type': 'rectangle', 'x': 10, 'y': 10,
+#                         'width': 100, 'height': 50,
+#                     }
 #                 ]
 #             }
 #         }

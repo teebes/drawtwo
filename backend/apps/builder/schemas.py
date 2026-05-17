@@ -1,6 +1,6 @@
 from typing import Annotated, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Discriminator, Field
+from pydantic import BaseModel, ConfigDict, Discriminator, Field
 
 
 class Encounter(BaseModel):
@@ -86,12 +86,22 @@ Action = Annotated[
 
 
 class TraitBase(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     type: str
     actions: List[Action] = Field(default_factory=list)
 
 
+class Armor(TraitBase):
+    type: Literal["armor"] = "armor"
+
+
 class Charge(TraitBase):
     type: Literal["charge"] = "charge"
+
+
+class Cleave(TraitBase):
+    type: Literal["cleave"] = "cleave"
 
 
 class Ranged(TraitBase):
@@ -110,6 +120,14 @@ class DeathRattle(TraitBase):
     type: Literal["deathrattle"] = "deathrattle"
 
 
+class Inspire(TraitBase):
+    type: Literal["inspire"] = "inspire"
+
+
+class Lifesteal(TraitBase):
+    type: Literal["lifesteal"] = "lifesteal"
+
+
 class Stealth(TraitBase):
     type: Literal["stealth"] = "stealth"
 
@@ -119,7 +137,19 @@ class Unique(TraitBase):
 
 
 Trait = Annotated[
-    Union[Charge, Ranged, Taunt, Battlecry, DeathRattle, Stealth, Unique],
+    Union[
+        Armor,
+        Battlecry,
+        Charge,
+        Cleave,
+        DeathRattle,
+        Inspire,
+        Lifesteal,
+        Ranged,
+        Stealth,
+        Taunt,
+        Unique,
+    ],
     Discriminator("type"),
 ]
 
@@ -138,6 +168,34 @@ class ResourceBase(BaseModel):
     type: str
 
 
+class TitleMetadata(ResourceBase):
+    type: Literal["title"] = "title"
+    slug: str
+    name: str
+    description: str = ""
+
+
+class FactionResource(ResourceBase):
+    type: Literal["faction"] = "faction"
+    slug: str
+    name: str
+    description: str = ""
+
+
+class TagResource(ResourceBase):
+    type: Literal["tag"] = "tag"
+    slug: str
+    name: str
+    description: str = ""
+
+
+class TraitOverrideResource(ResourceBase):
+    type: Literal["trait_override"] = "trait_override"
+    slug: str
+    name: str
+    description: str = ""
+
+
 class Card(ResourceBase):
     id: Optional[int] = None
     type: Literal["card"] = "card"
@@ -150,6 +208,8 @@ class Card(ResourceBase):
     health: int = 0
     traits: List[Trait] = Field(default_factory=list)
     faction: Optional[str] = None
+    spec: dict = Field(default_factory=dict)
+    tags: List[str] = Field(default_factory=list)
     art_url: Optional[str] = None  # For future user-uploaded art
     is_collectible: bool = True
     hero_slugs: List[str] = Field(default_factory=list)
@@ -157,8 +217,11 @@ class Card(ResourceBase):
 
 class Deck(ResourceBase):
     type: Literal["deck"] = "deck"
+    slug: Optional[str] = None
     name: str
+    description: str = ""
     hero: str
+    script: dict = Field(default_factory=dict)
     cards: List[dict] = Field(default_factory=list)
 
 
@@ -176,6 +239,7 @@ class Hero(ResourceBase):
     health: int
     hero_power: HeroPower
     faction: Optional[str] = None
+    spec: dict = Field(default_factory=dict)
 
 
 class TitleConfig(ResourceBase):
@@ -189,13 +253,34 @@ class TitleConfig(ResourceBase):
     ranked_time_per_turn: int = 60
 
 
-Resource = Annotated[Union[Card, Deck, Hero, TitleConfig], Discriminator("type")]
+Resource = Annotated[
+    Union[
+        Card,
+        Deck,
+        FactionResource,
+        Hero,
+        TagResource,
+        TitleConfig,
+        TitleMetadata,
+        TraitOverrideResource,
+    ],
+    Discriminator("type"),
+]
 
 
 class IngestedResource(BaseModel):
     """Represents a resource that was created or updated during ingestion."""
 
-    resource_type: Literal["card", "hero", "deck", "config"]
+    resource_type: Literal[
+        "card",
+        "config",
+        "deck",
+        "faction",
+        "hero",
+        "tag",
+        "title",
+        "trait_override",
+    ]
     action: Literal["created", "updated"]
     id: int
     slug: str

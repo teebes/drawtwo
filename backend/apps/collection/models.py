@@ -43,11 +43,14 @@ class OwnedHero(TimestampedModel):
 class Deck(TimestampedModel):
     # Either user-owned or AI-owned (exactly one must be set)
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
-    ai_player = models.ForeignKey(AIPlayer, on_delete=models.CASCADE, null=True, blank=True)
+    ai_player = models.ForeignKey(
+        AIPlayer, on_delete=models.CASCADE, null=True, blank=True
+    )
 
     # Title that this deck belongs to
     title = models.ForeignKey(Title, on_delete=models.PROTECT)
 
+    slug = models.SlugField(blank=True, default="")
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     cards = models.ManyToManyField(CardTemplate, through='DeckCard')
@@ -76,6 +79,11 @@ class Deck(TimestampedModel):
                 fields=["ai_player", "name"],
                 condition=models.Q(ai_player__isnull=False),
                 name="deck_u_ai_name",
+            ),
+            models.UniqueConstraint(
+                fields=["title", "slug"],
+                condition=~models.Q(slug=""),
+                name="deck_u_title_slug_nonblank",
             ),
         ]
 

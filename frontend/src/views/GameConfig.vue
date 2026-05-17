@@ -1,5 +1,144 @@
 <template>
   <div class="ui-page">
+    <BaseModal :show="exportModalOpen" @close="closeExportModal">
+      <div class="p-6">
+        <div class="mb-4 flex items-start justify-between gap-4 pr-8">
+          <div>
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+              Export Title Snapshot
+            </h2>
+            <p v-if="snapshotCountLabel" class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ snapshotCountLabel }}
+            </p>
+          </div>
+          <button
+            type="button"
+            :disabled="snapshotLoading || Boolean(snapshotError) || !snapshotYaml"
+            :class="[
+              'ui-btn ui-btn-sm',
+              snapshotCopied
+                ? 'border border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/40 dark:text-green-200'
+                : 'ui-btn-secondary'
+            ]"
+            @click="copySnapshotYaml"
+          >
+            <Check v-if="snapshotCopied" class="h-4 w-4" aria-hidden="true" />
+            <Copy v-else class="h-4 w-4" aria-hidden="true" />
+            {{ snapshotCopied ? 'Copied' : 'Copy' }}
+          </button>
+        </div>
+
+        <div v-if="snapshotLoading" class="flex items-center justify-center gap-3 py-12 text-gray-500 dark:text-gray-400">
+          <Loader2 class="h-5 w-5 animate-spin" aria-hidden="true" />
+          <span>Loading YAML...</span>
+        </div>
+        <div v-else-if="snapshotError" class="ui-alert ui-alert-error">
+          {{ snapshotError }}
+        </div>
+        <pre v-else class="max-h-[60vh] overflow-auto rounded-lg bg-gray-900 p-4 text-sm text-gray-100 dark:bg-gray-950"><code>{{ snapshotYaml }}</code></pre>
+      </div>
+    </BaseModal>
+
+    <BaseModal :show="importModalOpen" @close="closeImportModal">
+      <div class="p-6">
+        <div class="mb-5 pr-8">
+          <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+            Import YAML
+          </h2>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {{ title?.name || 'World' }}
+          </p>
+        </div>
+
+        <div class="space-y-5">
+          <label class="block">
+            <span class="ui-label">YAML content</span>
+            <textarea
+              v-model="importYamlContent"
+              rows="16"
+              class="ui-input mt-2 min-h-80 font-mono"
+              placeholder="- type: title"
+              :disabled="importing"
+            />
+          </label>
+
+          <label class="flex items-start gap-3">
+            <input
+              v-model="replaceMissing"
+              type="checkbox"
+              class="ui-checkbox mt-0.5"
+              :disabled="importing"
+            />
+            <span>
+              <span class="ui-label">Replace missing snapshot content</span>
+              <span class="ui-help block">Use for prod/local cloning; leave off for additive card promotion.</span>
+            </span>
+          </label>
+
+          <div v-if="importError" class="ui-alert ui-alert-error">
+            {{ importError }}
+          </div>
+
+          <div v-if="importResults.length || removedResources.length" class="space-y-4">
+            <div v-if="importResults.length" class="ui-alert ui-alert-success">
+              Processed {{ importResults.length }} resource{{ importResults.length === 1 ? '' : 's' }}.
+            </div>
+
+            <div v-if="importResults.length" class="max-h-56 overflow-auto rounded-lg border border-gray-200 dark:border-gray-700">
+              <div
+                v-for="resource in importResults"
+                :key="`${resource.resource_type}-${resource.slug}-${resource.name}`"
+                class="flex items-center justify-between gap-3 border-b border-gray-200 px-3 py-2 last:border-b-0 dark:border-gray-700"
+              >
+                <div>
+                  <div class="text-sm font-medium text-gray-900 dark:text-white">
+                    {{ resource.name }}
+                  </div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">
+                    {{ resourceTypeLabel(resource.resource_type) }}
+                    <span v-if="resource.slug"> - {{ resource.slug }}</span>
+                  </div>
+                </div>
+                <span
+                  :class="[
+                    'ui-status-badge',
+                    resource.action === 'created' ? 'ui-status-success' : 'ui-status-info'
+                  ]"
+                >
+                  {{ resource.action }}
+                </span>
+              </div>
+            </div>
+
+            <div v-if="removedResources.length" class="ui-alert ui-alert-warning">
+              Removed {{ removedResources.length }} missing resource{{ removedResources.length === 1 ? '' : 's' }}.
+            </div>
+          </div>
+
+          <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              class="ui-btn ui-btn-md ui-btn-secondary"
+              :disabled="importing"
+              @click="clearImport"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              class="ui-btn ui-btn-md ui-btn-primary"
+              :disabled="importing || !importYamlContent.trim()"
+              @click="importSnapshotYaml"
+            >
+              <Loader2 v-if="importing" class="h-4 w-4 animate-spin" aria-hidden="true" />
+              <Upload v-else class="h-4 w-4" aria-hidden="true" />
+              {{ importing ? 'Importing' : 'Import YAML' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </BaseModal>
+
     <main class="ui-page-container ui-page-container-narrow">
       <header class="ui-page-header-row">
         <div>
@@ -11,7 +150,25 @@
           </p>
         </div>
 
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            class="ui-btn ui-btn-md ui-btn-secondary"
+            :disabled="loading || saving"
+            @click="openImportModal"
+          >
+            <Upload class="h-4 w-4" aria-hidden="true" />
+            Import YAML
+          </button>
+          <button
+            type="button"
+            class="ui-btn ui-btn-md ui-btn-secondary"
+            :disabled="loading || saving"
+            @click="openExportModal"
+          >
+            <Download class="h-4 w-4" aria-hidden="true" />
+            Export YAML
+          </button>
           <button
             type="button"
             class="ui-btn ui-btn-md ui-btn-secondary"
@@ -176,13 +333,18 @@ import {
   AlertCircle,
   ArrowRight,
   BookOpen,
+  Check,
+  Copy,
+  Download,
   Loader2,
   RotateCcw,
   Save,
   Settings,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Upload
 } from 'lucide-vue-next'
 import axios from '../config/api'
+import BaseModal from '../components/modals/BaseModal.vue'
 import { useNotificationStore } from '../stores/notifications'
 import { useTitleStore } from '../stores/title'
 
@@ -200,6 +362,47 @@ interface GameConfigResponse {
   config: Omit<GameConfigForm, 'side_b_compensation'> & {
     side_b_compensation: string | null
   }
+}
+
+interface SnapshotCounts {
+  resources: number
+  cards: number
+  heroes: number
+  decks: number
+}
+
+interface SnapshotResponse {
+  yaml: string
+  counts?: SnapshotCounts
+}
+
+type SnapshotResourceType =
+  | 'title'
+  | 'config'
+  | 'faction'
+  | 'tag'
+  | 'trait_override'
+  | 'hero'
+  | 'card'
+  | 'deck'
+
+interface SnapshotResource {
+  resource_type: SnapshotResourceType
+  action: 'created' | 'updated'
+  id: number
+  slug: string
+  name: string
+}
+
+interface RemovedResource {
+  resource_type: SnapshotResourceType
+  slug: string
+  name: string
+}
+
+interface SnapshotImportResponse {
+  resources: SnapshotResource[]
+  removed: RemovedResource[]
 }
 
 const defaultConfig: GameConfigForm = {
@@ -223,6 +426,21 @@ const saving = ref(false)
 const error = ref<string | null>(null)
 const loadedConfig = ref<GameConfigForm | null>(null)
 const form = reactive<GameConfigForm>({ ...defaultConfig })
+
+const exportModalOpen = ref(false)
+const snapshotYaml = ref('')
+const snapshotCounts = ref<SnapshotCounts | null>(null)
+const snapshotLoading = ref(false)
+const snapshotError = ref<string | null>(null)
+const snapshotCopied = ref(false)
+
+const importModalOpen = ref(false)
+const importYamlContent = ref('')
+const replaceMissing = ref(false)
+const importing = ref(false)
+const importError = ref<string | null>(null)
+const importResults = ref<SnapshotResource[]>([])
+const removedResources = ref<RemovedResource[]>([])
 
 const normalizeConfig = (config: GameConfigResponse['config']): GameConfigForm => ({
   deck_size_limit: config.deck_size_limit,
@@ -255,6 +473,12 @@ const validationError = computed(() => {
 
 const canSave = computed(() => {
   return !loading.value && !saving.value && !validationError.value && !!loadedConfig.value
+})
+
+const snapshotCountLabel = computed(() => {
+  if (!snapshotCounts.value) return ''
+  const { resources, cards, heroes, decks } = snapshotCounts.value
+  return `${resources} resources - ${heroes} heroes, ${cards} cards, ${decks} AI decks`
 })
 
 const fetchConfig = async (): Promise<void> => {
@@ -303,9 +527,142 @@ const saveConfig = async (): Promise<void> => {
   }
 }
 
+const openExportModal = async (): Promise<void> => {
+  exportModalOpen.value = true
+  snapshotYaml.value = ''
+  snapshotCounts.value = null
+  snapshotError.value = null
+  snapshotCopied.value = false
+
+  try {
+    snapshotLoading.value = true
+    const response = await axios.get<SnapshotResponse>(`/builder/titles/${slug.value}/snapshot/`)
+    snapshotYaml.value = response.data.yaml
+    snapshotCounts.value = response.data.counts || null
+  } catch (err: any) {
+    snapshotError.value = err.response?.data?.error || err.message || 'Failed to export YAML.'
+    console.error('Error exporting title snapshot:', err)
+  } finally {
+    snapshotLoading.value = false
+  }
+}
+
+const closeExportModal = (): void => {
+  exportModalOpen.value = false
+  snapshotYaml.value = ''
+  snapshotCounts.value = null
+  snapshotError.value = null
+  snapshotCopied.value = false
+}
+
+const openImportModal = (): void => {
+  importModalOpen.value = true
+  importError.value = null
+}
+
+const closeImportModal = (): void => {
+  if (importing.value) return
+  importModalOpen.value = false
+  importError.value = null
+  importResults.value = []
+  removedResources.value = []
+}
+
+const clearImport = (): void => {
+  importYamlContent.value = ''
+  importError.value = null
+  importResults.value = []
+  removedResources.value = []
+}
+
+const importSnapshotYaml = async (): Promise<void> => {
+  if (!importYamlContent.value.trim()) return
+
+  try {
+    importing.value = true
+    importError.value = null
+    importResults.value = []
+    removedResources.value = []
+
+    const response = await axios.post<SnapshotImportResponse>(`/builder/titles/${slug.value}/snapshot/`, {
+      yaml_content: importYamlContent.value,
+      replace_missing: replaceMissing.value
+    })
+
+    importResults.value = response.data.resources || []
+    removedResources.value = response.data.removed || []
+    importYamlContent.value = ''
+
+    const importedTitle = importResults.value.find(resource => resource.resource_type === 'title')
+    if (importedTitle && titleStore.currentTitle) {
+      titleStore.setCurrentTitle({
+        ...titleStore.currentTitle,
+        name: importedTitle.name
+      })
+    }
+
+    await fetchConfig()
+    notificationStore.success('YAML import completed')
+  } catch (err: any) {
+    importError.value = err.response?.data?.error || err.message || 'Failed to import YAML.'
+    console.error('Error importing title snapshot:', err)
+    notificationStore.handleApiError(err as Error)
+  } finally {
+    importing.value = false
+  }
+}
+
+const writeTextWithTextarea = (text: string): boolean => {
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.top = '-9999px'
+  document.body.appendChild(textarea)
+  textarea.focus()
+  textarea.select()
+
+  const copiedToClipboard = document.execCommand('copy')
+  document.body.removeChild(textarea)
+
+  return copiedToClipboard
+}
+
+const writeTextToClipboard = async (text: string): Promise<void> => {
+  if (writeTextWithTextarea(text)) return
+
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+
+  throw new Error('Unable to copy text.')
+}
+
+const copySnapshotYaml = async (): Promise<void> => {
+  if (!snapshotYaml.value) return
+
+  try {
+    await writeTextToClipboard(snapshotYaml.value)
+    snapshotCopied.value = true
+    setTimeout(() => {
+      snapshotCopied.value = false
+    }, 2000)
+  } catch (err) {
+    console.error('Failed to copy YAML:', err)
+    notificationStore.error('Failed to copy YAML.')
+  }
+}
+
+const resourceTypeLabel = (type: SnapshotResourceType): string => {
+  return type.replace('_', ' ')
+}
+
 onMounted(fetchConfig)
 
 watch(slug, () => {
+  closeExportModal()
+  closeImportModal()
   void fetchConfig()
 })
 </script>

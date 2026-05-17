@@ -1,10 +1,10 @@
 import yaml
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404
 from pydantic import ValidationError
-from rest_framework import status, viewsets
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -116,7 +116,10 @@ def create_card(request, title_slug):
     if not re.match(r"^[a-z0-9\-_]+$", slug):
         return Response(
             {
-                "error": "Slug can only contain lowercase letters, numbers, hyphens, and underscores"
+                "error": (
+                    "Slug can only contain lowercase letters, numbers, hyphens, "
+                    "and underscores"
+                )
             },
             status=status.HTTP_400_BAD_REQUEST,
         )
@@ -319,6 +322,8 @@ def card_template_to_schema(card: CardTemplate) -> Card:
         health=card.health or 0,
         traits=traits,
         faction=card.faction.slug if card.faction else None,
+        spec=card.spec or {},
+        tags=list(card.tags.values_list("slug", flat=True).order_by("slug")),
         art_url=card.art_url if hasattr(card, "art_url") and card.art_url else None,
         is_collectible=card.is_collectible,
         hero_slugs=list(card.allowed_heroes.values_list("slug", flat=True)),
@@ -338,6 +343,7 @@ def hero_template_to_schema(hero: HeroTemplate) -> Hero:
         health=hero.health,
         hero_power=hero.hero_power or {},
         faction=hero.faction.slug if hero.faction else None,
+        spec=hero.spec or {},
     )
 
 
@@ -526,13 +532,74 @@ def title_content_config(request, title_slug):
     )
 
 
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def title_snapshot(request, title_slug):
+    """
+    Export or import a full title snapshot manifest.
+
+    Snapshot YAML is intentionally slug-based so it can move between
+    environments where database IDs differ.
+    """
+    title = get_object_or_404(Title, slug=title_slug, is_latest=True)
+
+    if not title.can_be_edited_by(request.user):
+        return Response(
+            {"error": "You do not have permission to edit this title"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    service = TitleService(title)
+
+    if request.method == "GET":
+        return Response(
+            {
+                "yaml": service.export_snapshot_yaml(),
+                "title": {"slug": title.slug, "name": title.name},
+                "counts": service.export_snapshot_counts(),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    yaml_content = request.data.get("yaml_content")
+    if not yaml_content:
+        return Response(
+            {"error": "yaml_content is required"}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    replace_missing = bool(
+        request.data.get("replace_missing", request.data.get("replace", False))
+    )
+
+    try:
+        with transaction.atomic():
+            ingested_resources, removed_resources = service.import_snapshot_yaml(
+                yaml_content, replace_missing=replace_missing
+            )
+            results = [res.model_dump() for res in ingested_resources]
+
+            return Response(
+                {
+                    "success": True,
+                    "message": f"Successfully processed {len(results)} resource(s)",
+                    "resources": results,
+                    "removed": removed_resources,
+                    "replace_missing": replace_missing,
+                },
+                status=status.HTTP_200_OK,
+            )
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def title_config_yaml(request, title_slug):
     """
     Get a title's configuration YAML representation in the ingestion format.
 
-    Returns the title config as YAML that can be copied and used with the ingestion endpoint.
+    Returns the title config as YAML that can be copied and used with the ingestion
+    endpoint.
     """
     # Get the title (latest version) or return 404
     title = get_object_or_404(Title, slug=title_slug, is_latest=True)

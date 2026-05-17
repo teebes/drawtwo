@@ -23,6 +23,11 @@ urlpatterns = [
         views.title_config_yaml,
         name="title-config-yaml",
     ),
+    path(
+        "titles/<slug:title_slug>/snapshot/",
+        views.title_snapshot,
+        name="title-snapshot",
+    ),
     # Card endpoints
     path("titles/<slug:title_slug>/cards/", views.create_card, name="card-create"),
     path(
