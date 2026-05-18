@@ -176,9 +176,9 @@ def _card_play_allowed_target_types(card: CardInPlay) -> set[str]:
             continue
 
         if isinstance(action, DamageAction):
-            if action.target in ("creature", "enemy"):
+            if action.target in ("creature", "enemy", "friendly"):
                 allowed.add("creature")
-            if action.target in ("hero", "enemy"):
+            if action.target in ("hero", "enemy", "friendly"):
                 allowed.add("hero")
             continue
 
@@ -333,10 +333,13 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
         # This situation can occur for example in aoe damage situation
         # and we rather than return a Rejected we return a Success because
         # we don't want to the user to see an error message.
+        target_side = None
         if target_type == "creature":
-            if effect.target_id not in (
-                state.board[opposing_side] + state.board[effect.side]
-            ):
+            if effect.target_id in state.board[opposing_side]:
+                target_side = opposing_side
+            elif effect.target_id in state.board[effect.side]:
+                target_side = effect.side
+            else:
                 return Success(
                     new_state=state, events=events, child_effects=child_effects
                 )
@@ -358,13 +361,14 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
 
         # Creature death
         if target.health <= 0:
-            # Only remove from board if still present (may have been removed by a previous effect)
-            if effect.target_id in state.board[opposing_side]:
-                state.board[opposing_side].remove(effect.target_id)
+            # Only remove from board if still present. It may have been removed
+            # by a previous effect in the same chain.
+            if target_side:
+                state.board[target_side].remove(effect.target_id)
 
                 events.append(
                     CreatureDeathEvent(
-                        side=opposing_side,
+                        side=target_side,
                         source_type=effect.source_type,
                         source_id=effect.source_id,
                         creature=target,
@@ -397,7 +401,7 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
             if should_retaliate:
                 child_effects.append(
                     DamageEffect(
-                        side=opposing_side,
+                        side=target_side or opposing_side,
                         damage_type="physical",
                         source_type="creature",
                         source_id=effect.target_id,
@@ -639,6 +643,7 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
     # Determine if this hero power targets friendlies, enemies, or self
     targets_friendly = any(
         (isinstance(action, HealAction) and action.target == "friendly")
+        or (isinstance(action, DamageAction) and action.target == "friendly")
         or isinstance(action, BuffAction)
         for action in hero.hero_power.actions
     )

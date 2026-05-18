@@ -25,7 +25,7 @@ class DrawAction(ActionBase):
 class DamageAction(ActionBase):
     action: Literal["damage"] = "damage"
     amount: int
-    target: Literal["hero", "creature", "enemy", "self"] = "creature"
+    target: Literal["hero", "creature", "enemy", "self", "friendly"] = "creature"
     scope: Literal["single", "cleave", "all"] = "single"
     damage_type: Literal["physical", "spell"] = "spell"
 

@@ -118,6 +118,10 @@ def _targets_for_action(action: Action, state: GameState, side: str) -> list[Tar
             return _enemy_creature_targets(state, side) + _enemy_hero_target(
                 state, side
             )
+        if action.target == "friendly":
+            return _friendly_creature_targets(state, side) + _friendly_hero_target(
+                state, side
+            )
         if action.target == "creature":
             return _enemy_creature_targets(state, side)
 
@@ -255,6 +259,7 @@ def _hero_commands(state: GameState, side: str) -> list[Command]:
         uses_friendly_validation = any(
             isinstance(action, BuffAction)
             or (isinstance(action, DamageAction) and action.target == "self")
+            or (isinstance(action, DamageAction) and action.target == "friendly")
             or (isinstance(action, HealAction) and action.target == "friendly")
             for action in actions
         )

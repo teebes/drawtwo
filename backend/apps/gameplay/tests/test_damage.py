@@ -1,10 +1,11 @@
 """
 Tests for damage effects and combat mechanics.
 """
-from apps.builder.schemas import HeroPower, DamageAction
+
+from apps.builder.schemas import DamageAction, HeroPower
 from apps.gameplay.engine.dispatcher import resolve
-from apps.gameplay.schemas.engine import Success
 from apps.gameplay.schemas.effects import DamageEffect, UseHeroEffect
+from apps.gameplay.schemas.engine import Success
 from apps.gameplay.schemas.game import Creature
 from apps.gameplay.tests import GamePlayTestBase
 
@@ -27,7 +28,7 @@ class TestDamage(GamePlayTestBase):
 
     def test_creature_to_hero_damage(self):
         self.game_state.creatures["1"] = self.creature
-        self.game_state.board['side_a'] = ["1"]
+        self.game_state.board["side_a"] = ["1"]
         damage_effect = DamageEffect(
             side="side_a",
             damage_type="physical",
@@ -43,11 +44,11 @@ class TestDamage(GamePlayTestBase):
         new_state = result.new_state
 
         # The target hero's health went down
-        self.assertEqual(new_state.heroes['side_b'].health, 9)
+        self.assertEqual(new_state.heroes["side_b"].health, 9)
 
         # A DamageEvent is created for UI updates
         self.assertEqual(len(result.events), 1)
-        self.assertEqual(result.events[0].type, 'event_damage')
+        self.assertEqual(result.events[0].type, "event_damage")
 
     def test_creature_to_creature_damage(self):
         target_creature = Creature(
@@ -63,8 +64,8 @@ class TestDamage(GamePlayTestBase):
 
         self.game_state.creatures["1"] = self.creature
         self.game_state.creatures["2"] = target_creature
-        self.game_state.board['side_a'] = ["1"]
-        self.game_state.board['side_b'] = ["2"]
+        self.game_state.board["side_a"] = ["1"]
+        self.game_state.board["side_b"] = ["2"]
         damage_effect = DamageEffect(
             side="side_a",
             damage_type="physical",
@@ -102,6 +103,30 @@ class TestDamage(GamePlayTestBase):
         # Retaliation doesn't retaliate to avoid an infinite loop
         self.assertFalse(retaliation_effect.retaliate)
 
+    def test_damage_removes_dead_friendly_creature_from_own_board(self):
+        self.game_state.creatures["1"] = self.creature
+        self.game_state.board["side_a"] = ["1"]
+        damage_effect = DamageEffect(
+            side="side_a",
+            damage_type="spell",
+            source_type="hero",
+            source_id="1",
+            target_type="creature",
+            target_id="1",
+            damage=1,
+            retaliate=False,
+        )
+
+        result = resolve(damage_effect, self.game_state)
+
+        self.assertTrue(isinstance(result, Success))
+        self.assertNotIn("1", result.new_state.board["side_a"])
+        death_events = [
+            event for event in result.events if event.type == "event_creature_death"
+        ]
+        self.assertEqual(len(death_events), 1)
+        self.assertEqual(death_events[0].side, "side_a")
+
     def test_creature_to_creature_retaliation(self):
         """
         Make sure that a retaliation effect does not generate another
@@ -120,8 +145,8 @@ class TestDamage(GamePlayTestBase):
 
         self.game_state.creatures["1"] = self.creature
         self.game_state.creatures["2"] = target_creature
-        self.game_state.board['side_a'] = ["1"]
-        self.game_state.board['side_b'] = ["2"]
+        self.game_state.board["side_a"] = ["1"]
+        self.game_state.board["side_b"] = ["2"]
         damage_effect = DamageEffect(
             side="side_a",
             damage_type="physical",
@@ -143,7 +168,7 @@ class TestDamage(GamePlayTestBase):
     def test_hero_to_creature_damage(self):
         self.creature.health = 10
         self.game_state.creatures["1"] = self.creature
-        self.game_state.board['side_b'] = ["1"]
+        self.game_state.board["side_b"] = ["1"]
         damage_effect = DamageEffect(
             side="side_a",
             damage_type="physical",
@@ -177,8 +202,8 @@ class TestDamage(GamePlayTestBase):
         self.assertEqual(retaliation_effect.target_type, "hero")
 
     def test_hero_to_hero_damage(self):
-        self.game_state.heroes['side_a'].health = 10
-        self.game_state.heroes['side_b'].health = 10
+        self.game_state.heroes["side_a"].health = 10
+        self.game_state.heroes["side_b"].health = 10
         damage_effect = DamageEffect(
             side="side_a",
             damage_type="physical",
@@ -190,7 +215,7 @@ class TestDamage(GamePlayTestBase):
         )
         result = resolve(damage_effect, self.game_state)
         self.assertTrue(isinstance(result, Success))
-        self.assertEqual(result.new_state.heroes['side_b'].health, 9)
+        self.assertEqual(result.new_state.heroes["side_b"].health, 9)
 
     def test_hero_power_creature_physical_retaliation(self):
         """
@@ -198,7 +223,7 @@ class TestDamage(GamePlayTestBase):
         the creature retaliates against the hero.
         """
         # Set up hero with the specified power
-        self.game_state.heroes['side_a'].hero_power = HeroPower(
+        self.game_state.heroes["side_a"].hero_power = HeroPower(
             name="Small Damage",
             actions=[
                 DamageAction(
@@ -211,7 +236,7 @@ class TestDamage(GamePlayTestBase):
             ],
             description="Deal 2 damage to an enemy.",
         )
-        self.game_state.heroes['side_a'].exhausted = False
+        self.game_state.heroes["side_a"].exhausted = False
 
         # Create a creature with 5 health on opponent's side
         target_creature = Creature(
@@ -225,10 +250,10 @@ class TestDamage(GamePlayTestBase):
             exhausted=False,
         )
         self.game_state.creatures["enemy_creature"] = target_creature
-        self.game_state.board['side_b'] = ["enemy_creature"]
+        self.game_state.board["side_b"] = ["enemy_creature"]
 
         # Use hero power to damage the creature
-        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
         use_hero_effect = UseHeroEffect(
             side="side_a",
             source_id=hero_a_id,
@@ -266,7 +291,7 @@ class TestDamage(GamePlayTestBase):
         self.assertGreater(
             len(damage_result.child_effects),
             0,
-            "Creature should retaliate against hero when damaged by hero power"
+            "Creature should retaliate against hero when damaged by hero power",
         )
 
         retaliation_effect = damage_result.child_effects[0]
@@ -279,7 +304,7 @@ class TestDamage(GamePlayTestBase):
         self.assertFalse(retaliation_effect.retaliate)  # Retaliation doesn't retaliate
 
     def test_hero_power_enemy_hero_damage_targets_opponent(self):
-        self.game_state.heroes['side_a'].hero_power = HeroPower(
+        self.game_state.heroes["side_a"].hero_power = HeroPower(
             name="Small Damage",
             actions=[
                 DamageAction(
@@ -291,12 +316,12 @@ class TestDamage(GamePlayTestBase):
             ],
             description="Deal 2 damage to an enemy.",
         )
-        self.game_state.heroes['side_a'].exhausted = False
-        self.game_state.heroes['side_a'].health = 10
-        self.game_state.heroes['side_b'].health = 10
+        self.game_state.heroes["side_a"].exhausted = False
+        self.game_state.heroes["side_a"].health = 10
+        self.game_state.heroes["side_b"].health = 10
 
-        hero_a_id = self.game_state.heroes['side_a'].hero_id
-        hero_b_id = self.game_state.heroes['side_b'].hero_id
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
+        hero_b_id = self.game_state.heroes["side_b"].hero_id
         use_hero_effect = UseHeroEffect(
             side="side_a",
             source_id=hero_a_id,
@@ -308,8 +333,7 @@ class TestDamage(GamePlayTestBase):
         self.assertTrue(isinstance(result, Success))
 
         damage_effects = [
-            effect for effect in result.child_effects
-            if effect.type == "effect_damage"
+            effect for effect in result.child_effects if effect.type == "effect_damage"
         ]
         self.assertTrue(damage_effects, "Hero power should create a damage effect")
 
@@ -320,5 +344,5 @@ class TestDamage(GamePlayTestBase):
 
         damage_result = resolve(damage_effect, result.new_state)
         self.assertTrue(isinstance(damage_result, Success))
-        self.assertEqual(damage_result.new_state.heroes['side_b'].health, 8)
-        self.assertEqual(damage_result.new_state.heroes['side_a'].health, 10)
+        self.assertEqual(damage_result.new_state.heroes["side_b"].health, 8)
+        self.assertEqual(damage_result.new_state.heroes["side_a"].health, 10)

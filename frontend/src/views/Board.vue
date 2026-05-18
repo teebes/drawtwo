@@ -1568,10 +1568,10 @@ function getBattlecryAllowedTargets(card: CardInPlay): Array<'card' | 'hero' | '
 
     for (const action of battlecry.actions || []) {
         if (action.action === 'damage') {
-            if (action.target === 'creature' || action.target === 'enemy') {
+            if (action.target === 'creature' || action.target === 'enemy' || action.target === 'friendly') {
                 allowed.add('card')
             }
-            if (action.target === 'hero' || action.target === 'enemy') {
+            if (action.target === 'hero' || action.target === 'enemy' || action.target === 'friendly') {
                 allowed.add('hero')
             }
         }
@@ -1616,8 +1616,10 @@ function getBattlecryTargetScope(card: CardInPlay): 'enemy' | 'friendly' {
         if (action.action === 'buff') {
             return 'friendly'
         }
-        // Damage actions target enemies
         if (action.action === 'damage') {
+            if (action.target === 'friendly' || action.target === 'self') {
+                return 'friendly'
+            }
             return 'enemy'
         }
         // Remove actions target enemies
@@ -1686,10 +1688,10 @@ function getAllowedTargets(card: CardInPlay): Array<'card' | 'hero' | 'any'> {
         const actions = trait.actions || []
         for (const action of actions) {
             if (action.action === 'damage') {
-                if (action.target === 'creature' || action.target === 'enemy') {
+                if (action.target === 'creature' || action.target === 'enemy' || action.target === 'friendly') {
                     allowed.add('card')
                 }
-                if (action.target === 'hero' || action.target === 'enemy') {
+                if (action.target === 'hero' || action.target === 'enemy' || action.target === 'friendly') {
                     allowed.add('hero')
                 }
             }
@@ -1736,8 +1738,10 @@ function getSpellTargetScope(card: CardInPlay): 'enemy' | 'friendly' {
             if (action.action === 'buff') {
                 return 'friendly'
             }
-            // Damage actions target enemies
             if (action.action === 'damage') {
+                if (action.target === 'friendly' || action.target === 'self') {
+                    return 'friendly'
+                }
                 return 'enemy'
             }
             // Remove actions target enemies
@@ -1765,8 +1769,10 @@ function getHeroPowerTargetScope(hero: any): 'enemy' | 'friendly' {
         if (action.action === 'buff') {
             return 'friendly'
         }
-        // Damage actions target enemies
         if (action.action === 'damage') {
+            if (action.target === 'friendly' || action.target === 'self') {
+                return 'friendly'
+            }
             return 'enemy'
         }
     }

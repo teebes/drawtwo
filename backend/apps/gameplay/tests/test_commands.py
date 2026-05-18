@@ -1,6 +1,7 @@
 """
 Tests for command processing - including attack validation and game flow commands.
 """
+
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -8,14 +9,19 @@ from django.test import TestCase
 from django.utils import timezone
 
 from apps.builder.models import AIPlayer, CardTemplate, HeroTemplate, Title
-from apps.builder.schemas import HeroPower, DamageAction, Taunt, Stealth
+from apps.builder.schemas import DamageAction, DrawAction, HeroPower, Stealth, Taunt
 from apps.collection.models import Deck, DeckCard
-from apps.gameplay.models import Game
-from apps.gameplay.engine.dispatcher import resolve
-from apps.gameplay.schemas.effects import AttackEffect, DamageEffect, UseHeroEffect
-from apps.gameplay.schemas.game import GameState, Creature, HeroInPlay
-from apps.gameplay.services import GameService
 from apps.gameplay.ai import AIMoveChooser
+from apps.gameplay.engine.dispatcher import resolve
+from apps.gameplay.models import Game
+from apps.gameplay.schemas.effects import (
+    AttackEffect,
+    DamageEffect,
+    DrawEffect,
+    UseHeroEffect,
+)
+from apps.gameplay.schemas.game import Creature, GameState, HeroInPlay
+from apps.gameplay.services import GameService
 from apps.gameplay.tests import ServiceTestsBase
 
 User = get_user_model()
@@ -26,71 +32,71 @@ class ProcessCommandTests(ServiceTestsBase):
 
     def test_attack_with_retaliation(self):
         # Create creatures on the board (not cards)
-        self.game.state['creatures'] = {
-            '1': {
-                'creature_id': '1',
-                'card_id': 'card_1',
-                'name': 'Test Creature 1',
-                'attack': 1,
-                'health': 10,
-                'exhausted': False,
-                'traits': []
+        self.game.state["creatures"] = {
+            "1": {
+                "creature_id": "1",
+                "card_id": "card_1",
+                "name": "Test Creature 1",
+                "attack": 1,
+                "health": 10,
+                "exhausted": False,
+                "traits": [],
             },
-            '5': {
-                'creature_id': '5',
-                'card_id': 'card_5',
-                'name': 'Test Creature 5',
-                'attack': 1,
-                'health': 10,
-                'exhausted': False,
-                'traits': []
-            }
+            "5": {
+                "creature_id": "5",
+                "card_id": "card_5",
+                "name": "Test Creature 5",
+                "attack": 1,
+                "health": 10,
+                "exhausted": False,
+                "traits": [],
+            },
         }
-        self.game.state['board']['side_a'].append('1')
-        self.game.state['board']['side_b'].append('5')
+        self.game.state["board"]["side_a"].append("1")
+        self.game.state["board"]["side_b"].append("5")
         self.game.save()
 
         command = {
-            'type': 'cmd_attack',
-            'card_id': '1',
-            'target_id': '5',
-            'target_type': 'creature'
+            "type": "cmd_attack",
+            "card_id": "1",
+            "target_id": "5",
+            "target_type": "creature",
         }
-        GameService.process_command(self.game.id, command, 'side_a')
+        GameService.process_command(self.game.id, command, "side_a")
         self.game.refresh_from_db()
         self.assertEqual(len(self.game.queue), 2)
-        self.assertEqual(self.game.queue[0]['type'], 'effect_start_game')
-        self.assertEqual(self.game.queue[1]['type'], 'effect_attack')
+        self.assertEqual(self.game.queue[0]["type"], "effect_start_game")
+        self.assertEqual(self.game.queue[1]["type"], "effect_attack")
 
         GameService.step(self.game.id)
         self.game.refresh_from_db()
         self.assertEqual(len(self.game.queue), 0)
-        self.assertEqual(self.game.state['creatures']['5']['health'], 9)
-        self.assertEqual(self.game.state['creatures']['1']['health'], 9)
+        self.assertEqual(self.game.state["creatures"]["5"]["health"], 9)
+        self.assertEqual(self.game.state["creatures"]["1"]["health"], 9)
 
     def test_end_turn(self):
-        self.assertEqual(self.game.status, 'init')
+        self.assertEqual(self.game.status, "init")
         GameService.step(self.game.id)
         self.game.refresh_from_db()
-        self.assertEqual(self.game.status, 'in_progress')
+        self.assertEqual(self.game.status, "in_progress")
 
-        self.assertEqual(self.game.state['turn'], 0)
-        self.assertEqual(self.game.state['active'], 'side_a')
-        self.assertEqual(self.game.state['phase'], 'mulligan')
+        self.assertEqual(self.game.state["turn"], 0)
+        self.assertEqual(self.game.state["active"], "side_a")
+        self.assertEqual(self.game.state["phase"], "mulligan")
 
-        command = {'type': 'cmd_mulligan', 'card_ids': []}
-        GameService.process_command(self.game.id, command, 'side_a')
+        command = {"type": "cmd_mulligan", "card_ids": []}
+        GameService.process_command(self.game.id, command, "side_a")
         GameService.step(self.game.id)
         self.game.refresh_from_db()
 
-        self.assertEqual(self.game.state['turn'], 1)
-        self.assertEqual(self.game.state['phase'], 'main')
+        self.assertEqual(self.game.state["turn"], 1)
+        self.assertEqual(self.game.state["phase"], "main")
 
-        command = {'type': 'cmd_end_turn'}
-        GameService.process_command(self.game.id, command, 'side_a')
+        command = {"type": "cmd_end_turn"}
+        GameService.process_command(self.game.id, command, "side_a")
         self.game.refresh_from_db()
         self.assertEqual(len(self.game.queue), 1)
-        self.assertEqual(self.game.queue[0]['type'], 'effect_end_turn')
+        self.assertEqual(self.game.queue[0]["type"], "effect_end_turn")
 
 
 class ExtendTimeCommandTests(TestCase):
@@ -98,56 +104,44 @@ class ExtendTimeCommandTests(TestCase):
 
     def setUp(self):
         self.user_a = User.objects.create_user(
-            email="extend_a@example.com",
-            username="extend_a"
+            email="extend_a@example.com", username="extend_a"
         )
         self.user_b = User.objects.create_user(
-            email="extend_b@example.com",
-            username="extend_b"
+            email="extend_b@example.com", username="extend_b"
         )
 
         self.title = Title.objects.create(
-            slug='extend-time-title',
+            slug="extend-time-title",
             author=self.user_a,
             config={"min_cards_in_deck": 4},
         )
         self.hero_a = HeroTemplate.objects.create(
-            title=self.title,
-            slug='extend-hero-a',
-            name="Extend Hero A",
-            health=30
+            title=self.title, slug="extend-hero-a", name="Extend Hero A", health=30
         )
         self.hero_b = HeroTemplate.objects.create(
-            title=self.title,
-            slug='extend-hero-b',
-            name="Extend Hero B",
-            health=30
+            title=self.title, slug="extend-hero-b", name="Extend Hero B", health=30
         )
 
         self.deck_a = Deck.objects.create(
-            title=self.title,
-            user=self.user_a,
-            name="Extend Deck A",
-            hero=self.hero_a
+            title=self.title, user=self.user_a, name="Extend Deck A", hero=self.hero_a
         )
         self.deck_b = Deck.objects.create(
-            title=self.title,
-            user=self.user_b,
-            name="Extend Deck B",
-            hero=self.hero_b
+            title=self.title, user=self.user_b, name="Extend Deck B", hero=self.hero_b
         )
 
         for i in range(4):
             card = CardTemplate.objects.create(
                 title=self.title,
-                slug=f'extend-card-{i}',
-                name=f'Extend Card {i}',
+                slug=f"extend-card-{i}",
+                name=f"Extend Card {i}",
                 cost=1,
             )
             DeckCard.objects.create(deck=self.deck_a, card=card)
             DeckCard.objects.create(deck=self.deck_b, card=card)
 
-    def _create_ranked_game_with_timer(self, ladder_type: str, active_side: str = 'side_b'):
+    def _create_ranked_game_with_timer(
+        self, ladder_type: str, active_side: str = "side_b"
+    ):
         game = GameService.create_game(
             self.deck_a,
             self.deck_b,
@@ -157,9 +151,11 @@ class ExtendTimeCommandTests(TestCase):
         start_expires = timezone.now() + timedelta(minutes=5)
         game_state = game.game_state
         game_state.turn = 2
-        game_state.phase = 'main'
+        game_state.phase = "main"
         game_state.active = active_side
-        game_state.time_per_turn = 60 * 60 * 24 if ladder_type == Game.LADDER_TYPE_DAILY else 60
+        game_state.time_per_turn = (
+            60 * 60 * 24 if ladder_type == Game.LADDER_TYPE_DAILY else 60
+        )
         game_state.turn_expires = start_expires.isoformat()
 
         game.type = Game.GAME_TYPE_RANKED
@@ -172,18 +168,22 @@ class ExtendTimeCommandTests(TestCase):
         return game, start_expires
 
     def test_daily_extension_adds_six_hours(self):
-        game, start_expires = self._create_ranked_game_with_timer(Game.LADDER_TYPE_DAILY)
+        game, start_expires = self._create_ranked_game_with_timer(
+            Game.LADDER_TYPE_DAILY
+        )
 
-        GameService.process_command(game.id, {'type': 'cmd_extend_time'}, 'side_a')
+        GameService.process_command(game.id, {"type": "cmd_extend_time"}, "side_a")
 
         game.refresh_from_db()
         self.assertEqual(game.turn_expires, start_expires + timedelta(hours=6))
         self.assertEqual(game.game_state.turn_expires, game.turn_expires.isoformat())
 
     def test_rapid_extension_adds_thirty_seconds(self):
-        game, start_expires = self._create_ranked_game_with_timer(Game.LADDER_TYPE_RAPID)
+        game, start_expires = self._create_ranked_game_with_timer(
+            Game.LADDER_TYPE_RAPID
+        )
 
-        GameService.process_command(game.id, {'type': 'cmd_extend_time'}, 'side_a')
+        GameService.process_command(game.id, {"type": "cmd_extend_time"}, "side_a")
 
         game.refresh_from_db()
         self.assertEqual(game.turn_expires, start_expires + timedelta(seconds=30))
@@ -193,36 +193,36 @@ class ExtendTimeCommandTests(TestCase):
         game, _ = self._create_ranked_game_with_timer(Game.LADDER_TYPE_RAPID)
         game.type = Game.GAME_TYPE_FRIENDLY
         game.ladder_type = None
-        game.save(update_fields=['type', 'ladder_type'])
+        game.save(update_fields=["type", "ladder_type"])
 
         with self.assertRaises(ValueError) as context:
-            GameService.process_command(game.id, {'type': 'cmd_extend_time'}, 'side_a')
+            GameService.process_command(game.id, {"type": "cmd_extend_time"}, "side_a")
 
         self.assertIn("ranked matches", str(context.exception).lower())
 
     def test_extension_rejected_when_not_opponent_turn(self):
         game, _ = self._create_ranked_game_with_timer(
             Game.LADDER_TYPE_DAILY,
-            active_side='side_a',
+            active_side="side_a",
         )
 
         with self.assertRaises(ValueError) as context:
-            GameService.process_command(game.id, {'type': 'cmd_extend_time'}, 'side_a')
+            GameService.process_command(game.id, {"type": "cmd_extend_time"}, "side_a")
 
         self.assertIn("opponent's turn", str(context.exception).lower())
+
 
 class AttackValidationTestBase(TestCase):
     """Base test class that sets up a game with creatures on both sides."""
 
     def setUp(self):
         self.user = User.objects.create_user(
-            email="testuser@example.com",
-            username="testuser"
+            email="testuser@example.com", username="testuser"
         )
-        self.ai_player = AIPlayer.objects.create(name='AI')
+        self.ai_player = AIPlayer.objects.create(name="AI")
 
         self.title = Title.objects.create(
-            slug='title',
+            slug="title",
             author=self.user,
             config={"min_cards_in_deck": 4},
         )
@@ -230,36 +230,38 @@ class AttackValidationTestBase(TestCase):
         # Create heroes with simple hero powers
         self.hero_a = HeroTemplate.objects.create(
             title=self.title,
-            slug='hero-a',
+            slug="hero-a",
             name="Hero A",
             health=30,
             hero_power={
-                'cost': 2,
-                'actions': [{'action': 'damage', 'amount': 1, 'target': 'enemy'}]
-            }
+                "cost": 2,
+                "actions": [{"action": "damage", "amount": 1, "target": "enemy"}],
+            },
         )
         self.hero_b = HeroTemplate.objects.create(
             title=self.title,
-            slug='hero-b',
+            slug="hero-b",
             name="Hero B",
             health=30,
             hero_power={
-                'cost': 2,
-                'actions': [{'action': 'damage', 'amount': 1, 'target': 'enemy'}]
-            }
+                "cost": 2,
+                "actions": [{"action": "damage", "amount": 1, "target": "enemy"}],
+            },
         )
 
         self.deck_a = Deck.objects.create(
-            title=self.title, user=self.user, name="Deck A", hero=self.hero_a)
+            title=self.title, user=self.user, name="Deck A", hero=self.hero_a
+        )
         self.deck_b = Deck.objects.create(
-            title=self.title, ai_player=self.ai_player, name="Deck B", hero=self.hero_b)
+            title=self.title, ai_player=self.ai_player, name="Deck B", hero=self.hero_b
+        )
 
         # Add some cards to the decks
         for i in range(4):
             card = CardTemplate.objects.create(
                 title=self.title,
-                slug=f'card-{i}',
-                name=f'Card {i}',
+                slug=f"card-{i}",
+                name=f"Card {i}",
                 cost=1,
                 attack=2,
                 health=3,
@@ -274,74 +276,74 @@ class AttackValidationTestBase(TestCase):
         self.game_state = GameState.model_validate(self.game.state)
 
         # Clear boards
-        self.game_state.board['side_a'] = []
-        self.game_state.board['side_b'] = []
+        self.game_state.board["side_a"] = []
+        self.game_state.board["side_b"] = []
 
         # Create creatures for side_a
         self.side_a_creature_1 = Creature(
-            creature_id='creature_a_1',
-            card_id='card_a_1',
-            name='Side A Creature 1',
-            description='',
+            creature_id="creature_a_1",
+            card_id="card_a_1",
+            name="Side A Creature 1",
+            description="",
             attack=3,
             attack_max=3,
             health=5,
             health_max=5,
             traits=[],
-            exhausted=False
+            exhausted=False,
         )
         self.side_a_creature_2 = Creature(
-            creature_id='creature_a_2',
-            card_id='card_a_2',
-            name='Side A Creature 2',
-            description='',
+            creature_id="creature_a_2",
+            card_id="card_a_2",
+            name="Side A Creature 2",
+            description="",
             attack=2,
             attack_max=2,
             health=4,
             health_max=4,
             traits=[],
-            exhausted=False
+            exhausted=False,
         )
 
         # Create creatures for side_b
         self.side_b_creature_1 = Creature(
-            creature_id='creature_b_1',
-            card_id='card_b_1',
-            name='Side B Creature 1',
-            description='',
+            creature_id="creature_b_1",
+            card_id="card_b_1",
+            name="Side B Creature 1",
+            description="",
             attack=3,
             attack_max=3,
             health=5,
             health_max=5,
             traits=[],
-            exhausted=False
+            exhausted=False,
         )
         self.side_b_creature_2 = Creature(
-            creature_id='creature_b_2',
-            card_id='card_b_2',
-            name='Side B Creature 2',
-            description='',
+            creature_id="creature_b_2",
+            card_id="card_b_2",
+            name="Side B Creature 2",
+            description="",
             attack=2,
             attack_max=2,
             health=4,
             health_max=4,
             traits=[],
-            exhausted=False
+            exhausted=False,
         )
 
         # Add creatures to the state
-        self.game_state.creatures['creature_a_1'] = self.side_a_creature_1
-        self.game_state.creatures['creature_a_2'] = self.side_a_creature_2
-        self.game_state.creatures['creature_b_1'] = self.side_b_creature_1
-        self.game_state.creatures['creature_b_2'] = self.side_b_creature_2
+        self.game_state.creatures["creature_a_1"] = self.side_a_creature_1
+        self.game_state.creatures["creature_a_2"] = self.side_a_creature_2
+        self.game_state.creatures["creature_b_1"] = self.side_b_creature_1
+        self.game_state.creatures["creature_b_2"] = self.side_b_creature_2
 
         # Add creatures to boards
-        self.game_state.board['side_a'] = ['creature_a_1', 'creature_a_2']
-        self.game_state.board['side_b'] = ['creature_b_1', 'creature_b_2']
+        self.game_state.board["side_a"] = ["creature_a_1", "creature_a_2"]
+        self.game_state.board["side_b"] = ["creature_b_1", "creature_b_2"]
 
         # Set active player to side_a
-        self.game_state.active = 'side_a'
-        self.game_state.phase = 'main'
+        self.game_state.active = "side_a"
+        self.game_state.phase = "main"
 
 
 class AttackCommandValidationTests(AttackValidationTestBase):
@@ -350,86 +352,86 @@ class AttackCommandValidationTests(AttackValidationTestBase):
     def test_valid_attack_on_enemy_creature(self):
         """Test that a valid attack on enemy creature succeeds."""
         command = {
-            'type': 'cmd_attack',
-            'card_id': 'creature_a_1',  # Side A creature
-            'target_type': 'creature',
-            'target_id': 'creature_b_1',  # Side B creature
+            "type": "cmd_attack",
+            "card_id": "creature_a_1",  # Side A creature
+            "target_type": "creature",
+            "target_id": "creature_b_1",  # Side B creature
         }
 
         # Should not raise an exception
-        effects = GameService.compile_cmd(self.game_state, command, 'side_a')
+        effects = GameService.compile_cmd(self.game_state, command, "side_a")
         self.assertEqual(len(effects), 1)
         self.assertIsInstance(effects[0], AttackEffect)
 
     def test_valid_attack_on_enemy_hero(self):
         """Test that a valid attack on enemy hero succeeds."""
-        hero_b_id = self.game_state.heroes['side_b'].hero_id
+        hero_b_id = self.game_state.heroes["side_b"].hero_id
         command = {
-            'type': 'cmd_attack',
-            'card_id': 'creature_a_1',  # Side A creature
-            'target_type': 'hero',
-            'target_id': hero_b_id,  # Side B hero
+            "type": "cmd_attack",
+            "card_id": "creature_a_1",  # Side A creature
+            "target_type": "hero",
+            "target_id": hero_b_id,  # Side B hero
         }
 
         # Should not raise an exception
-        effects = GameService.compile_cmd(self.game_state, command, 'side_a')
+        effects = GameService.compile_cmd(self.game_state, command, "side_a")
         self.assertEqual(len(effects), 1)
         self.assertIsInstance(effects[0], AttackEffect)
 
     def test_cannot_attack_with_opponent_creature(self):
         """Test that you cannot attack with opponent's creature."""
         command = {
-            'type': 'cmd_attack',
-            'card_id': 'creature_b_1',  # Side B creature (opponent's)
-            'target_type': 'creature',
-            'target_id': 'creature_a_1',  # Side A creature (your own)
+            "type": "cmd_attack",
+            "card_id": "creature_b_1",  # Side B creature (opponent's)
+            "target_type": "creature",
+            "target_id": "creature_a_1",  # Side A creature (your own)
         }
 
         with self.assertRaises(ValueError) as context:
-            GameService.compile_cmd(self.game_state, command, 'side_a')
+            GameService.compile_cmd(self.game_state, command, "side_a")
 
         self.assertIn("do not control", str(context.exception).lower())
 
     def test_cannot_attack_own_creature(self):
         """Test that you cannot attack your own creature."""
         command = {
-            'type': 'cmd_attack',
-            'card_id': 'creature_a_1',  # Side A creature
-            'target_type': 'creature',
-            'target_id': 'creature_a_2',  # Another Side A creature (friendly fire)
+            "type": "cmd_attack",
+            "card_id": "creature_a_1",  # Side A creature
+            "target_type": "creature",
+            "target_id": "creature_a_2",  # Another Side A creature (friendly fire)
         }
 
         with self.assertRaises(ValueError) as context:
-            GameService.compile_cmd(self.game_state, command, 'side_a')
+            GameService.compile_cmd(self.game_state, command, "side_a")
 
         self.assertIn("not on opponent's board", str(context.exception).lower())
 
     def test_cannot_attack_own_hero(self):
         """Test that you cannot attack your own hero."""
-        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
         command = {
-            'type': 'cmd_attack',
-            'card_id': 'creature_a_1',  # Side A creature
-            'target_type': 'hero',
-            'target_id': hero_a_id,  # Side A hero (your own)
+            "type": "cmd_attack",
+            "card_id": "creature_a_1",  # Side A creature
+            "target_type": "hero",
+            "target_id": hero_a_id,  # Side A hero (your own)
         }
 
         with self.assertRaises(ValueError) as context:
-            GameService.compile_cmd(self.game_state, command, 'side_a')
+            GameService.compile_cmd(self.game_state, command, "side_a")
 
         self.assertIn("not the opponent's hero", str(context.exception).lower())
 
     def test_cannot_attack_with_nonexistent_creature(self):
         """Test that you cannot attack with a creature that doesn't exist."""
         command = {
-            'type': 'cmd_attack',
-            'card_id': 'nonexistent_creature',
-            'target_type': 'creature',
-            'target_id': 'creature_b_1',
+            "type": "cmd_attack",
+            "card_id": "nonexistent_creature",
+            "target_type": "creature",
+            "target_id": "creature_b_1",
         }
 
         with self.assertRaises(ValueError) as context:
-            GameService.compile_cmd(self.game_state, command, 'side_a')
+            GameService.compile_cmd(self.game_state, command, "side_a")
 
         self.assertIn("does not exist", str(context.exception).lower())
 
@@ -437,60 +439,60 @@ class AttackCommandValidationTests(AttackValidationTestBase):
         """Test that you cannot attack with a creature that exists but is not on board."""
         # Create a creature that's in the creatures dict but not on any board
         orphan_creature = Creature(
-            creature_id='orphan',
-            card_id='card_orphan',
-            name='Orphan Creature',
-            description='',
+            creature_id="orphan",
+            card_id="card_orphan",
+            name="Orphan Creature",
+            description="",
             attack=5,
             attack_max=5,
             health=5,
             health_max=5,
             traits=[],
-            exhausted=False
+            exhausted=False,
         )
-        self.game_state.creatures['orphan'] = orphan_creature
+        self.game_state.creatures["orphan"] = orphan_creature
 
         command = {
-            'type': 'cmd_attack',
-            'card_id': 'orphan',
-            'target_type': 'creature',
-            'target_id': 'creature_b_1',
+            "type": "cmd_attack",
+            "card_id": "orphan",
+            "target_type": "creature",
+            "target_id": "creature_b_1",
         }
 
         with self.assertRaises(ValueError) as context:
-            GameService.compile_cmd(self.game_state, command, 'side_a')
+            GameService.compile_cmd(self.game_state, command, "side_a")
 
         self.assertIn("do not control", str(context.exception).lower())
 
     def test_cannot_attack_with_zero_attack_creature(self):
         """Test that creatures with 0 attack cannot declare an attack."""
-        self.game_state.creatures['creature_a_1'].attack = 0
+        self.game_state.creatures["creature_a_1"].attack = 0
 
         command = {
-            'type': 'cmd_attack',
-            'card_id': 'creature_a_1',
-            'target_type': 'creature',
-            'target_id': 'creature_b_1',
+            "type": "cmd_attack",
+            "card_id": "creature_a_1",
+            "target_type": "creature",
+            "target_id": "creature_b_1",
         }
 
         with self.assertRaises(ValueError) as context:
-            GameService.compile_cmd(self.game_state, command, 'side_a')
+            GameService.compile_cmd(self.game_state, command, "side_a")
 
         self.assertIn("no attack", str(context.exception).lower())
 
     def test_zero_attack_creature_can_attack_after_attack_increase(self):
         """Test that an attack increase lets a formerly 0-attack creature attack."""
-        self.game_state.creatures['creature_a_1'].attack = 0
-        self.game_state.creatures['creature_a_1'].attack = 3
+        self.game_state.creatures["creature_a_1"].attack = 0
+        self.game_state.creatures["creature_a_1"].attack = 3
 
         command = {
-            'type': 'cmd_attack',
-            'card_id': 'creature_a_1',
-            'target_type': 'creature',
-            'target_id': 'creature_b_1',
+            "type": "cmd_attack",
+            "card_id": "creature_a_1",
+            "target_type": "creature",
+            "target_id": "creature_b_1",
         }
 
-        effects = GameService.compile_cmd(self.game_state, command, 'side_a')
+        effects = GameService.compile_cmd(self.game_state, command, "side_a")
         self.assertEqual(len(effects), 1)
         self.assertIsInstance(effects[0], AttackEffect)
 
@@ -502,72 +504,72 @@ class AttackEffectValidationTests(AttackValidationTestBase):
         """Test that the effect handler also validates creature ownership."""
         # Try to create an effect that attacks with opponent's creature
         effect = AttackEffect(
-            side='side_a',  # Claiming to be side_a
-            card_id='creature_b_1',  # But using side_b's creature
-            target_type='creature',
-            target_id='creature_a_1',
+            side="side_a",  # Claiming to be side_a
+            card_id="creature_b_1",  # But using side_b's creature
+            target_type="creature",
+            target_id="creature_a_1",
         )
 
         result = resolve(effect, self.game_state)
-        self.assertEqual(result.type, 'outcome_rejected')
+        self.assertEqual(result.type, "outcome_rejected")
         self.assertIn("do not control", result.reason.lower())
 
     def test_effect_handler_validates_target_is_enemy(self):
         """Test that the effect handler validates target is an enemy."""
         # Try to create an effect that targets own creature
         effect = AttackEffect(
-            side='side_a',
-            card_id='creature_a_1',
-            target_type='creature',
-            target_id='creature_a_2',  # Own creature
+            side="side_a",
+            card_id="creature_a_1",
+            target_type="creature",
+            target_id="creature_a_2",  # Own creature
         )
 
         result = resolve(effect, self.game_state)
-        self.assertEqual(result.type, 'outcome_rejected')
+        self.assertEqual(result.type, "outcome_rejected")
         self.assertIn("opponent", result.reason.lower())
 
     def test_effect_handler_rejects_exhausted_creature(self):
         """Test that the effect handler rejects attacks from exhausted creatures."""
         # Exhaust the creature
-        self.game_state.creatures['creature_a_1'].exhausted = True
+        self.game_state.creatures["creature_a_1"].exhausted = True
 
         effect = AttackEffect(
-            side='side_a',
-            card_id='creature_a_1',
-            target_type='creature',
-            target_id='creature_b_1',
+            side="side_a",
+            card_id="creature_a_1",
+            target_type="creature",
+            target_id="creature_b_1",
         )
 
         result = resolve(effect, self.game_state)
-        self.assertEqual(result.type, 'outcome_rejected')
+        self.assertEqual(result.type, "outcome_rejected")
         self.assertIn("exhausted", result.reason.lower())
 
     def test_effect_handler_rejects_zero_attack_creature(self):
         """Test that the effect handler rejects attacks from 0-attack creatures."""
-        self.game_state.creatures['creature_a_1'].attack = 0
+        self.game_state.creatures["creature_a_1"].attack = 0
 
         effect = AttackEffect(
-            side='side_a',
-            card_id='creature_a_1',
-            target_type='creature',
-            target_id='creature_b_1',
+            side="side_a",
+            card_id="creature_a_1",
+            target_type="creature",
+            target_id="creature_b_1",
         )
 
         result = resolve(effect, self.game_state)
-        self.assertEqual(result.type, 'outcome_rejected')
+        self.assertEqual(result.type, "outcome_rejected")
         self.assertIn("no attack", result.reason.lower())
 
     def test_valid_attack_succeeds_in_handler(self):
         """Test that a valid attack succeeds in the effect handler."""
         effect = AttackEffect(
-            side='side_a',
-            card_id='creature_a_1',
-            target_type='creature',
-            target_id='creature_b_1',
+            side="side_a",
+            card_id="creature_a_1",
+            target_type="creature",
+            target_id="creature_b_1",
         )
 
         result = resolve(effect, self.game_state)
-        self.assertEqual(result.type, 'outcome_success')
+        self.assertEqual(result.type, "outcome_success")
         # Should have child effects (mark exhausted and damage)
         self.assertGreater(len(result.child_effects), 0)
 
@@ -577,32 +579,32 @@ class AttackValidationEdgeCasesTests(AttackValidationTestBase):
 
     def test_side_b_attacking_side_a(self):
         """Test that validation works correctly when side_b is active."""
-        self.game_state.active = 'side_b'
+        self.game_state.active = "side_b"
 
         command = {
-            'type': 'cmd_attack',
-            'card_id': 'creature_b_1',  # Side B creature (now active player)
-            'target_type': 'creature',
-            'target_id': 'creature_a_1',  # Side A creature (opponent)
+            "type": "cmd_attack",
+            "card_id": "creature_b_1",  # Side B creature (now active player)
+            "target_type": "creature",
+            "target_id": "creature_a_1",  # Side A creature (opponent)
         }
 
         # Should succeed
-        effects = GameService.compile_cmd(self.game_state, command, 'side_b')
+        effects = GameService.compile_cmd(self.game_state, command, "side_b")
         self.assertEqual(len(effects), 1)
 
     def test_side_b_cannot_attack_own_creatures(self):
         """Test that side_b also cannot attack own creatures."""
-        self.game_state.active = 'side_b'
+        self.game_state.active = "side_b"
 
         command = {
-            'type': 'cmd_attack',
-            'card_id': 'creature_b_1',  # Side B creature
-            'target_type': 'creature',
-            'target_id': 'creature_b_2',  # Another Side B creature (friendly fire)
+            "type": "cmd_attack",
+            "card_id": "creature_b_1",  # Side B creature
+            "target_type": "creature",
+            "target_id": "creature_b_2",  # Another Side B creature (friendly fire)
         }
 
         with self.assertRaises(ValueError) as context:
-            GameService.compile_cmd(self.game_state, command, 'side_b')
+            GameService.compile_cmd(self.game_state, command, "side_b")
 
         self.assertIn("not on opponent's board", str(context.exception).lower())
 
@@ -610,14 +612,14 @@ class AttackValidationEdgeCasesTests(AttackValidationTestBase):
         """Test that you cannot attack when it's not your turn."""
         # Side A is active, but try to compile command as side B
         command = {
-            'type': 'cmd_attack',
-            'card_id': 'creature_b_1',
-            'target_type': 'creature',
-            'target_id': 'creature_a_1',
+            "type": "cmd_attack",
+            "card_id": "creature_b_1",
+            "target_type": "creature",
+            "target_id": "creature_a_1",
         }
 
         with self.assertRaises(ValueError) as context:
-            GameService.compile_cmd(self.game_state, command, 'side_b')
+            GameService.compile_cmd(self.game_state, command, "side_b")
 
         self.assertIn("not your turn", str(context.exception).lower())
 
@@ -627,40 +629,40 @@ class HeroPowerValidationTests(AttackValidationTestBase):
 
     def test_valid_hero_power_on_enemy_creature(self):
         """Test that a valid hero power on enemy creature succeeds."""
-        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
         command = {
-            'type': 'cmd_use_hero',
-            'hero_id': hero_a_id,
-            'target_type': 'creature',
-            'target_id': 'creature_b_1',  # Side B creature
+            "type": "cmd_use_hero",
+            "hero_id": hero_a_id,
+            "target_type": "creature",
+            "target_id": "creature_b_1",  # Side B creature
         }
 
         # Should not raise an exception
-        effects = GameService.compile_cmd(self.game_state, command, 'side_a')
+        effects = GameService.compile_cmd(self.game_state, command, "side_a")
         self.assertEqual(len(effects), 1)
         self.assertIsInstance(effects[0], UseHeroEffect)
 
     def test_valid_hero_power_on_enemy_hero(self):
         """Test that a valid hero power on enemy hero succeeds."""
-        hero_a_id = self.game_state.heroes['side_a'].hero_id
-        hero_b_id = self.game_state.heroes['side_b'].hero_id
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
+        hero_b_id = self.game_state.heroes["side_b"].hero_id
         command = {
-            'type': 'cmd_use_hero',
-            'hero_id': hero_a_id,
-            'target_type': 'hero',
-            'target_id': hero_b_id,
+            "type": "cmd_use_hero",
+            "hero_id": hero_a_id,
+            "target_type": "hero",
+            "target_id": hero_b_id,
         }
 
         # Should not raise an exception
-        effects = GameService.compile_cmd(self.game_state, command, 'side_a')
+        effects = GameService.compile_cmd(self.game_state, command, "side_a")
         self.assertEqual(len(effects), 1)
         self.assertIsInstance(effects[0], UseHeroEffect)
 
     def test_hero_power_enemy_hero_damage_targets_opponent_command(self):
         """Ensure enemy hero targeting stays on opponent when using command flow."""
-        hero_a_id = self.game_state.heroes['side_a'].hero_id
-        hero_b_id = self.game_state.heroes['side_b'].hero_id
-        self.game_state.heroes['side_a'].hero_power = HeroPower(
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
+        hero_b_id = self.game_state.heroes["side_b"].hero_id
+        self.game_state.heroes["side_a"].hero_power = HeroPower(
             name="Small Damage",
             actions=[
                 DamageAction(
@@ -672,82 +674,83 @@ class HeroPowerValidationTests(AttackValidationTestBase):
             ],
             description="Deal 2 damage to an enemy.",
         )
-        self.game_state.heroes['side_a'].exhausted = False
-        self.game_state.heroes['side_a'].health = 10
-        self.game_state.heroes['side_b'].health = 10
+        self.game_state.heroes["side_a"].exhausted = False
+        self.game_state.heroes["side_a"].health = 10
+        self.game_state.heroes["side_b"].health = 10
 
         command = {
-            'type': 'cmd_use_hero',
-            'hero_id': hero_a_id,
-            'target_type': 'hero',
-            'target_id': hero_b_id,
+            "type": "cmd_use_hero",
+            "hero_id": hero_a_id,
+            "target_type": "hero",
+            "target_id": hero_b_id,
         }
 
-        effects = GameService.compile_cmd(self.game_state, command, 'side_a')
+        effects = GameService.compile_cmd(self.game_state, command, "side_a")
         self.assertEqual(len(effects), 1)
         self.assertIsInstance(effects[0], UseHeroEffect)
 
         result = resolve(effects[0], self.game_state)
-        self.assertEqual(result.type, 'outcome_success')
+        self.assertEqual(result.type, "outcome_success")
 
         damage_effects = [
-            effect for effect in result.child_effects
+            effect
+            for effect in result.child_effects
             if isinstance(effect, DamageEffect)
         ]
         self.assertTrue(damage_effects)
 
         damage_effect = damage_effects[0]
-        self.assertEqual(damage_effect.target_type, 'hero')
+        self.assertEqual(damage_effect.target_type, "hero")
         self.assertEqual(damage_effect.target_id, hero_b_id)
         self.assertEqual(damage_effect.damage, 2)
 
         damage_result = resolve(damage_effect, result.new_state)
-        self.assertEqual(damage_result.type, 'outcome_success')
-        self.assertEqual(damage_result.new_state.heroes['side_b'].health, 8)
-        self.assertEqual(damage_result.new_state.heroes['side_a'].health, 10)
+        self.assertEqual(damage_result.type, "outcome_success")
+        self.assertEqual(damage_result.new_state.heroes["side_b"].health, 8)
+        self.assertEqual(damage_result.new_state.heroes["side_a"].health, 10)
 
     def test_cannot_use_opponent_hero(self):
         """Test that you cannot use opponent's hero power."""
-        hero_b_id = self.game_state.heroes['side_b'].hero_id
+        hero_b_id = self.game_state.heroes["side_b"].hero_id
         command = {
-            'type': 'cmd_use_hero',
-            'hero_id': hero_b_id,  # Side B hero (opponent's)
-            'target_type': 'creature',
-            'target_id': 'creature_a_1',
+            "type": "cmd_use_hero",
+            "hero_id": hero_b_id,  # Side B hero (opponent's)
+            "target_type": "creature",
+            "target_id": "creature_a_1",
         }
 
         with self.assertRaises(ValueError) as context:
-            GameService.compile_cmd(self.game_state, command, 'side_a')
+            GameService.compile_cmd(self.game_state, command, "side_a")
 
         self.assertIn("do not control", str(context.exception).lower())
 
     def test_cannot_target_own_creature_with_hero_power(self):
         """Test that you cannot target your own creature with hero power."""
-        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
         command = {
-            'type': 'cmd_use_hero',
-            'hero_id': hero_a_id,
-            'target_type': 'creature',
-            'target_id': 'creature_a_1',  # Own creature
+            "type": "cmd_use_hero",
+            "hero_id": hero_a_id,
+            "target_type": "creature",
+            "target_id": "creature_a_1",  # Own creature
         }
 
         with self.assertRaises(ValueError) as context:
-            GameService.compile_cmd(self.game_state, command, 'side_a')
+            GameService.compile_cmd(self.game_state, command, "side_a")
 
         self.assertIn("not on opponent's board", str(context.exception).lower())
 
     def test_cannot_target_own_hero_with_hero_power(self):
         """Test that you cannot target your own hero with hero power."""
-        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
         command = {
-            'type': 'cmd_use_hero',
-            'hero_id': hero_a_id,
-            'target_type': 'hero',
-            'target_id': hero_a_id,  # Own hero
+            "type": "cmd_use_hero",
+            "hero_id": hero_a_id,
+            "target_type": "hero",
+            "target_id": hero_a_id,  # Own hero
         }
 
         with self.assertRaises(ValueError) as context:
-            GameService.compile_cmd(self.game_state, command, 'side_a')
+            GameService.compile_cmd(self.game_state, command, "side_a")
 
         self.assertIn("not the opponent's hero", str(context.exception).lower())
 
@@ -757,104 +760,211 @@ class HeroPowerEffectValidationTests(AttackValidationTestBase):
 
     def test_effect_handler_validates_hero_ownership(self):
         """Test that the effect handler validates hero ownership."""
-        hero_b_id = self.game_state.heroes['side_b'].hero_id
+        hero_b_id = self.game_state.heroes["side_b"].hero_id
 
         # Try to use opponent's hero
         effect = UseHeroEffect(
-            side='side_a',
+            side="side_a",
             source_id=hero_b_id,  # Side B hero (opponent's)
-            target_type='creature',
-            target_id='creature_b_1',
+            target_type="creature",
+            target_id="creature_b_1",
         )
 
         result = resolve(effect, self.game_state)
-        self.assertEqual(result.type, 'outcome_rejected')
+        self.assertEqual(result.type, "outcome_rejected")
         self.assertIn("do not control", result.reason.lower())
 
     def test_effect_handler_validates_target_is_enemy_creature(self):
         """Test that the effect handler validates target is enemy creature."""
-        hero_a_id = self.game_state.heroes['side_a'].hero_id
-        self.game_state.heroes['side_a'].exhausted = False
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
+        self.game_state.heroes["side_a"].exhausted = False
 
         # Try to target own creature
         effect = UseHeroEffect(
-            side='side_a',
+            side="side_a",
             source_id=hero_a_id,
-            target_type='creature',
-            target_id='creature_a_1',  # Own creature
+            target_type="creature",
+            target_id="creature_a_1",  # Own creature
         )
 
         result = resolve(effect, self.game_state)
-        self.assertEqual(result.type, 'outcome_rejected')
+        self.assertEqual(result.type, "outcome_rejected")
         self.assertIn("opponent", result.reason.lower())
 
     def test_effect_handler_validates_target_is_enemy_hero(self):
         """Test that the effect handler validates target is enemy hero."""
-        hero_a_id = self.game_state.heroes['side_a'].hero_id
-        self.game_state.heroes['side_a'].exhausted = False
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
+        self.game_state.heroes["side_a"].exhausted = False
 
         # Try to target own hero
         effect = UseHeroEffect(
-            side='side_a',
+            side="side_a",
             source_id=hero_a_id,
-            target_type='hero',
+            target_type="hero",
             target_id=hero_a_id,  # Own hero
         )
 
         result = resolve(effect, self.game_state)
-        self.assertEqual(result.type, 'outcome_rejected')
+        self.assertEqual(result.type, "outcome_rejected")
         self.assertIn("opponent", result.reason.lower())
 
     def test_valid_hero_power_succeeds_in_handler(self):
         """Test that a valid hero power succeeds in the effect handler."""
-        hero_a_id = self.game_state.heroes['side_a'].hero_id
-        self.game_state.heroes['side_a'].exhausted = False
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
+        self.game_state.heroes["side_a"].exhausted = False
 
         effect = UseHeroEffect(
-            side='side_a',
+            side="side_a",
             source_id=hero_a_id,
-            target_type='creature',
-            target_id='creature_b_1',  # Enemy creature
+            target_type="creature",
+            target_id="creature_b_1",  # Enemy creature
         )
 
         result = resolve(effect, self.game_state)
-        self.assertEqual(result.type, 'outcome_success')
+        self.assertEqual(result.type, "outcome_success")
         # Should have child effects
         self.assertGreater(len(result.child_effects), 0)
 
     def test_hero_power_self_damage_targets_self(self):
         """Hero power should be able to damage the hero itself when target='self'."""
-        hero_a_id = self.game_state.heroes['side_a'].hero_id
-        self.game_state.heroes['side_a'].hero_power = HeroPower(
-            name='Self Harm',
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
+        self.game_state.heroes["side_a"].hero_power = HeroPower(
+            name="Self Harm",
             actions=[
                 DamageAction(
                     amount=2,
-                    target='self',
-                    scope='single',
+                    target="self",
+                    scope="single",
                 )
-            ]
+            ],
         )
-        self.game_state.heroes['side_a'].exhausted = False
-        initial_health = self.game_state.heroes['side_a'].health
+        self.game_state.heroes["side_a"].exhausted = False
+        initial_health = self.game_state.heroes["side_a"].health
 
         effect = UseHeroEffect(
-            side='side_a',
+            side="side_a",
             source_id=hero_a_id,
-            target_type='hero',
+            target_type="hero",
             target_id=hero_a_id,
         )
 
         result = resolve(effect, self.game_state)
-        self.assertEqual(result.type, 'outcome_success')
+        self.assertEqual(result.type, "outcome_success")
 
         hero_damage_effects = [
-            child for child in result.child_effects
-            if isinstance(child, DamageEffect) and child.target_type == 'hero' and child.target_id == hero_a_id
+            child
+            for child in result.child_effects
+            if isinstance(child, DamageEffect)
+            and child.target_type == "hero"
+            and child.target_id == hero_a_id
         ]
         self.assertTrue(hero_damage_effects)
         damage_result = resolve(hero_damage_effects[0], result.new_state)
-        self.assertEqual(damage_result.new_state.heroes['side_a'].health, initial_health - 2)
+        self.assertEqual(
+            damage_result.new_state.heroes["side_a"].health, initial_health - 2
+        )
+
+
+class FriendlyDamageHeroPowerTests(AttackValidationTestBase):
+    """Test damage hero powers that target friendly units."""
+
+    def setUp(self):
+        super().setUp()
+        self.game_state.heroes["side_a"].hero_power = HeroPower(
+            name="Pact",
+            actions=[
+                DamageAction(
+                    amount=1,
+                    target="friendly",
+                    scope="single",
+                    damage_type="spell",
+                ),
+                DrawAction(amount=1),
+            ],
+            description=(
+                "Deal 1 damage to yourself or one of your creatures and draw 1 card."
+            ),
+        )
+        self.game_state.heroes["side_a"].exhausted = False
+
+    def test_can_target_own_hero_with_friendly_damage_power(self):
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
+        command = {
+            "type": "cmd_use_hero",
+            "hero_id": hero_a_id,
+            "target_type": "hero",
+            "target_id": hero_a_id,
+        }
+
+        effects = GameService.compile_cmd(self.game_state, command, "side_a")
+        self.assertEqual(len(effects), 1)
+        self.assertIsInstance(effects[0], UseHeroEffect)
+
+        result = resolve(effects[0], self.game_state)
+        self.assertEqual(result.type, "outcome_success")
+        self.assertTrue(
+            any(
+                isinstance(child, DamageEffect)
+                and child.target_type == "hero"
+                and child.target_id == hero_a_id
+                for child in result.child_effects
+            )
+        )
+        self.assertTrue(
+            any(isinstance(child, DrawEffect) for child in result.child_effects)
+        )
+
+    def test_can_target_own_creature_with_friendly_damage_power(self):
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
+        command = {
+            "type": "cmd_use_hero",
+            "hero_id": hero_a_id,
+            "target_type": "creature",
+            "target_id": "creature_a_1",
+        }
+
+        effects = GameService.compile_cmd(self.game_state, command, "side_a")
+        self.assertEqual(len(effects), 1)
+        self.assertIsInstance(effects[0], UseHeroEffect)
+
+        result = resolve(effects[0], self.game_state)
+        self.assertEqual(result.type, "outcome_success")
+        self.assertTrue(
+            any(
+                isinstance(child, DamageEffect)
+                and child.target_type == "creature"
+                and child.target_id == "creature_a_1"
+                for child in result.child_effects
+            )
+        )
+
+    def test_cannot_target_enemy_creature_with_friendly_damage_power(self):
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
+        command = {
+            "type": "cmd_use_hero",
+            "hero_id": hero_a_id,
+            "target_type": "creature",
+            "target_id": "creature_b_1",
+        }
+
+        with self.assertRaises(ValueError) as context:
+            GameService.compile_cmd(self.game_state, command, "side_a")
+
+        self.assertIn("not on your board", str(context.exception).lower())
+
+    def test_effect_handler_rejects_enemy_hero_with_friendly_damage_power(self):
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
+        hero_b_id = self.game_state.heroes["side_b"].hero_id
+        effect = UseHeroEffect(
+            side="side_a",
+            source_id=hero_a_id,
+            target_type="hero",
+            target_id=hero_b_id,
+        )
+
+        result = resolve(effect, self.game_state)
+        self.assertEqual(result.type, "outcome_rejected")
+        self.assertIn("not your hero", result.reason.lower())
 
 
 class HealingHeroPowerTests(AttackValidationTestBase):
@@ -863,76 +973,71 @@ class HealingHeroPowerTests(AttackValidationTestBase):
     def setUp(self):
         super().setUp()
         # Override hero A with a healing hero power in the game state
-        from apps.builder.schemas import HeroPower, HealAction
-        self.game_state.heroes['side_a'].hero_power = HeroPower(
-            name='Heal',
-            actions=[
-                HealAction(
-                    amount=2,
-                    target='friendly',
-                    scope='single'
-                )
-            ]
+        from apps.builder.schemas import HealAction, HeroPower
+
+        self.game_state.heroes["side_a"].hero_power = HeroPower(
+            name="Heal",
+            actions=[HealAction(amount=2, target="friendly", scope="single")],
         )
 
     def test_can_target_own_hero_with_healing_power(self):
         """Test that you can target your own hero with a healing hero power."""
-        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
         command = {
-            'type': 'cmd_use_hero',
-            'hero_id': hero_a_id,
-            'target_type': 'hero',
-            'target_id': hero_a_id,  # Own hero
+            "type": "cmd_use_hero",
+            "hero_id": hero_a_id,
+            "target_type": "hero",
+            "target_id": hero_a_id,  # Own hero
         }
 
         # Should not raise an exception
-        effects = GameService.compile_cmd(self.game_state, command, 'side_a')
+        effects = GameService.compile_cmd(self.game_state, command, "side_a")
         self.assertEqual(len(effects), 1)
         self.assertIsInstance(effects[0], UseHeroEffect)
 
     def test_can_target_own_creature_with_healing_power(self):
         """Test that you can target your own creature with a healing hero power."""
-        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
         command = {
-            'type': 'cmd_use_hero',
-            'hero_id': hero_a_id,
-            'target_type': 'creature',
-            'target_id': 'creature_a_1',  # Own creature
+            "type": "cmd_use_hero",
+            "hero_id": hero_a_id,
+            "target_type": "creature",
+            "target_id": "creature_a_1",  # Own creature
         }
 
         # Should not raise an exception
-        effects = GameService.compile_cmd(self.game_state, command, 'side_a')
+        effects = GameService.compile_cmd(self.game_state, command, "side_a")
         self.assertEqual(len(effects), 1)
         self.assertIsInstance(effects[0], UseHeroEffect)
 
     def test_cannot_target_enemy_hero_with_healing_power(self):
         """Test that you cannot target enemy hero with a healing hero power."""
-        hero_a_id = self.game_state.heroes['side_a'].hero_id
-        hero_b_id = self.game_state.heroes['side_b'].hero_id
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
+        hero_b_id = self.game_state.heroes["side_b"].hero_id
         command = {
-            'type': 'cmd_use_hero',
-            'hero_id': hero_a_id,
-            'target_type': 'hero',
-            'target_id': hero_b_id,  # Enemy hero
+            "type": "cmd_use_hero",
+            "hero_id": hero_a_id,
+            "target_type": "hero",
+            "target_id": hero_b_id,  # Enemy hero
         }
 
         with self.assertRaises(ValueError) as context:
-            GameService.compile_cmd(self.game_state, command, 'side_a')
+            GameService.compile_cmd(self.game_state, command, "side_a")
 
         self.assertIn("not your hero", str(context.exception).lower())
 
     def test_cannot_target_enemy_creature_with_healing_power(self):
         """Test that you cannot target enemy creature with a healing hero power."""
-        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
         command = {
-            'type': 'cmd_use_hero',
-            'hero_id': hero_a_id,
-            'target_type': 'creature',
-            'target_id': 'creature_b_1',  # Enemy creature
+            "type": "cmd_use_hero",
+            "hero_id": hero_a_id,
+            "target_type": "creature",
+            "target_id": "creature_b_1",  # Enemy creature
         }
 
         with self.assertRaises(ValueError) as context:
-            GameService.compile_cmd(self.game_state, command, 'side_a')
+            GameService.compile_cmd(self.game_state, command, "side_a")
 
         self.assertIn("not on your board", str(context.exception).lower())
 
@@ -942,46 +1047,42 @@ class BuffHeroPowerTests(AttackValidationTestBase):
 
     def setUp(self):
         super().setUp()
-        from apps.builder.schemas import HeroPower, BuffAction
-        self.game_state.heroes['side_a'].hero_power = HeroPower(
-            name='Fortify',
+        from apps.builder.schemas import BuffAction, HeroPower
+
+        self.game_state.heroes["side_a"].hero_power = HeroPower(
+            name="Fortify",
             actions=[
-                BuffAction(
-                    attribute='health',
-                    amount=2,
-                    target='hero',
-                    scope='single'
-                )
-            ]
+                BuffAction(attribute="health", amount=2, target="hero", scope="single")
+            ],
         )
 
     def test_can_target_own_hero_with_buff_power(self):
         """Buff hero powers can target own hero."""
-        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
         command = {
-            'type': 'cmd_use_hero',
-            'hero_id': hero_a_id,
-            'target_type': 'hero',
-            'target_id': hero_a_id,
+            "type": "cmd_use_hero",
+            "hero_id": hero_a_id,
+            "target_type": "hero",
+            "target_id": hero_a_id,
         }
 
-        effects = GameService.compile_cmd(self.game_state, command, 'side_a')
+        effects = GameService.compile_cmd(self.game_state, command, "side_a")
         self.assertEqual(len(effects), 1)
         self.assertIsInstance(effects[0], UseHeroEffect)
 
     def test_cannot_target_enemy_hero_with_buff_power(self):
         """Buff hero powers cannot target enemy hero."""
-        hero_a_id = self.game_state.heroes['side_a'].hero_id
-        hero_b_id = self.game_state.heroes['side_b'].hero_id
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
+        hero_b_id = self.game_state.heroes["side_b"].hero_id
         command = {
-            'type': 'cmd_use_hero',
-            'hero_id': hero_a_id,
-            'target_type': 'hero',
-            'target_id': hero_b_id,
+            "type": "cmd_use_hero",
+            "hero_id": hero_a_id,
+            "target_type": "hero",
+            "target_id": hero_b_id,
         }
 
         with self.assertRaises(ValueError) as context:
-            GameService.compile_cmd(self.game_state, command, 'side_a')
+            GameService.compile_cmd(self.game_state, command, "side_a")
 
         self.assertIn("not your hero", str(context.exception).lower())
 
@@ -993,184 +1094,184 @@ class TauntMechanicTests(AttackValidationTestBase):
         super().setUp()
         # Add a taunt creature to side_b
         self.taunt_creature = Creature(
-            creature_id='taunt_b_1',
-            card_id='card_taunt_b_1',
-            name='Taunt Creature',
-            description='Has Taunt',
+            creature_id="taunt_b_1",
+            card_id="card_taunt_b_1",
+            name="Taunt Creature",
+            description="Has Taunt",
             attack=1,
             attack_max=1,
             health=3,
             health_max=3,
             traits=[Taunt()],
-            exhausted=False
+            exhausted=False,
         )
-        self.game_state.creatures['taunt_b_1'] = self.taunt_creature
-        self.game_state.board['side_b'].append('taunt_b_1')
+        self.game_state.creatures["taunt_b_1"] = self.taunt_creature
+        self.game_state.board["side_b"].append("taunt_b_1")
 
     def test_cannot_attack_hero_with_taunt_on_board(self):
         """Test that you cannot attack the enemy hero when taunt creatures exist."""
-        hero_b_id = self.game_state.heroes['side_b'].hero_id
+        hero_b_id = self.game_state.heroes["side_b"].hero_id
 
         effect = AttackEffect(
-            side='side_a',
-            card_id='creature_a_1',
-            target_type='hero',
+            side="side_a",
+            card_id="creature_a_1",
+            target_type="hero",
             target_id=hero_b_id,
         )
 
         result = resolve(effect, self.game_state)
-        self.assertEqual(result.type, 'outcome_rejected')
+        self.assertEqual(result.type, "outcome_rejected")
         self.assertIn("taunt", result.reason.lower())
 
     def test_cannot_attack_non_taunt_creature_with_taunt_on_board(self):
         """Test that you cannot attack non-taunt creatures when taunt exists."""
         effect = AttackEffect(
-            side='side_a',
-            card_id='creature_a_1',
-            target_type='creature',
-            target_id='creature_b_1',  # Non-taunt creature
+            side="side_a",
+            card_id="creature_a_1",
+            target_type="creature",
+            target_id="creature_b_1",  # Non-taunt creature
         )
 
         result = resolve(effect, self.game_state)
-        self.assertEqual(result.type, 'outcome_rejected')
+        self.assertEqual(result.type, "outcome_rejected")
         self.assertIn("taunt", result.reason.lower())
 
     def test_can_attack_taunt_creature(self):
         """Test that you CAN attack a creature with taunt."""
         effect = AttackEffect(
-            side='side_a',
-            card_id='creature_a_1',
-            target_type='creature',
-            target_id='taunt_b_1',  # Taunt creature
+            side="side_a",
+            card_id="creature_a_1",
+            target_type="creature",
+            target_id="taunt_b_1",  # Taunt creature
         )
 
         result = resolve(effect, self.game_state)
-        self.assertEqual(result.type, 'outcome_success')
+        self.assertEqual(result.type, "outcome_success")
 
     def test_can_attack_hero_when_no_taunt_on_board(self):
         """Test that you CAN attack hero when no taunt creatures exist."""
         # Remove the taunt creature
-        self.game_state.board['side_b'].remove('taunt_b_1')
-        del self.game_state.creatures['taunt_b_1']
+        self.game_state.board["side_b"].remove("taunt_b_1")
+        del self.game_state.creatures["taunt_b_1"]
 
-        hero_b_id = self.game_state.heroes['side_b'].hero_id
+        hero_b_id = self.game_state.heroes["side_b"].hero_id
         effect = AttackEffect(
-            side='side_a',
-            card_id='creature_a_1',
-            target_type='hero',
+            side="side_a",
+            card_id="creature_a_1",
+            target_type="hero",
             target_id=hero_b_id,
         )
 
         result = resolve(effect, self.game_state)
-        self.assertEqual(result.type, 'outcome_success')
+        self.assertEqual(result.type, "outcome_success")
 
     def test_can_attack_any_creature_when_no_taunt_on_board(self):
         """Test that you CAN attack any creature when no taunt exists."""
         # Remove the taunt creature
-        self.game_state.board['side_b'].remove('taunt_b_1')
-        del self.game_state.creatures['taunt_b_1']
+        self.game_state.board["side_b"].remove("taunt_b_1")
+        del self.game_state.creatures["taunt_b_1"]
 
         effect = AttackEffect(
-            side='side_a',
-            card_id='creature_a_1',
-            target_type='creature',
-            target_id='creature_b_1',  # Non-taunt creature
+            side="side_a",
+            card_id="creature_a_1",
+            target_type="creature",
+            target_id="creature_b_1",  # Non-taunt creature
         )
 
         result = resolve(effect, self.game_state)
-        self.assertEqual(result.type, 'outcome_success')
+        self.assertEqual(result.type, "outcome_success")
 
     def test_multiple_taunt_creatures(self):
         """Test that any taunt creature can be attacked when multiple exist."""
         # Add another taunt creature
         taunt_creature_2 = Creature(
-            creature_id='taunt_b_2',
-            card_id='card_taunt_b_2',
-            name='Taunt Creature 2',
-            description='Also has Taunt',
+            creature_id="taunt_b_2",
+            card_id="card_taunt_b_2",
+            name="Taunt Creature 2",
+            description="Also has Taunt",
             attack=2,
             attack_max=2,
             health=2,
             health_max=2,
             traits=[Taunt()],
-            exhausted=False
+            exhausted=False,
         )
-        self.game_state.creatures['taunt_b_2'] = taunt_creature_2
-        self.game_state.board['side_b'].append('taunt_b_2')
+        self.game_state.creatures["taunt_b_2"] = taunt_creature_2
+        self.game_state.board["side_b"].append("taunt_b_2")
 
         # Can attack first taunt creature
         effect1 = AttackEffect(
-            side='side_a',
-            card_id='creature_a_1',
-            target_type='creature',
-            target_id='taunt_b_1',
+            side="side_a",
+            card_id="creature_a_1",
+            target_type="creature",
+            target_id="taunt_b_1",
         )
         result1 = resolve(effect1, self.game_state)
-        self.assertEqual(result1.type, 'outcome_success')
+        self.assertEqual(result1.type, "outcome_success")
 
         # Can attack second taunt creature
         effect2 = AttackEffect(
-            side='side_a',
-            card_id='creature_a_2',
-            target_type='creature',
-            target_id='taunt_b_2',
+            side="side_a",
+            card_id="creature_a_2",
+            target_type="creature",
+            target_id="taunt_b_2",
         )
         result2 = resolve(effect2, self.game_state)
-        self.assertEqual(result2.type, 'outcome_success')
+        self.assertEqual(result2.type, "outcome_success")
 
         # Still cannot attack non-taunt creature
         effect3 = AttackEffect(
-            side='side_a',
-            card_id='creature_a_1',
-            target_type='creature',
-            target_id='creature_b_1',
+            side="side_a",
+            card_id="creature_a_1",
+            target_type="creature",
+            target_id="creature_b_1",
         )
         result3 = resolve(effect3, self.game_state)
-        self.assertEqual(result3.type, 'outcome_rejected')
+        self.assertEqual(result3.type, "outcome_rejected")
 
     def test_taunt_only_affects_opponent_side(self):
         """Test that taunt on side_a doesn't affect side_a's own attacks."""
         # Add taunt to side_a
         taunt_creature_a = Creature(
-            creature_id='taunt_a_1',
-            card_id='card_taunt_a_1',
-            name='Taunt Creature A',
-            description='Has Taunt',
+            creature_id="taunt_a_1",
+            card_id="card_taunt_a_1",
+            name="Taunt Creature A",
+            description="Has Taunt",
             attack=1,
             attack_max=1,
             health=3,
             health_max=3,
             traits=[Taunt()],
-            exhausted=False
+            exhausted=False,
         )
-        self.game_state.creatures['taunt_a_1'] = taunt_creature_a
-        self.game_state.board['side_a'].append('taunt_a_1')
+        self.game_state.creatures["taunt_a_1"] = taunt_creature_a
+        self.game_state.board["side_a"].append("taunt_a_1")
 
         # Side_a can still attack side_b's hero (side_b has taunt, but we check opponent's board)
         # Actually, side_b still has taunt, so this should fail
-        hero_b_id = self.game_state.heroes['side_b'].hero_id
+        hero_b_id = self.game_state.heroes["side_b"].hero_id
         effect = AttackEffect(
-            side='side_a',
-            card_id='creature_a_1',
-            target_type='hero',
+            side="side_a",
+            card_id="creature_a_1",
+            target_type="hero",
             target_id=hero_b_id,
         )
         result = resolve(effect, self.game_state)
         # Should be rejected because side_b has taunt
-        self.assertEqual(result.type, 'outcome_rejected')
+        self.assertEqual(result.type, "outcome_rejected")
 
         # Now test side_b attacking - side_a's taunt should matter
-        self.game_state.active = 'side_b'
-        hero_a_id = self.game_state.heroes['side_a'].hero_id
+        self.game_state.active = "side_b"
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
         effect_b = AttackEffect(
-            side='side_b',
-            card_id='creature_b_1',
-            target_type='hero',
+            side="side_b",
+            card_id="creature_b_1",
+            target_type="hero",
             target_id=hero_a_id,
         )
         result_b = resolve(effect_b, self.game_state)
         # Should be rejected because side_a has taunt
-        self.assertEqual(result_b.type, 'outcome_rejected')
+        self.assertEqual(result_b.type, "outcome_rejected")
         self.assertIn("taunt", result_b.reason.lower())
 
 
@@ -1181,39 +1282,40 @@ class SpellTargetingWithTauntTests(AttackValidationTestBase):
         super().setUp()
         # Add a taunt creature to side_b
         self.taunt_creature = Creature(
-            creature_id='taunt_b_1',
-            card_id='card_taunt_b_1',
-            name='Taunt Creature',
-            description='Has Taunt',
+            creature_id="taunt_b_1",
+            card_id="card_taunt_b_1",
+            name="Taunt Creature",
+            description="Has Taunt",
             attack=1,
             attack_max=1,
             health=3,
             health_max=3,
             traits=[Taunt()],
-            exhausted=False
+            exhausted=False,
         )
-        self.game_state.creatures['taunt_b_1'] = self.taunt_creature
-        self.game_state.board['side_b'].append('taunt_b_1')
+        self.game_state.creatures["taunt_b_1"] = self.taunt_creature
+        self.game_state.board["side_b"].append("taunt_b_1")
 
         # Add a non-taunt creature with 1 HP to side_b
         self.weak_creature = Creature(
-            creature_id='weak_b_1',
-            card_id='card_weak_b_1',
-            name='Weak Creature',
-            description='1 HP, no taunt',
+            creature_id="weak_b_1",
+            card_id="card_weak_b_1",
+            name="Weak Creature",
+            description="1 HP, no taunt",
             attack=1,
             attack_max=1,
             health=1,
             health_max=1,
             traits=[],
-            exhausted=False
+            exhausted=False,
         )
-        self.game_state.creatures['weak_b_1'] = self.weak_creature
-        self.game_state.board['side_b'].append('weak_b_1')
+        self.game_state.creatures["weak_b_1"] = self.weak_creature
+        self.game_state.board["side_b"].append("weak_b_1")
 
         # Create a spell card that deals 2 damage
         from apps.builder.schemas import Battlecry
         from apps.gameplay.schemas.game import CardInPlay
+
         self.spell_card = CardInPlay(
             card_type="spell",
             card_id="spell_damage_2",
@@ -1260,7 +1362,7 @@ class SpellTargetingWithTauntTests(AttackValidationTestBase):
 
         # Should succeed - spells are NOT affected by taunt
         # If this fails, it means the backend is incorrectly applying taunt restrictions to spells
-        self.assertEqual(result.type, 'outcome_success')
+        self.assertEqual(result.type, "outcome_success")
         self.assertIsInstance(result, Success)
 
         # Verify the spell was played (moved from hand to graveyard)
@@ -1270,9 +1372,9 @@ class SpellTargetingWithTauntTests(AttackValidationTestBase):
 
         # Verify a PlayEvent was created with the correct target
         self.assertEqual(len(result.events), 1)
-        self.assertEqual(result.events[0].type, 'event_play')
-        self.assertEqual(result.events[0].target_type, 'creature')
-        self.assertEqual(result.events[0].target_id, 'weak_b_1')
+        self.assertEqual(result.events[0].type, "event_play")
+        self.assertEqual(result.events[0].target_type, "creature")
+        self.assertEqual(result.events[0].target_id, "weak_b_1")
 
     def test_spell_can_target_taunt_creature_with_taunt_on_board(self):
         """Test that a spell can also target a taunt creature (should work too)."""
@@ -1292,7 +1394,7 @@ class SpellTargetingWithTauntTests(AttackValidationTestBase):
         result = resolve(play_effect, self.game_state)
 
         # Should succeed - spells can target any valid target
-        self.assertEqual(result.type, 'outcome_success')
+        self.assertEqual(result.type, "outcome_success")
         self.assertIsInstance(result, Success)
 
 
@@ -1301,43 +1403,48 @@ class AITauntTests(TestCase):
 
     def setUp(self):
         from apps.builder.schemas import DeckScript
-        from apps.gameplay.schemas.game import GameState, Creature, HeroInPlay, CardInPlay
+        from apps.gameplay.schemas.game import (
+            CardInPlay,
+            Creature,
+            GameState,
+            HeroInPlay,
+        )
 
         # Create a basic game state with creatures on both sides
         self.game_state = GameState(
             turn=1,
-            active='side_a',
-            phase='main',
+            active="side_a",
+            phase="main",
             cards={
-                'card_a_1': CardInPlay(
-                    card_id='card_a_1',
-                    card_type='creature',
-                    name='AI Creature',
-                    description='',
+                "card_a_1": CardInPlay(
+                    card_id="card_a_1",
+                    card_type="creature",
+                    name="AI Creature",
+                    description="",
                     attack=2,
                     health=2,
                     cost=1,
                     traits=[],
-                    template_slug='ai-creature',
+                    template_slug="ai-creature",
                 ),
-                'card_b_1': CardInPlay(
-                    card_id='card_b_1',
-                    card_type='creature',
-                    name='Regular Creature',
-                    description='',
+                "card_b_1": CardInPlay(
+                    card_id="card_b_1",
+                    card_type="creature",
+                    name="Regular Creature",
+                    description="",
                     attack=1,
                     health=1,
                     cost=1,
                     traits=[],
-                    template_slug='regular-creature',
+                    template_slug="regular-creature",
                 ),
             },
             creatures={
-                'creature_a_1': Creature(
-                    creature_id='creature_a_1',
-                    card_id='card_a_1',
-                    name='AI Creature',
-                    description='',
+                "creature_a_1": Creature(
+                    creature_id="creature_a_1",
+                    card_id="card_a_1",
+                    name="AI Creature",
+                    description="",
                     attack=2,
                     attack_max=2,
                     health=2,
@@ -1345,11 +1452,11 @@ class AITauntTests(TestCase):
                     traits=[],
                     exhausted=False,
                 ),
-                'creature_b_1': Creature(
-                    creature_id='creature_b_1',
-                    card_id='card_b_1',
-                    name='Regular Creature',
-                    description='',
+                "creature_b_1": Creature(
+                    creature_id="creature_b_1",
+                    card_id="card_b_1",
+                    name="Regular Creature",
+                    description="",
                     attack=1,
                     attack_max=1,
                     health=1,
@@ -1359,14 +1466,14 @@ class AITauntTests(TestCase):
                 ),
             },
             board={
-                'side_a': ['creature_a_1'],
-                'side_b': ['creature_b_1'],
+                "side_a": ["creature_a_1"],
+                "side_b": ["creature_b_1"],
             },
             heroes={
-                'side_a': HeroInPlay(
-                    hero_id='hero_a',
-                    template_slug='hero-a',
-                    name='Hero A',
+                "side_a": HeroInPlay(
+                    hero_id="hero_a",
+                    template_slug="hero-a",
+                    name="Hero A",
                     health=30,
                     health_max=30,
                     hero_power=HeroPower(
@@ -1378,10 +1485,10 @@ class AITauntTests(TestCase):
                         ]
                     ),
                 ),
-                'side_b': HeroInPlay(
-                    hero_id='hero_b',
-                    template_slug='hero-b',
-                    name='Hero B',
+                "side_b": HeroInPlay(
+                    hero_id="hero_b",
+                    template_slug="hero-b",
+                    name="Hero B",
                     health=30,
                     health_max=30,
                     hero_power=HeroPower(
@@ -1394,46 +1501,46 @@ class AITauntTests(TestCase):
                     ),
                 ),
             },
-            hands={'side_a': [], 'side_b': []},
-            decks={'side_a': [], 'side_b': []},
-            graveyard={'side_a': [], 'side_b': []},
-            mana_pool={'side_a': 10, 'side_b': 10},
-            mana_used={'side_a': 0, 'side_b': 0},
-            ai_sides=['side_a'],
+            hands={"side_a": [], "side_b": []},
+            decks={"side_a": [], "side_b": []},
+            graveyard={"side_a": [], "side_b": []},
+            mana_pool={"side_a": 10, "side_b": 10},
+            mana_used={"side_a": 0, "side_b": 0},
+            ai_sides=["side_a"],
         )
 
-        self.script_rush = DeckScript(strategy='rush')
+        self.script_rush = DeckScript(strategy="rush")
 
     def test_ai_attacks_taunt_creature_instead_of_hero(self):
         """Test that AI attacks taunt creature instead of hero when taunt exists."""
         # Add a taunt creature to side_b
         taunt_creature = Creature(
-            creature_id='taunt_b_1',
-            card_id='card_taunt_b_1',
-            name='Taunt Creature',
-            description='Has Taunt',
+            creature_id="taunt_b_1",
+            card_id="card_taunt_b_1",
+            name="Taunt Creature",
+            description="Has Taunt",
             attack=1,
             attack_max=1,
             health=3,
             health_max=3,
             traits=[Taunt()],
-            exhausted=False
+            exhausted=False,
         )
-        self.game_state.creatures['taunt_b_1'] = taunt_creature
-        self.game_state.board['side_b'].append('taunt_b_1')
+        self.game_state.creatures["taunt_b_1"] = taunt_creature
+        self.game_state.board["side_b"].append("taunt_b_1")
 
         # Test with rush strategy (normally attacks hero)
         effect = AIMoveChooser.choose_move(self.game_state, self.script_rush)
 
         # Verify that the AI chose to attack
         self.assertIsNotNone(effect)
-        self.assertEqual(effect.type, 'effect_attack')
+        self.assertEqual(effect.type, "effect_attack")
 
         # Verify that it attacked a creature (not hero) due to taunt
-        self.assertEqual(effect.target_type, 'creature')
+        self.assertEqual(effect.target_type, "creature")
 
         # Verify that it attacked the taunt creature specifically
-        self.assertEqual(effect.target_id, 'taunt_b_1')
+        self.assertEqual(effect.target_id, "taunt_b_1")
 
     def test_ai_attacks_hero_when_no_taunt(self):
         """Test that AI with rush strategy attacks hero when no taunt exists."""
@@ -1442,58 +1549,58 @@ class AITauntTests(TestCase):
 
         # Verify that the AI chose to attack
         self.assertIsNotNone(effect)
-        self.assertEqual(effect.type, 'effect_attack')
+        self.assertEqual(effect.type, "effect_attack")
 
         # Verify that it attacked the hero (rush strategy)
-        self.assertEqual(effect.target_type, 'hero')
-        self.assertEqual(effect.target_id, 'hero_b')
+        self.assertEqual(effect.target_type, "hero")
+        self.assertEqual(effect.target_id, "hero_b")
 
     def test_ai_attacks_taunt_with_multiple_taunt_creatures(self):
         """Test that AI attacks one of the taunt creatures when multiple exist."""
         # Add two taunt creatures to side_b
         taunt_creature_1 = Creature(
-            creature_id='taunt_b_1',
-            card_id='card_taunt_b_1',
-            name='Taunt Creature 1',
-            description='Has Taunt',
+            creature_id="taunt_b_1",
+            card_id="card_taunt_b_1",
+            name="Taunt Creature 1",
+            description="Has Taunt",
             attack=1,
             attack_max=1,
             health=3,
             health_max=3,
             traits=[Taunt()],
-            exhausted=False
+            exhausted=False,
         )
         taunt_creature_2 = Creature(
-            creature_id='taunt_b_2',
-            card_id='card_taunt_b_2',
-            name='Taunt Creature 2',
-            description='Has Taunt',
+            creature_id="taunt_b_2",
+            card_id="card_taunt_b_2",
+            name="Taunt Creature 2",
+            description="Has Taunt",
             attack=2,
             attack_max=2,
             health=2,
             health_max=2,
             traits=[Taunt()],
-            exhausted=False
+            exhausted=False,
         )
-        self.game_state.creatures['taunt_b_1'] = taunt_creature_1
-        self.game_state.creatures['taunt_b_2'] = taunt_creature_2
-        self.game_state.board['side_b'].extend(['taunt_b_1', 'taunt_b_2'])
+        self.game_state.creatures["taunt_b_1"] = taunt_creature_1
+        self.game_state.creatures["taunt_b_2"] = taunt_creature_2
+        self.game_state.board["side_b"].extend(["taunt_b_1", "taunt_b_2"])
 
         effect = AIMoveChooser.choose_move(self.game_state, self.script_rush)
 
         # Verify that the AI chose to attack
         self.assertIsNotNone(effect)
-        self.assertEqual(effect.type, 'effect_attack')
+        self.assertEqual(effect.type, "effect_attack")
 
         # Verify that it attacked a creature (not hero)
-        self.assertEqual(effect.target_type, 'creature')
+        self.assertEqual(effect.target_type, "creature")
 
         # Verify that it attacked one of the taunt creatures
-        self.assertIn(effect.target_id, ['taunt_b_1', 'taunt_b_2'])
+        self.assertIn(effect.target_id, ["taunt_b_1", "taunt_b_2"])
 
     def test_ai_does_not_attack_with_zero_attack_creature(self):
         """Test that AI skips attacking when its only creature has 0 attack."""
-        self.game_state.creatures['creature_a_1'].attack = 0
+        self.game_state.creatures["creature_a_1"].attack = 0
 
         effect = AIMoveChooser.choose_move(self.game_state, self.script_rush)
 
@@ -1507,115 +1614,115 @@ class StealthMechanicTests(AttackValidationTestBase):
         super().setUp()
         # Add a stealth creature to side_b
         self.stealth_creature = Creature(
-            creature_id='stealth_b_1',
-            card_id='card_stealth_b_1',
-            name='Stealth Creature',
-            description='Has Stealth',
+            creature_id="stealth_b_1",
+            card_id="card_stealth_b_1",
+            name="Stealth Creature",
+            description="Has Stealth",
             attack=2,
             attack_max=2,
             health=2,
             health_max=2,
             traits=[Stealth()],
-            exhausted=False
+            exhausted=False,
         )
-        self.game_state.creatures['stealth_b_1'] = self.stealth_creature
-        self.game_state.board['side_b'].append('stealth_b_1')
+        self.game_state.creatures["stealth_b_1"] = self.stealth_creature
+        self.game_state.board["side_b"].append("stealth_b_1")
 
     def test_cannot_target_stealthed_creature(self):
         """Test that you cannot directly target a stealthed creature."""
         effect = AttackEffect(
-            side='side_a',
-            card_id='creature_a_1',
-            target_type='creature',
-            target_id='stealth_b_1',  # Stealth creature
+            side="side_a",
+            card_id="creature_a_1",
+            target_type="creature",
+            target_id="stealth_b_1",  # Stealth creature
         )
 
         result = resolve(effect, self.game_state)
-        self.assertEqual(result.type, 'outcome_rejected')
+        self.assertEqual(result.type, "outcome_rejected")
         self.assertIn("stealth", result.reason.lower())
 
     def test_can_attack_non_stealth_creature(self):
         """Test that you CAN attack non-stealth creatures even when stealth exists."""
         effect = AttackEffect(
-            side='side_a',
-            card_id='creature_a_1',
-            target_type='creature',
-            target_id='creature_b_1',  # Non-stealth creature
+            side="side_a",
+            card_id="creature_a_1",
+            target_type="creature",
+            target_id="creature_b_1",  # Non-stealth creature
         )
 
         result = resolve(effect, self.game_state)
-        self.assertEqual(result.type, 'outcome_success')
+        self.assertEqual(result.type, "outcome_success")
 
     def test_stealth_removed_after_attack(self):
         """Test that stealth is removed after the creature attacks."""
         # Make the stealth creature attack
         effect = AttackEffect(
-            side='side_b',
-            card_id='stealth_b_1',
-            target_type='creature',
-            target_id='creature_a_1',
+            side="side_b",
+            card_id="stealth_b_1",
+            target_type="creature",
+            target_id="creature_a_1",
         )
 
         # Change active side to side_b so the attack is valid
-        self.game_state.active = 'side_b'
+        self.game_state.active = "side_b"
 
         result = resolve(effect, self.game_state)
-        self.assertEqual(result.type, 'outcome_success')
+        self.assertEqual(result.type, "outcome_success")
 
         # Check that stealth trait was removed
-        updated_creature = result.new_state.creatures['stealth_b_1']
-        has_stealth = any(trait.type == 'stealth' for trait in updated_creature.traits)
+        updated_creature = result.new_state.creatures["stealth_b_1"]
+        has_stealth = any(trait.type == "stealth" for trait in updated_creature.traits)
         self.assertFalse(has_stealth)
 
     def test_can_attack_creature_after_stealth_removed(self):
         """Test that a creature can be targeted after its stealth is removed."""
         # First, have the stealth creature attack to remove stealth
-        self.game_state.active = 'side_b'
+        self.game_state.active = "side_b"
         attack_effect = AttackEffect(
-            side='side_b',
-            card_id='stealth_b_1',
-            target_type='creature',
-            target_id='creature_a_1',
+            side="side_b",
+            card_id="stealth_b_1",
+            target_type="creature",
+            target_id="creature_a_1",
         )
 
         result = resolve(attack_effect, self.game_state)
-        self.assertEqual(result.type, 'outcome_success')
+        self.assertEqual(result.type, "outcome_success")
 
         # Update game state
         new_state = result.new_state
 
         # Now try to attack the creature that lost stealth
-        new_state.active = 'side_a'
+        new_state.active = "side_a"
         counter_attack = AttackEffect(
-            side='side_a',
-            card_id='creature_a_1',
-            target_type='creature',
-            target_id='stealth_b_1',
+            side="side_a",
+            card_id="creature_a_1",
+            target_type="creature",
+            target_id="stealth_b_1",
         )
 
         result2 = resolve(counter_attack, new_state)
-        self.assertEqual(result2.type, 'outcome_success')
+        self.assertEqual(result2.type, "outcome_success")
 
     def test_can_attack_hero_with_stealth_on_board(self):
         """Test that you CAN attack hero even when stealth creatures exist (unlike taunt)."""
-        hero_b_id = self.game_state.heroes['side_b'].hero_id
+        hero_b_id = self.game_state.heroes["side_b"].hero_id
 
         effect = AttackEffect(
-            side='side_a',
-            card_id='creature_a_1',
-            target_type='hero',
+            side="side_a",
+            card_id="creature_a_1",
+            target_type="hero",
             target_id=hero_b_id,
         )
 
         result = resolve(effect, self.game_state)
         # Should succeed - stealth doesn't force you to attack it like taunt does
-        self.assertEqual(result.type, 'outcome_success')
+        self.assertEqual(result.type, "outcome_success")
 
     def test_spell_cannot_target_stealthed_creature(self):
         """Test that a spell cannot target a stealthed creature."""
+        from apps.builder.schemas import Battlecry
         from apps.gameplay.engine.dispatcher import resolve
         from apps.gameplay.schemas.effects import PlayEffect
-        from apps.builder.schemas import Battlecry
         from apps.gameplay.schemas.game import CardInPlay
 
         # Create a spell card that deals 2 damage
@@ -1653,14 +1760,14 @@ class StealthMechanicTests(AttackValidationTestBase):
         result = resolve(play_effect, self.game_state)
 
         # Should be rejected - spells cannot target stealthed creatures
-        self.assertEqual(result.type, 'outcome_rejected')
+        self.assertEqual(result.type, "outcome_rejected")
         self.assertIn("stealth", result.reason.lower())
 
     def test_spell_can_target_non_stealthed_creature_when_stealth_exists(self):
         """Test that a spell CAN target non-stealthed creatures even when stealth exists."""
+        from apps.builder.schemas import Battlecry
         from apps.gameplay.engine.dispatcher import resolve
         from apps.gameplay.schemas.effects import PlayEffect
-        from apps.builder.schemas import Battlecry
         from apps.gameplay.schemas.game import CardInPlay
 
         # Create a spell card that deals 2 damage
@@ -1698,27 +1805,27 @@ class StealthMechanicTests(AttackValidationTestBase):
         result = resolve(play_effect, self.game_state)
 
         # Should succeed
-        self.assertEqual(result.type, 'outcome_success')
+        self.assertEqual(result.type, "outcome_success")
 
     def test_hero_power_cannot_target_stealthed_creature(self):
         """Test that hero power cannot target a stealthed creature."""
         from apps.gameplay.engine.dispatcher import resolve
         from apps.gameplay.schemas.effects import UseHeroEffect
 
-        hero_a = self.game_state.heroes['side_a']
+        hero_a = self.game_state.heroes["side_a"]
 
         # Try to use hero power targeting the stealthed creature
         effect = UseHeroEffect(
-            side='side_a',
+            side="side_a",
             source_id=hero_a.hero_id,
-            target_type='creature',
-            target_id='stealth_b_1',  # Stealth creature
+            target_type="creature",
+            target_id="stealth_b_1",  # Stealth creature
         )
 
         result = resolve(effect, self.game_state)
 
         # Should be rejected - hero power cannot target stealthed creatures
-        self.assertEqual(result.type, 'outcome_rejected')
+        self.assertEqual(result.type, "outcome_rejected")
         self.assertIn("stealth", result.reason.lower())
 
     def test_hero_power_can_target_non_stealthed_creature_when_stealth_exists(self):
@@ -1726,50 +1833,50 @@ class StealthMechanicTests(AttackValidationTestBase):
         from apps.gameplay.engine.dispatcher import resolve
         from apps.gameplay.schemas.effects import UseHeroEffect
 
-        hero_a = self.game_state.heroes['side_a']
+        hero_a = self.game_state.heroes["side_a"]
 
         # Try to use hero power targeting a non-stealthed creature
         effect = UseHeroEffect(
-            side='side_a',
+            side="side_a",
             source_id=hero_a.hero_id,
-            target_type='creature',
-            target_id='creature_b_1',  # Non-stealth creature
+            target_type="creature",
+            target_id="creature_b_1",  # Non-stealth creature
         )
 
         result = resolve(effect, self.game_state)
 
         # Should succeed
-        self.assertEqual(result.type, 'outcome_success')
+        self.assertEqual(result.type, "outcome_success")
 
     def test_hero_power_can_target_hero_when_stealth_exists(self):
         """Test that hero power CAN target enemy hero even when stealth creatures exist."""
         from apps.gameplay.engine.dispatcher import resolve
         from apps.gameplay.schemas.effects import UseHeroEffect
 
-        hero_a = self.game_state.heroes['side_a']
-        hero_b = self.game_state.heroes['side_b']
+        hero_a = self.game_state.heroes["side_a"]
+        hero_b = self.game_state.heroes["side_b"]
 
         # Try to use hero power targeting the enemy hero
         effect = UseHeroEffect(
-            side='side_a',
+            side="side_a",
             source_id=hero_a.hero_id,
-            target_type='hero',
+            target_type="hero",
             target_id=hero_b.hero_id,
         )
 
         result = resolve(effect, self.game_state)
 
         # Should succeed - stealth doesn't protect heroes
-        self.assertEqual(result.type, 'outcome_success')
+        self.assertEqual(result.type, "outcome_success")
 
     def test_spell_can_target_hero_when_stealth_exists(self):
         """Test that a spell CAN target enemy hero even when stealth creatures exist."""
+        from apps.builder.schemas import Battlecry
         from apps.gameplay.engine.dispatcher import resolve
         from apps.gameplay.schemas.effects import PlayEffect
-        from apps.builder.schemas import Battlecry
         from apps.gameplay.schemas.game import CardInPlay
 
-        hero_b = self.game_state.heroes['side_b']
+        hero_b = self.game_state.heroes["side_b"]
 
         # Create a spell card that deals damage to hero
         spell_card = CardInPlay(
@@ -1806,28 +1913,28 @@ class StealthMechanicTests(AttackValidationTestBase):
         result = resolve(play_effect, self.game_state)
 
         # Should succeed - stealth doesn't protect heroes
-        self.assertEqual(result.type, 'outcome_success')
+        self.assertEqual(result.type, "outcome_success")
 
     def test_spell_can_target_own_stealthed_creature(self):
         """Test that you CAN target your own stealthed creature with a spell."""
+        from apps.builder.schemas import Battlecry, Stealth
         from apps.gameplay.engine.dispatcher import resolve
         from apps.gameplay.schemas.effects import PlayEffect
-        from apps.builder.schemas import Battlecry, Stealth
         from apps.gameplay.schemas.game import CardInPlay, Creature
 
         # Add a friendly stealth creature
         stealth_creature = Creature(
-            creature_id='stealth_a_1',
-            card_id='card_stealth_a_1',
-            name='Friendly Stealth',
-            description='Has Stealth',
+            creature_id="stealth_a_1",
+            card_id="card_stealth_a_1",
+            name="Friendly Stealth",
+            description="Has Stealth",
             attack=2,
             health=2,
             traits=[Stealth()],
-            exhausted=False
+            exhausted=False,
         )
-        self.game_state.creatures['stealth_a_1'] = stealth_creature
-        self.game_state.board['side_a'].append('stealth_a_1')
+        self.game_state.creatures["stealth_a_1"] = stealth_creature
+        self.game_state.board["side_a"].append("stealth_a_1")
 
         # Create a buff spell (using DamageAction just for mechanics testing, assuming friendly fire is allowed by rules but maybe usually buffs)
         # Let's use HealAction or just DamageAction (mechanically same targeting logic in play handler)
@@ -1842,7 +1949,7 @@ class StealthMechanicTests(AttackValidationTestBase):
                     actions=[
                         DamageAction(
                             amount=1,
-                            target="creature", # Can target any creature
+                            target="creature",  # Can target any creature
                         )
                     ]
                 )
@@ -1865,4 +1972,4 @@ class StealthMechanicTests(AttackValidationTestBase):
         result = resolve(play_effect, self.game_state)
 
         # Should succeed - you can target your own stealth units
-        self.assertEqual(result.type, 'outcome_success')
+        self.assertEqual(result.type, "outcome_success")

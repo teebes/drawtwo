@@ -160,10 +160,10 @@ function getAllowedTargets(card: any): Array<'card' | 'hero' | 'any'> {
 
     for (const action of battlecry.actions || []) {
         if (action.action === 'damage') {
-            if (action.target === 'creature' || action.target === 'enemy') {
+            if (action.target === 'creature' || action.target === 'enemy' || action.target === 'friendly') {
                 allowed.add('card')
             }
-            if (action.target === 'hero' || action.target === 'enemy') {
+            if (action.target === 'hero' || action.target === 'enemy' || action.target === 'friendly') {
                 allowed.add('hero')
             }
         }
@@ -207,8 +207,10 @@ function getTargetScope(card: any): 'enemy' | 'friendly' {
         if (action.action === 'buff') {
             return 'friendly'
         }
-        // Damage actions target enemies
         if (action.action === 'damage') {
+            if (action.target === 'friendly' || action.target === 'self') {
+                return 'friendly'
+            }
             return 'enemy'
         }
         // Remove actions target enemies

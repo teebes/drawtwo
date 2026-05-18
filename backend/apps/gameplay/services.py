@@ -882,6 +882,9 @@ class GameService:
                 (
                     (isinstance(action, HealAction) and action.target == "friendly")
                     or (isinstance(action, DamageAction) and action.target == "self")
+                    or (
+                        isinstance(action, DamageAction) and action.target == "friendly"
+                    )
                     or isinstance(action, BuffAction)
                 )
                 for action in active_hero.hero_power.actions
@@ -1021,6 +1024,8 @@ class GameService:
 
         if isinstance(action, DamageAction):
             opposing_side = "side_b" if event.side == "side_a" else "side_a"
+            same_side = event.side
+            target_side = opposing_side
 
             # Determine base target
             if action.target == "hero":
@@ -1037,7 +1042,13 @@ class GameService:
                 # 'enemy' can be hero or creature, use event target
                 base_target_type = event.target_type or "hero"
                 base_target_id = event.target_id or state.heroes[opposing_side].hero_id
+            elif action.target == "friendly":
+                # 'friendly' can be own hero or own creature, use event target
+                target_side = same_side
+                base_target_type = event.target_type or "hero"
+                base_target_id = event.target_id or state.heroes[same_side].hero_id
             elif action.target == "self":
+                target_side = same_side
                 if source_type in ("hero", "creature") and source_id:
                     base_target_type = source_type
                     base_target_id = source_id
@@ -1056,29 +1067,30 @@ class GameService:
                     targets = [(base_target_type, base_target_id)]
 
             elif action.scope == "all":
-                # Hit all enemies (all creatures + hero on opposing side)
-                for creature_id in state.board[opposing_side]:
+                # Hit all valid units on the selected side.
+                side = same_side if action.target == "friendly" else opposing_side
+                for creature_id in state.board[side]:
                     targets.append(("creature", creature_id))
-                targets.append(("hero", state.heroes[opposing_side].hero_id))
+                targets.append(("hero", state.heroes[side].hero_id))
 
             elif action.scope == "cleave":
                 # Hit target and adjacent creatures
                 if (
                     base_target_type == "creature"
-                    and base_target_id in state.board[opposing_side]
+                    and base_target_id in state.board[target_side]
                 ):
-                    target_index = state.board[opposing_side].index(base_target_id)
+                    target_index = state.board[target_side].index(base_target_id)
                     # Add the main target
                     targets.append((base_target_type, base_target_id))
                     # Add left neighbor
                     if target_index > 0:
                         targets.append(
-                            ("creature", state.board[opposing_side][target_index - 1])
+                            ("creature", state.board[target_side][target_index - 1])
                         )
                     # Add right neighbor
-                    if target_index < len(state.board[opposing_side]) - 1:
+                    if target_index < len(state.board[target_side]) - 1:
                         targets.append(
-                            ("creature", state.board[opposing_side][target_index + 1])
+                            ("creature", state.board[target_side][target_index + 1])
                         )
                 elif base_target_id:
                     # If not a creature, just hit the single target

@@ -4,7 +4,7 @@ from apps.builder.schemas import DamageAction, DrawAction, HeroPower, Taunt
 from apps.gameplay.agents.legal import list_legal_commands
 from apps.gameplay.agents.observation import filter_state_for_player, make_observation
 from apps.gameplay.agents.simulator import apply_command
-from apps.gameplay.schemas.commands import AttackCommand
+from apps.gameplay.schemas.commands import AttackCommand, UseHeroCommand
 from apps.gameplay.schemas.game import CardInPlay, Creature, GameState, HeroInPlay
 
 
@@ -173,3 +173,25 @@ class LegalCommandTests(TestCase):
         result = apply_command(state, "side_a", command)
 
         self.assertFalse(result.errors)
+
+    def test_friendly_damage_hero_power_lists_own_targets(self):
+        state = make_agent_test_state()
+        state.heroes["side_a"].exhausted = False
+        state.heroes["side_a"].hero_power = HeroPower(
+            name="Pact",
+            actions=[
+                DamageAction(amount=1, target="friendly"),
+                DrawAction(amount=1),
+            ],
+        )
+
+        commands = [
+            command
+            for command in list_legal_commands(state, "side_a")
+            if isinstance(command, UseHeroCommand)
+        ]
+
+        self.assertEqual(
+            {(command.target_type, command.target_id) for command in commands},
+            {("creature", "creature_a_1"), ("hero", "hero_a")},
+        )
