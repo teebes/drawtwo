@@ -84,6 +84,9 @@ def validate_deck_card_count(
 
 
 def validate_deck_for_play(deck, deck_label: str = "Deck") -> str | None:
+    if getattr(deck, "archived_at", None):
+        return f"{deck_label} has been archived"
+
     config = get_title_config(deck.title)
     deck_size = deck.deck_size
 

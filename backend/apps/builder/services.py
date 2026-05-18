@@ -410,12 +410,21 @@ class TitleService:
             title=self.title, slug=resource.hero, is_latest=True
         )
 
-        deck, is_new = collection_models.Deck.objects.get_or_create(
-            ai_player=self.get_default_ai_player(),
+        ai_player = self.get_default_ai_player()
+        deck = collection_models.Deck.objects.filter(
+            ai_player=ai_player,
             title=self.title,
             name=resource.name,
-            hero=hero,
-        )
+            archived_at__isnull=True,
+        ).first()
+        is_new = deck is None
+        if is_new:
+            deck = collection_models.Deck.objects.create(
+                ai_player=ai_player,
+                title=self.title,
+                name=resource.name,
+                hero=hero,
+            )
 
         deck.hero = hero
         deck.save()

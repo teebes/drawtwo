@@ -1,8 +1,9 @@
 from django.contrib.auth import get_user_model
 from django.db import models
+from django.utils import timezone
 
+from apps.builder.models import AIPlayer, CardTemplate, HeroTemplate, Title
 from apps.core.models import TimestampedModel
-from apps.builder.models import CardTemplate, HeroTemplate, AIPlayer, Title
 
 User = get_user_model()
 
@@ -40,6 +41,14 @@ class OwnedHero(TimestampedModel):
         return f"{self.user.email} → {self.hero.name}"
 
 
+class DeckQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(archived_at__isnull=True)
+
+    def archived(self):
+        return self.filter(archived_at__isnull=False)
+
+
 class Deck(TimestampedModel):
     # Either user-owned or AI-owned (exactly one must be set)
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
@@ -52,31 +61,34 @@ class Deck(TimestampedModel):
 
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
-    cards = models.ManyToManyField(CardTemplate, through='DeckCard')
+    cards = models.ManyToManyField(CardTemplate, through="DeckCard")
     hero = models.ForeignKey(HeroTemplate, on_delete=models.PROTECT)
 
     script = models.JSONField(default=dict, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    objects = DeckQuerySet.as_manager()
 
     class Meta:
         constraints = [
             # Ensure exactly one owner
             models.CheckConstraint(
                 check=(
-                    models.Q(user__isnull=False, ai_player__isnull=True) |
-                    models.Q(user__isnull=True, ai_player__isnull=False)
+                    models.Q(user__isnull=False, ai_player__isnull=True)
+                    | models.Q(user__isnull=True, ai_player__isnull=False)
                 ),
-                name='deck_exactly_one_owner'
+                name="deck_exactly_one_owner",
             ),
             # Unique name per user
             models.UniqueConstraint(
                 fields=["user", "name"],
-                condition=models.Q(user__isnull=False),
+                condition=models.Q(user__isnull=False, archived_at__isnull=True),
                 name="deck_u_user_name",
             ),
             # Unique name per AI player
             models.UniqueConstraint(
                 fields=["ai_player", "name"],
-                condition=models.Q(ai_player__isnull=False),
+                condition=models.Q(ai_player__isnull=False, archived_at__isnull=True),
                 name="deck_u_ai_name",
             ),
         ]
@@ -99,13 +111,25 @@ class Deck(TimestampedModel):
         return self.ai_player is not None
 
     @property
+    def is_archived(self):
+        return self.archived_at is not None
+
+    def archive(self, when=None):
+        if self.archived_at:
+            return False
+
+        when = when or timezone.now()
+        self.archived_at = when
+        self.updated_at = when
+        self.save(update_fields=["archived_at", "updated_at"])
+        return True
+
+    @property
     def deck_size(self):
         """
         Returns the total number of cards in the deck, counting duplicates.
         """
-        return self.deckcard_set.aggregate(
-            total=models.Sum('count')
-        )['total'] or 0
+        return self.deckcard_set.aggregate(total=models.Sum("count"))["total"] or 0
 
     def __str__(self):
         return f"{self.owner_name} → {self.name}"
@@ -113,39 +137,26 @@ class Deck(TimestampedModel):
 
 class UserTitleDeckPreference(TimestampedModel):
     user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='deck_preferences'
+        User, on_delete=models.CASCADE, related_name="deck_preferences"
     )
     title = models.ForeignKey(
-        Title,
-        on_delete=models.CASCADE,
-        related_name='deck_preferences'
+        Title, on_delete=models.CASCADE, related_name="deck_preferences"
     )
     last_used_deck = models.ForeignKey(
-        Deck,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='+'
+        Deck, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     last_used_friend = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='+'
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['user', 'title'],
-                name='user_title_deck_preference_unique'
+                fields=["user", "title"], name="user_title_deck_preference_unique"
             ),
         ]
         indexes = [
-            models.Index(fields=['user', 'title']),
+            models.Index(fields=["user", "title"]),
         ]
 
     def __str__(self):

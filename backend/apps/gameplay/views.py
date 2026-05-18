@@ -44,6 +44,8 @@ def _update_game_time_per_turn(game: Game):
 def _set_last_used_deck(user, deck: Deck | None) -> None:
     if not deck or deck.user_id != user.id:
         return
+    if deck.is_archived:
+        return
 
     UserTitleDeckPreference.objects.update_or_create(
         user=user,

@@ -77,6 +77,18 @@ class DeckMinimumCardsAPITests(TestCase):
         self.assertEqual(response.status_code, 400, response.content)
         self.assertIn("at least 10 cards", response.json()["error"])
 
+    def test_queue_rejects_archived_deck(self):
+        self.player_deck.archive()
+
+        response = self.client.post(
+            reverse("queue-ranked-match"),
+            {"deck_id": self.player_deck.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("archived", response.json()["error"])
+
     def test_game_create_rejects_player_deck_below_minimum(self):
         response = self.client.post(
             reverse("game-create"),
@@ -91,6 +103,21 @@ class DeckMinimumCardsAPITests(TestCase):
         self.assertIn(
             "Player deck must have at least 10 cards", response.json()["error"]
         )
+
+    def test_game_create_rejects_archived_player_deck(self):
+        self.player_deck.archive()
+
+        response = self.client.post(
+            reverse("game-create"),
+            {
+                "player_deck_id": self.player_deck.id,
+                "ai_deck_id": self.ai_deck.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("Player deck has been archived", response.json()["error"])
 
     def test_queue_rejects_deck_above_maximum(self):
         self.title.config = {

@@ -179,7 +179,7 @@
 
         <Panel>
           <div class="grid grid-cols-3 space-x-2">
-            <GameButton variant="danger" @click="deleteDeck">Delete Deck</GameButton>
+            <GameButton variant="danger" @click="archiveDeck">Archive Deck</GameButton>
             <router-link :to="{ name: 'DeckEdit', params: { slug: deck.title.slug, id: deck.id } }">
               <GameButton variant="secondary" class="w-full">Edit Deck</GameButton>
             </router-link>
@@ -641,12 +641,12 @@ const deleteCard = async (card: DeckCard): Promise<void> => {
   }
 }
 
-const deleteDeck = async (): Promise<void> => {
+const archiveDeck = async (): Promise<void> => {
   if (!deck.value) return
 
   // Show confirmation dialog
   const confirmed = window.confirm(
-    `Are you sure you want to delete the deck "${deck.value.name}"? This action cannot be undone.`
+    `Archive the deck "${deck.value.name}"? It will be removed from deck lists and game setup, but past games will keep using it for history.`
   )
 
   if (!confirmed) return

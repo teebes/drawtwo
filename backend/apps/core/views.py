@@ -234,7 +234,11 @@ def title_decks(request, slug):
     """Get all decks for a title."""
     title = get_title_or_403(slug, request.user)
 
-    decks = Deck.objects.filter(user=request.user, title=title)
+    decks = Deck.objects.filter(
+        user=request.user,
+        title=title,
+        archived_at__isnull=True,
+    )
     return Response(serialize_decks(decks))
 
 
@@ -247,6 +251,7 @@ def title_pve(request, slug):
     decks = Deck.objects.filter(
         ai_player__isnull=False,
         title=title,
+        archived_at__isnull=True,
     )
     return Response(
         [
