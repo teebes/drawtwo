@@ -18,7 +18,6 @@ from apps.builder.schemas import (
     Card,
     ClearAction,
     DamageAction,
-    DeckScript,
     DrawAction,
     HealAction,
     HeroPower,
@@ -554,11 +553,11 @@ class GameService:
             and game.state["active"] in game.state["ai_sides"]
         ):
             deck = getattr(game, game.state["active"])
-            script = DeckScript.model_validate(deck.script or {})
             from apps.gameplay.ai import AIMoveChooser
 
             active_side = game.state["active"]
-            ai_command = AIMoveChooser.choose_command(game_state, script)
+            ai_decision = AIMoveChooser.choose_decision(game_state, deck)
+            ai_command = ai_decision.command
             if ai_command is None:
                 ai_command = EndTurnCommand()
 
@@ -575,7 +574,7 @@ class GameService:
                     game_state=game_state,
                     side=active_side,
                     command=command_dict,
-                    actor_kind="scripted_ai",
+                    actor_kind=ai_decision.actor_kind,
                     outcome="rejected",
                     error={"reason": str(exc)},
                 )
@@ -586,7 +585,7 @@ class GameService:
                     game_state=game_state,
                     side=active_side,
                     command=command_dict,
-                    actor_kind="scripted_ai",
+                    actor_kind=ai_decision.actor_kind,
                     outcome="accepted",
                 )
 
@@ -702,7 +701,7 @@ class GameService:
                 game_state=game_state,
                 side=side,
                 command=command,
-                actor_kind="scripted_ai" if side in game_state.ai_sides else "human",
+                actor_kind=GameService._actor_kind_for_side(game, game_state, side),
                 outcome="rejected",
                 error={"reason": str(exc)},
             )
@@ -713,10 +712,20 @@ class GameService:
             game_state=game_state,
             side=side,
             command=command,
-            actor_kind="scripted_ai" if side in game_state.ai_sides else "human",
+            actor_kind=GameService._actor_kind_for_side(game, game_state, side),
             outcome="accepted",
         )
         game.enqueue(effects)
+
+    @staticmethod
+    def _actor_kind_for_side(game, game_state: GameState, side: str) -> str:
+        if side not in game_state.ai_sides:
+            return "human"
+
+        deck = getattr(game, side)
+        from apps.gameplay.ai import AIMoveChooser
+
+        return AIMoveChooser.actor_kind_for_deck(deck)
 
     @staticmethod
     def _record_action_decision(

@@ -219,7 +219,33 @@ docker-compose exec backend python -m ai.evaluation.evaluate_policy \
 
 That output JSONL is also ignored by git.
 
-## Step 7: Add Human Replay Data Later
+## Step 7: Try A Checkpoint In Local PvE
+
+Once a checkpoint evaluates without command errors, point a local AI deck at it:
+
+```bash
+docker-compose exec backend python manage.py set_ai_policy \
+  --ai-deck-id AI_DECK_ID \
+  --policy linear_model \
+  --model /app/ai/checkpoints/archetype-linear-v1.json
+```
+
+Then start a normal PvE game against that AI deck in the app. Only AI players
+with `policy=linear_model` use the checkpoint; every other AI deck stays on the
+existing scripted policy.
+
+To revert the AI player:
+
+```bash
+docker-compose exec backend python manage.py set_ai_policy \
+  --ai-deck-id AI_DECK_ID \
+  --policy scripted
+```
+
+See `docs/architecture/ai-live-model-pve.md` for the implementation details and
+production caveats.
+
+## Step 8: Add Human Replay Data Later
 
 Once prod has useful rows, export them:
 
