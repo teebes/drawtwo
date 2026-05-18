@@ -19,7 +19,7 @@ seed for that split.
 
 The first local training loop is deliberately dependency-free:
 
-- `data/replays.py` reads exported JSONL decisions.
+- `data/replays.py` streams exported JSONL decisions.
 - `archetype/features.py` converts a public observation and candidate command
   into sparse features.
 - `models/linear_policy.py` trains and serves a linear command ranker.
@@ -56,6 +56,10 @@ docker-compose exec backend python -m ai.training.train_linear_policy \
   --input /app/ai/runs/scripted-selfplay.jsonl \
   --output /app/ai/checkpoints/archetype-linear.json
 ```
+
+The trainer streams JSONL rows and uses a bounded shuffle buffer, so large
+replay files do not need to fit in memory. Use `--limit` for smoke runs and
+`--shuffle-buffer` to trade memory for better approximate shuffling.
 
 Evaluate it:
 

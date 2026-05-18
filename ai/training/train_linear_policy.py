@@ -3,8 +3,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from ai.data.replays import load_replay_decisions
-from ai.models.linear_policy import train_linear_policy
+from ai.data.replays import iter_replay_decisions
+from ai.models.linear_policy import train_linear_policy_streaming
 
 
 def parse_args() -> argparse.Namespace:
@@ -22,6 +22,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--learning-rate", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--limit", type=int)
+    parser.add_argument(
+        "--shuffle-buffer",
+        type=int,
+        default=512,
+        help=(
+            "Number of replay rows to keep in memory for approximate shuffling. "
+            "Higher values shuffle better but use more memory."
+        ),
+    )
+    parser.add_argument(
+        "--accuracy-limit",
+        type=int,
+        help="Only use the first N rows for the final training-accuracy pass.",
+    )
     parser.add_argument("--title", help="Only train on rows for this title slug.")
     parser.add_argument("--actor-kind", help="Only train on rows for this actor kind.")
     parser.add_argument(
@@ -40,23 +54,29 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     input_paths = [Path(path) for path in args.input]
-    decisions = load_replay_decisions(
-        input_paths,
-        accepted_only=not args.include_rejected,
-        actor_kind=args.actor_kind,
-        title=args.title,
-        limit=args.limit,
-    )
-    model, stats = train_linear_policy(
-        decisions,
+    shuffle_buffer_size = 0 if args.no_shuffle else args.shuffle_buffer
+
+    def decision_iter():
+        return iter_replay_decisions(
+            input_paths,
+            accepted_only=not args.include_rejected,
+            actor_kind=args.actor_kind,
+            title=args.title,
+            limit=args.limit,
+        )
+
+    model, stats = train_linear_policy_streaming(
+        decision_iter,
         epochs=args.epochs,
         learning_rate=args.learning_rate,
-        shuffle=not args.no_shuffle,
+        shuffle_buffer_size=shuffle_buffer_size,
         seed=args.seed,
+        accuracy_limit=args.accuracy_limit,
         metadata={
             "input_paths": [str(path) for path in input_paths],
             "title_filter": args.title,
             "actor_kind_filter": args.actor_kind,
+            "limit": args.limit,
         },
     )
     model.save(args.output)

@@ -131,6 +131,32 @@ docker-compose exec backend python -m ai.training.train_linear_policy \
   --output /app/ai/checkpoints/archetype-linear-v1.json
 ```
 
+The trainer streams replay rows from disk. It no longer needs to load the whole
+JSONL file into memory, so multi-GB self-play files are expected to work. By
+default it keeps a small bounded shuffle buffer in memory and rereads the input
+once per epoch, plus one final pass for training accuracy.
+
+For a first smoke run on a large file, use a limit:
+
+```bash
+docker-compose exec backend python -m ai.training.train_linear_policy \
+  --input /app/ai/runs/archetype-scripted-selfplay.jsonl \
+  --output /app/ai/checkpoints/archetype-linear-smoke.json \
+  --limit 10000 \
+  --epochs 3
+```
+
+For a full large-file run, remove `--limit`. If memory is tight, lower the
+shuffle buffer:
+
+```bash
+docker-compose exec backend python -m ai.training.train_linear_policy \
+  --input /app/ai/runs/archetype-scripted-selfplay.jsonl \
+  --output /app/ai/checkpoints/archetype-linear-full.json \
+  --epochs 5 \
+  --shuffle-buffer 128
+```
+
 This creates:
 
 ```text
@@ -148,6 +174,14 @@ The current checkpoint is just JSON. There are no neural tensors yet.
 
 Training does not write to the database. It reads JSONL rows and writes the
 checkpoint file specified by `--output`.
+
+Useful training flags:
+
+- `--limit N`: train on the first N usable rows.
+- `--epochs N`: reread the streamed dataset N times.
+- `--shuffle-buffer N`: approximate shuffle with at most N rows in memory.
+- `--no-shuffle`: train in file order.
+- `--accuracy-limit N`: only use N rows for the final accuracy pass.
 
 ## Step 6: Evaluate The Checkpoint
 

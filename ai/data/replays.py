@@ -114,7 +114,26 @@ def load_replay_decisions(
     title: str | None = None,
     limit: int | None = None,
 ) -> list[ReplayDecision]:
-    decisions: list[ReplayDecision] = []
+    return list(
+        iter_replay_decisions(
+            paths,
+            accepted_only=accepted_only,
+            actor_kind=actor_kind,
+            title=title,
+            limit=limit,
+        )
+    )
+
+
+def iter_replay_decisions(
+    paths: Iterable[str | Path],
+    *,
+    accepted_only: bool = True,
+    actor_kind: str | None = None,
+    title: str | None = None,
+    limit: int | None = None,
+) -> Iterable[ReplayDecision]:
+    yielded = 0
     for path in paths:
         for line_number, row in iter_jsonl(path):
             if accepted_only and row.get("outcome", "accepted") != "accepted":
@@ -132,7 +151,7 @@ def load_replay_decisions(
             if not decision.command or not decision.legal_commands:
                 continue
 
-            decisions.append(decision)
-            if limit is not None and len(decisions) >= limit:
-                return decisions
-    return decisions
+            yield decision
+            yielded += 1
+            if limit is not None and yielded >= limit:
+                return

@@ -74,6 +74,12 @@ docker-compose exec backend python -m ai.training.train_linear_policy \
   --output /app/ai/checkpoints/archetype-linear.json
 ```
 
+Training streams JSONL input from disk. The CLI rereads the source file for
+each epoch instead of keeping the whole dataset in memory, and uses
+`--shuffle-buffer` for bounded approximate shuffling. This keeps the current
+linear trainer usable with multi-GB self-play files while preserving simple
+JSONL artifacts.
+
 Evaluate the model:
 
 ```bash
