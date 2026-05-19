@@ -91,6 +91,7 @@ env/
 
 # Docker
 .dockerignore
+!/.dockerignore
 
 # Node.js (for future frontend)
 node_modules/

@@ -24,11 +24,12 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-COPY requirements.txt /app/
+COPY backend/requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy project
-COPY . /app/
+# Copy backend and shared AI workspace into the runtime image
+COPY backend/ /app/
+COPY ai/ /app/ai/
 
 # Create a non-root user with an interactive shell for docker-compose exec
 RUN groupadd -r appuser && useradd -m -r -g appuser -s /bin/bash appuser
@@ -37,11 +38,11 @@ RUN groupadd -r appuser && useradd -m -r -g appuser -s /bin/bash appuser
 RUN mkdir -p /app/staticfiles
 
 # Create entrypoint script
-COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY backend/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 # Configure interactive shell niceties for docker-compose exec sessions
-COPY docker-bashrc /home/appuser/.bashrc
+COPY backend/docker-bashrc /home/appuser/.bashrc
 
 # Change ownership of app directory to the non-root user
 RUN chown -R appuser:appuser /app /home/appuser

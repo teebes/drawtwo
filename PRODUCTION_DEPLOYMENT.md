@@ -14,7 +14,7 @@ make build-prod
 If you prefer to run the `docker build` commands manually, pass the build arg:
 
 ```bash
-docker build -t teebes/drawtwo-backend:latest ./backend
+docker build -t teebes/drawtwo-backend:latest -f backend/Dockerfile .
 docker build -t teebes/drawtwo-frontend:latest \
   -f frontend/Dockerfile.production \
   --build-arg VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID \

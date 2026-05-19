@@ -28,7 +28,9 @@ services:
       retries: 5
 
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.development
       - SECRET_KEY=${SECRET_KEY:-django-insecure-dev-key}
@@ -64,7 +66,9 @@ services:
     command: ["daphne", "-b", "0.0.0.0", "-p", "8000", "config.asgi:application"]
 
   celery-worker:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.development
       - SECRET_KEY=${SECRET_KEY:-django-insecure-dev-key}
@@ -93,7 +97,9 @@ services:
     command: ["celery", "-A", "config", "worker", "--loglevel=info"]
 
   celery-beat:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.development
       - SECRET_KEY=${SECRET_KEY:-django-insecure-dev-key}

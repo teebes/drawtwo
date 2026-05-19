@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -26,15 +29,15 @@ jobs:
           - 5432:5432
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v6
       with:
         python-version: '3.11'
 
     - name: Cache pip dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v5
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
@@ -89,18 +92,18 @@ jobs:
     - name: Test Docker build
       run: |
         # Just test that the Docker image builds successfully
-        docker build -t drawtwo-backend ./backend
+        docker build -t drawtwo-backend -f backend/Dockerfile .
 
-        # Verify the image exists and Python works (bypass entrypoint)
-        docker run --rm --entrypoint="" drawtwo-backend python --version
+        # Verify the shared AI package is present in the backend image
+        docker run --rm --entrypoint="" drawtwo-backend python -c "import ai.models.linear_policy"
 
   security:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v6
       with:
         python-version: '3.11'
 
@@ -118,7 +121,7 @@ jobs:
         bandit -r backend/ -x backend/*/tests/ -f json -o bandit-report.json || true
 
     - name: Upload security report
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: security-report
