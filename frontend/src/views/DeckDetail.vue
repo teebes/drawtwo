@@ -187,7 +187,7 @@
               :variant="isAddCardMode ? 'secondary' : 'primary'"
               @click="toggleAddCardMode"
             >
-              {{ isAddCardMode ? 'Cancel Edit Cards' : 'Edit Cards' }}
+              {{ isAddCardMode ? 'Done' : 'Edit Cards' }}
             </GameButton>
           </div>
         </Panel>
