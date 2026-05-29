@@ -201,6 +201,7 @@ const yamlPlaceholder = `# Example YAML format for ingestion
   hero_power:
     name: Strike
     description: Deal 1 damage to an enemy.
+    cost: 2
     actions:
       - action: damage
         amount: 1

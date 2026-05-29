@@ -171,7 +171,7 @@
                   <td class="ui-table-cell">
                     <div class="text-sm text-gray-900 dark:text-white">{{ heroPowerName(hero) }}</div>
                     <div class="text-xs text-gray-500 dark:text-gray-400">
-                      {{ heroPowerActionCount(hero) }} action{{ heroPowerActionCount(hero) === 1 ? '' : 's' }}
+                      {{ heroPowerActionCount(hero) }} action{{ heroPowerActionCount(hero) === 1 ? '' : 's' }} - {{ heroPowerCost(hero) }} energy
                     </div>
                   </td>
                   <td class="ui-table-cell">
@@ -353,6 +353,7 @@ interface HeroConfig {
   hero_power: {
     name?: string
     description?: string
+    cost?: number
     actions?: unknown[]
   }
   spec: Record<string, unknown>
@@ -509,6 +510,12 @@ const heroPowerName = (hero: HeroConfig): string => {
 
 const heroPowerActionCount = (hero: HeroConfig): number => {
   return Array.isArray(hero.hero_power?.actions) ? hero.hero_power.actions.length : 0
+}
+
+const heroPowerCost = (hero: HeroConfig): number => {
+  const cost = Number(hero.hero_power?.cost ?? 0)
+  if (!Number.isFinite(cost)) return 0
+  return Math.max(0, Math.trunc(cost))
 }
 
 const fetchContent = async (): Promise<void> => {

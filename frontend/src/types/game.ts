@@ -50,7 +50,8 @@ export interface Creature {
 export interface HeroPower {
   name: string
   actions: CardAction[]
-  description: string
+  description?: string | null
+  cost?: number
 }
 
 export interface HeroInPlay {

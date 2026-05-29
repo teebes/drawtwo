@@ -174,6 +174,23 @@ class LegalCommandTests(TestCase):
 
         self.assertFalse(result.errors)
 
+    def test_paid_hero_power_is_not_legal_without_enough_energy(self):
+        state = make_agent_test_state()
+        state.heroes["side_a"].exhausted = False
+        state.heroes["side_a"].hero_power = HeroPower(
+            name="Draw",
+            cost=2,
+            actions=[DrawAction(amount=1)],
+        )
+        state.mana_pool["side_a"] = 1
+        state.mana_used["side_a"] = 0
+
+        commands = list_legal_commands(state, "side_a")
+
+        self.assertFalse(
+            any(isinstance(command, UseHeroCommand) for command in commands)
+        )
+
     def test_friendly_damage_hero_power_lists_own_targets(self):
         state = make_agent_test_state()
         state.heroes["side_a"].exhausted = False

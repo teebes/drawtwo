@@ -256,7 +256,7 @@ class TestTitleAPIPermissions(APITestCase):
             name="Warrior",
             description="Front line hero",
             health=30,
-            hero_power={"name": "Strike", "actions": []},
+            hero_power={"name": "Strike", "cost": 2, "actions": []},
         )
         card = CardTemplate.objects.create(
             title=self.draft_title,
@@ -290,7 +290,7 @@ class TestTitleAPIPermissions(APITestCase):
             name="Warrior",
             description="Front line hero",
             health=30,
-            hero_power={"name": "Strike", "actions": []},
+            hero_power={"name": "Strike", "cost": 2, "actions": []},
         )
         CardTemplate.objects.create(
             title=self.draft_title,
@@ -330,7 +330,7 @@ class TestTitleAPIPermissions(APITestCase):
             name="Warrior",
             description="Front line hero",
             health=30,
-            hero_power={"name": "Strike", "actions": []},
+            hero_power={"name": "Strike", "cost": 2, "actions": []},
         )
 
         self.client.force_authenticate(user=self.author)
@@ -348,6 +348,7 @@ class TestTitleAPIPermissions(APITestCase):
         self.assertEqual(data["name"], "Warrior")
         self.assertEqual(data["health"], 30)
         self.assertEqual(data["hero_power"]["name"], "Strike")
+        self.assertEqual(data["hero_power"]["cost"], 2)
 
     def test_other_user_cannot_read_hero_yaml(self):
         HeroTemplate.objects.create(
@@ -596,6 +597,7 @@ class TestIngestion(TestCase):
             armor: 1
           hero_power:
             name: Strike
+            cost: 2
             actions: []
         - type: card
           card_type: spell
@@ -639,6 +641,7 @@ class TestIngestion(TestCase):
         self.assertEqual(hero.name, "Warrior")
         self.assertEqual(hero.faction.slug, "guard")
         self.assertEqual(hero.spec, {"armor": 1})
+        self.assertEqual(hero.hero_power["cost"], 2)
         card.refresh_from_db()
         self.assertEqual(card.id, existing_card_id)
         self.assertEqual(card.name, "Shield Slam")

@@ -89,6 +89,12 @@ function formatDuration(seconds: number): string {
   return `${seconds}s`
 }
 
+function heroPowerCost(hero: HeroInPlay | null | undefined): number {
+  const cost = Number(hero?.hero_power?.cost ?? 0)
+  if (!Number.isFinite(cost)) return 0
+  return Math.max(0, Math.trunc(cost))
+}
+
 export const useGameStore = defineStore('game', {
   state: (): GameStoreState => ({
     gameState: createInitialGameState(),
@@ -311,7 +317,11 @@ export const useGameStore = defineStore('game', {
       const hero = state.gameState.heroes[state.viewer]
       if (!hero) return false
 
-      return !hero.exhausted
+      const pool = state.gameState.mana_pool?.[state.viewer] || 0
+      const used = state.gameState.mana_used?.[state.viewer] || 0
+      const energy = pool - used
+
+      return !hero.exhausted && heroPowerCost(hero) <= energy
     },
 
     isRankedGame: (state): boolean => {

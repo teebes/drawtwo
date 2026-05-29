@@ -685,6 +685,15 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
     if hero.exhausted:
         return Rejected(reason="Hero is exhausted")
 
+    cost = hero.hero_power.cost or 0
+    usable_mana = state.mana_pool.get(effect.side, 0) - state.mana_used.get(
+        effect.side, 0
+    )
+    if cost > usable_mana:
+        return Rejected(reason="Not enough energy to use hero power")
+
+    state.mana_used[effect.side] = state.mana_used.get(effect.side, 0) + cost
+
     child_effects = []
 
     use_hero_event = UseHeroEvent(

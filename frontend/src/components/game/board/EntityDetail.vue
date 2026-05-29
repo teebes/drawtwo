@@ -82,7 +82,7 @@
                         :disabled="!canUseHero"
                         class="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:opacity-50 text-white rounded-lg transition-colors"
                     >
-                        Use Hero Power
+                        {{ heroPowerButtonLabel }}
                     </button>
                 </template>
 
@@ -181,6 +181,17 @@ const entityDescription = computed(() => {
     return 'No description'
 })
 
+const heroPowerCost = computed(() => {
+    const cost = Number(props.hero?.hero_power?.cost ?? 0)
+    if (!Number.isFinite(cost)) return 0
+    return Math.max(0, Math.trunc(cost))
+})
+
+const heroPowerButtonLabel = computed(() => {
+    if (heroPowerCost.value <= 0) return 'Use Hero Power'
+    return `Use Hero Power (${heroPowerCost.value} Energy)`
+})
+
 const canPlayCard = computed(() => {
     if (props.entityType !== 'card' || !props.card) return false
 
@@ -212,6 +223,11 @@ const errorMessage = computed(() => {
     }
 
     if (props.entityType === 'hero' && props.hero) {
+        const isOwnMainPhase = gameStore.gameState.active === gameStore.currentViewer &&
+            gameStore.gameState.phase === 'main'
+        if (isOwnMainPhase && heroPowerCost.value > gameStore.ownEnergy) {
+            return `Not enough energy (need ${heroPowerCost.value}, have ${gameStore.ownEnergy})`
+        }
         if (!gameStore.canUseHero) {
             return 'Cannot use hero power'
         }

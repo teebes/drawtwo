@@ -249,6 +249,10 @@ def _hero_commands(state: GameState, side: str) -> list[Command]:
     if not hero or hero.exhausted:
         return []
 
+    mana_available = state.mana_pool.get(side, 0) - state.mana_used.get(side, 0)
+    if (hero.hero_power.cost or 0) > mana_available:
+        return []
+
     actions = _actions_from_hero(hero)
     requires_target = _requires_selected_target(actions)
 

@@ -225,6 +225,7 @@ class Deck(ResourceBase):
 class HeroPower(BaseModel):
     name: str = "Power"
     description: Optional[str] = None
+    cost: int = Field(default=0, ge=0)
     actions: List[Action] = Field(default_factory=list)
 
 

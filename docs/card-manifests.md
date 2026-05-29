@@ -63,6 +63,32 @@ Common valid trait types include `charge`, `ranged`, `taunt`, `battlecry`,
 `deathrattle`, `stealth`, and `unique`. Common action types include `draw`,
 `damage`, `heal`, `remove`, `buff`, `summon`, `clear`, and `temp_mana_boost`.
 
+## Hero Powers
+
+Hero resources define a `hero_power` with a name, optional description, optional
+energy `cost`, and one or more actions:
+
+```yaml
+- type: hero
+  slug: warrior
+  name: Warrior
+  description: Front-line fighter.
+  health: 30
+  hero_power:
+    name: Strike
+    description: Deal 1 damage to an enemy.
+    cost: 2
+    actions:
+      - action: damage
+        amount: 1
+        target: enemy
+```
+
+If `cost` is omitted, it defaults to `0`, so existing hero powers remain free.
+When `cost` is greater than `0`, the player must have that much available
+energy to use the hero power, and the energy is spent when the power is used.
+Hero powers are still limited by the normal once-per-turn exhaustion behavior.
+
 ## Hero-Specific Cards
 
 Add `hero_slugs` to make a card available only to specific heroes in the same
@@ -77,6 +103,7 @@ title:
   hero_power:
     name: Strike
     description: Deal 1 damage to an enemy.
+    cost: 2
     actions:
       - action: damage
         amount: 1
@@ -90,6 +117,7 @@ title:
   hero_power:
     name: Spark
     description: Deal 1 spell damage to an enemy.
+    cost: 1
     actions:
       - action: damage
         amount: 1

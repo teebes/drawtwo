@@ -344,6 +344,8 @@ class AttackValidationTestBase(TestCase):
         # Set active player to side_a
         self.game_state.active = "side_a"
         self.game_state.phase = "main"
+        self.game_state.mana_pool["side_a"] = 10
+        self.game_state.mana_used["side_a"] = 0
 
 
 class AttackCommandValidationTests(AttackValidationTestBase):
@@ -824,6 +826,25 @@ class HeroPowerEffectValidationTests(AttackValidationTestBase):
         self.assertEqual(result.type, "outcome_success")
         # Should have child effects
         self.assertGreater(len(result.child_effects), 0)
+
+    def test_effect_handler_rejects_hero_power_without_enough_energy(self):
+        """Hero powers with configured costs require available energy."""
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
+        self.game_state.heroes["side_a"].exhausted = False
+        self.game_state.mana_pool["side_a"] = 1
+        self.game_state.mana_used["side_a"] = 0
+
+        effect = UseHeroEffect(
+            side="side_a",
+            source_id=hero_a_id,
+            target_type="creature",
+            target_id="creature_b_1",
+        )
+
+        result = resolve(effect, self.game_state)
+
+        self.assertEqual(result.type, "outcome_rejected")
+        self.assertIn("energy", result.reason.lower())
 
     def test_hero_power_self_damage_targets_self(self):
         """Hero power should be able to damage the hero itself when target='self'."""

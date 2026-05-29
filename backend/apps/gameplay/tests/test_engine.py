@@ -1,7 +1,7 @@
 """
 Tests for game engine effect resolution.
 """
-from apps.builder.schemas import Battlecry, BuffAction, DamageAction, Charge
+from apps.builder.schemas import Battlecry, BuffAction, DamageAction, Charge, HeroPower
 from apps.gameplay.engine.dispatcher import resolve
 from apps.gameplay.schemas.engine import Success, Prevented, Rejected
 from apps.gameplay.schemas.effects import (
@@ -103,6 +103,49 @@ class EngineTests(GamePlayTestBase):
         self.assertEqual(len(result.child_effects), 2)
         self.assertEqual(result.child_effects[0].type, 'effect_damage')
         self.assertEqual(result.child_effects[1].type, 'effect_mark_exhausted')
+
+    def test_use_hero_power_rejects_when_energy_is_insufficient(self):
+        self.game_state.heroes["side_a"].hero_power = HeroPower(
+            cost=2,
+            actions=[DamageAction(amount=1, target="enemy")],
+        )
+        self.game_state.heroes["side_a"].exhausted = False
+        self.game_state.mana_pool["side_a"] = 1
+        self.game_state.mana_used["side_a"] = 0
+
+        effect = UseHeroEffect(
+            side="side_a",
+            source_id="1",
+            target_type="hero",
+            target_id="2",
+        )
+
+        result = resolve(effect, self.game_state)
+
+        self.assertTrue(isinstance(result, Rejected))
+        self.assertIn("energy", result.reason.lower())
+        self.assertEqual(self.game_state.mana_used["side_a"], 0)
+
+    def test_use_hero_power_spends_configured_energy(self):
+        self.game_state.heroes["side_a"].hero_power = HeroPower(
+            cost=2,
+            actions=[DamageAction(amount=1, target="enemy")],
+        )
+        self.game_state.heroes["side_a"].exhausted = False
+        self.game_state.mana_pool["side_a"] = 3
+        self.game_state.mana_used["side_a"] = 1
+
+        effect = UseHeroEffect(
+            side="side_a",
+            source_id="1",
+            target_type="hero",
+            target_id="2",
+        )
+
+        result = resolve(effect, self.game_state)
+
+        self.assertTrue(isinstance(result, Success))
+        self.assertEqual(result.new_state.mana_used["side_a"], 3)
 
     def test_play_spell_card(self):
         spell_card = CardInPlay(
