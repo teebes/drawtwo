@@ -58,6 +58,10 @@ ai/**/*.jsonl
 *.swo
 *~
 
+# Xcode user state
+xcuserdata/
+*.xcuserstate
+
 # OS generated files
 .DS_Store
 .DS_Store?
