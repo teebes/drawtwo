@@ -12,6 +12,7 @@ from ai.archetype.features import FEATURE_VERSION, command_features
 from ai.data.replays import ReplayDecision, command_key, find_matching_command_index
 
 MODEL_VERSION = "linear_command_ranker_v1"
+COMPATIBLE_FEATURE_VERSIONS = {FEATURE_VERSION, "archetype_linear_v1"}
 
 
 @dataclass
@@ -95,7 +96,7 @@ class LinearPolicyModel:
             raise ValueError(
                 f"Unsupported model version: {payload.get('model_version')!r}"
             )
-        if payload.get("feature_version") != FEATURE_VERSION:
+        if payload.get("feature_version") not in COMPATIBLE_FEATURE_VERSIONS:
             raise ValueError(
                 f"Unsupported feature version: {payload.get('feature_version')!r}"
             )

@@ -5,7 +5,8 @@ from typing import Any, Mapping
 
 from ai.data.replays import to_command_dict
 
-FEATURE_VERSION = "archetype_linear_v1"
+FEATURE_VERSION = "archetype_linear_v2"
+RESOURCE_BUCKETS = (0, 1, 2, 4, 7, 10)
 
 
 def _bucket(value: Any, edges: tuple[int, ...]) -> str:
@@ -62,6 +63,27 @@ def _creature(state: Mapping[str, Any], creature_id: str | None) -> dict[str, An
 def _hero_for_side(state: Mapping[str, Any], side: str) -> dict[str, Any]:
     hero = _side_map(state, "heroes").get(side) or {}
     return dict(hero) if isinstance(hero, Mapping) else {}
+
+
+def _hero_power(hero: Mapping[str, Any]) -> dict[str, Any]:
+    hero_power = hero.get("hero_power") or {}
+    return dict(hero_power) if isinstance(hero_power, Mapping) else {}
+
+
+def _hero_power_cost(hero: Mapping[str, Any]) -> int:
+    try:
+        return int(_hero_power(hero).get("cost") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _mana_available(state: Mapping[str, Any], side: str) -> int:
+    mana_pool = _side_map(state, "mana_pool")
+    mana_used = _side_map(state, "mana_used")
+    try:
+        return int(mana_pool.get(side, 0) or 0) - int(mana_used.get(side, 0) or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _side_for_creature(state: Mapping[str, Any], creature_id: str | None) -> str | None:
@@ -154,14 +176,13 @@ def _add_context_features(
     hand_counts = _side_map(state, "hand_counts")
     decks = _side_map(state, "decks")
     deck_counts = _side_map(state, "deck_counts")
-    mana_pool = _side_map(state, "mana_pool")
-    mana_used = _side_map(state, "mana_used")
+    mana_available = _mana_available(state, actor_side)
 
     context_keys: list[str] = []
 
     def add_context(name: str, value: float = 1.0) -> None:
         _add(features, name, value)
-        if len(context_keys) < 16:
+        if len(context_keys) < 24:
             context_keys.append(name)
 
     add_context("bias")
@@ -178,6 +199,9 @@ def _add_context_features(
         add_context(f"ctx:own_hero={own_hero.get('template_slug', 'unknown')}")
         add_context(
             f"ctx:own_health={_bucket(own_hero.get('health'), (5, 10, 15, 20, 30))}"
+        )
+        add_context(
+            f"ctx:own_hero_power_cost={_bucket(_hero_power_cost(own_hero), RESOURCE_BUCKETS)}"
         )
     if opponent_hero:
         add_context(
@@ -209,10 +233,7 @@ def _add_context_features(
     add_context(f"ctx:own_deck={_bucket(len(own_deck), (0, 5, 10, 20, 30))}")
     add_context(f"ctx:opponent_deck={_bucket(opponent_deck_count, (0, 5, 10, 20, 30))}")
 
-    mana_available = int(mana_pool.get(actor_side, 0) or 0) - int(
-        mana_used.get(actor_side, 0) or 0
-    )
-    add_context(f"ctx:mana_available={_bucket(mana_available, (0, 1, 2, 4, 7, 10))}")
+    add_context(f"ctx:mana_available={_bucket(mana_available, RESOURCE_BUCKETS)}")
 
     own_total_attack = 0
     opponent_total_attack = 0
@@ -302,6 +323,17 @@ def command_features(
         own_hero = _hero_for_side(state, actor_side)
         if own_hero.get("template_slug"):
             add_command(f"cmd:hero_power_template={own_hero['template_slug']}")
+        hero_power_cost = _hero_power_cost(own_hero)
+        mana_available = _mana_available(state, actor_side)
+        add_command(f"cmd:hero_power_cost={_bucket(hero_power_cost, RESOURCE_BUCKETS)}")
+        add_command(
+            f"cmd:hero_power_mana_after={_bucket(mana_available - hero_power_cost, RESOURCE_BUCKETS)}"
+        )
+        add_command(
+            "cmd:hero_power_affordable"
+            if hero_power_cost <= mana_available
+            else "cmd:hero_power_unaffordable"
+        )
         _target_features(features, state, actor_side, command_dict)
 
     elif command_type == "cmd_mulligan":

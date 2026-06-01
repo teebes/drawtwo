@@ -5,8 +5,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from ai.archetype.features import command_features
 from ai.data.replays import ReplayDecision, iter_replay_decisions
-from ai.models.linear_policy import train_linear_policy_streaming
+from ai.models.linear_policy import (
+    MODEL_VERSION,
+    LinearPolicyModel,
+    train_linear_policy_streaming,
+)
 
 
 def _row(command: dict, legal_commands: list[dict], *, outcome: str = "accepted"):
@@ -30,11 +35,21 @@ def _row(command: dict, legal_commands: list[dict], *, outcome: str = "accepted"
                     "side_a": {
                         "health": 30,
                         "hero_id": "hero_a",
+                        "hero_power": {
+                            "name": "Heal",
+                            "cost": 2,
+                            "actions": [],
+                        },
                         "template_slug": "healer",
                     },
                     "side_b": {
                         "health": 30,
                         "hero_id": "hero_b",
+                        "hero_power": {
+                            "name": "Snipe",
+                            "cost": 1,
+                            "actions": [],
+                        },
                         "template_slug": "sniper",
                     },
                 },
@@ -45,6 +60,38 @@ def _row(command: dict, legal_commands: list[dict], *, outcome: str = "accepted"
         "outcome": outcome,
         "title_slug": "archetype",
     }
+
+
+class CommandFeatureTests(unittest.TestCase):
+    def test_hero_power_features_include_cost_and_remaining_mana(self):
+        hero_command = {
+            "type": "cmd_use_hero",
+            "hero_id": "hero_a",
+            "target_type": "hero",
+            "target_id": "hero_b",
+        }
+        legal_commands = [{"type": "cmd_end_turn"}, hero_command]
+        row = _row(hero_command, legal_commands)
+        public_state = row["observation"]["public_state"]
+        public_state["mana_pool"]["side_a"] = 4
+        public_state["mana_used"]["side_a"] = 1
+
+        features = command_features(
+            row["observation"],
+            "side_a",
+            hero_command,
+            row=row,
+            legal_commands=legal_commands,
+        )
+
+        self.assertEqual(features["cmd:hero_power_cost=le_2"], 1.0)
+        self.assertEqual(features["cmd:hero_power_mana_after=le_1"], 1.0)
+        self.assertEqual(features["cmd:hero_power_affordable"], 1.0)
+        self.assertEqual(features["ctx:own_hero_power_cost=le_2"], 1.0)
+        self.assertIn(
+            "pair:ctx:mana_available=le_4|cmd:hero_power_cost=le_2",
+            features,
+        )
 
 
 class ReplayStreamingTests(unittest.TestCase):
@@ -113,6 +160,25 @@ class ReplayStreamingTests(unittest.TestCase):
         self.assertEqual(stats.rows_skipped, 0)
         self.assertGreater(model.metadata["weight_count"], 0)
         self.assertEqual(model.metadata["training_mode"], "streaming")
+
+    def test_linear_model_load_accepts_legacy_feature_version(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "legacy-model.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "model_version": MODEL_VERSION,
+                        "feature_version": "archetype_linear_v1",
+                        "metadata": {},
+                        "weights": {"cmd:type=cmd_end_turn": 0.5},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            model = LinearPolicyModel.load(path)
+
+        self.assertEqual(model.weights["cmd:type=cmd_end_turn"], 0.5)
 
 
 if __name__ == "__main__":
