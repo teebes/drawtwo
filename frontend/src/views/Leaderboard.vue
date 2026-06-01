@@ -50,28 +50,28 @@
           <!-- Leaderboard Table -->
           <div v-else-if="players.length > 0" class="rounded-2xl bg-white shadow-sm dark:bg-gray-900 overflow-hidden">
             <div class="overflow-x-auto">
-              <table class="w-full">
+              <table class="w-full table-fixed sm:table-auto">
                 <thead class="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                   <tr>
-                    <th class="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                    <th class="w-16 px-3 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white sm:w-auto sm:px-6">
                       Rank
                     </th>
-                    <th class="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                    <th class="px-2 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white sm:px-6">
                       Player
                     </th>
-                    <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">
+                    <th class="w-24 px-3 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white sm:w-auto sm:px-6">
                       Rating
                     </th>
-                    <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">
+                    <th class="hidden px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white sm:table-cell">
                       Wins
                     </th>
-                    <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">
+                    <th class="hidden px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white sm:table-cell">
                       Losses
                     </th>
-                    <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">
+                    <th class="hidden px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white sm:table-cell">
                       Total Games
                     </th>
-                    <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">
+                    <th class="hidden px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white sm:table-cell">
                       Win Rate
                     </th>
                   </tr>
@@ -88,7 +88,7 @@
                     }"
                   >
                     <!-- Rank -->
-                    <td class="px-6 py-4 whitespace-nowrap">
+                    <td class="px-3 py-4 whitespace-nowrap sm:px-6">
                       <div class="flex items-center">
                         <span v-if="index === 0" class="text-3xl">🥇</span>
                         <span v-else-if="index === 1" class="text-3xl">🥈</span>
@@ -100,19 +100,19 @@
                     </td>
 
                     <!-- Player Name -->
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      <div class="flex items-center">
-                        <div class="flex-shrink-0 h-10 w-10 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center text-white font-bold">
+                    <td class="px-2 py-4 sm:px-6">
+                      <div class="flex min-w-0 items-center">
+                        <div class="flex-shrink-0 h-9 w-9 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center text-white font-bold sm:h-10 sm:w-10">
                           {{ getInitials(player.display_name) }}
                         </div>
-                        <div class="ml-4">
-                          <div class="text-sm font-medium text-gray-900 dark:text-white">
+                        <div class="ml-2 min-w-0 sm:ml-4">
+                          <div class="truncate text-sm font-medium text-gray-900 dark:text-white">
                             {{ player.display_name }}
                             <span v-if="authStore.user && player.id === authStore.user.id" class="ml-2 inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                               You
                             </span>
                           </div>
-                          <div class="text-sm text-gray-500 dark:text-gray-400" v-if="player.username">
+                          <div class="truncate text-sm text-gray-500 dark:text-gray-400" v-if="player.username">
                             @{{ player.username }}
                           </div>
                         </div>
@@ -120,7 +120,7 @@
                     </td>
 
                     <!-- Rating -->
-                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                    <td class="px-3 py-4 whitespace-nowrap text-center sm:px-6">
                       <span class="inline-flex items-center rounded-full px-3 py-1 text-base font-bold"
                         :class="{
                           'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200': index < 3,
@@ -132,28 +132,28 @@
                     </td>
 
                     <!-- Wins -->
-                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                    <td class="hidden px-6 py-4 whitespace-nowrap text-center sm:table-cell">
                       <span class="text-sm font-medium text-green-600 dark:text-green-400">
                         {{ player.wins }}
                       </span>
                     </td>
 
                     <!-- Losses -->
-                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                    <td class="hidden px-6 py-4 whitespace-nowrap text-center sm:table-cell">
                       <span class="text-sm font-medium text-red-600 dark:text-red-400">
                         {{ player.losses }}
                       </span>
                     </td>
 
                     <!-- Total Games -->
-                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                    <td class="hidden px-6 py-4 whitespace-nowrap text-center sm:table-cell">
                       <span class="text-sm font-medium text-gray-900 dark:text-white">
                         {{ player.total_games }}
                       </span>
                     </td>
 
                     <!-- Win Rate -->
-                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                    <td class="hidden px-6 py-4 whitespace-nowrap text-center sm:table-cell">
                       <span class="text-sm font-medium text-gray-900 dark:text-white">
                         {{ calculateWinRate(player.wins, player.total_games) }}%
                       </span>

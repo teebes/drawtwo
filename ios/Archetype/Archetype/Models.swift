@@ -9,6 +9,8 @@ struct User: Codable, Identifiable, Equatable {
     let isEmailVerified: Bool?
     let isStaff: Bool?
     let status: String?
+    let createdAt: String?
+    let updatedAt: String?
 }
 
 struct AuthResponse: Decodable {
@@ -32,8 +34,21 @@ struct TokenRefreshResponse: Decodable {
     let refresh: String?
 }
 
+struct LogoutRequest: Encodable {
+    let refresh: String
+}
+
+struct ProfileUpdateRequest: Encodable {
+    let username: String
+}
+
 struct PasswordlessLoginRequest: Encodable {
     let email: String
+}
+
+struct PasswordSignInRequest: Encodable {
+    let email: String
+    let password: String
 }
 
 struct EmailConfirmationRequest: Encodable {
@@ -45,6 +60,17 @@ struct LoginLinkResponse: Decodable {
     let email: String?
 }
 
+struct RegistrationRequest: Encodable {
+    let email: String
+    let username: String?
+}
+
+struct RegistrationResponse: Decodable {
+    let message: String?
+    let user: User?
+    let requiresApproval: Bool?
+}
+
 struct Title: Codable, Identifiable, Equatable {
     let id: Int
     let slug: String
@@ -53,6 +79,14 @@ struct Title: Codable, Identifiable, Equatable {
     let artUrl: String?
     let status: String?
     let canEdit: Bool?
+
+    var resolvedArtUrl: String? {
+        if let artUrl, !artUrl.isEmpty {
+            return artUrl
+        }
+
+        return AppConfig.titleBannerURL
+    }
 }
 
 struct Hero: Codable, Identifiable, Equatable {
@@ -64,6 +98,14 @@ struct Hero: Codable, Identifiable, Equatable {
     let faction: String?
     let heroPower: JSONValue?
     let spec: JSONValue?
+
+    var resolvedArtUrl: String? {
+        if let artUrl, !artUrl.isEmpty {
+            return artUrl
+        }
+
+        return AppConfig.heroArtURL(slug: slug)
+    }
 }
 
 struct Deck: Codable, Identifiable, Equatable {
@@ -84,7 +126,7 @@ struct DeckListResponse: Decodable {
     let lastUsedFriendId: Int?
 }
 
-struct TitleSummary: Decodable, Equatable {
+struct TitleSummary: Codable, Equatable {
     let id: Int
     let slug: String
     let name: String
@@ -99,6 +141,423 @@ struct GameSummary: Codable, Identifiable, Equatable {
 
 struct GameListResponse: Decodable {
     let games: [GameSummary]
+}
+
+enum LadderType: String, CaseIterable, Identifiable, Codable {
+    case rapid
+    case daily
+
+    var id: String {
+        rawValue
+    }
+
+    var label: String {
+        switch self {
+        case .rapid:
+            return "Rapid"
+        case .daily:
+            return "Daily"
+        }
+    }
+}
+
+struct LeaderboardPlayer: Codable, Identifiable, Equatable {
+    let id: Int
+    let username: String?
+    let displayName: String
+    let avatar: String?
+    let eloRating: Int
+    let wins: Int
+    let losses: Int
+    let totalGames: Int
+}
+
+struct FriendUser: Codable, Identifiable, Equatable {
+    let id: Int
+    let username: String?
+    let displayName: String?
+    let avatar: String?
+
+    var displayLabel: String {
+        displayName?.isEmpty == false ? displayName! : username ?? "Player \(id)"
+    }
+
+    var usernameLabel: String? {
+        guard let username, !username.isEmpty else {
+            return nil
+        }
+        return "@\(username)"
+    }
+}
+
+enum FriendshipStatus: String, Codable {
+    case pending
+    case accepted
+    case declined
+    case blocked
+}
+
+struct Friendship: Codable, Identifiable, Equatable {
+    let id: Int
+    let friend: Int
+    let friendData: FriendUser
+    let status: FriendshipStatus
+    let isInitiator: Bool
+    let createdAt: String?
+    let updatedAt: String?
+}
+
+struct FriendRequest: Encodable {
+    let username: String
+}
+
+struct FriendshipActionRequest: Encodable {
+    let action: String
+}
+
+enum GameMode: String, CaseIterable, Identifiable {
+    case pvp
+    case pve
+
+    var id: String {
+        rawValue
+    }
+
+    var label: String {
+        switch self {
+        case .pvp:
+            return "vs Player"
+        case .pve:
+            return "vs AI"
+        }
+    }
+}
+
+struct RankedQueueRequest: Encodable {
+    let deckId: Int
+    let ladderType: LadderType
+
+    enum CodingKeys: String, CodingKey {
+        case deckId = "deck_id"
+        case ladderType = "ladder_type"
+    }
+}
+
+struct RankedQueueTitle: Codable, Equatable {
+    let id: Int?
+    let slug: String
+    let name: String
+}
+
+struct RankedQueueDeck: Codable, Equatable {
+    let id: Int
+    let name: String
+    let hero: String
+}
+
+struct RankedQueueEntry: Codable, Identifiable, Equatable {
+    let id: Int
+    let status: String
+    let title: RankedQueueTitle?
+    let deck: RankedQueueDeck
+    let eloRating: Int
+    let ladderType: LadderType
+    let message: String?
+    let queuedAt: String?
+}
+
+struct RankedQueueStatusResponse: Decodable {
+    let inQueue: Bool
+    let queueEntry: RankedQueueEntry?
+    let error: String?
+}
+
+struct TitleNotification: Codable, Identifiable, Equatable {
+    let refId: Int
+    let type: String
+    let message: String
+    let isUserTurn: Bool?
+
+    var id: String {
+        "\(type)-\(refId)"
+    }
+
+    var isGameNotification: Bool {
+        switch type {
+        case "game_ranked", "game_friendly", "game_pve":
+            return true
+        default:
+            return false
+        }
+    }
+
+    var emoji: String {
+        switch type {
+        case "game_ranked", "game_ranked_queued":
+            return "⚔️"
+        case "game_friendly", "game_challenge":
+            return "🤝"
+        case "friend_request":
+            return "👥"
+        case "game_pve":
+            return "👾"
+        default:
+            return "🔔"
+        }
+    }
+}
+
+struct ChallengeAcceptRequest: Encodable {
+    let challengeeDeckId: Int
+
+    enum CodingKeys: String, CodingKey {
+        case challengeeDeckId = "challengee_deck_id"
+    }
+}
+
+struct ChallengeAcceptResponse: Decodable {
+    let gameId: Int
+}
+
+enum FriendlyChallengeStatus: String, Codable {
+    case pending
+    case accepted
+    case cancelled
+    case expired
+}
+
+struct FriendlyChallengeUser: Codable, Identifiable, Equatable {
+    let id: Int
+    let displayName: String
+}
+
+struct FriendlyChallengeDeck: Codable, Identifiable, Equatable {
+    let id: Int
+    let name: String
+    let hero: String
+}
+
+struct FriendlyChallenge: Codable, Identifiable, Equatable {
+    let id: Int
+    let status: FriendlyChallengeStatus
+    let title: TitleSummary?
+    let challenger: FriendlyChallengeUser
+    let challengee: FriendlyChallengeUser
+    let challengerDeck: FriendlyChallengeDeck
+}
+
+struct PendingChallengesResponse: Decodable, Equatable {
+    let incoming: [FriendlyChallenge]
+    let outgoing: [FriendlyChallenge]
+}
+
+struct FriendlyChallengeCreateRequest: Encodable {
+    let titleSlug: String
+    let challengeeUserId: Int
+    let challengerDeckId: Int
+
+    enum CodingKeys: String, CodingKey {
+        case titleSlug = "title_slug"
+        case challengeeUserId = "challengee_user_id"
+        case challengerDeckId = "challenger_deck_id"
+    }
+}
+
+struct ChallengeActionResponse: Decodable {
+    let success: Bool?
+    let message: String?
+}
+
+enum CardTypeFilter: String, CaseIterable, Identifiable {
+    case all
+    case creature
+    case spell
+
+    var id: String {
+        rawValue
+    }
+
+    var label: String {
+        switch self {
+        case .all:
+            return "All"
+        case .creature:
+            return "Creatures"
+        case .spell:
+            return "Spells"
+        }
+    }
+}
+
+struct CardTemplate: Codable, Identifiable, Equatable {
+    let id: Int
+    let type: String?
+    let slug: String
+    let name: String
+    let description: String?
+    let cardType: String
+    let cost: Int
+    let attack: Int
+    let health: Int
+    let traits: [JSONValue]
+    let faction: String?
+    let artUrl: String?
+    let isCollectible: Bool?
+    let heroSlugs: [String]?
+
+    var isSpell: Bool {
+        cardType == "spell"
+    }
+
+    var isCollectibleCard: Bool {
+        isCollectible != false
+    }
+
+    var resolvedArtUrl: String? {
+        if let artUrl, !artUrl.isEmpty {
+            return artUrl
+        }
+
+        return AppConfig.cardArtURL(slug: slug)
+    }
+
+    var traitTypes: [String] {
+        traits.compactMap { trait in
+            trait["type"]?.stringValue ?? trait["slug"]?.stringValue
+        }
+    }
+
+    var primaryTrait: String? {
+        let priority = ["stealth", "taunt", "deathrattle", "battlecry", "ranged", "charge", "unique"]
+        return priority.first { traitTypes.contains($0) }
+    }
+}
+
+struct GameHistoryResponse: Decodable {
+    let stats: GameHistoryStats
+    let games: [GameHistoryItem]
+    let pagination: GameHistoryPagination
+}
+
+struct GameHistoryStats: Decodable, Equatable {
+    let ranked: GameHistoryRankedStats
+    let friendly: GameHistoryFriendlyStats
+    let currentRating: Int?
+    let ladderType: LadderType?
+}
+
+struct GameHistoryRankedStats: Decodable, Equatable {
+    let total: Int
+    let wins: Int
+    let losses: Int
+}
+
+struct GameHistoryFriendlyStats: Decodable, Equatable {
+    let total: Int
+}
+
+struct GameHistoryItem: Codable, Identifiable, Equatable {
+    let id: Int
+    let type: String
+    let ladderType: LadderType?
+    let status: String
+    let opponentName: String
+    let opponentHero: String?
+    let userHero: String?
+    let outcome: String?
+    let isUserTurn: Bool?
+    let eloChange: Int?
+    let createdAt: String
+}
+
+struct GameHistoryPagination: Decodable, Equatable {
+    let page: Int
+    let totalPages: Int
+    let totalGames: Int
+    let hasNext: Bool
+    let hasPrevious: Bool
+}
+
+struct DeckConfig: Codable, Equatable {
+    let deckSizeLimit: Int
+    let minCardsInDeck: Int
+    let deckCardMaxCount: Int
+}
+
+struct DeckDetailTitle: Codable, Equatable {
+    let id: Int
+    let slug: String
+    let name: String
+}
+
+struct DeckDetailHero: Codable, Identifiable, Equatable {
+    let id: Int
+    let name: String
+    let slug: String
+    let health: Int
+    let artUrl: String?
+
+    var resolvedArtUrl: String? {
+        if let artUrl, !artUrl.isEmpty {
+            return artUrl
+        }
+
+        return AppConfig.heroArtURL(slug: slug)
+    }
+}
+
+struct DeckCard: Codable, Identifiable, Equatable {
+    let id: Int
+    let type: String?
+    let slug: String
+    let name: String
+    let description: String?
+    let cardType: String
+    let cost: Int
+    let attack: Int
+    let health: Int
+    let traits: [JSONValue]
+    let faction: String?
+    let artUrl: String?
+    let isCollectible: Bool?
+    let heroSlugs: [String]?
+    var count: Int
+
+    var isSpell: Bool {
+        cardType == "spell"
+    }
+
+    var resolvedArtUrl: String? {
+        if let artUrl, !artUrl.isEmpty {
+            return artUrl
+        }
+
+        return AppConfig.cardArtURL(slug: slug)
+    }
+
+    var traitTypes: [String] {
+        traits.compactMap { trait in
+            trait["type"]?.stringValue ?? trait["slug"]?.stringValue
+        }
+    }
+
+    var isUnique: Bool {
+        traitTypes.contains("unique")
+    }
+}
+
+struct DeckDetail: Codable, Identifiable, Equatable {
+    let id: Int
+    var name: String
+    var description: String?
+    let title: DeckDetailTitle
+    var hero: DeckDetailHero
+    let config: DeckConfig
+    var cards: [DeckCard]
+    let allCards: [CardTemplate]?
+    var totalCards: Int
+    let createdAt: String?
+    var updatedAt: String?
 }
 
 struct CreateGameRequest: Encodable {
@@ -120,7 +579,14 @@ struct CreateGameResponse: Decodable {
     let message: String?
 }
 
+struct RematchResponse: Decodable {
+    let id: Int
+    let status: String
+    let titleSlug: String?
+}
+
 struct EmptyBody: Encodable {}
+struct EmptyResponse: Decodable, Equatable {}
 
 enum JSONValue: Codable, Hashable, CustomStringConvertible {
     case string(String)
@@ -226,20 +692,5 @@ enum JSONValue: Codable, Hashable, CustomStringConvertible {
             return value
         }
         return nil
-    }
-
-    var prettyPrinted: String {
-        guard
-            let data = try? JSONEncoder().encode(self),
-            let object = try? JSONSerialization.jsonObject(with: data),
-            let prettyData = try? JSONSerialization.data(
-                withJSONObject: object,
-                options: [.prettyPrinted, .sortedKeys]
-            ),
-            let string = String(data: prettyData, encoding: .utf8)
-        else {
-            return description
-        }
-        return string
     }
 }

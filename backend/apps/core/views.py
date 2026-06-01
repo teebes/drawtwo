@@ -252,7 +252,7 @@ def title_pve(request, slug):
         ai_player__isnull=False,
         title=title,
         archived_at__isnull=True,
-    )
+    ).order_by("created_at", "id")
     return Response(
         [
             DeckSchema(

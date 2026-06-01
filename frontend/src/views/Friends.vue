@@ -11,13 +11,13 @@
             v-model="newFriendUsername"
             type="text"
             placeholder="Enter username"
-            class="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded focus:outline-none focus:border-blue-500"
+            class="min-w-0 flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded focus:outline-none focus:border-blue-500"
             required
           />
           <button
             type="submit"
             :disabled="loading"
-            class="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded font-semibold transition-colors"
+            class="w-24 shrink-0 whitespace-normal px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded text-center font-semibold leading-tight transition-colors"
           >
             {{ loading ? 'Sending...' : 'Send Request' }}
           </button>

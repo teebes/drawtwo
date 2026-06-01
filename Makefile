@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs shell migrate makemigrations collectstatic createsuperuser test test-verbose test-debug clean ci-check ci-check-docker lint lint-docker format format-docker cleanup-emails cleanup-emails-dry celery-dev logs-celery logs-redis
+.PHONY: help build up down restart logs shell migrate makemigrations collectstatic createsuperuser test test-verbose test-debug clean ci-check ci-check-docker lint lint-docker format format-docker cleanup-emails cleanup-emails-dry celery-dev logs-celery logs-redis ios-ui ios-ui-captures ios-ui-comparison
 
 # Default target
 help:
@@ -38,6 +38,12 @@ help:
 	@echo "  frontend-dev   - Start only frontend development server"
 	@echo "  frontend-build - Build frontend for production"
 	@echo "  frontend-logs  - View logs from frontend service"
+	@echo ""
+	@echo "iOS UI:"
+	@echo "  ios-ui          - Launch the iOS simulator app against the local backend"
+	@echo "  ios-ui-captures - Capture the iOS UI gallery from local seeded data"
+	@echo "  ios-ui-comparison - Capture web/iOS references and build comparison gallery"
+	@echo "                    Use SCREENS=login,new-game for a focused capture"
 	@echo ""
 	@echo "CI/Code Quality:"
 	@echo "  ci-check       - Run full CI pipeline locally"
@@ -120,6 +126,16 @@ frontend-dev:
 
 frontend-build:
 	docker-compose exec frontend npm run build
+
+# iOS UI Development
+ios-ui:
+	scripts/run-ios-local-ui.sh
+
+ios-ui-captures:
+	ARCHETYPE_CAPTURE_NAMES="$(SCREENS)" scripts/capture-ios-ui.sh
+
+ios-ui-comparison:
+	ARCHETYPE_CAPTURE_NAMES="$(SCREENS)" scripts/capture-ui-comparison.sh
 
 # Django commands
 shell:

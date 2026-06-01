@@ -9,7 +9,7 @@
       <!-- Loading State -->
       <div v-if="loading" class="text-center py-12">
         <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
-        <p class="text-gray-600">Loading queue status...</p>
+        <p class="text-gray-600 dark:text-gray-400">Loading queue status...</p>
       </div>
 
       <!-- Error State -->
@@ -43,14 +43,14 @@
           </div>
         </div>
 
-        <h2 class="text-2xl font-bold text-gray-900 mb-4">Searching for Opponent...</h2>
+        <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">Searching for Opponent...</h2>
 
         <div class="mb-6">
-          <p class="text-gray-600 mb-2">
-            Deck: <span class="font-semibold text-gray-900">{{ queueEntry?.deck.name }}</span>
+          <p class="text-gray-600 dark:text-gray-400 mb-2">
+            Deck: <span class="font-semibold text-gray-900 dark:text-gray-100">{{ queueEntry?.deck.name }}</span>
           </p>
-          <p class="text-gray-600 mb-2">
-            Your Rating: <span class="font-semibold text-gray-900">{{ queueEntry?.elo_rating }}</span>
+          <p class="text-gray-600 dark:text-gray-400 mb-2">
+            Your Rating: <span class="font-semibold text-gray-900 dark:text-gray-100">{{ queueEntry?.elo_rating }}</span>
           </p>
         </div>
 
@@ -59,18 +59,18 @@
           <div class="text-5xl font-bold text-primary-600 mb-2">
             {{ formattedTime }}
           </div>
-          <p class="text-sm text-gray-500">Time in queue</p>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Time in queue</p>
           <div class="mt-4 max-w-xs mx-auto">
-            <div class="w-full bg-gray-200 rounded-full h-2">
+            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
               <div
                 class="bg-primary-600 h-2 rounded-full transition-all duration-1000"
                 :style="{ width: `${timeProgress}%` }"
               ></div>
             </div>
-            <p class="text-xs text-gray-500 mt-2">Queue timeout in {{ timeRemaining }}s</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Queue timeout in {{ timeRemaining }}s</p>
           </div>
         </div>
-        <div v-else class="mb-8 text-sm text-gray-500">
+        <div v-else class="mb-8 text-sm text-gray-500 dark:text-gray-400">
           You can leave this page and stay in the daily queue until a match is found.
         </div>
 
@@ -92,8 +92,8 @@
           </svg>
         </div>
 
-        <h2 class="text-2xl font-bold text-gray-900 mb-4">Queue Timeout</h2>
-        <p class="text-gray-600 mb-8">
+        <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">Queue Timeout</h2>
+        <p class="text-gray-600 dark:text-gray-400 mb-8">
           No opponent found within 1 minute. Would you like to try again?
         </p>
 
@@ -116,7 +116,7 @@
 
       <!-- Not in Queue State -->
       <div v-else class="text-center py-12">
-        <p class="text-gray-600 mb-4">You are not currently in the {{ ladderLabel }} queue.</p>
+        <p class="text-gray-600 dark:text-gray-400 mb-4">You are not currently in the {{ ladderLabel }} queue.</p>
         <router-link
           :to="{ name: 'GameCreate', params: { slug: titleSlug } }"
           class="inline-flex items-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"

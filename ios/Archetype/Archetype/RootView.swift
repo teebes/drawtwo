@@ -6,9 +6,16 @@ struct RootView: View {
     var body: some View {
         Group {
             if authStore.isRestoringSession {
-                ProgressView("Restoring session")
+                ArchetypeScreen {
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .tint(ArchetypeTheme.gold2)
+                        Text("Restoring Session")
+                            .font(.archetypeBody(16, weight: .bold))
+                            .foregroundStyle(ArchetypeTheme.text)
+                    }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(.systemGroupedBackground))
+                }
             } else if authStore.isAuthenticated {
                 DashboardView()
             } else {

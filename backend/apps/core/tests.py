@@ -1,11 +1,15 @@
-from django.contrib.auth import get_user_model
-from django.test import TestCase
-from django.db import models
-from django.utils import timezone
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 
-from .models import TimestampedModel, BaseModel, SoftDeleteModel
+from django.contrib.auth import get_user_model
+from django.db import models
+from django.test import TestCase
+from django.utils import timezone
+
+from apps.builder.models import AIPlayer, HeroTemplate, Title
+from apps.collection.models import Deck
+
+from .models import BaseModel, SoftDeleteModel, TimestampedModel
 
 User = get_user_model()
 
@@ -31,16 +35,74 @@ class HealthCheckTestCase(TestCase):
 
     def test_health_endpoint(self):
         """Test that the health endpoint returns a 200 status."""
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
 
         # Mock Redis since it's not available in CI
         mock_redis_instance = MagicMock()
         mock_redis_instance.ping.return_value = True
 
-        with patch('redis.Redis', return_value=mock_redis_instance):
+        with patch("redis.Redis", return_value=mock_redis_instance):
             response = self.client.get("/api/health/")
             self.assertEqual(response.status_code, 200)
             self.assertContains(response, "healthy")
+
+
+class TitlePveEndpointTestCase(TestCase):
+    """Test cases for title PvE opponent data."""
+
+    def test_pve_decks_are_returned_in_created_order(self):
+        """PvE opponents should have a deterministic display order."""
+        author = User.objects.create_user(
+            email="author@example.com",
+            username="author",
+        )
+        title = Title.objects.create(
+            slug="pve-order",
+            name="PvE Order",
+            author=author,
+            status=Title.STATUS_PUBLISHED,
+            is_latest=True,
+        )
+        hero = HeroTemplate.objects.create(
+            title=title,
+            slug="balanced",
+            name="Balanced",
+            health=20,
+            is_latest=True,
+        )
+        ai_player = AIPlayer.objects.create(name="Test AI")
+
+        control = Deck.objects.create(
+            title=title,
+            ai_player=ai_player,
+            name="Control",
+            hero=hero,
+        )
+        practice = Deck.objects.create(
+            title=title,
+            ai_player=ai_player,
+            name="Practice",
+            hero=hero,
+        )
+        vanilla = Deck.objects.create(
+            title=title,
+            ai_player=ai_player,
+            name="Vanilla",
+            hero=hero,
+        )
+
+        now = timezone.now()
+        Deck.objects.filter(id=control.id).update(created_at=now + timedelta(minutes=2))
+        Deck.objects.filter(id=practice.id).update(created_at=now)
+        Deck.objects.filter(id=vanilla.id).update(created_at=now + timedelta(minutes=1))
+
+        response = self.client.get(f"/api/titles/{title.slug}/pve/")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            [deck["name"] for deck in response.json()],
+            ["Practice", "Vanilla", "Control"],
+        )
 
 
 class BasicDjangoTestCase(TestCase):

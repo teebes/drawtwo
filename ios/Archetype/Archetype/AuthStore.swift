@@ -26,6 +26,13 @@ final class AuthStore: ObservableObject {
     func restoreSession() async {
         defer { isRestoringSession = false }
 
+        #if DEBUG
+        if AppConfig.localClearSessionOnLaunchEnabled {
+            clearSession()
+            return
+        }
+        #endif
+
         accessToken = try? keychain.string(for: "accessToken")
         refreshToken = try? keychain.string(for: "refreshToken")
 
@@ -50,6 +57,62 @@ final class AuthStore: ObservableObject {
                 body: PasswordlessLoginRequest(email: email)
             )
             statusMessage = response.message ?? "Login link sent."
+        }
+    }
+
+    #if DEBUG
+    func signInWithLocalAccount() async {
+        guard AppConfig.allowsLocalAccountShortcut else {
+            errorMessage = "Local test sign-in requires a local backend."
+            return
+        }
+
+        await runLoading {
+            let response: AuthResponse = try await api.post(
+                "/auth/token/",
+                body: PasswordSignInRequest(
+                    email: AppConfig.localTestEmail,
+                    password: AppConfig.localTestPassword
+                )
+            )
+
+            guard
+                let access = response.resolvedAccessToken,
+                let refresh = response.resolvedRefreshToken
+            else {
+                throw APIError.decodingFailed("Local sign-in did not return tokens.")
+            }
+
+            let profile: User = try await api.get("/auth/profile/", accessToken: access)
+            try storeSession(access: access, refresh: refresh, user: profile)
+            statusMessage = "Signed in as \(profile.displayName ?? profile.email)."
+        }
+    }
+    #endif
+
+    @discardableResult
+    func register(email: String, username: String?) async -> Bool {
+        isLoading = true
+        errorMessage = nil
+        statusMessage = nil
+
+        do {
+            let normalizedUsername = username?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let response: RegistrationResponse = try await api.post(
+                "/auth/register/",
+                body: RegistrationRequest(
+                    email: email,
+                    username: normalizedUsername?.isEmpty == true ? nil : normalizedUsername
+                )
+            )
+            statusMessage = response.message ?? "Registration successful. Please check your email."
+            isLoading = false
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            isLoading = false
+            return false
         }
     }
 
@@ -86,6 +149,20 @@ final class AuthStore: ObservableObject {
         }
     }
 
+    func authenticatedGet<Response: Decodable>(
+        _ path: String,
+        queryItems: [URLQueryItem]
+    ) async throws -> Response {
+        do {
+            return try await api.get(path, queryItems: queryItems, accessToken: accessToken)
+        } catch APIError.unauthorized {
+            guard await refreshAccessToken() else {
+                throw APIError.unauthorized
+            }
+            return try await api.get(path, queryItems: queryItems, accessToken: accessToken)
+        }
+    }
+
     func authenticatedPost<Body: Encodable, Response: Decodable>(
         _ path: String,
         body: Body
@@ -97,6 +174,104 @@ final class AuthStore: ObservableObject {
                 throw APIError.unauthorized
             }
             return try await api.post(path, body: body, accessToken: accessToken)
+        }
+    }
+
+    func authenticatedPost<Body: Encodable, Response: Decodable>(
+        _ path: String,
+        queryItems: [URLQueryItem],
+        body: Body
+    ) async throws -> Response {
+        do {
+            return try await api.post(
+                path,
+                queryItems: queryItems,
+                body: body,
+                accessToken: accessToken
+            )
+        } catch APIError.unauthorized {
+            guard await refreshAccessToken() else {
+                throw APIError.unauthorized
+            }
+            return try await api.post(
+                path,
+                queryItems: queryItems,
+                body: body,
+                accessToken: accessToken
+            )
+        }
+    }
+
+    func authenticatedPut<Body: Encodable, Response: Decodable>(
+        _ path: String,
+        body: Body
+    ) async throws -> Response {
+        do {
+            return try await api.put(path, body: body, accessToken: accessToken)
+        } catch APIError.unauthorized {
+            guard await refreshAccessToken() else {
+                throw APIError.unauthorized
+            }
+            return try await api.put(path, body: body, accessToken: accessToken)
+        }
+    }
+
+    func authenticatedPatch<Body: Encodable, Response: Decodable>(
+        _ path: String,
+        body: Body
+    ) async throws -> Response {
+        do {
+            return try await api.patch(path, body: body, accessToken: accessToken)
+        } catch APIError.unauthorized {
+            guard await refreshAccessToken() else {
+                throw APIError.unauthorized
+            }
+            return try await api.patch(path, body: body, accessToken: accessToken)
+        }
+    }
+
+    func authenticatedDelete<Response: Decodable>(_ path: String) async throws -> Response {
+        do {
+            return try await api.delete(path, accessToken: accessToken)
+        } catch APIError.unauthorized {
+            guard await refreshAccessToken() else {
+                throw APIError.unauthorized
+            }
+            return try await api.delete(path, accessToken: accessToken)
+        }
+    }
+
+    @discardableResult
+    func reloadProfile() async -> Bool {
+        do {
+            let profile: User = try await authenticatedGet("/auth/profile/")
+            user = profile
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    func updateProfile(username: String) async -> Bool {
+        isLoading = true
+        errorMessage = nil
+        statusMessage = nil
+
+        do {
+            let profile: User = try await authenticatedPatch(
+                "/auth/profile/",
+                body: ProfileUpdateRequest(username: username)
+            )
+            user = profile
+            statusMessage = "Profile updated."
+            isLoading = false
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            isLoading = false
+            return false
         }
     }
 
@@ -126,9 +301,25 @@ final class AuthStore: ObservableObject {
         }
     }
 
-    func signOut() {
+    func signOut() async {
+        isLoading = true
+
+        if let refreshToken {
+            do {
+                let _: EmptyResponse = try await api.post(
+                    "/auth/auth/logout/",
+                    body: LogoutRequest(refresh: refreshToken),
+                    accessToken: accessToken
+                )
+            } catch {
+                // Match the web client: backend logout failure should not trap
+                // the user in a stale local session.
+            }
+        }
+
         clearSession()
         statusMessage = "Signed out."
+        isLoading = false
     }
 
     private func runLoading(_ operation: () async throws -> Void) async {
@@ -146,13 +337,23 @@ final class AuthStore: ObservableObject {
     }
 
     private func storeSession(access: String, refresh: String, user: User) throws {
+        do {
+            try keychain.set(access, for: "accessToken")
+            try keychain.set(refresh, for: "refreshToken")
+        } catch {
+            #if DEBUG
+            guard AppConfig.isLocalBackend else {
+                throw error
+            }
+            #else
+            throw error
+            #endif
+        }
+
         accessToken = access
         refreshToken = refresh
         self.user = user
         isAuthenticated = true
-
-        try keychain.set(access, for: "accessToken")
-        try keychain.set(refresh, for: "refreshToken")
     }
 
     private func clearSession() {

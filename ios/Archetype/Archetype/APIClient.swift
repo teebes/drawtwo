@@ -46,7 +46,27 @@ final class APIClient {
         _ path: String,
         accessToken: String? = nil
     ) async throws -> Response {
-        try await request(method: "GET", path: path, body: nil, accessToken: accessToken)
+        try await request(
+            method: "GET",
+            path: path,
+            queryItems: [],
+            body: nil,
+            accessToken: accessToken
+        )
+    }
+
+    func get<Response: Decodable>(
+        _ path: String,
+        queryItems: [URLQueryItem],
+        accessToken: String? = nil
+    ) async throws -> Response {
+        try await request(
+            method: "GET",
+            path: path,
+            queryItems: queryItems,
+            body: nil,
+            accessToken: accessToken
+        )
     }
 
     func post<Body: Encodable, Response: Decodable>(
@@ -54,11 +74,64 @@ final class APIClient {
         body: Body,
         accessToken: String? = nil
     ) async throws -> Response {
+        try await post(path, queryItems: [], body: body, accessToken: accessToken)
+    }
+
+    func post<Body: Encodable, Response: Decodable>(
+        _ path: String,
+        queryItems: [URLQueryItem],
+        body: Body,
+        accessToken: String? = nil
+    ) async throws -> Response {
         let data = try encoder.encode(body)
         return try await request(
             method: "POST",
             path: path,
+            queryItems: queryItems,
             body: data,
+            accessToken: accessToken
+        )
+    }
+
+    func put<Body: Encodable, Response: Decodable>(
+        _ path: String,
+        body: Body,
+        accessToken: String? = nil
+    ) async throws -> Response {
+        let data = try encoder.encode(body)
+        return try await request(
+            method: "PUT",
+            path: path,
+            queryItems: [],
+            body: data,
+            accessToken: accessToken
+        )
+    }
+
+    func patch<Body: Encodable, Response: Decodable>(
+        _ path: String,
+        body: Body,
+        accessToken: String? = nil
+    ) async throws -> Response {
+        let data = try encoder.encode(body)
+        return try await request(
+            method: "PATCH",
+            path: path,
+            queryItems: [],
+            body: data,
+            accessToken: accessToken
+        )
+    }
+
+    func delete<Response: Decodable>(
+        _ path: String,
+        accessToken: String? = nil
+    ) async throws -> Response {
+        try await request(
+            method: "DELETE",
+            path: path,
+            queryItems: [],
+            body: nil,
             accessToken: accessToken
         )
     }
@@ -66,10 +139,11 @@ final class APIClient {
     private func request<Response: Decodable>(
         method: String,
         path: String,
+        queryItems: [URLQueryItem],
         body: Data?,
         accessToken: String?
     ) async throws -> Response {
-        let url = try makeURL(path)
+        let url = try makeURL(path, queryItems: queryItems)
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -101,6 +175,9 @@ final class APIClient {
         }
 
         guard !data.isEmpty else {
+            if let emptyResponse = EmptyResponse() as? Response {
+                return emptyResponse
+            }
             throw APIError.emptyResponse
         }
 
@@ -111,13 +188,16 @@ final class APIClient {
         }
     }
 
-    private func makeURL(_ path: String) throws -> URL {
+    private func makeURL(_ path: String, queryItems: [URLQueryItem]) throws -> URL {
         let normalizedPath = path.hasPrefix("/") ? path : "/\(path)"
         var components = URLComponents(
             url: AppConfig.apiBaseURL,
             resolvingAgainstBaseURL: false
         )
         components?.path = AppConfig.apiBaseURL.path + normalizedPath
+        if !queryItems.isEmpty {
+            components?.queryItems = queryItems
+        }
 
         guard let url = components?.url else {
             throw APIError.invalidURL
@@ -135,9 +215,46 @@ final class APIClient {
             let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let directMessage = object["error"] ?? object["message"] ?? object["detail"]
         {
-            return String(describing: directMessage)
+            return formattedMessage(directMessage)
+        }
+
+        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            let fieldErrors = object
+                .sorted { $0.key < $1.key }
+                .compactMap { key, value in
+                    fieldMessage(key: key, value: value)
+                }
+
+            if !fieldErrors.isEmpty {
+                return fieldErrors.joined(separator: " ")
+            }
         }
 
         return String(data: data, encoding: .utf8) ?? "Unparseable response"
+    }
+
+    private static func fieldMessage(key: String, value: Any) -> String? {
+        let message = formattedMessage(value)
+        guard !message.isEmpty else {
+            return nil
+        }
+
+        if key == "non_field_errors" {
+            return message
+        }
+
+        return "\(key): \(message)"
+    }
+
+    private static func formattedMessage(_ value: Any) -> String {
+        if let messages = value as? [String] {
+            return messages.joined(separator: " ")
+        }
+
+        if let messages = value as? [Any] {
+            return messages.map { formattedMessage($0) }.joined(separator: " ")
+        }
+
+        return String(describing: value)
     }
 }

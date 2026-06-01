@@ -18,6 +18,20 @@
 		8A0000112C9B410100000001 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0000122C9B410100000001 /* LoginView.swift */; };
 		8A0000132C9B410100000001 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0000142C9B410100000001 /* DashboardView.swift */; };
 		8A0000152C9B410100000001 /* GameDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0000162C9B410100000001 /* GameDetailView.swift */; };
+		8A0000172C9B410100000001 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0000182C9B410100000001 /* DesignSystem.swift */; };
+		8A0000192C9B410100000001 /* CollectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A00001A2C9B410100000001 /* CollectionView.swift */; };
+		8A00001B2C9B410100000001 /* GamesHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A00001C2C9B410100000001 /* GamesHistoryView.swift */; };
+		8A00001D2C9B410100000001 /* LeaderboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A00001E2C9B410100000001 /* LeaderboardView.swift */; };
+		8A00001F2C9B410100000001 /* DeckDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0000302C9B410100000001 /* DeckDetailView.swift */; };
+		8A0000332C9B410100000001 /* FriendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0000342C9B410100000001 /* FriendsView.swift */; };
+		8A0000352C9B410100000001 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0000362C9B410100000001 /* ProfileView.swift */; };
+		8A0000372C9B410100000001 /* RankedQueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0000382C9B410100000001 /* RankedQueueView.swift */; };
+		8A0000392C9B410100000001 /* HowToView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A00003A2C9B410100000001 /* HowToView.swift */; };
+		8A00003B2C9B410100000001 /* FontRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A00003C2C9B410100000001 /* FontRegistry.swift */; };
+		8A00003D2C9B410100000001 /* Cinzel.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8A00003E2C9B410100000001 /* Cinzel.ttf */; };
+		8A00003F2C9B410100000001 /* Inter.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8A0000402C9B410100000001 /* Inter.ttf */; };
+		8A0000432C9B410100000001 /* drawtwo_logo.png in Resources */ = {isa = PBXBuildFile; fileRef = 8A0000442C9B410100000001 /* drawtwo_logo.png */; };
+		8A0000452C9B410100000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8A0000462C9B410100000001 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,6 +46,21 @@
 		8A0000122C9B410100000001 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		8A0000142C9B410100000001 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		8A0000162C9B410100000001 /* GameDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameDetailView.swift; sourceTree = "<group>"; };
+		8A0000182C9B410100000001 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
+		8A00001A2C9B410100000001 /* CollectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionView.swift; sourceTree = "<group>"; };
+		8A00001C2C9B410100000001 /* GamesHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamesHistoryView.swift; sourceTree = "<group>"; };
+		8A00001E2C9B410100000001 /* LeaderboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaderboardView.swift; sourceTree = "<group>"; };
+		8A0000302C9B410100000001 /* DeckDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeckDetailView.swift; sourceTree = "<group>"; };
+		8A0000342C9B410100000001 /* FriendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsView.swift; sourceTree = "<group>"; };
+		8A0000362C9B410100000001 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		8A0000382C9B410100000001 /* RankedQueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankedQueueView.swift; sourceTree = "<group>"; };
+		8A00003A2C9B410100000001 /* HowToView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HowToView.swift; sourceTree = "<group>"; };
+		8A00003C2C9B410100000001 /* FontRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontRegistry.swift; sourceTree = "<group>"; };
+		8A00003E2C9B410100000001 /* Cinzel.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Cinzel.ttf; sourceTree = "<group>"; };
+		8A0000402C9B410100000001 /* Inter.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Inter.ttf; sourceTree = "<group>"; };
+		8A0000442C9B410100000001 /* drawtwo_logo.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = drawtwo_logo.png; sourceTree = "<group>"; };
+		8A0000462C9B410100000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		8A0000422C9B410100000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		8A0000202C9B410100000001 /* Archetype.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Archetype.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -58,18 +87,41 @@
 			isa = PBXGroup;
 			children = (
 				8A0000022C9B410100000001 /* ArchetypeApp.swift */,
+				8A0000422C9B410100000001 /* Info.plist */,
+				8A0000462C9B410100000001 /* Assets.xcassets */,
+				8A0000442C9B410100000001 /* drawtwo_logo.png */,
 				8A0000042C9B410100000001 /* AppConfig.swift */,
 				8A0000062C9B410100000001 /* Models.swift */,
 				8A0000082C9B410100000001 /* APIClient.swift */,
 				8A00000A2C9B410100000001 /* KeychainStore.swift */,
 				8A00000C2C9B410100000001 /* AuthStore.swift */,
 				8A00000E2C9B410100000001 /* DrawTwoWebSocket.swift */,
+				8A0000182C9B410100000001 /* DesignSystem.swift */,
+				8A00003C2C9B410100000001 /* FontRegistry.swift */,
+				8A0000412C9B410100000001 /* Fonts */,
 				8A0000102C9B410100000001 /* RootView.swift */,
 				8A0000122C9B410100000001 /* LoginView.swift */,
 				8A0000142C9B410100000001 /* DashboardView.swift */,
+				8A00001A2C9B410100000001 /* CollectionView.swift */,
+				8A0000302C9B410100000001 /* DeckDetailView.swift */,
+				8A00001C2C9B410100000001 /* GamesHistoryView.swift */,
+				8A00001E2C9B410100000001 /* LeaderboardView.swift */,
+				8A0000342C9B410100000001 /* FriendsView.swift */,
+				8A0000362C9B410100000001 /* ProfileView.swift */,
+				8A0000382C9B410100000001 /* RankedQueueView.swift */,
+				8A00003A2C9B410100000001 /* HowToView.swift */,
 				8A0000162C9B410100000001 /* GameDetailView.swift */,
 			);
 			path = Archetype;
+			sourceTree = "<group>";
+		};
+		8A0000412C9B410100000001 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				8A00003E2C9B410100000001 /* Cinzel.ttf */,
+				8A0000402C9B410100000001 /* Inter.ttf */,
+			);
+			path = Fonts;
 			sourceTree = "<group>";
 		};
 		8A0000242C9B410100000001 /* Products */ = {
@@ -138,6 +190,10 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8A0000452C9B410100000001 /* Assets.xcassets in Resources */,
+				8A00003D2C9B410100000001 /* Cinzel.ttf in Resources */,
+				8A00003F2C9B410100000001 /* Inter.ttf in Resources */,
+				8A0000432C9B410100000001 /* drawtwo_logo.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -155,9 +211,19 @@
 				8A0000092C9B410100000001 /* KeychainStore.swift in Sources */,
 				8A00000B2C9B410100000001 /* AuthStore.swift in Sources */,
 				8A00000D2C9B410100000001 /* DrawTwoWebSocket.swift in Sources */,
+				8A0000172C9B410100000001 /* DesignSystem.swift in Sources */,
+				8A00003B2C9B410100000001 /* FontRegistry.swift in Sources */,
 				8A00000F2C9B410100000001 /* RootView.swift in Sources */,
 				8A0000112C9B410100000001 /* LoginView.swift in Sources */,
 				8A0000132C9B410100000001 /* DashboardView.swift in Sources */,
+				8A0000192C9B410100000001 /* CollectionView.swift in Sources */,
+				8A00001F2C9B410100000001 /* DeckDetailView.swift in Sources */,
+				8A00001B2C9B410100000001 /* GamesHistoryView.swift in Sources */,
+				8A00001D2C9B410100000001 /* LeaderboardView.swift in Sources */,
+				8A0000332C9B410100000001 /* FriendsView.swift in Sources */,
+				8A0000352C9B410100000001 /* ProfileView.swift in Sources */,
+				8A0000372C9B410100000001 /* RankedQueueView.swift in Sources */,
+				8A0000392C9B410100000001 /* HowToView.swift in Sources */,
 				8A0000152C9B410100000001 /* GameDetailView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -281,15 +347,12 @@
 		8A00002D2C9B410100000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 4P7Z23L3F7;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Archetype;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Archetype/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -308,15 +371,12 @@
 		8A00002E2C9B410100000001 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 4P7Z23L3F7;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Archetype;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Archetype/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
