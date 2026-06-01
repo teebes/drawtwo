@@ -44,6 +44,7 @@ struct ProfileUpdateRequest: Encodable {
 
 struct PasswordlessLoginRequest: Encodable {
     let email: String
+    let client = "ios"
 }
 
 struct PasswordSignInRequest: Encodable {

@@ -28,7 +28,15 @@ CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
 
 # Frontend URL configuration for production
 FRONTEND_URL = os.environ.get("FRONTEND_URL")
-FRONTEND_EMAIL_CONFIRM_URL = os.environ.get("FRONTEND_EMAIL_CONFIRM_URL")
+FRONTEND_EMAIL_CONFIRM_URL = os.environ.get(
+    "FRONTEND_EMAIL_CONFIRM_URL",
+    f"{FRONTEND_URL}/auth/email-confirm" if FRONTEND_URL else None,
+)
+IOS_APP_LOGIN_URL = os.environ.get(
+    "IOS_APP_LOGIN_URL",
+    f"{FRONTEND_URL}/app/login" if FRONTEND_URL else None,
+)
+IOS_LOGIN_URL_SCHEME = os.environ.get("IOS_LOGIN_URL_SCHEME") or "drawtwo://login"
 
 # JWT settings for production
 REST_AUTH = {
@@ -64,11 +72,15 @@ SOCIALACCOUNT_PROVIDERS = {
 
 # Email settings for production - AWS SES
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = os.environ.get("EMAIL_HOST", "email-smtp.us-east-1.amazonaws.com")  # Default SES SMTP endpoint
+EMAIL_HOST = os.environ.get(
+    "EMAIL_HOST", "email-smtp.us-east-1.amazonaws.com"
+)  # Default SES SMTP endpoint
 EMAIL_PORT = int(os.environ.get("EMAIL_PORT", 587))
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.environ.get("AWS_SES_ACCESS_KEY_ID")  # AWS SES SMTP username
-EMAIL_HOST_PASSWORD = os.environ.get("AWS_SES_SECRET_ACCESS_KEY")  # AWS SES SMTP password
+EMAIL_HOST_PASSWORD = os.environ.get(
+    "AWS_SES_SECRET_ACCESS_KEY"
+)  # AWS SES SMTP password
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL")
 SERVER_EMAIL = os.environ.get("SERVER_EMAIL")  # For error emails
 

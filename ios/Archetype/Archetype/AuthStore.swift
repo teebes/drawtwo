@@ -138,6 +138,16 @@ final class AuthStore: ObservableObject {
         }
     }
 
+    func confirmEmail(fromLoginURL url: URL) async {
+        guard let key = Self.confirmationKey(from: url) else {
+            errorMessage = "The login link is missing its confirmation code."
+            statusMessage = nil
+            return
+        }
+
+        await confirmEmail(key: key)
+    }
+
     func authenticatedGet<Response: Decodable>(_ path: String) async throws -> Response {
         do {
             return try await api.get(path, accessToken: accessToken)
@@ -368,14 +378,48 @@ final class AuthStore: ObservableObject {
     private static func normalizedConfirmationKey(_ input: String) -> String {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if
-            let url = URL(string: trimmed),
-            let lastComponent = url.pathComponents.last,
-            lastComponent != "/"
-        {
-            return lastComponent
+        if let url = URL(string: trimmed), let key = confirmationKey(from: url) {
+            return key
         }
 
         return trimmed
+    }
+
+    private static func confirmationKey(from url: URL) -> String? {
+        if
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+            let key = components.queryItems?.first(where: { $0.name == "key" })?.value,
+            !key.isEmpty
+        {
+            return key
+        }
+
+        let pathComponents = url.pathComponents.filter { $0 != "/" }
+
+        if url.scheme?.lowercased() == "drawtwo" {
+            if url.host?.lowercased() == "login", let key = pathComponents.last {
+                return key
+            }
+
+            if let host = url.host, !host.isEmpty {
+                return host
+            }
+        }
+
+        if
+            let index = pathComponents.firstIndex(of: "login"),
+            pathComponents.indices.contains(index + 1)
+        {
+            return pathComponents[index + 1]
+        }
+
+        if
+            let index = pathComponents.firstIndex(of: "email-confirm"),
+            pathComponents.indices.contains(index + 1)
+        {
+            return pathComponents[index + 1]
+        }
+
+        return pathComponents.last
     }
 }

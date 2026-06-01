@@ -99,14 +99,16 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [{
-                "address": f"redis://{os.environ.get('REDIS_HOST', 'localhost')}:6379",
-                "socket_timeout": 30,        # Timeout for socket operations
-                "socket_connect_timeout": 30, # Timeout for initial connection
-            }],
+            "hosts": [
+                {
+                    "address": f"redis://{os.environ.get('REDIS_HOST', 'localhost')}:6379",
+                    "socket_timeout": 30,  # Timeout for socket operations
+                    "socket_connect_timeout": 30,  # Timeout for initial connection
+                }
+            ],
             "prefix": "drawtwo:ws:",
-            "capacity": 1500,               # Max messages per channel
-            "expiry": 10,                   # Message expiry in seconds
+            "capacity": 1500,  # Max messages per channel
+            "expiry": 10,  # Message expiry in seconds
         },
     },
 }
@@ -253,7 +255,11 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@drawtwo.com")
 
 # Frontend URL configuration
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
-FRONTEND_EMAIL_CONFIRM_URL = os.environ.get("FRONTEND_EMAIL_CONFIRM_URL", f"{FRONTEND_URL}/auth/email-confirm")
+FRONTEND_EMAIL_CONFIRM_URL = os.environ.get(
+    "FRONTEND_EMAIL_CONFIRM_URL", f"{FRONTEND_URL}/auth/email-confirm"
+)
+IOS_APP_LOGIN_URL = os.environ.get("IOS_APP_LOGIN_URL", f"{FRONTEND_URL}/app/login")
+IOS_LOGIN_URL_SCHEME = os.environ.get("IOS_LOGIN_URL_SCHEME") or "drawtwo://login"
 
 # dj-rest-auth settings
 REST_AUTH = {
@@ -281,15 +287,17 @@ CORS_ALLOW_CREDENTIALS = True
 
 # Celery Configuration
 CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
-CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = os.environ.get(
+    "CELERY_RESULT_BACKEND", "redis://localhost:6379/0"
+)
 
 # Fix for Celery 6.0+ deprecation warning
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
 # Celery task serialization
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
 
 # Timezone configuration
 CELERY_TIMEZONE = TIME_ZONE
@@ -309,8 +317,8 @@ CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
 
 # Beat scheduler configuration (for periodic tasks)
-CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
 # Store task results in Django database
-CELERY_RESULT_BACKEND = 'django-db'
-CELERY_CACHE_BACKEND = 'django-cache'
+CELERY_RESULT_BACKEND = "django-db"
+CELERY_CACHE_BACKEND = "django-cache"

@@ -4,6 +4,7 @@ import { useTitleStore } from '../stores/title'
 import Home from '../views/Home.vue'
 import Login from '../views/Login.vue'
 import EmailConfirm from '../views/EmailConfirm.vue'
+import AppLogin from '../views/AppLogin.vue'
 import ControlPanel from '../views/ControlPanel.vue'
 import DesignReference from '../views/DesignReference.vue'
 import Styleguide from '../views/Styleguide.vue'
@@ -114,6 +115,12 @@ const routes = [
     path: '/auth/email-confirm/:key',
     name: 'EmailConfirm',
     component: EmailConfirm,
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/app/login/:key',
+    name: 'AppLogin',
+    component: AppLogin,
     meta: { requiresAuth: false }
   },
   {

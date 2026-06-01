@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "4P7Z23L3F7.com.drawtwo.archetype.dev",
+        "paths": ["/app/login/*"]
+      },
+      {
+        "appID": "4P7Z23L3F7.com.drawtwo.archetype",
+        "paths": ["/app/login/*"]
+      }
+    ]
+  }
+}

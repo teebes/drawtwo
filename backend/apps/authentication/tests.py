@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 from allauth.account.models import EmailAddress, EmailConfirmation
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -225,6 +225,57 @@ class AuthenticationAPITestCase(APITestCase):
         # User should now be verified
         user.refresh_from_db()
         self.assertTrue(user.is_email_verified)
+
+    @override_settings(
+        FRONTEND_EMAIL_CONFIRM_URL="https://drawtwo.test/auth/email-confirm"
+    )
+    @patch("apps.authentication.views.send_mail")
+    def test_passwordless_login_web_uses_browser_confirm_link(self, mock_send_mail):
+        """Web login requests keep the existing browser-confirm link."""
+        User.objects.create_user(email="web-link@example.com")
+
+        response = self.client.post(
+            self.passwordless_login_url,
+            {"email": "web-link@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        email_address = EmailAddress.objects.get(email="web-link@example.com")
+        confirmation = EmailConfirmation.objects.get(email_address=email_address)
+        message = mock_send_mail.call_args.kwargs["message"]
+
+        self.assertIn(
+            f"https://drawtwo.test/auth/email-confirm/{confirmation.key}",
+            message,
+        )
+        self.assertNotIn("/app/login/", message)
+        self.assertNotIn("drawtwo://", message)
+
+    @override_settings(
+        IOS_APP_LOGIN_URL="https://drawtwo.test/app/login",
+        IOS_LOGIN_URL_SCHEME="drawtwo://login",
+    )
+    @patch("apps.authentication.views.send_mail")
+    def test_passwordless_login_ios_uses_app_login_links(self, mock_send_mail):
+        """iOS login requests receive app-targeted links and a paste fallback."""
+        User.objects.create_user(email="ios-link@example.com")
+
+        response = self.client.post(
+            self.passwordless_login_url,
+            {"email": "ios-link@example.com", "client": "ios"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        email_address = EmailAddress.objects.get(email="ios-link@example.com")
+        confirmation = EmailConfirmation.objects.get(email_address=email_address)
+        message = mock_send_mail.call_args.kwargs["message"]
+
+        self.assertIn(f"https://drawtwo.test/app/login/{confirmation.key}", message)
+        self.assertIn(f"drawtwo://login/{confirmation.key}", message)
+        self.assertIn(confirmation.key, message)
+        self.assertNotIn("/auth/email-confirm/", message)
 
     def test_email_confirmation_invalid_key(self):
         """Test email confirmation with invalid key."""

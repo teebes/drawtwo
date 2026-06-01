@@ -12,6 +12,9 @@ inspect the cards and decks they already have.
 ## What Works
 
 - Passwordless DrawTwo login using the existing email-confirm endpoint.
+- App-targeted email login links using Universal Links on
+  `https://drawtwo.com/app/login/<key>`, with `drawtwo://login/<key>`,
+  paste-key, and browser fallback support.
 - Secure token storage in iOS Keychain.
 - Session refresh through the existing JWT refresh endpoint.
 - Archetype dashboard, notifications, active games, title stats, and embedded
@@ -35,9 +38,9 @@ inspect the cards and decks they already have.
 
 ## Current Limits
 
-- Login uses a paste-in confirmation key because the backend currently sends a
-  web login URL. Native universal links can be added later, but they require an
-  Apple App Site Association file on `drawtwo.com`.
+- Universal Links require the deployed `drawtwo.com` frontend to serve the
+  Apple App Site Association file and the signing team to allow Associated
+  Domains for `com.drawtwo.archetype.dev`.
 - There is no StoreKit subscription layer yet.
 - App Store metadata is not prepared yet.
 - Android is not implemented yet.
@@ -109,7 +112,7 @@ ARCHETYPE_SCREENSHOT_PATH=/tmp/archetype-login-signup.png \
 scripts/run-ios-local-ui.sh
 ```
 
-To launch directly into the native paste-link confirmation form:
+To launch directly into the native confirmation fallback form:
 
 ```sh
 ARCHETYPE_AUTO_LOGIN=0 \
@@ -119,9 +122,10 @@ ARCHETYPE_SCREENSHOT_PATH=/tmp/archetype-login-confirm.png \
 scripts/run-ios-local-ui.sh
 ```
 
-If you need to paste an existing email confirmation URL without sending a new
-link first, add `ARCHETYPE_SHOW_MANUAL_LOGIN_LINK_SHORTCUT=1` to expose the
-manual paste-link shortcut below the login card.
+If you need to paste an existing email confirmation URL, app link, or raw key
+without sending a new link first, add
+`ARCHETYPE_SHOW_MANUAL_LOGIN_LINK_SHORTCUT=1` to expose the manual shortcut
+below the login card.
 
 For visual QA, you can launch directly to a native screen:
 
@@ -205,8 +209,8 @@ review, verifies that every expected web and iOS screenshot exists with valid
 image dimensions, and writes `/tmp/archetype-ui-comparison/index.html` plus
 `/tmp/archetype-ui-comparison/contact-sheet.png` for quick visual review. The
 wrapper uses platform-specific expectations: web captures only comparable web
-states, while iOS also requires native-only states such as the paste-link
-confirmation form. The wrapper defaults `ARCHETYPE_SEED_GAME_AGE_SECONDS` to
+states, while iOS also requires native-only states such as the confirmation
+fallback form. The wrapper defaults `ARCHETYPE_SEED_GAME_AGE_SECONDS` to
 `-3600`, which future-dates seeded game timestamps so both web and iOS render
 relative game times as `Just now` throughout the long comparison run. Override
 that when intentionally validating relative-time copy. Web captures also freeze
@@ -453,10 +457,17 @@ local network permission the first time the app connects to your Mac.
 7. Press Run.
 8. On the phone, enter the email for your existing DrawTwo account and tap
    `Send Login Link`.
-9. Open the email, copy the full confirmation URL or just the final key from the
-   URL, return to the app, paste it into the confirmation field, and tap
-   `Continue`.
+9. Open the email on the phone and tap the `https://drawtwo.com/app/login/<key>`
+   link. The app should foreground and sign in. If the email client opens the
+   browser instead, tap `Open DrawTwo App`, use the `drawtwo://login/<key>`
+   fallback, or copy the confirmation code and paste it into the app.
 10. After login, choose a deck and PvE opponent, then start a practice game.
+
+To test the production login workflow from a dev build, remove any
+`ARCHETYPE_BACKEND_BASE_URL` override from the Xcode scheme so the app uses
+`https://drawtwo.com`. Install the dev build after the Associated Domains
+entitlement is present; iOS fetches the association file on install/update and
+may cache old results for a while.
 
 To test against your local Docker backend on the phone, first run
 `docker compose up -d` and `docker compose exec backend python manage.py seed_archetype_dev`

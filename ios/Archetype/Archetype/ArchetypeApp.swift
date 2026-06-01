@@ -17,6 +17,16 @@ struct ArchetypeApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(authStore)
+                .onOpenURL { url in
+                    handleLoginURL(url)
+                }
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    guard let url = activity.webpageURL else {
+                        return
+                    }
+
+                    handleLoginURL(url)
+                }
                 .task {
                     await authStore.restoreSession()
                     #if DEBUG
@@ -25,6 +35,12 @@ struct ArchetypeApp: App {
                     }
                     #endif
                 }
+        }
+    }
+
+    private func handleLoginURL(_ url: URL) {
+        Task {
+            await authStore.confirmEmail(fromLoginURL: url)
         }
     }
 }

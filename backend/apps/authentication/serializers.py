@@ -100,6 +100,11 @@ class PasswordlessLoginSerializer(serializers.Serializer):
     """Serializer for passwordless login via email."""
 
     email = serializers.EmailField(required=True)
+    client = serializers.ChoiceField(
+        choices=("web", "ios"),
+        default="web",
+        required=False,
+    )
 
     def validate_email(self, email):
         """Validate that the email exists in the system."""
@@ -145,7 +150,16 @@ class LeaderboardUserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("id", "username", "display_name", "avatar", "elo_rating", "wins", "losses", "total_games")
+        fields = (
+            "id",
+            "username",
+            "display_name",
+            "avatar",
+            "elo_rating",
+            "wins",
+            "losses",
+            "total_games",
+        )
         read_only_fields = fields
 
 

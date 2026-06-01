@@ -42,6 +42,10 @@ services:
       - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - FRONTEND_EMAIL_CONFIRM_URL=${FRONTEND_EMAIL_CONFIRM_URL:-http://localhost:3000/auth/email-confirm}
+      - IOS_APP_LOGIN_URL=${IOS_APP_LOGIN_URL:-http://localhost:3000/app/login}
+      - IOS_LOGIN_URL_SCHEME=${IOS_LOGIN_URL_SCHEME:-drawtwo://login}
       # Cloudflare R2 Configuration (optional for local dev)
       - CARD_ASSETS_BASE_URL=${CARD_ASSETS_BASE_URL:-}
       - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}

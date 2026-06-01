@@ -10,7 +10,11 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import permissions, status
-from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.decorators import (
+    api_view,
+    permission_classes,
+    authentication_classes,
+)
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -24,6 +28,47 @@ from .serializers import (
 )
 
 User = get_user_model()
+
+
+def _login_url(base_url, key):
+    """Append the one-time key to a configured login URL base."""
+    return f"{base_url.rstrip('/')}/{key}"
+
+
+def _frontend_email_confirm_url(key):
+    base_url = getattr(settings, "FRONTEND_EMAIL_CONFIRM_URL", None)
+    if not base_url:
+        base_url = f"{settings.FRONTEND_URL.rstrip('/')}/auth/email-confirm"
+    return _login_url(base_url, key)
+
+
+def _ios_universal_login_url(key):
+    base_url = getattr(settings, "IOS_APP_LOGIN_URL", None)
+    if not base_url:
+        base_url = f"{settings.FRONTEND_URL.rstrip('/')}/app/login"
+    return _login_url(base_url, key)
+
+
+def _ios_scheme_login_url(key):
+    return _login_url(settings.IOS_LOGIN_URL_SCHEME, key)
+
+
+def _passwordless_login_message(client, key):
+    if client == "ios":
+        universal_url = _ios_universal_login_url(key)
+        scheme_url = _ios_scheme_login_url(key)
+
+        return (
+            "Open this link on your iPhone to log in to DrawTwo:\n\n"
+            f"{universal_url}\n\n"
+            "If that opens in the browser instead, use this app link:\n\n"
+            f"{scheme_url}\n\n"
+            "You can also paste this confirmation code into the app:\n\n"
+            f"{key}"
+        )
+
+    frontend_url = _frontend_email_confirm_url(key)
+    return f"Click this link to log in: {frontend_url}"
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -46,7 +91,7 @@ class GoogleLogin(SocialLoginView):
         except PermissionDenied as e:
             # Handle signup disabled error from signal
             # DRF's PermissionDenied has a detail attribute
-            error_message = getattr(e, 'detail', str(e))
+            error_message = getattr(e, "detail", str(e))
             if isinstance(error_message, list):
                 error_message = error_message[0] if error_message else str(e)
             return Response(
@@ -63,10 +108,10 @@ class GoogleLogin(SocialLoginView):
             user = None
 
             # Try to get user from response data first
-            if hasattr(response, 'data') and isinstance(response.data, dict):
-                user_data = response.data.get('user')
+            if hasattr(response, "data") and isinstance(response.data, dict):
+                user_data = response.data.get("user")
                 if user_data and isinstance(user_data, dict):
-                    user_id = user_data.get('id')
+                    user_id = user_data.get("id")
                     if user_id:
                         try:
                             user = User.objects.get(id=user_id)
@@ -74,19 +119,19 @@ class GoogleLogin(SocialLoginView):
                             pass
 
             # Fallback: try to get user from authenticated request
-            if not user and hasattr(request, 'user') and request.user.is_authenticated:
+            if not user and hasattr(request, "user") and request.user.is_authenticated:
                 user = request.user
 
             # Mark email as verified if we found the user
             if user and not user.is_email_verified:
                 user.is_email_verified = True
-                user.save(update_fields=['is_email_verified'])
+                user.save(update_fields=["is_email_verified"])
 
                 # Also update the response data if it contains user info
-                if hasattr(response, 'data') and isinstance(response.data, dict):
-                    user_data = response.data.get('user')
+                if hasattr(response, "data") and isinstance(response.data, dict):
+                    user_data = response.data.get("user")
                     if user_data and isinstance(user_data, dict):
-                        user_data['is_email_verified'] = True
+                        user_data["is_email_verified"] = True
 
         return response
 
@@ -102,6 +147,7 @@ class PasswordlessLoginView(APIView):
         serializer = PasswordlessLoginSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data["email"]
+            client = serializer.validated_data.get("client", "web")
             try:
                 user = User.objects.get(email=email)
 
@@ -123,15 +169,10 @@ class PasswordlessLoginView(APIView):
                 confirmation.sent = timezone.now()
                 confirmation.save()
 
-                # Create custom login link for frontend
-                frontend_url = (
-                    f"{settings.FRONTEND_EMAIL_CONFIRM_URL}/" f"{confirmation.key}"
-                )
-
                 # Send email with console backend for development
                 send_mail(
                     subject="DrawTwo - Login Link",
-                    message=f"Click this link to log in: {frontend_url}",
+                    message=_passwordless_login_message(client, confirmation.key),
                     from_email=settings.DEFAULT_FROM_EMAIL,
                     recipient_list=[email],
                     fail_silently=False,
@@ -473,38 +514,51 @@ class LeaderboardView(APIView):
             title = Title.objects.get(slug=title_slug)
         except Title.DoesNotExist:
             return Response(
-                {'error': f'Title "{title_slug}" not found'},
-                status=status.HTTP_404_NOT_FOUND
+                {"error": f'Title "{title_slug}" not found'},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
-        ladder_type = request.query_params.get('ladder_type', Game.LADDER_TYPE_RAPID)
+        ladder_type = request.query_params.get("ladder_type", Game.LADDER_TYPE_RAPID)
         if ladder_type not in dict(Game.LADDER_TYPE_CHOICES):
-            return Response({'error': 'Invalid ladder type'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Invalid ladder type"}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         # Get limit from query params (default 100, max 1000)
-        limit = min(int(request.query_params.get('limit', 100)), 1000)
+        limit = min(int(request.query_params.get("limit", 100)), 1000)
 
         # Get all user ratings for this title, annotated with win/loss counts
-        user_ratings = UserTitleRating.objects.filter(
-            title=title,
-            ladder_type=ladder_type,
-        ).select_related('user').annotate(
-            wins=Count(
-                'user__elo_wins',
-                filter=Q(user__elo_wins__title=title, user__elo_wins__ladder_type=ladder_type),
-                distinct=True
-            ),
-            losses=Count(
-                'user__elo_losses',
-                filter=Q(user__elo_losses__title=title, user__elo_losses__ladder_type=ladder_type),
-                distinct=True
+        user_ratings = (
+            UserTitleRating.objects.filter(
+                title=title,
+                ladder_type=ladder_type,
             )
-        ).annotate(
-            total_games=F('wins') + F('losses')
-        ).filter(
-            # Only include users who have played at least 5 games
-            total_games__gte=5
-        ).order_by('-elo_rating')[:limit]
+            .select_related("user")
+            .annotate(
+                wins=Count(
+                    "user__elo_wins",
+                    filter=Q(
+                        user__elo_wins__title=title,
+                        user__elo_wins__ladder_type=ladder_type,
+                    ),
+                    distinct=True,
+                ),
+                losses=Count(
+                    "user__elo_losses",
+                    filter=Q(
+                        user__elo_losses__title=title,
+                        user__elo_losses__ladder_type=ladder_type,
+                    ),
+                    distinct=True,
+                ),
+            )
+            .annotate(total_games=F("wins") + F("losses"))
+            .filter(
+                # Only include users who have played at least 5 games
+                total_games__gte=5
+            )
+            .order_by("-elo_rating")[:limit]
+        )
 
         # Build response data
         leaderboard_data = []
@@ -513,16 +567,18 @@ class LeaderboardView(APIView):
             losses = rating.losses
             total_games = wins + losses
 
-            leaderboard_data.append({
-                'id': rating.user.id,
-                'username': rating.user.username,
-                'display_name': rating.user.display_name,
-                'avatar': rating.user.avatar,
-                'elo_rating': rating.elo_rating,
-                'wins': wins,
-                'losses': losses,
-                'total_games': total_games,
-            })
+            leaderboard_data.append(
+                {
+                    "id": rating.user.id,
+                    "username": rating.user.username,
+                    "display_name": rating.user.display_name,
+                    "avatar": rating.user.avatar,
+                    "elo_rating": rating.elo_rating,
+                    "wins": wins,
+                    "losses": losses,
+                    "total_games": total_games,
+                }
+            )
 
         return Response(leaderboard_data)
 
@@ -542,53 +598,69 @@ class UserTitleRatingView(APIView):
             title = Title.objects.get(slug=title_slug)
         except Title.DoesNotExist:
             return Response(
-                {'error': f'Title "{title_slug}" not found'},
-                status=status.HTTP_404_NOT_FOUND
+                {"error": f'Title "{title_slug}" not found'},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
-        ladder_type = request.query_params.get('ladder_type', Game.LADDER_TYPE_RAPID)
+        ladder_type = request.query_params.get("ladder_type", Game.LADDER_TYPE_RAPID)
         if ladder_type not in dict(Game.LADDER_TYPE_CHOICES):
-            return Response({'error': 'Invalid ladder type'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Invalid ladder type"}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             # Get or create the user's rating for this title
-            user_rating = UserTitleRating.objects.select_related('user').annotate(
-                wins=Count(
-                    'user__elo_wins',
-                    filter=Q(user__elo_wins__title=title, user__elo_wins__ladder_type=ladder_type),
-                    distinct=True
-                ),
-                losses=Count(
-                    'user__elo_losses',
-                    filter=Q(user__elo_losses__title=title, user__elo_losses__ladder_type=ladder_type),
-                    distinct=True
+            user_rating = (
+                UserTitleRating.objects.select_related("user")
+                .annotate(
+                    wins=Count(
+                        "user__elo_wins",
+                        filter=Q(
+                            user__elo_wins__title=title,
+                            user__elo_wins__ladder_type=ladder_type,
+                        ),
+                        distinct=True,
+                    ),
+                    losses=Count(
+                        "user__elo_losses",
+                        filter=Q(
+                            user__elo_losses__title=title,
+                            user__elo_losses__ladder_type=ladder_type,
+                        ),
+                        distinct=True,
+                    ),
                 )
-            ).get(user=request.user, title=title, ladder_type=ladder_type)
+                .get(user=request.user, title=title, ladder_type=ladder_type)
+            )
 
             wins = user_rating.wins
             losses = user_rating.losses
 
-            return Response({
-                'id': request.user.id,
-                'username': request.user.username,
-                'display_name': request.user.display_name,
-                'avatar': request.user.avatar,
-                'elo_rating': user_rating.elo_rating,
-                'ladder_type': ladder_type,
-                'wins': wins,
-                'losses': losses,
-                'total_games': wins + losses,
-            })
+            return Response(
+                {
+                    "id": request.user.id,
+                    "username": request.user.username,
+                    "display_name": request.user.display_name,
+                    "avatar": request.user.avatar,
+                    "elo_rating": user_rating.elo_rating,
+                    "ladder_type": ladder_type,
+                    "wins": wins,
+                    "losses": losses,
+                    "total_games": wins + losses,
+                }
+            )
         except UserTitleRating.DoesNotExist:
             # User hasn't played any games for this title yet
-            return Response({
-                'id': request.user.id,
-                'username': request.user.username,
-                'display_name': request.user.display_name,
-                'avatar': request.user.avatar,
-                'elo_rating': 1200,  # Default rating
-                'ladder_type': ladder_type,
-                'wins': 0,
-                'losses': 0,
-                'total_games': 0,
-            })
+            return Response(
+                {
+                    "id": request.user.id,
+                    "username": request.user.username,
+                    "display_name": request.user.display_name,
+                    "avatar": request.user.avatar,
+                    "elo_rating": 1200,  # Default rating
+                    "ladder_type": ladder_type,
+                    "wins": 0,
+                    "losses": 0,
+                    "total_games": 0,
+                }
+            )
