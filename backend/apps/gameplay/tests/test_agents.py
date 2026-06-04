@@ -157,7 +157,7 @@ class LegalCommandTests(TestCase):
         self.assertEqual(result.state.heroes["side_b"].health, 8)
         self.assertTrue(result.state.creatures["creature_a_1"].exhausted)
 
-    def test_no_target_hero_power_uses_validation_safe_placeholder(self):
+    def test_no_target_hero_power_uses_targetless_command(self):
         state = make_agent_test_state()
         state.heroes["side_a"].exhausted = False
         state.heroes["side_a"].hero_power = HeroPower(
@@ -170,6 +170,8 @@ class LegalCommandTests(TestCase):
             for command in list_legal_commands(state, "side_a")
             if command.type == "cmd_use_hero"
         )
+        self.assertIsNone(command.target_type)
+        self.assertIsNone(command.target_id)
         result = apply_command(state, "side_a", command)
 
         self.assertFalse(result.errors)

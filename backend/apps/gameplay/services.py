@@ -785,6 +785,39 @@ class GameService:
         )
 
     @staticmethod
+    def action_requires_selected_target(action: Action) -> bool:
+        if getattr(action, "scope", "single") == "all":
+            return False
+        if isinstance(action, DamageAction) and action.target in ("hero", "self"):
+            return False
+        if isinstance(action, HealAction) and action.target == "hero":
+            return False
+        if isinstance(action, BuffAction) and action.target == "hero":
+            return False
+        return isinstance(action, (DamageAction, HealAction, RemoveAction, BuffAction))
+
+    @staticmethod
+    def actions_require_selected_target(actions: list[Action]) -> bool:
+        return any(
+            GameService.action_requires_selected_target(action) for action in actions
+        )
+
+    @staticmethod
+    def hero_power_targets_friendly(actions: list[Action]) -> bool:
+        return any(
+            (
+                isinstance(action, HealAction)
+                and action.target in ("creature", "friendly")
+            )
+            or (
+                isinstance(action, DamageAction)
+                and action.target in ("self", "friendly")
+            )
+            or isinstance(action, BuffAction)
+            for action in actions
+        )
+
+    @staticmethod
     def compile_cmd(game_state: GameState, command: dict, side) -> list[Effect]:
         "Translates a Command into a list of Effect objects"
 
@@ -870,65 +903,69 @@ class GameService:
                 )
             )
         elif isinstance(command, UseHeroCommand):
-            from apps.builder.schemas import BuffAction, HealAction
-
             # Validate that the hero belongs to the active player
             active_hero = game_state.heroes.get(game_state.active)
             if not active_hero or active_hero.hero_id != command.hero_id:
                 raise ValueError(f"You do not control hero {command.hero_id}")
 
-            # Determine if this hero power targets friendlies
-            targets_friendly = any(
-                (
-                    (isinstance(action, HealAction) and action.target == "friendly")
-                    or (isinstance(action, DamageAction) and action.target == "self")
-                    or (
-                        isinstance(action, DamageAction) and action.target == "friendly"
-                    )
-                    or isinstance(action, BuffAction)
-                )
+            actions = [
+                TypeAdapter(Action).validate_python(action)
                 for action in active_hero.hero_power.actions
-            )
+            ]
+            requires_target = GameService.actions_require_selected_target(actions)
+            effect_target_type = target_type if requires_target else None
+            effect_target_id = command.target_id if requires_target else None
 
-            # Validate that the target belongs to the correct side (if there is a target)
-            if target_type:
+            if requires_target and (
+                effect_target_type is None or effect_target_id is None
+            ):
+                raise ValueError("This hero power requires you to choose a target")
+
+            # Validate that the target belongs to the correct side when the power
+            # actually uses a selected target. Non-targeted powers may arrive from
+            # older clients with a placeholder target; ignore it.
+            if requires_target and effect_target_type:
+                targets_friendly = GameService.hero_power_targets_friendly(actions)
                 if targets_friendly:
                     # For healing/friendly powers, target must be on own side
-                    if target_type == "creature":
-                        if command.target_id not in game_state.board[game_state.active]:
+                    if effect_target_type == "creature":
+                        if effect_target_id not in game_state.board[game_state.active]:
                             raise ValueError(
-                                f"Target creature {command.target_id} is not on your board"
+                                f"Target creature {effect_target_id} "
+                                "is not on your board"
                             )
-                    elif target_type == "hero":
-                        if not active_hero or active_hero.hero_id != command.target_id:
+                    elif effect_target_type == "hero":
+                        if not active_hero or active_hero.hero_id != effect_target_id:
                             raise ValueError(
-                                f"Target hero {command.target_id} is not your hero"
+                                f"Target hero {effect_target_id} is not your hero"
                             )
                 else:
                     # For damage/enemy powers, target must be on opponent's side
                     opposing_side = game_state.opposite_side
-                    if target_type == "creature":
-                        if command.target_id not in game_state.board[opposing_side]:
+                    if effect_target_type == "creature":
+                        if effect_target_id not in game_state.board[opposing_side]:
                             raise ValueError(
-                                f"Target creature {command.target_id} is not on opponent's board"
+                                f"Target creature {effect_target_id} "
+                                "is not on opponent's board"
                             )
-                    elif target_type == "hero":
+                    elif effect_target_type == "hero":
                         # Hero must belong to opposing side
                         opposing_hero = game_state.heroes.get(opposing_side)
                         if (
                             not opposing_hero
-                            or opposing_hero.hero_id != command.target_id
+                            or opposing_hero.hero_id != effect_target_id
                         ):
                             raise ValueError(
-                                f"Target hero {command.target_id} is not the opponent's hero"
+                                f"Target hero {effect_target_id} "
+                                "is not the opponent's hero"
                             )
 
             effects.append(
                 UseHeroEffect(
                     side=game_state.active,
                     source_id=command.hero_id,
-                    target_type=target_type,
-                    target_id=command.target_id,
+                    target_type=effect_target_type,
+                    target_id=effect_target_id,
                 )
             )
         else:

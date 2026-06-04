@@ -1380,7 +1380,7 @@ const handleUseHero = (side_id: string) => {
     if (!hero) return
 
     if (!heroPowerRequiresTarget(hero)) {
-        gameStore.useHeroOnHero(hero.hero_id, hero.hero_id)
+        gameStore.useHero(hero.hero_id)
         closeOverlay()
         return
     }

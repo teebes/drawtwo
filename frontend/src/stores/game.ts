@@ -925,6 +925,17 @@ export const useGameStore = defineStore('game', {
       })
     },
 
+    useHero(heroId: string): void {
+      if (this.gameOver.isGameOver) return
+
+      console.log('Using hero', heroId)
+
+      this.sendWebSocketMessage({
+        type: 'cmd_use_hero',
+        hero_id: heroId,
+      })
+    },
+
     useHeroOnHero(heroId: string, targetHeroId: string): void {
       if (this.gameOver.isGameOver) return
 

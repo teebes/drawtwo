@@ -9,7 +9,14 @@ from django.test import TestCase
 from django.utils import timezone
 
 from apps.builder.models import AIPlayer, CardTemplate, HeroTemplate, Title
-from apps.builder.schemas import DamageAction, DrawAction, HeroPower, Stealth, Taunt
+from apps.builder.schemas import (
+    DamageAction,
+    DrawAction,
+    HeroPower,
+    Stealth,
+    SummonAction,
+    Taunt,
+)
 from apps.collection.models import Deck, DeckCard
 from apps.gameplay.ai import AIMoveChooser
 from apps.gameplay.engine.dispatcher import resolve
@@ -18,9 +25,10 @@ from apps.gameplay.schemas.effects import (
     AttackEffect,
     DamageEffect,
     DrawEffect,
+    SummonEffect,
     UseHeroEffect,
 )
-from apps.gameplay.schemas.game import Creature, GameState, HeroInPlay
+from apps.gameplay.schemas.game import CardInPlay, Creature, GameState, HeroInPlay
 from apps.gameplay.services import GameService
 from apps.gameplay.tests import ServiceTestsBase
 
@@ -629,6 +637,25 @@ class AttackValidationEdgeCasesTests(AttackValidationTestBase):
 class HeroPowerValidationTests(AttackValidationTestBase):
     """Test validation for hero power usage."""
 
+    def set_summon_hero_power(self):
+        self.game_state.heroes["side_a"].hero_power = HeroPower(
+            name="Recruit",
+            cost=1,
+            actions=[SummonAction(target="recruit")],
+            description="Summon a 1/1 Recruit.",
+        )
+        self.game_state.heroes["side_a"].exhausted = False
+        self.game_state.summonable_cards["recruit"] = CardInPlay(
+            card_type="creature",
+            card_id="",
+            template_slug="recruit",
+            name="Recruit",
+            description="A 1/1 Recruit.",
+            attack=1,
+            health=1,
+            cost=0,
+        )
+
     def test_valid_hero_power_on_enemy_creature(self):
         """Test that a valid hero power on enemy creature succeeds."""
         hero_a_id = self.game_state.heroes["side_a"].hero_id
@@ -756,6 +783,49 @@ class HeroPowerValidationTests(AttackValidationTestBase):
 
         self.assertIn("not the opponent's hero", str(context.exception).lower())
 
+    def test_summon_hero_power_accepts_no_target(self):
+        """Non-targeted summon powers should not need a selected target."""
+        self.set_summon_hero_power()
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
+        command = {
+            "type": "cmd_use_hero",
+            "hero_id": hero_a_id,
+        }
+
+        effects = GameService.compile_cmd(self.game_state, command, "side_a")
+
+        self.assertEqual(len(effects), 1)
+        self.assertIsInstance(effects[0], UseHeroEffect)
+        self.assertIsNone(effects[0].target_type)
+        self.assertIsNone(effects[0].target_id)
+
+        result = resolve(effects[0], self.game_state)
+        self.assertEqual(result.type, "outcome_success")
+        self.assertTrue(
+            any(
+                isinstance(child, SummonEffect) and child.target == "recruit"
+                for child in result.child_effects
+            )
+        )
+
+    def test_summon_hero_power_ignores_old_own_hero_placeholder_target(self):
+        """Old clients send own hero as placeholder for non-targeted powers."""
+        self.set_summon_hero_power()
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
+        command = {
+            "type": "cmd_use_hero",
+            "hero_id": hero_a_id,
+            "target_type": "hero",
+            "target_id": hero_a_id,
+        }
+
+        effects = GameService.compile_cmd(self.game_state, command, "side_a")
+
+        self.assertEqual(len(effects), 1)
+        self.assertIsInstance(effects[0], UseHeroEffect)
+        self.assertIsNone(effects[0].target_type)
+        self.assertIsNone(effects[0].target_id)
+
 
 class HeroPowerEffectValidationTests(AttackValidationTestBase):
     """Test validation in the use_hero effect handler."""
@@ -826,6 +896,45 @@ class HeroPowerEffectValidationTests(AttackValidationTestBase):
         self.assertEqual(result.type, "outcome_success")
         # Should have child effects
         self.assertGreater(len(result.child_effects), 0)
+
+    def test_effect_handler_ignores_placeholder_target_for_summon_power(self):
+        """Non-targeted hero powers should tolerate placeholder targets."""
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
+        self.game_state.heroes["side_a"].hero_power = HeroPower(
+            name="Recruit",
+            cost=1,
+            actions=[SummonAction(target="recruit")],
+        )
+        self.game_state.heroes["side_a"].exhausted = False
+        self.game_state.summonable_cards["recruit"] = CardInPlay(
+            card_type="creature",
+            card_id="",
+            template_slug="recruit",
+            name="Recruit",
+            description="A 1/1 Recruit.",
+            attack=1,
+            health=1,
+            cost=0,
+        )
+
+        effect = UseHeroEffect(
+            side="side_a",
+            source_id=hero_a_id,
+            target_type="hero",
+            target_id=hero_a_id,
+        )
+
+        result = resolve(effect, self.game_state)
+
+        self.assertEqual(result.type, "outcome_success")
+        self.assertIsNone(result.events[0].target_type)
+        self.assertIsNone(result.events[0].target_id)
+        self.assertTrue(
+            any(
+                isinstance(child, SummonEffect) and child.target == "recruit"
+                for child in result.child_effects
+            )
+        )
 
     def test_effect_handler_rejects_hero_power_without_enough_energy(self):
         """Hero powers with configured costs require available energy."""

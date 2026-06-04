@@ -629,7 +629,6 @@ def attack(effect: AttackEffect, state: GameState) -> Result:
 @register("effect_use_hero")
 def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
     # Lazy import to avoid circular dependency
-    from apps.builder.schemas import HealAction
     from apps.gameplay.services import GameService
 
     hero = state.heroes.get(effect.side)
@@ -640,46 +639,45 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
     if hero.hero_id != effect.source_id:
         return Rejected(reason=f"You do not control hero {effect.source_id}")
 
-    # Determine if this hero power targets friendlies, enemies, or self
-    targets_friendly = any(
-        (isinstance(action, HealAction) and action.target == "friendly")
-        or (isinstance(action, DamageAction) and action.target == "friendly")
-        or isinstance(action, BuffAction)
+    actions = [
+        TypeAdapter(Action).validate_python(action)
         for action in hero.hero_power.actions
-    )
-    targets_self = any(
-        isinstance(action, DamageAction) and getattr(action, "target", None) == "self"
-        for action in hero.hero_power.actions
-    )
+    ]
+    requires_target = GameService.actions_require_selected_target(actions)
+    target_type = effect.target_type if requires_target else None
+    target_id = effect.target_id if requires_target else None
 
-    # Validate that the target belongs to the correct side (if there is a target)
-    if effect.target_type:
-        if targets_friendly:
+    if requires_target and (target_type is None or target_id is None):
+        return Rejected(reason="This hero power requires you to choose a target")
+
+    # Validate that the target belongs to the correct side when the power actually
+    # uses a selected target. Non-targeted powers may include a placeholder target
+    # from older clients; it is deliberately ignored.
+    if requires_target and target_type:
+        if GameService.hero_power_targets_friendly(actions):
             # For healing/friendly powers, target must be on own side
-            if effect.target_type == "creature":
-                if effect.target_id not in state.board[effect.side]:
+            if target_type == "creature":
+                if target_id not in state.board[effect.side]:
                     return Rejected(reason=f"Target creature is not on your board")
-            elif effect.target_type == "hero":
+            elif target_type == "hero":
                 own_hero = state.heroes.get(effect.side)
-                if not own_hero or own_hero.hero_id != effect.target_id:
+                if not own_hero or own_hero.hero_id != target_id:
                     return Rejected(reason=f"Target is not your hero")
         else:
             # For damage/enemy powers, target must be on opponent's side
             opposing_side = state.opposite_side
-            if effect.target_type == "creature":
-                if effect.target_id not in state.board[opposing_side]:
+            if target_type == "creature":
+                if target_id not in state.board[opposing_side]:
                     return Rejected(
                         reason=f"Target creature is not on opponent's board"
                     )
-                # STEALTH VALIDATION: Cannot directly target stealthed creatures with hero powers
-                target_creature = state.creatures.get(effect.target_id)
+                # Cannot directly target stealthed creatures with hero powers.
+                target_creature = state.creatures.get(target_id)
                 if target_creature and has_stealth(target_creature):
                     return Rejected(reason="Cannot target stealthed creatures")
-            elif effect.target_type == "hero":
+            elif target_type == "hero":
                 opposing_hero = state.heroes.get(opposing_side)
-                if effect.target_id == hero.hero_id and targets_self:
-                    pass
-                elif not opposing_hero or opposing_hero.hero_id != effect.target_id:
+                if not opposing_hero or opposing_hero.hero_id != target_id:
                     return Rejected(reason=f"Target is not the opponent's hero")
 
     if hero.exhausted:
@@ -700,13 +698,12 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
         side=effect.side,
         source_type="hero",
         source_id=effect.source_id,
-        target_type=effect.target_type,
-        target_id=effect.target_id,
+        target_type=target_type,
+        target_id=target_id,
     )
 
     # Parse out hero power actions
-    for action in hero.hero_power.actions:
-        action = TypeAdapter(Action).validate_python(action)
+    for action in actions:
         child_effects.extend(
             GameService.compile_action(
                 state=state,

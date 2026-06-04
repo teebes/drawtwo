@@ -257,31 +257,7 @@ def _hero_commands(state: GameState, side: str) -> list[Command]:
     requires_target = _requires_selected_target(actions)
 
     if not requires_target:
-        # UseHeroCommand currently requires a target even for powers whose
-        # actions do not. Pick a validation-compatible placeholder target; the
-        # action compiler ignores it for draw/summon/fixed hero/self actions.
-        uses_friendly_validation = any(
-            isinstance(action, BuffAction)
-            or (isinstance(action, DamageAction) and action.target == "self")
-            or (isinstance(action, DamageAction) and action.target == "friendly")
-            or (isinstance(action, HealAction) and action.target == "friendly")
-            for action in actions
-        )
-        placeholder_targets = (
-            _friendly_hero_target(state, side)
-            if uses_friendly_validation
-            else _enemy_hero_target(state, side)
-        )
-        if not placeholder_targets:
-            placeholder_targets = _friendly_hero_target(state, side)
-        target_type, target_id = placeholder_targets[0]
-        return [
-            UseHeroCommand(
-                hero_id=hero.hero_id,
-                target_type=target_type,
-                target_id=target_id,
-            )
-        ]
+        return [UseHeroCommand(hero_id=hero.hero_id)]
 
     targets = _targets_for_actions(actions, state, side)
     commands: list[Command] = []

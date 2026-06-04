@@ -13,6 +13,9 @@ export type CardAction =
   | { action: 'damage'; amount: number; target: 'hero' | 'creature' | 'enemy' | 'self' | 'friendly'; scope?: 'single' | 'cleave' | 'all'; damage_type?: 'physical' | 'spell' }
   | { action: 'heal'; amount: number; target: 'hero' | 'creature' | 'friendly'; scope?: 'single' | 'cleave' | 'all' }
   | { action: 'remove'; target: 'creature' | 'enemy'; scope?: 'single' | 'cleave' | 'all' }
+  | { action: 'temp_mana_boost'; amount: number; target?: 'hero' | 'creature' | 'friendly' }
+  | { action: 'summon'; target: string }
+  | { action: 'clear'; target?: 'both' | 'own' | 'opponent' }
   | { action: 'buff'; attribute: 'attack' | 'health'; amount: number; target: 'hero' | 'creature' | 'friendly'; scope?: 'single' | 'cleave' | 'all' }
 
 
