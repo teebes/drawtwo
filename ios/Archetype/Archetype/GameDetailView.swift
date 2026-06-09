@@ -1317,6 +1317,13 @@ struct GameDetailView: View {
                     )
                 }
 
+                if model.isMulliganPhase, overlay == nil, model.winner == "none" {
+                    MulliganMenuButtonLayer(
+                        socketStatus: socket.status,
+                        onMenuTap: { overlay = .menu }
+                    )
+                }
+
                 if model.winner != "none", showGameOverOverlay {
                     GameOverOverlay(
                         title: model.currentGameOverTitle,
@@ -2508,22 +2515,7 @@ private struct BoardSideHeader: View {
             .buttonStyle(.plain)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            Button(action: onMenuTap) {
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(ArchetypeTheme.text)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                    Circle()
-                        .fill(socketColor)
-                        .frame(width: 8, height: 8)
-                        .padding(.top, 8)
-                        .padding(.trailing, 8)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .buttonStyle(.plain)
+            BoardMenuButton(socketStatus: socketStatus, onMenuTap: onMenuTap)
             .frame(width: 96)
             .frame(maxHeight: .infinity)
             .overlay(alignment: .leading) {
@@ -2541,16 +2533,6 @@ private struct BoardSideHeader: View {
         }
     }
 
-    private var socketColor: Color {
-        switch socketStatus {
-        case .connected:
-            return ArchetypeTheme.green
-        case .connecting, .reconnecting:
-            return ArchetypeTheme.gold2
-        case .failed, .disconnected:
-            return ArchetypeTheme.red
-        }
-    }
 }
 
 private struct PlayerFooter: View {
@@ -2868,6 +2850,69 @@ private struct HeroTile: View {
             return "\(health)"
         }
         return "-"
+    }
+}
+
+private struct BoardMenuButton: View {
+    let socketStatus: SocketStatus
+    let onMenuTap: () -> Void
+
+    var body: some View {
+        Button(action: onMenuTap) {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(ArchetypeTheme.text)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                Circle()
+                    .fill(socketColor)
+                    .frame(width: 8, height: 8)
+                    .padding(.top, 8)
+                    .padding(.trailing, 8)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open game menu")
+    }
+
+    private var socketColor: Color {
+        switch socketStatus {
+        case .connected:
+            return ArchetypeTheme.green
+        case .connecting, .reconnecting:
+            return ArchetypeTheme.gold2
+        case .failed, .disconnected:
+            return ArchetypeTheme.red
+        }
+    }
+}
+
+private struct MulliganMenuButtonLayer: View {
+    let socketStatus: SocketStatus
+    let onMenuTap: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+
+                BoardMenuButton(socketStatus: socketStatus, onMenuTap: onMenuTap)
+                    .frame(width: 96, height: 96)
+                    .background(ArchetypeTheme.ink2)
+                    .overlay(alignment: .leading) {
+                        Rectangle()
+                            .fill(ArchetypeTheme.border)
+                            .frame(width: 1)
+                    }
+            }
+            .frame(height: 96)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: 448, maxHeight: .infinity)
     }
 }
 

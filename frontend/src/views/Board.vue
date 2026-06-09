@@ -45,7 +45,13 @@
                     </div>
 
                     <!-- Menu -->
-                    <div class="w-24 flex flex-col justify-center items-center text-center border-l border-gray-700 relative">
+                    <button
+                        type="button"
+                        class="w-24 h-full shrink-0 appearance-none bg-transparent flex flex-col justify-center items-center text-center border-l border-gray-700 relative transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-inset"
+                        :class="{ 'z-50 bg-gray-900': isMulliganPhase }"
+                        aria-label="Open game menu"
+                        title="Open game menu"
+                        @click="handleMenuClick">
                         <!-- WebSocket Status Indicator -->
                         <div class="flex items-center mb-1 absolute top-2 right-1" :title="`WebSocket: ${wsStatus}`">
                             <div
@@ -61,14 +67,14 @@
                                 {{ wsStatus === 'connected' ? '●' : wsStatus === 'reconnecting' ? '↻' : wsStatus === 'connecting' ? '...' : '○' }}
                             </span> -->
                         </div>
-                        <span class="inline-block cursor-pointer" @click="handleMenuClick">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-label="Menu" xmlns="http://www.w3.org/2000/svg">
+                        <span class="inline-block">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
                                 <rect y="5" width="24" height="2" rx="1" fill="currentColor"/>
                                 <rect y="11" width="24" height="2" rx="1" fill="currentColor"/>
                                 <rect y="17" width="24" height="2" rx="1" fill="currentColor"/>
                             </svg>
                         </span>
-                    </div>
+                    </button>
                  </div>
 
                  <!-- Stats -->

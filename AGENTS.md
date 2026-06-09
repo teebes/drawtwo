@@ -35,3 +35,4 @@ Run commands inside Docker containers (preferred workflow uses `make` targets).
 - Commands are expected to run inside Docker containers; avoid host-only workflows.
 - Refer to `frontend/src/views/DesignReference.vue` for frontend styling guidance.
 - For frontend changes or new frontend screens, review `frontend/src/views/Styleguide.vue` first and use centralized UI classes from `frontend/src/style.css` where possible.
+- When fixing a web frontend issue, check whether the iOS app has the same issue and address it if present; when fixing an iOS issue, check whether the web frontend has the same issue and address it if present.
