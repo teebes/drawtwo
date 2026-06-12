@@ -1,5 +1,12 @@
 <template>
     <div class="flex flex-col items-center justify-center space-y-8 my-8">
+        <div
+            v-if="nextGame"
+            class="text-2xl cursor-pointer text-primary-400 hover:text-primary-300"
+            @click="handleNextGame">
+            Next Game
+        </div>
+
         <div class="text-2xl cursor-pointer hover:text-gray-400" @click="handleClickUpdates">
             Updates
         </div>
@@ -37,6 +44,11 @@ const props = defineProps<{
     showExtendTime: boolean
     titleSlug: string | undefined
     gameOver: boolean
+    nextGame?: {
+        id: number
+        type: 'pve' | 'ranked' | 'friendly'
+        name: string
+    } | null
 }>()
 
 const emit = defineEmits<{
@@ -58,6 +70,19 @@ const handleClickExtendTime = () => {
 
 const handleClickDebug = () => {
     emit('clickDebug')
+}
+
+const handleNextGame = () => {
+    if (!props.nextGame || !props.titleSlug) return
+
+    gameStore.disconnectWebSocket()
+    router.push({
+        name: 'Board',
+        params: {
+            slug: props.titleSlug,
+            game_id: props.nextGame.id,
+        },
+    })
 }
 
 const handleConcede = () => {

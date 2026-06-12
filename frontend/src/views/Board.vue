@@ -343,6 +343,7 @@
                 :show-extend-time="canShowExtendTime"
                 :title-slug="titleStore.titleSlug ?? undefined"
                 :game-over="gameOver.isGameOver"
+                :next-game="nextGame"
                 @click-updates="handleClickUpdates"
                 @click-extend-time="handleClickExtendTime"
                 @click-debug="handleClickDebug"
@@ -459,9 +460,17 @@ const opposingHeroArtUrl = computed(() => {
 // Overlay Types
 type OverlayType = 'entity_detail' | 'place_creature' | 'select_target' | 'menu' | 'updates' | 'debug' | null
 
+interface ActiveGameSummary {
+    id: number
+    name: string
+    type: 'pve' | 'ranked' | 'friendly'
+    is_user_turn: boolean
+}
+
 // Local UI state
 const overlay = ref<OverlayType>(null)
 const overlayTitle = ref<string>('')
+const activeGames = ref<ActiveGameSummary[]>([])
 
 // Entity selection state (for detail view)
 interface SelectedEntity {
@@ -650,6 +659,13 @@ const hasNoAvailableActions = computed(() => {
 
 // Game ID for debug overlay
 const gameId = computed(() => route.params.game_id as string)
+
+const nextGame = computed(() => {
+    const currentGameId = Number(gameId.value)
+    return activeGames.value.find(game =>
+        game.is_user_turn && game.id !== currentGameId
+    ) ?? null
+})
 
 // Time control countdown
 const currentTime = ref(Date.now())
@@ -1504,6 +1520,7 @@ const handleEndTurn = () => {
 const handleMenuClick = () => {
     overlay.value = 'menu'
     overlayTitle.value = "Menu"
+    fetchActiveGames()
 }
 
 const handleClickUpdates = () => {
@@ -1518,6 +1535,19 @@ const handleClickExtendTime = () => {
 const handleClickDebug = () => {
     overlay.value = 'debug'
     overlayTitle.value = "Debug"
+}
+
+const fetchActiveGames = async () => {
+    const slug = titleStore.titleSlug ?? (route.params.slug as string | undefined)
+    if (!slug) return
+
+    try {
+        const response = await axios.get(`/titles/${slug}/games/`)
+        activeGames.value = response.data.games || []
+    } catch (error) {
+        console.error('Failed to fetch active games', error)
+        activeGames.value = []
+    }
 }
 
 const handleRematch = async () => {
@@ -1829,6 +1859,7 @@ watch([title, gameId], async ([newTitle, newGameId], [, oldGameId]) => {
     }
 
     await gameStore.connectToGame(newGameId)
+    await fetchActiveGames()
 }, { immediate: true })
 
 // Clear local state when game over is detected

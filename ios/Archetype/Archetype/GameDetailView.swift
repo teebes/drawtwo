@@ -411,6 +411,7 @@ final class GameDetailViewModel: ObservableObject {
     @Published var isRematchLoading = false
     @Published var errorMessage: String?
     @Published var statusMessage: String?
+    @Published var activeGames: [GameSummary] = []
 
     private static let displayUpdateTypes: Set<String> = [
         "update_draw_card",
@@ -560,6 +561,10 @@ final class GameDetailViewModel: ObservableObject {
         gameJSON?["cards"]?.objectValue?.count ?? 0
     }
 
+    func nextGame(currentGameId: Int) -> GameSummary? {
+        activeGames.first { $0.isUserTurn && $0.id != currentGameId }
+    }
+
     func load(gameId: Int, using authStore: AuthStore) async {
         isLoading = true
         errorMessage = nil
@@ -571,6 +576,17 @@ final class GameDetailViewModel: ObservableObject {
         }
 
         isLoading = false
+    }
+
+    func loadActiveGames(using authStore: AuthStore) async {
+        do {
+            let response: GameListResponse = try await authStore.authenticatedGet(
+                "/titles/\(AppConfig.titleSlug)/games/"
+            )
+            activeGames = response.games
+        } catch {
+            activeGames = []
+        }
     }
 
     func fetchEloChangeIfNeeded(gameId: Int, using authStore: AuthStore) async {
@@ -1280,6 +1296,7 @@ struct GameDetailView: View {
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     let gameId: Int
+    var onOpenGame: (Int) -> Void = { _ in }
 
     var body: some View {
         ArchetypeScreen {
@@ -1296,7 +1313,7 @@ struct GameDetailView: View {
                         onOwnHeroTap: handleOwnHeroTap,
                         onOpponentHeroTap: handleOpponentHeroTap,
                         onUpdatesTap: { overlay = .updates },
-                        onMenuTap: { overlay = .menu },
+                        onMenuTap: openMenu,
                         onEndTurn: sendEndTurn
                     )
 
@@ -1320,7 +1337,7 @@ struct GameDetailView: View {
                 if model.isMulliganPhase, overlay == nil, model.winner == "none" {
                     MulliganMenuButtonLayer(
                         socketStatus: socket.status,
-                        onMenuTap: { overlay = .menu }
+                        onMenuTap: openMenu
                     )
                 }
 
@@ -1364,6 +1381,7 @@ struct GameDetailView: View {
                 model.applySocketText(text)
             }
             await model.load(gameId: gameId, using: authStore)
+            await model.loadActiveGames(using: authStore)
             await model.fetchEloChangeIfNeeded(gameId: gameId, using: authStore)
             connectSocketIfPossible()
             #if DEBUG
@@ -1382,6 +1400,7 @@ struct GameDetailView: View {
             }
             Task {
                 await model.load(gameId: gameId, using: authStore)
+                await model.loadActiveGames(using: authStore)
                 await model.fetchEloChangeIfNeeded(gameId: gameId, using: authStore)
                 connectSocketIfPossible()
                 #if DEBUG
@@ -1565,8 +1584,10 @@ struct GameDetailView: View {
         case .menu:
             GameMenuSheet(
                 latestUpdateText: model.latestDisplayUpdateText,
+                nextGame: model.nextGame(currentGameId: gameId),
                 canExtendTime: model.canExtendTime,
                 canConcede: model.winner == "none",
+                onNextGame: openNextGame,
                 onUpdates: { self.overlay = .updates },
                 onExtendTime: sendExtendTime,
                 onConcede: requestConcede,
@@ -1829,6 +1850,19 @@ struct GameDetailView: View {
     private func sendExtendTime() {
         socket.send(json: ["type": "cmd_extend_time"])
         overlay = nil
+    }
+
+    private func openMenu() {
+        overlay = .menu
+        Task {
+            await model.loadActiveGames(using: authStore)
+        }
+    }
+
+    private func openNextGame(_ game: GameSummary) {
+        socket.disconnect()
+        overlay = nil
+        onOpenGame(game.id)
     }
 
     private func requestRematch() {
@@ -4752,8 +4786,10 @@ private struct RatingChangeRow: View {
 
 private struct GameMenuSheet: View {
     let latestUpdateText: String
+    let nextGame: GameSummary?
     let canExtendTime: Bool
     let canConcede: Bool
+    let onNextGame: (GameSummary) -> Void
     let onUpdates: () -> Void
     let onExtendTime: () -> Void
     let onConcede: () -> Void
@@ -4763,6 +4799,14 @@ private struct GameMenuSheet: View {
     var body: some View {
         GameOverlayFrame(title: "Menu", onDismiss: onDismiss) {
             VStack(spacing: 30) {
+                if let nextGame {
+                    GameMenuTextButton(
+                        title: "Next Game",
+                        color: ArchetypeTheme.sky,
+                        action: { onNextGame(nextGame) }
+                    )
+                }
+
                 GameMenuTextButton(title: "Updates", color: ArchetypeTheme.text, action: onUpdates)
 
                 if canExtendTime {

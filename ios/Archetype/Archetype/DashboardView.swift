@@ -532,7 +532,15 @@ struct DashboardView: View {
                         }
                     )
                 case .game(let gameId):
-                    GameDetailView(gameId: gameId)
+                    GameDetailView(
+                        gameId: gameId,
+                        onOpenGame: { nextGameId in
+                            if !path.isEmpty {
+                                path.removeLast()
+                            }
+                            path.append(DashboardRoute.game(nextGameId))
+                        }
+                    )
                 case .collection:
                     CollectionView(
                         openDeck: { deckId in
