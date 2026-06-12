@@ -650,6 +650,17 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
     if requires_target and (target_type is None or target_id is None):
         return Rejected(reason="This hero power requires you to choose a target")
 
+    if not requires_target:
+        fixed_target_error = GameService.fixed_hero_power_target_error(
+            state,
+            effect.side,
+            actions,
+            effect.target_type,
+            effect.target_id,
+        )
+        if fixed_target_error:
+            return Rejected(reason=fixed_target_error)
+
     # Validate that the target belongs to the correct side when the power actually
     # uses a selected target. Non-targeted powers may include a placeholder target
     # from older clients; it is deliberately ignored.

@@ -23,6 +23,7 @@ from apps.gameplay.engine.dispatcher import resolve
 from apps.gameplay.models import Game
 from apps.gameplay.schemas.effects import (
     AttackEffect,
+    BuffEffect,
     DamageEffect,
     DrawEffect,
     SummonEffect,
@@ -936,6 +937,32 @@ class HeroPowerEffectValidationTests(AttackValidationTestBase):
             )
         )
 
+    def test_effect_handler_rejects_enemy_target_for_fixed_friendly_hero_buff(self):
+        """Fixed own-hero buffs should not accept an enemy hero placeholder."""
+        from apps.builder.schemas import BuffAction
+
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
+        hero_b_id = self.game_state.heroes["side_b"].hero_id
+        self.game_state.heroes["side_a"].hero_power = HeroPower(
+            name="Fortify",
+            actions=[
+                BuffAction(attribute="health", amount=2, target="hero", scope="single")
+            ],
+        )
+        self.game_state.heroes["side_a"].exhausted = False
+
+        effect = UseHeroEffect(
+            side="side_a",
+            source_id=hero_a_id,
+            target_type="hero",
+            target_id=hero_b_id,
+        )
+
+        result = resolve(effect, self.game_state)
+
+        self.assertEqual(result.type, "outcome_rejected")
+        self.assertIn("not your hero", result.reason.lower())
+
     def test_effect_handler_rejects_hero_power_without_enough_energy(self):
         """Hero powers with configured costs require available energy."""
         hero_a_id = self.game_state.heroes["side_a"].hero_id
@@ -1199,6 +1226,32 @@ class BuffHeroPowerTests(AttackValidationTestBase):
         effects = GameService.compile_cmd(self.game_state, command, "side_a")
         self.assertEqual(len(effects), 1)
         self.assertIsInstance(effects[0], UseHeroEffect)
+
+    def test_can_use_buff_hero_power_without_target(self):
+        """Fixed own-hero buff powers do not need an explicit target."""
+        hero_a_id = self.game_state.heroes["side_a"].hero_id
+        command = {
+            "type": "cmd_use_hero",
+            "hero_id": hero_a_id,
+        }
+
+        effects = GameService.compile_cmd(self.game_state, command, "side_a")
+
+        self.assertEqual(len(effects), 1)
+        self.assertIsInstance(effects[0], UseHeroEffect)
+        self.assertIsNone(effects[0].target_type)
+        self.assertIsNone(effects[0].target_id)
+
+        result = resolve(effects[0], self.game_state)
+        self.assertEqual(result.type, "outcome_success")
+        self.assertTrue(
+            any(
+                isinstance(child, BuffEffect)
+                and child.target_type == "hero"
+                and child.target_id == hero_a_id
+                for child in result.child_effects
+            )
+        )
 
     def test_cannot_target_enemy_hero_with_buff_power(self):
         """Buff hero powers cannot target enemy hero."""

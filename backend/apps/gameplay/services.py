@@ -818,6 +818,56 @@ class GameService:
         )
 
     @staticmethod
+    def fixed_hero_power_target_side(action: Action) -> str | None:
+        if getattr(action, "scope", "single") == "all":
+            return None
+        if isinstance(action, DamageAction):
+            if action.target == "hero":
+                return "opponent"
+            if action.target == "self":
+                return "own"
+        if isinstance(action, (BuffAction, HealAction)) and action.target == "hero":
+            return "own"
+        return None
+
+    @staticmethod
+    def fixed_hero_power_target_error(
+        game_state: GameState,
+        side: str,
+        actions: list[Action],
+        target_type: str | None,
+        target_id: str | None,
+    ) -> str | None:
+        if target_type is None and target_id is None:
+            return None
+
+        fixed_target_sides = {
+            target_side
+            for action in actions
+            if (target_side := GameService.fixed_hero_power_target_side(action))
+        }
+        if len(fixed_target_sides) != 1:
+            return None
+
+        fixed_target_side = next(iter(fixed_target_sides))
+        expected_side = (
+            side
+            if fixed_target_side == "own"
+            else ("side_b" if side == "side_a" else "side_a")
+        )
+        expected_hero = game_state.heroes.get(expected_side)
+        if not expected_hero:
+            return None
+
+        if target_type != "hero" or target_id != expected_hero.hero_id:
+            relation = (
+                "your hero" if fixed_target_side == "own" else "the opponent's hero"
+            )
+            return f"Target hero {target_id} is not {relation}"
+
+        return None
+
+    @staticmethod
     def compile_cmd(game_state: GameState, command: dict, side) -> list[Effect]:
         "Translates a Command into a list of Effect objects"
 
@@ -920,6 +970,17 @@ class GameService:
                 effect_target_type is None or effect_target_id is None
             ):
                 raise ValueError("This hero power requires you to choose a target")
+
+            if not requires_target:
+                fixed_target_error = GameService.fixed_hero_power_target_error(
+                    game_state,
+                    game_state.active,
+                    actions,
+                    target_type,
+                    command.target_id,
+                )
+                if fixed_target_error:
+                    raise ValueError(fixed_target_error)
 
             # Validate that the target belongs to the correct side when the power
             # actually uses a selected target. Non-targeted powers may arrive from
