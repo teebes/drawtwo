@@ -1,14 +1,17 @@
 import asyncio
 import json
 import logging
-from channels.generic.websocket import AsyncWebsocketConsumer
+from urllib.parse import parse_qs
+
 from channels.db import database_sync_to_async
-from django.contrib.auth.models import AnonymousUser
-from .models import Game, GameUpdate
+from channels.generic.websocket import AsyncWebsocketConsumer
+from pydantic import TypeAdapter
+
 from apps.gameplay.schemas.game import GameState
 from apps.gameplay.schemas.updates import GameUpdate as PydGameUpdate
+
+from .models import Game, GameUpdate
 from .services import GameService
-from pydantic import TypeAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -22,25 +25,16 @@ class GameConsumer(AsyncWebsocketConsumer):
         self.game_id = self.scope["url_route"]["kwargs"]["game_id"]
         self.game_group_name = f"game_{self.game_id}"
 
-        # Check if user is authenticated
-        if not self.scope["user"].is_authenticated:
-            logger.warning(
-                f"Rejecting unauthenticated WebSocket connection for game {self.game_id}"
-            )
-            await self.close()
-            return
-
-        # Verify user has access to this game and fetch game object
-        game = await self.user_can_access_game()
-        if not game:
+        # Verify user or guest token has access to this game.
+        access_context = await self.get_game_access_context()
+        if not access_context:
             logger.warning(
                 f"User {self.scope['user']} does not have access to game {self.game_id}"
             )
             await self.close()
             return
 
-        # Determine which side this user is on
-        self.side = await self.get_user_side(game)
+        game, self.side = access_context
 
         # Join the general game group
         # Use timeout to prevent deadlock if Redis is unresponsive
@@ -198,7 +192,7 @@ class GameConsumer(AsyncWebsocketConsumer):
         )
 
     @database_sync_to_async
-    def user_can_access_game(self):
+    def get_game_access_context(self):
         if not self.game_id:
             return None
         try:
@@ -206,14 +200,27 @@ class GameConsumer(AsyncWebsocketConsumer):
             user = self.scope["user"]
             # Check if user is a participant in the game (either side)
             # Works for both PvE (one side is user, other is AI) and PvP (both sides are users)
-            if game.player_a_user == user or game.player_b_user == user:
-                return game
+            if user.is_authenticated:
+                if game.player_a_user == user:
+                    return game, "side_a"
+                if game.player_b_user == user:
+                    return game, "side_b"
+
+            guest_token = self.get_guest_token()
+            if game.allows_guest_access(guest_token):
+                return game, game.guest_access_side
+
             # Staff/superuser can view any game as spectator (read-only)
-            if user.is_staff or user.is_superuser:
-                return game
+            if user.is_authenticated and (user.is_staff or user.is_superuser):
+                return game, "spectator"
             return None
         except Game.DoesNotExist:
             return None
+
+    def get_guest_token(self):
+        query_string = self.scope.get("query_string", b"").decode()
+        query_params = parse_qs(query_string)
+        return query_params.get("guest_token", [None])[0]
 
     @database_sync_to_async
     def get_user_side(self, game):

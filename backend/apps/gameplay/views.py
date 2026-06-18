@@ -2,7 +2,7 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.builder.models import Title
@@ -14,6 +14,7 @@ from apps.gameplay.models import (
     MatchmakingQueue,
     UserTitleRating,
 )
+from apps.gameplay.scenarios import ScenarioConfigurationError, ScenarioGameService
 from apps.gameplay.schemas import GameList, GameSummary
 from apps.gameplay.schemas.game import GameState
 from apps.gameplay.services import GameService
@@ -122,8 +123,32 @@ def _is_user_action_required(game_state: GameState, user_side: str) -> bool:
     return game_state.active == user_side
 
 
+def _guest_access_token_from_request(request) -> str | None:
+    return request.headers.get("X-Game-Access-Token") or request.query_params.get(
+        "guest_token"
+    )
+
+
+def _viewer_for_request(request, game: Game) -> str | None:
+    user = request.user
+    if user.is_authenticated:
+        if game.player_a_user == user:
+            return "side_a"
+        if game.player_b_user == user:
+            return "side_b"
+
+    guest_token = _guest_access_token_from_request(request)
+    if game.allows_guest_access(guest_token):
+        return game.guest_access_side
+
+    if user.is_authenticated and (user.is_staff or user.is_superuser):
+        return "spectator"
+
+    return None
+
+
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def game_detail(request, game_id):
     game = get_object_or_404(
         Game.objects.select_related(
@@ -139,17 +164,8 @@ def game_detail(request, game_id):
 
     game_state = GameState.model_validate(game.state)
 
-    # Determine which side the viewing user is on
-    # Verify the user has access to this game
-    if game.player_a_user == request.user:
-        viewer = "side_a"
-    elif game.player_b_user == request.user:
-        viewer = "side_b"
-    elif request.user.is_staff or request.user.is_superuser:
-        # Staff/superuser can view any game as spectator (read-only)
-        viewer = "spectator"
-    else:
-        # User is not a participant in this game
+    viewer = _viewer_for_request(request, game)
+    if not viewer:
         return Response(
             {"error": "You do not have access to this game"},
             status=status.HTTP_403_FORBIDDEN,
@@ -188,6 +204,30 @@ def game_detail(request, game_id):
         }
 
     return Response(game_data)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def start_scenario(request, scenario_slug):
+    try:
+        game, access_token = ScenarioGameService.start_scenario(scenario_slug)
+    except ScenarioConfigurationError as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    step.delay(game.id)
+
+    return Response(
+        {
+            "id": game.id,
+            "status": game.status,
+            "game_type": game.type,
+            "title_slug": game.title.slug,
+            "viewer_side": game.guest_access_side,
+            "access_token": access_token,
+            "message": "Intro game created successfully",
+        },
+        status=status.HTTP_201_CREATED,
+    )
 
 
 @api_view(["GET"])
@@ -256,7 +296,7 @@ def game_queue(request, game_id):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def advance_game(request, game_id):
-    game = get_object_or_404(Game, id=game_id)
+    get_object_or_404(Game, id=game_id)
     from .tasks import step
 
     step.delay(game_id)
@@ -783,12 +823,8 @@ def create_friendly_challenge(request):
     - challengee_user_id
     - challenger_deck_id
     """
-    import logging
-
     from apps.authentication.models import Friendship
     from apps.gameplay.models import FriendlyChallenge
-
-    logger = logging.getLogger(__name__)
 
     title_slug = request.data.get("title_slug")
     challengee_user_id = request.data.get("challengee_user_id")

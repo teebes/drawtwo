@@ -261,7 +261,7 @@ router.beforeEach(async (to, from, next) => {
   // Handle title loading for title routes
   if (to.meta.isTitleRoute && to.params.slug) {
     try {
-      await titleStore.loadTitle(to.params.slug)
+      await titleStore.loadTitle(to.params.slug, { anonymous: to.query.intro === '1' })
     } catch (error) {
       console.error('Failed to load title:', error)
       // Continue navigation even if title loading fails

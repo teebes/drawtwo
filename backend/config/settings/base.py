@@ -285,6 +285,11 @@ CORS_ALLOWED_ORIGINS = [
 
 CORS_ALLOW_CREDENTIALS = True
 
+# Gameplay pacing
+GAMEPLAY_AI_COMMAND_DELAY_SECONDS = float(
+    os.environ.get("GAMEPLAY_AI_COMMAND_DELAY_SECONDS", "1.0")
+)
+
 # Celery Configuration
 CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
 CELERY_RESULT_BACKEND = os.environ.get(

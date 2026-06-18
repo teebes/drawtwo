@@ -17,10 +17,14 @@
           <div class="mt-16">
             <button
               @click="handlePlayClick"
+              :disabled="startingIntro"
               class="inline-flex items-center justify-center rounded-xl bg-primary-600 px-12 py-5 text-lg font-medium text-white shadow-lg transition-all hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-seon-900 focus:ring-offset-4"
             >
-              Play
+              {{ startingIntro ? 'Loading...' : 'Play' }}
             </button>
+            <p v-if="playError" class="mt-4 text-sm text-red-600 dark:text-red-400">
+              {{ playError }}
+            </p>
           </div>
         </div>
       </section>
@@ -101,20 +105,41 @@
 </template>
 
 <script setup>
-import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { startIntroScenario } from '../services/introScenario'
 
-const authStore = useAuthStore()
 const router = useRouter()
+const startingIntro = ref(false)
+const playError = ref('')
 
 const currentYear = computed(() => new Date().getFullYear())
 
-const handlePlayClick = () => {
-  if (authStore.isAuthenticated) {
-    router.push({ name: 'Play' })
-  } else {
-    router.push({ name: 'Login' })
+const handlePlayClick = async () => {
+  if (startingIntro.value) {
+    return
+  }
+
+  startingIntro.value = true
+  playError.value = ''
+
+  try {
+    const game = await startIntroScenario()
+    router.push({
+      name: 'Board',
+      params: {
+        slug: game.title_slug,
+        game_id: game.id,
+      },
+      query: {
+        intro: '1',
+      },
+    })
+  } catch (error) {
+    console.error('Failed to start intro game:', error)
+    playError.value = 'Unable to start the intro game. Please try again.'
+  } finally {
+    startingIntro.value = false
   }
 }
 </script>

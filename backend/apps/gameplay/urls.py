@@ -18,6 +18,11 @@ urlpatterns = [
     path("games/<int:game_id>/rematch/", views.rematch_game, name="game-rematch"),
     path("games/", views.current_games, name="current-games"),
     path("games/new/", views.create_game, name="game-create"),
+    path(
+        "scenarios/<slug:scenario_slug>/start/",
+        views.start_scenario,
+        name="scenario-start",
+    ),
     # Matchmaking
     path("matchmaking/queue/", views.queue_for_ranked_match, name="queue-ranked-match"),
     path(

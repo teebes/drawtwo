@@ -12,10 +12,11 @@ import type {
 } from '../types/game'
 import { useNotificationStore } from './notifications'
 import { useAuthStore } from './auth'
+import { fetchIntroGame, getIntroGameAccessToken } from '@/services/introScenario'
 
 // WebSocket status type
 type WebSocketStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
-type GameType = 'pve' | 'ranked' | 'friendly'
+type GameType = 'pve' | 'ranked' | 'friendly' | 'intro'
 
 // Game store state interface
 interface GameStoreState {
@@ -359,7 +360,7 @@ export const useGameStore = defineStore('game', {
 
     async fetchEloChange(gameId: string): Promise<void> {
       try {
-        const response = await axios.get(`/gameplay/games/${gameId}/`)
+        const response = await fetchIntroGame(gameId) ?? await axios.get(`/gameplay/games/${gameId}/`)
         const { elo_change } = response.data
 
         if (elo_change) {
@@ -378,7 +379,7 @@ export const useGameStore = defineStore('game', {
         this.loading = true
         this.error = null
 
-        const response = await axios.get(`/gameplay/games/${gameId}/`)
+        const response = await fetchIntroGame(gameId) ?? await axios.get(`/gameplay/games/${gameId}/`)
         console.log(response.data)
 
         const data = response.data
@@ -414,9 +415,16 @@ export const useGameStore = defineStore('game', {
       // Get JWT token from auth store and append as query parameter
       const authStore = useAuthStore()
       const token = authStore.accessToken
-      const wsUrl = token
-        ? `${baseUrl}/ws/game/${gameId}/?token=${token}`
-        : `${baseUrl}/ws/game/${gameId}/`
+      const introAccessToken = getIntroGameAccessToken(gameId)
+      const params = new URLSearchParams()
+      if (token) {
+        params.set('token', token)
+      }
+      if (introAccessToken) {
+        params.set('guest_token', introAccessToken)
+      }
+      const queryString = params.toString()
+      const wsUrl = `${baseUrl}/ws/game/${gameId}/${queryString ? `?${queryString}` : ''}`
 
       // Set status based on whether this is initial connection or reconnection
       const isReconnecting = this.reconnectAttempts > 0

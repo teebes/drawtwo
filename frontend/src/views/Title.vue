@@ -162,7 +162,7 @@ interface DeckData extends DeckApiData {
 interface GameData {
   id: number
   name: string
-  type: 'pve' | 'ranked' | 'friendly'
+  type: 'pve' | 'ranked' | 'friendly' | 'intro'
   is_user_turn: boolean
 }
 

@@ -10,7 +10,9 @@
             :game-type="currentGameType ?? undefined"
             :rematch-loading="rematchLoading"
             @close="showingGameOver = false"
-            @rematch="handleRematch" />
+            @rematch="handleRematch"
+            @intro-signup="handleIntroSignup"
+            @intro-retry="handleIntroRetry" />
 
         <!-- Normal Mode -->
         <main
@@ -370,7 +372,7 @@
     </div>
 
     <div
-        v-if="autoSwitchTarget"
+        v-if="autoSwitchTarget && !isIntroGame"
         class="pointer-events-auto fixed inset-0 z-[100] flex items-center justify-center bg-gray-950/55 px-6 backdrop-blur-[2px]"
         aria-live="polite">
         <div class="next-game-transition w-full max-w-xs border border-primary-500/40 bg-gray-950/95 px-5 py-4 text-center shadow-2xl">
@@ -398,6 +400,7 @@ import { storeToRefs } from 'pinia'
 
 import axios from '../config/api'
 import { useNotificationStore } from '../stores/notifications'
+import { startIntroScenario } from '../services/introScenario'
 import GameCard from '../components/game/GameCard.vue'
 import GameButton from '../components/ui/GameButton.vue'
 // Board Components
@@ -451,6 +454,10 @@ const {
   currentGameType
 } = storeToRefs(gameStore)
 
+const isIntroGame = computed(() => {
+    return currentGameType.value === 'intro' || route.query.intro === '1'
+})
+
 // Get hero art URLs
 const ownHeroArtUrl = computed(() => {
     if (!ownHero.value) {
@@ -481,7 +488,7 @@ type OverlayType = 'entity_detail' | 'place_creature' | 'select_target' | 'menu'
 interface ActiveGameSummary {
     id: number
     name: string
-    type: 'pve' | 'ranked' | 'friendly'
+    type: 'pve' | 'ranked' | 'friendly' | 'intro'
     is_user_turn: boolean
 }
 
@@ -685,6 +692,9 @@ const hasNoAvailableActions = computed(() => {
 const gameId = computed(() => route.params.game_id as string)
 
 const nextGame = computed(() => {
+    if (isIntroGame.value) {
+        return null
+    }
     return getNextGame(activeGames.value)
 })
 
@@ -1544,6 +1554,14 @@ const onTargetSelected = (target: { target_type: 'creature' | 'hero'; target_id:
 
 const handleEndTurn = async () => {
     if (gameOver.value.isGameOver) return
+
+    if (isIntroGame.value) {
+        clearAutoSwitch()
+        activeGames.value = []
+        gameStore.endTurn()
+        return
+    }
+
     if (isAutoSwitchingGame.value) return
 
     autoSwitchLookupInFlight.value = true
@@ -1561,6 +1579,11 @@ const handleEndTurn = async () => {
 const handleMenuClick = () => {
     overlay.value = 'menu'
     overlayTitle.value = "Menu"
+    if (isIntroGame.value) {
+        clearAutoSwitch()
+        activeGames.value = []
+        return
+    }
     fetchActiveGames()
 }
 
@@ -1584,7 +1607,9 @@ const fetchActiveGames = async (): Promise<ActiveGameSummary[]> => {
 
     try {
         const response = await axios.get(`/titles/${slug}/games/`)
-        activeGames.value = response.data.games || []
+        activeGames.value = (response.data.games || []).filter(
+            (game: ActiveGameSummary) => game.type !== 'intro'
+        )
     } catch (error) {
         console.error('Failed to fetch active games', error)
         activeGames.value = []
@@ -1650,6 +1675,44 @@ const handleRematch = async () => {
     } catch (error: any) {
         const message = error.response?.data?.error || 'Failed to send rematch challenge'
         notificationStore.error(message)
+    } finally {
+        rematchLoading.value = false
+    }
+}
+
+const handleIntroSignup = () => {
+    gameStore.disconnectWebSocket()
+    router.push({
+        name: 'Login',
+        query: {
+            signup: '1',
+            redirect: '/play',
+        },
+    })
+}
+
+const handleIntroRetry = async () => {
+    if (rematchLoading.value) return
+    rematchLoading.value = true
+    const notificationStore = useNotificationStore()
+
+    try {
+        const game = await startIntroScenario()
+        showingGameOver.value = false
+        gameStore.disconnectWebSocket()
+        await router.replace({
+            name: 'Board',
+            params: {
+                slug: game.title_slug,
+                game_id: game.id,
+            },
+            query: {
+                intro: '1',
+            },
+        })
+    } catch (error) {
+        console.error('Failed to restart intro game', error)
+        notificationStore.error('Failed to restart the intro game')
     } finally {
         rematchLoading.value = false
     }
@@ -1943,7 +2006,12 @@ watch([title, gameId], async ([newTitle, newGameId], [, oldGameId]) => {
     }
 
     await gameStore.connectToGame(newGameId)
-    await fetchActiveGames()
+    if (isIntroGame.value) {
+        clearAutoSwitch()
+        activeGames.value = []
+    } else {
+        await fetchActiveGames()
+    }
 }, { immediate: true })
 
 // Clear local state when game over is detected
@@ -1952,7 +2020,7 @@ watch(() => gameOver.value.isGameOver, (isGameOver) => {
         clearLocalState()
         showingGameOver.value = true
 
-        if (!gameState.value.elo_change) {
+        if (!isIntroGame.value && !gameState.value.elo_change) {
             gameStore.fetchEloChange(route.params.game_id as string)
         }
     }

@@ -5,6 +5,7 @@ import traceback
 import uuid
 from datetime import timedelta
 
+from django.conf import settings
 from django.db import DatabaseError, transaction
 from django.db.models import Q
 from pydantic import TypeAdapter, ValidationError
@@ -63,7 +64,7 @@ from apps.gameplay.schemas.effects import (
     TempManaBoostEffect,
     UseHeroEffect,
 )
-from apps.gameplay.schemas.engine import Fault, Prevented, Rejected, Result, Success
+from apps.gameplay.schemas.engine import Fault, Prevented, Rejected, Success
 from apps.gameplay.schemas.events import (
     ActionableEvent,
     CreatureDeathEvent,
@@ -74,6 +75,9 @@ from apps.gameplay.schemas.events import (
 from apps.gameplay.schemas.game import CardInPlay, GameState, HeroInPlay
 
 # Moved to avoid circular import - imported where needed
+
+DEFAULT_STEP_DELAY_SECONDS = 0.1
+DEFAULT_AI_COMMAND_DELAY_SECONDS = 1.0
 
 
 class GameService:
@@ -311,7 +315,6 @@ class GameService:
             return
         game.status = Game.GAME_STATUS_IN_PROGRESS
         game_state = GameState.model_validate(game.state)
-        previous_phase = game_state.phase
 
         # Check for turn timeout - automatically concede if time expired
         if (
@@ -362,6 +365,7 @@ class GameService:
         processed_cap = 10
         all_events = []
         all_errors = []
+        next_step_delay_seconds = DEFAULT_STEP_DELAY_SECONDS
 
         while len(game.queue) > 0 and effects_processed < processed_cap:
 
@@ -590,12 +594,23 @@ class GameService:
                 )
 
             game.enqueue(ai_effects, trigger=False)
+            next_step_delay_seconds = GameService._ai_command_delay_seconds()
 
         # Continue processing if there are more effects in queue
         if len(game.queue) > 0:
             from apps.gameplay.tasks import step
 
-            step.apply_async(args=[game_id], countdown=0.1)
+            step.apply_async(args=[game_id], countdown=next_step_delay_seconds)
+
+    @staticmethod
+    def _ai_command_delay_seconds() -> float:
+        return float(
+            getattr(
+                settings,
+                "GAMEPLAY_AI_COMMAND_DELAY_SECONDS",
+                DEFAULT_AI_COMMAND_DELAY_SECONDS,
+            )
+        )
 
     @staticmethod
     @transaction.atomic
@@ -1664,9 +1679,6 @@ class GameService:
                     )
                 )
             elif event.type == "event_clear":
-                # Get cleared creature IDs from the state before the event
-                opposing_side = "side_b" if event.side == "side_a" else "side_a"
-                cleared_creature_ids = []
                 # We need to figure out which creatures were cleared
                 # For now, we'll rely on the event having this info or deduce from sides
                 # Since the event doesn't carry this info, we'll leave it empty
@@ -1709,7 +1721,6 @@ class GameService:
         3. Match players with closest ratings
         4. Create game and notify both players
         """
-        from apps.builder.models import Title
         from apps.gameplay.models import Game, MatchmakingQueue
 
         if ladder_type not in dict(Game.LADDER_TYPE_CHOICES):

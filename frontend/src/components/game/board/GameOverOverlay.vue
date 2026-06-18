@@ -6,11 +6,11 @@
                     {{ gameOver.winner === viewer ? '🎉' : '💀' }}
                 </div>
                 <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                    {{ gameOver.winner === viewer ? 'Victory!' : 'Defeat!' }}
+                    {{ resultTitle }}
                 </h2>
-                <!-- <p class="text-lg text-gray-600 dark:text-gray-400">
-                    {{ gameOver.winner === 'side_a' ? 'Side A' : 'Side B' }} wins the game!
-                </p> -->
+                <p v-if="isIntroGame" class="text-base text-gray-600 dark:text-gray-300">
+                    {{ resultMessage }}
+                </p>
             </div>
 
             <!-- ELO Rating Changes (only for PvP games) -->
@@ -47,7 +47,32 @@
                 </div>
             </div>
 
-            <div class="space-y-3">
+            <div v-if="isIntroGame" class="space-y-3">
+                <button
+                    v-if="didWin"
+                    @click="handleIntroSignup"
+                    class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+                >
+                    Create Account
+                </button>
+
+                <button
+                    v-else
+                    @click="handleIntroRetry"
+                    class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+                >
+                    Try Again
+                </button>
+
+                <button
+                    @click="handleReturnToGame"
+                    class="w-full px-4 py-3 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors"
+                >
+                    Return to Game
+                </button>
+            </div>
+
+            <div v-else class="space-y-3">
                 <router-link :to="{ name: 'Title', params: { slug: titleStore.titleSlug } }">
                     <button
                         class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
@@ -77,6 +102,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useTitleStore } from '@/stores/title'
 import type { Side, EloChange } from '../../../types/game'
 
@@ -100,7 +126,27 @@ const props = defineProps<Props>()
 const emit = defineEmits<{
     'close': []
     'rematch': []
+    'intro-signup': []
+    'intro-retry': []
 }>()
+
+const isIntroGame = computed(() => props.gameType === 'intro')
+const didWin = computed(() => props.gameOver.winner === props.viewer)
+const resultTitle = computed(() => {
+    if (!isIntroGame.value) {
+        return didWin.value ? 'Victory!' : 'Defeat!'
+    }
+    return didWin.value ? 'Intro Complete!' : 'Defeat!'
+})
+const resultMessage = computed(() => {
+    if (!isIntroGame.value) {
+        return ''
+    }
+    if (didWin.value) {
+        return 'You won the intro match. Create an account to keep playing Draw Two.'
+    }
+    return 'Try the intro match again with the same starting setup.'
+})
 
 const handleReturnToGame = () => {
     emit('close')
@@ -108,5 +154,13 @@ const handleReturnToGame = () => {
 
 const handleRematch = () => {
     emit('rematch')
+}
+
+const handleIntroSignup = () => {
+    emit('intro-signup')
+}
+
+const handleIntroRetry = () => {
+    emit('intro-retry')
 }
 </script>

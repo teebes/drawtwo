@@ -46,7 +46,7 @@ const props = defineProps<{
     gameOver: boolean
     nextGame?: {
         id: number
-        type: 'pve' | 'ranked' | 'friendly'
+        type: 'pve' | 'ranked' | 'friendly' | 'intro'
         name: string
     } | null
 }>()

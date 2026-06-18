@@ -1,6 +1,11 @@
+import hashlib
+import secrets
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.db import models, transaction
 from django.db.models import Case, Q, Value, When
+from django.utils import timezone
 
 from apps.collection.models import Deck
 from apps.core.models import TimestampedModel, list_to_choices
@@ -57,6 +62,7 @@ class Game(TimestampedModel):
     GAME_TYPE_PVE = "pve"
     GAME_TYPE_RANKED = "ranked"
     GAME_TYPE_FRIENDLY = "friendly"
+    GAME_TYPE_INTRO = "intro"
 
     LADDER_TYPE_RAPID = "rapid"
     LADDER_TYPE_DAILY = "daily"
@@ -65,7 +71,9 @@ class Game(TimestampedModel):
 
     type = models.CharField(
         max_length=20,
-        choices=list_to_choices([GAME_TYPE_PVE, GAME_TYPE_RANKED, GAME_TYPE_FRIENDLY]),
+        choices=list_to_choices(
+            [GAME_TYPE_PVE, GAME_TYPE_RANKED, GAME_TYPE_FRIENDLY, GAME_TYPE_INTRO]
+        ),
         default=GAME_TYPE_PVE,
     )
 
@@ -144,6 +152,25 @@ class Game(TimestampedModel):
         help_text="When the current turn expires (for time enforcement)",
     )
 
+    guest_access_token_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="SHA-256 hash for single-game guest access.",
+    )
+    guest_access_side = models.CharField(
+        max_length=10,
+        blank=True,
+        default="",
+        help_text="Side granted by the guest access token.",
+    )
+    guest_access_expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Expiry time for single-game guest access.",
+    )
+
     @property
     def game_state(self):
         return GameState.model_validate(self.state)
@@ -152,6 +179,41 @@ class Game(TimestampedModel):
     def is_vs_ai(self):
         """Returns True if this is a player vs AI game"""
         return self.side_a.is_ai_deck or self.side_b.is_ai_deck
+
+    @staticmethod
+    def hash_guest_access_token(token: str) -> str:
+        return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+    def issue_guest_access_token(
+        self,
+        side: str,
+        ttl: timedelta = timedelta(hours=2),
+    ) -> str:
+        token = secrets.token_urlsafe(32)
+        self.guest_access_token_hash = self.hash_guest_access_token(token)
+        self.guest_access_side = side
+        self.guest_access_expires_at = timezone.now() + ttl
+        self.save(
+            update_fields=[
+                "guest_access_token_hash",
+                "guest_access_side",
+                "guest_access_expires_at",
+            ]
+        )
+        return token
+
+    def allows_guest_access(self, token: str | None) -> bool:
+        if not token or not self.guest_access_token_hash or not self.guest_access_side:
+            return False
+        if (
+            self.guest_access_expires_at
+            and timezone.now() >= self.guest_access_expires_at
+        ):
+            return False
+        return secrets.compare_digest(
+            self.guest_access_token_hash,
+            self.hash_guest_access_token(token),
+        )
 
     @property
     def human_deck(self):

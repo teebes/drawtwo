@@ -1,5 +1,10 @@
 import { defineStore } from 'pinia'
-import axios from '../config/api'
+import rawAxios from 'axios'
+import api from '../config/api'
+
+const publicAxios = rawAxios.create({
+  baseURL: api.defaults.baseURL,
+})
 
 // Types for title data
 interface Title {
@@ -35,7 +40,7 @@ export const useTitleStore = defineStore('title', {
   },
 
   actions: {
-    async loadTitle(slug: string): Promise<Title> {
+    async loadTitle(slug: string, options?: { anonymous?: boolean }): Promise<Title> {
       // Don't reload if we already have the same title
       if (this.currentTitle?.slug === slug) {
         return this.currentTitle
@@ -47,7 +52,8 @@ export const useTitleStore = defineStore('title', {
 
       try {
         // const response = await axios.get(`/builder/titles/${slug}/`)
-        const response = await axios.get(`/titles/${slug}/`)
+        const client = options?.anonymous ? publicAxios : api
+        const response = await client.get(`/titles/${slug}/`)
         this.currentTitle = response.data as Title
         return this.currentTitle
       } catch (error: any) {

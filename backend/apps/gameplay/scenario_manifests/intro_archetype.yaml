@@ -1,0 +1,60 @@
+- slug: intro-archetype-v1
+  title: archetype
+  viewer_side: side_b
+  guest_token_ttl_minutes: 120
+  player_name: You
+  opponent_name: CPU
+  sides:
+    side_a:
+      controller: ai
+      hero:
+        slug: commander
+        health: 10
+      opening_hand: []
+      deck:
+        - sharpen
+        - decoy
+        - brute
+        - soldier
+        - grenade
+        - mongoose
+        - medic
+        - phalanx
+        - cheerleader
+        - meteor
+      ai:
+        fallback_strategy: control
+        opening:
+          - turn: 1
+            commands:
+              - use_hero_power
+              - end_turn
+          - turn: 2
+            commands:
+              - play_card:
+                  slug: sharpen
+                  target: own_first_creature
+              - attack:
+                  attacker: own_first_creature
+                  target: enemy_taunt_else_hero
+              - end_turn
+    side_b:
+      controller: guest
+      hero:
+        slug: berserker
+        health: 10
+      opening_hand:
+        - powerup
+        - decoy
+        - mongoose
+      deck:
+        - sharpen
+        - cleave
+        - drawtwo
+        - archer
+        - shieldwall
+        - ambusher
+        - zap
+        - knight
+        - phoenix
+        - soldier

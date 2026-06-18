@@ -259,6 +259,9 @@ const initGoogleClient = async () => {
 }
 
 onMounted(() => {
+  if (route.query.signup === '1') {
+    isSignUp.value = true
+  }
   initGoogleClient()
 })
 
