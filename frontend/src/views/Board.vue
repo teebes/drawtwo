@@ -127,6 +127,7 @@
                     variant="secondary"
                     class="m-2"
                     :class="{ 'ring-2 ring-primary-500': hasNoAvailableActions }"
+                    :disabled="isAutoSwitchingGame"
                     @click="handleEndTurn">End Turn</GameButton>
                 <div v-else-if="gameState.winner !== 'none'" class="flex items-center justify-center mr-4">
                     <span v-if="gameOver.winner === bottomSide">You win!</span>
@@ -357,7 +358,7 @@
             <!-- Debug Overlay -->
             <DebugOverlay v-if="overlay === 'debug'" :game-id="gameId" />
 
-         </main>
+        </main>
 
     </div>
 
@@ -365,6 +366,23 @@
     <div class="min-h-screen flex flex-row justify-center" v-else>
         <div class="flex flex-col items-center justify-center">
             <div class="text-2xl font-bold">Loading...</div>
+        </div>
+    </div>
+
+    <div
+        v-if="autoSwitchTarget"
+        class="pointer-events-auto fixed inset-0 z-[100] flex items-center justify-center bg-gray-950/55 px-6 backdrop-blur-[2px]"
+        aria-live="polite">
+        <div class="next-game-transition w-full max-w-xs border border-primary-500/40 bg-gray-950/95 px-5 py-4 text-center shadow-2xl">
+            <div class="text-sm font-semibold uppercase tracking-[0.18em] text-primary-400">
+                Next game
+            </div>
+            <div class="mt-2 truncate text-lg font-semibold text-white">
+                {{ autoSwitchTarget.name }}
+            </div>
+            <div class="mt-4 h-1 overflow-hidden bg-gray-800">
+                <div class="next-game-progress h-full bg-primary-500"></div>
+            </div>
         </div>
     </div>
 </template>
@@ -471,6 +489,8 @@ interface ActiveGameSummary {
 const overlay = ref<OverlayType>(null)
 const overlayTitle = ref<string>('')
 const activeGames = ref<ActiveGameSummary[]>([])
+const autoSwitchTarget = ref<ActiveGameSummary | null>(null)
+const autoSwitchLookupInFlight = ref(false)
 
 // Entity selection state (for detail view)
 interface SelectedEntity {
@@ -581,6 +601,8 @@ let combatAnimationKey = 0
 let combatAnimationTimeout: number | null = null
 let combatValueBurstKey = 0
 let playedSpellCardKey = 0
+let autoSwitchNavigateTimeout: number | null = null
+let autoSwitchClearTimeout: number | null = null
 
 const COMBAT_ENTITY_LUNGE = 14
 const COMBAT_ENTITY_RECOIL = 10
@@ -593,6 +615,8 @@ const PLAYED_SPELL_CARD_FLOAT_OFFSET_PX = 12
 const PLAYED_SPELL_CARD_DURATION_MS = 1700
 const PLAYED_SPELL_CARD_EXIT_MS = 260
 const PLAYED_SPELL_CARD_AFTER_ANIMATION_MS = 400
+const AUTO_SWITCH_NAVIGATE_MS = 760
+const AUTO_SWITCH_CLEAR_MS = 520
 
 const title = computed(() => titleStore.currentTitle)
 
@@ -661,11 +685,17 @@ const hasNoAvailableActions = computed(() => {
 const gameId = computed(() => route.params.game_id as string)
 
 const nextGame = computed(() => {
+    return getNextGame(activeGames.value)
+})
+
+const isAutoSwitchingGame = computed(() => autoSwitchLookupInFlight.value || autoSwitchTarget.value !== null)
+
+function getNextGame(games: ActiveGameSummary[]): ActiveGameSummary | null {
     const currentGameId = Number(gameId.value)
-    return activeGames.value.find(game =>
+    return games.find(game =>
         game.is_user_turn && game.id !== currentGameId
     ) ?? null
-})
+}
 
 // Time control countdown
 const currentTime = ref(Date.now())
@@ -1512,9 +1542,20 @@ const onTargetSelected = (target: { target_type: 'creature' | 'hero'; target_id:
 
 /* Menu Handlers */
 
-const handleEndTurn = () => {
+const handleEndTurn = async () => {
     if (gameOver.value.isGameOver) return
+    if (isAutoSwitchingGame.value) return
+
+    autoSwitchLookupInFlight.value = true
     gameStore.endTurn()
+
+    const games = await fetchActiveGames()
+    const availableNextGame = getNextGame(games)
+    if (availableNextGame) {
+        startAutoSwitchToGame(availableNextGame)
+    } else {
+        autoSwitchLookupInFlight.value = false
+    }
 }
 
 const handleMenuClick = () => {
@@ -1537,9 +1578,9 @@ const handleClickDebug = () => {
     overlayTitle.value = "Debug"
 }
 
-const fetchActiveGames = async () => {
+const fetchActiveGames = async (): Promise<ActiveGameSummary[]> => {
     const slug = titleStore.titleSlug ?? (route.params.slug as string | undefined)
-    if (!slug) return
+    if (!slug) return activeGames.value
 
     try {
         const response = await axios.get(`/titles/${slug}/games/`)
@@ -1548,6 +1589,49 @@ const fetchActiveGames = async () => {
         console.error('Failed to fetch active games', error)
         activeGames.value = []
     }
+
+    return activeGames.value
+}
+
+const clearAutoSwitchTimeouts = () => {
+    if (autoSwitchNavigateTimeout !== null) {
+        clearTimeout(autoSwitchNavigateTimeout)
+        autoSwitchNavigateTimeout = null
+    }
+    if (autoSwitchClearTimeout !== null) {
+        clearTimeout(autoSwitchClearTimeout)
+        autoSwitchClearTimeout = null
+    }
+}
+
+const clearAutoSwitch = () => {
+    clearAutoSwitchTimeouts()
+    autoSwitchLookupInFlight.value = false
+    autoSwitchTarget.value = null
+}
+
+const startAutoSwitchToGame = (target: ActiveGameSummary) => {
+    clearAutoSwitchTimeouts()
+    autoSwitchLookupInFlight.value = false
+    autoSwitchTarget.value = target
+
+    autoSwitchNavigateTimeout = window.setTimeout(async () => {
+        autoSwitchNavigateTimeout = null
+        const slug = titleStore.titleSlug ?? (route.params.slug as string)
+        gameStore.disconnectWebSocket()
+        await router.push({
+            name: 'Board',
+            params: {
+                slug,
+                game_id: target.id,
+            },
+        })
+
+        autoSwitchClearTimeout = window.setTimeout(() => {
+            autoSwitchClearTimeout = null
+            autoSwitchTarget.value = null
+        }, AUTO_SWITCH_CLEAR_MS)
+    }, AUTO_SWITCH_NAVIGATE_MS)
 }
 
 const handleRematch = async () => {
@@ -1970,6 +2054,7 @@ onUnmounted(() => {
     if (timeInterval !== null) {
         clearInterval(timeInterval)
     }
+    clearAutoSwitch()
     resetCombatAnimations()
     gameStore.disconnect()
 })
@@ -1978,6 +2063,39 @@ onUnmounted(() => {
 <style scoped>
 .board {
     height: 100svh;
+}
+
+.next-game-transition {
+    border-radius: 8px;
+    animation: next-game-transition-in 760ms cubic-bezier(0.2, 0.78, 0.22, 1) both;
+}
+
+.next-game-progress {
+    transform-origin: left;
+    animation: next-game-progress 760ms linear both;
+}
+
+@keyframes next-game-transition-in {
+    0% {
+        opacity: 0;
+        transform: translateY(10px) scale(0.98);
+    }
+    30% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes next-game-progress {
+    from {
+        transform: scaleX(0);
+    }
+    to {
+        transform: scaleX(1);
+    }
 }
 
 .combat-entity {

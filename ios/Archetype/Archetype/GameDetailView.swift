@@ -1288,12 +1288,16 @@ struct GameDetailView: View {
     @State private var now = Date()
     @State private var showGameOverOverlay = true
     @State private var showConcedeConfirmation = false
+    @State private var autoSwitchTarget: GameSummary?
+    @State private var isAutoSwitchingGame = false
+    @State private var autoSwitchTask: Task<Void, Never>?
     #if DEBUG
     @State private var didApplyInitialGameOverlay = false
     @State private var didApplyInitialGameCommand = false
     #endif
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    private let autoSwitchNavigateDelayNs: UInt64 = 760_000_000
 
     let gameId: Int
     var onOpenGame: (Int) -> Void = { _ in }
@@ -1314,6 +1318,7 @@ struct GameDetailView: View {
                         onOpponentHeroTap: handleOpponentHeroTap,
                         onUpdatesTap: { overlay = .updates },
                         onMenuTap: openMenu,
+                        isAutoSwitchingGame: isAutoSwitchingGame,
                         onEndTurn: sendEndTurn
                     )
 
@@ -1360,6 +1365,12 @@ struct GameDetailView: View {
                 if let overlay {
                     overlayContent(overlay)
                 }
+
+                if let autoSwitchTarget {
+                    AutoSwitchGameOverlay(gameName: autoSwitchTarget.name)
+                        .transition(.opacity.combined(with: .scale(scale: 0.985)))
+                        .zIndex(80)
+                }
             }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -1391,6 +1402,7 @@ struct GameDetailView: View {
             recordCaptureState()
         }
         .onDisappear {
+            autoSwitchTask?.cancel()
             socket.disconnect()
             socket.onTextMessage = nil
         }
@@ -1834,7 +1846,47 @@ struct GameDetailView: View {
     }
 
     private func sendEndTurn() {
+        guard !isAutoSwitchingGame else {
+            return
+        }
+
+        isAutoSwitchingGame = true
         socket.send(json: ["type": "cmd_end_turn"])
+
+        autoSwitchTask?.cancel()
+        autoSwitchTask = Task { @MainActor in
+            await model.loadActiveGames(using: authStore)
+            guard !Task.isCancelled else {
+                isAutoSwitchingGame = false
+                return
+            }
+
+            guard let nextGame = model.nextGame(currentGameId: gameId) else {
+                isAutoSwitchingGame = false
+                return
+            }
+
+            withAnimation(.easeOut(duration: 0.18)) {
+                autoSwitchTarget = nextGame
+            }
+
+            do {
+                try await Task.sleep(nanoseconds: autoSwitchNavigateDelayNs)
+            } catch {
+                isAutoSwitchingGame = false
+                autoSwitchTarget = nil
+                return
+            }
+
+            guard !Task.isCancelled else {
+                isAutoSwitchingGame = false
+                autoSwitchTarget = nil
+                return
+            }
+
+            socket.disconnect()
+            onOpenGame(nextGame.id)
+        }
     }
 
     private func requestConcede() {
@@ -1860,6 +1912,7 @@ struct GameDetailView: View {
     }
 
     private func openNextGame(_ game: GameSummary) {
+        autoSwitchTask?.cancel()
         socket.disconnect()
         overlay = nil
         onOpenGame(game.id)
@@ -2147,6 +2200,7 @@ private struct NativeBoardSurface: View {
     let onOpponentHeroTap: (GameSideSnapshot) -> Void
     let onUpdatesTap: () -> Void
     let onMenuTap: () -> Void
+    let isAutoSwitchingGame: Bool
     let onEndTurn: () -> Void
 
     @State private var transientUpdate: GameUpdateSnapshot?
@@ -2211,6 +2265,7 @@ private struct NativeBoardSurface: View {
                 timeText: timeText,
                 isPlayerTurn: model.isPlayerTurn,
                 highlightEndTurn: model.hasNoAvailableActions,
+                isEndTurnDisabled: isAutoSwitchingGame,
                 winnerText: winnerText,
                 onEndTurn: onEndTurn
             )
@@ -3048,6 +3103,7 @@ private struct TurnDivider: View {
     let timeText: String?
     let isPlayerTurn: Bool
     let highlightEndTurn: Bool
+    let isEndTurnDisabled: Bool
     let winnerText: String?
     let onEndTurn: () -> Void
 
@@ -3083,6 +3139,8 @@ private struct TurnDivider: View {
                     color: highlightEndTurn ? ArchetypeTheme.gold2.opacity(0.35) : Color.clear,
                     radius: highlightEndTurn ? 8 : 0
                 )
+                .disabled(isEndTurnDisabled)
+                .opacity(isEndTurnDisabled ? 0.56 : 1)
             } else {
                 StatusPill(text: "Waiting", color: ArchetypeTheme.muted)
             }
@@ -4843,6 +4901,61 @@ private struct GameMenuTextButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct AutoSwitchGameOverlay: View {
+    let gameName: String
+
+    @State private var progress: CGFloat = 0
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.55)
+                .ignoresSafeArea()
+
+            VStack(spacing: 12) {
+                Text("Next game")
+                    .font(.archetypeBody(13, weight: .bold))
+                    .tracking(2.1)
+                    .textCase(.uppercase)
+                    .foregroundStyle(ArchetypeTheme.sky)
+
+                Text(gameName)
+                    .font(.archetypeBody(19, weight: .semibold))
+                    .foregroundStyle(ArchetypeTheme.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Rectangle()
+                            .fill(Color(hex: 0x111827))
+
+                        Rectangle()
+                            .fill(ArchetypeTheme.sky)
+                            .frame(width: max(0, proxy.size.width * progress))
+                    }
+                }
+                .frame(height: 4)
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 18)
+            .frame(maxWidth: 320)
+            .background(Color(hex: 0x111827).opacity(0.94))
+            .overlay(
+                RoundedRectangle(cornerRadius: ArchetypeTheme.surfaceRadius)
+                    .stroke(ArchetypeTheme.sky.opacity(0.42), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: ArchetypeTheme.surfaceRadius))
+            .shadow(color: Color.black.opacity(0.32), radius: 22, x: 0, y: 10)
+        }
+        .onAppear {
+            progress = 0
+            withAnimation(.linear(duration: 0.76)) {
+                progress = 1
+            }
+        }
     }
 }
 
