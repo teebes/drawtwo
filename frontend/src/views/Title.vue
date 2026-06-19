@@ -120,7 +120,7 @@
 
         </div>
 
-        <Howto />
+        <TitleHelp />
 
       </main>
     </div>
@@ -138,7 +138,7 @@ import Panel from '../components/layout/Panel.vue'
 import TitleNotifications from '../components/title/TitleNotifications.vue'
 import type { Notification } from '../types/notification'
 import type { LadderType } from '../types/game'
-import Howto from './Howto.vue'
+import TitleHelp from '../components/title/TitleHelp.vue'
 
 interface DeckApiData {
   id: number

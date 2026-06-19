@@ -352,6 +352,7 @@ enum GameOverlay: Identifiable {
     case placement(GamePlacementContext)
     case targeting(GameTargetingContext)
     case updates
+    case howToPlay
     case menu
 
     var id: String {
@@ -364,6 +365,8 @@ enum GameOverlay: Identifiable {
             return "targeting-\(context.id)"
         case .updates:
             return "updates"
+        case .howToPlay:
+            return "how-to-play"
         case .menu:
             return "menu"
         }
@@ -397,6 +400,8 @@ enum GameOverlay: Identifiable {
             }
         case .updates:
             return "game-updates"
+        case .howToPlay:
+            return "game-how-to-play"
         case .menu:
             return "game-menu"
         }
@@ -1593,6 +1598,10 @@ struct GameDetailView: View {
                 },
                 onDismiss: { self.overlay = nil }
             )
+        case .howToPlay:
+            GameHowToPlaySheet(
+                onDismiss: { self.overlay = nil }
+            )
         case .menu:
             GameMenuSheet(
                 latestUpdateText: model.latestDisplayUpdateText,
@@ -1601,6 +1610,7 @@ struct GameDetailView: View {
                 canConcede: model.winner == "none",
                 onNextGame: openNextGame,
                 onUpdates: { self.overlay = .updates },
+                onHowToPlay: { self.overlay = .howToPlay },
                 onExtendTime: sendExtendTime,
                 onConcede: requestConcede,
                 onExit: { dismiss() },
@@ -4849,6 +4859,7 @@ private struct GameMenuSheet: View {
     let canConcede: Bool
     let onNextGame: (GameSummary) -> Void
     let onUpdates: () -> Void
+    let onHowToPlay: () -> Void
     let onExtendTime: () -> Void
     let onConcede: () -> Void
     let onExit: () -> Void
@@ -4867,6 +4878,8 @@ private struct GameMenuSheet: View {
 
                 GameMenuTextButton(title: "Updates", color: ArchetypeTheme.text, action: onUpdates)
 
+                GameMenuTextButton(title: "How to Play", color: ArchetypeTheme.text, action: onHowToPlay)
+
                 if canExtendTime {
                     GameMenuTextButton(title: "Extend Time", color: ArchetypeTheme.text, action: onExtendTime)
                 }
@@ -4883,6 +4896,20 @@ private struct GameMenuSheet: View {
             .padding(.horizontal, 18)
             .padding(.top, 34)
             .padding(.bottom, 32)
+        }
+    }
+}
+
+private struct GameHowToPlaySheet: View {
+    let onDismiss: () -> Void
+
+    var body: some View {
+        GameOverlayFrame(title: "How to Play", onDismiss: onDismiss) {
+            ScrollView {
+                HowToGuideContent(horizontalInset: 18)
+                    .padding(.top, 28)
+                    .padding(.bottom, 36)
+            }
         }
     }
 }

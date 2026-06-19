@@ -11,6 +11,10 @@
             Updates
         </div>
 
+        <div class="text-2xl cursor-pointer hover:text-gray-400" @click="handleClickHowToPlay">
+            How to Play
+        </div>
+
         <div
             v-if="showExtendTime && !gameOver"
             class="text-2xl cursor-pointer hover:text-gray-400"
@@ -53,6 +57,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     clickUpdates: []
+    clickHowToPlay: []
     clickExtendTime: []
     clickDebug: []
 }>()
@@ -62,6 +67,10 @@ const router = useRouter()
 
 const handleClickUpdates = () => {
     emit('clickUpdates')
+}
+
+const handleClickHowToPlay = () => {
+    emit('clickHowToPlay')
 }
 
 const handleClickExtendTime = () => {

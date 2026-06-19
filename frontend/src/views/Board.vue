@@ -348,9 +348,15 @@
                 :game-over="gameOver.isGameOver"
                 :next-game="nextGame"
                 @click-updates="handleClickUpdates"
+                @click-how-to-play="handleClickHowToPlay"
                 @click-extend-time="handleClickExtendTime"
                 @click-debug="handleClickDebug"
             />
+
+            <!-- How To Play Overlay -->
+            <div v-if="overlay === 'how_to_play'" class="flex-1 min-h-0 overflow-y-auto">
+                <TitleHelp :show-title="false" />
+            </div>
 
             <!-- Updates Overlay -->
             <div v-if="overlay === 'updates'" class="flex-1 min-h-0">
@@ -416,6 +422,7 @@ import Hero from '../components/game/board/Hero.vue'
 import GameMenu from '../components/game/board/GameMenu.vue'
 import CombatAnimationLayer from '../components/game/board/CombatAnimationLayer.vue'
 import CombatValueBursts from '../components/game/board/CombatValueBursts.vue'
+import TitleHelp from '../components/title/TitleHelp.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -483,7 +490,7 @@ const opposingHeroArtUrl = computed(() => {
 
 
 // Overlay Types
-type OverlayType = 'entity_detail' | 'place_creature' | 'select_target' | 'menu' | 'updates' | 'debug' | null
+type OverlayType = 'entity_detail' | 'place_creature' | 'select_target' | 'menu' | 'updates' | 'how_to_play' | 'debug' | null
 
 interface ActiveGameSummary {
     id: number
@@ -1590,6 +1597,11 @@ const handleMenuClick = () => {
 const handleClickUpdates = () => {
     overlay.value = 'updates'
     overlayTitle.value = "Game Updates"
+}
+
+const handleClickHowToPlay = () => {
+    overlay.value = 'how_to_play'
+    overlayTitle.value = "How to Play"
 }
 
 const handleClickExtendTime = () => {
