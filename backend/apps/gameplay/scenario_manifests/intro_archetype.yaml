@@ -13,11 +13,11 @@
       opening_hand: []
       deck:
         - sharpen
+        - grenade
         - decoy
         - brute
         - soldier
-        - grenade
-        - mongoose
+        # - mongoose
         - medic
         - phalanx
         - cheerleader
@@ -37,7 +37,21 @@
               - attack:
                   attacker: own_first_creature
                   target: enemy_taunt_else_hero
+              - use_hero_power
               - end_turn
+          - turn: 3
+            commands:
+              - attack:
+                  attacker:
+                    side: own
+                    template_slug: recruit
+                    attack: 4
+                  target: enemy_taunt_else_hero
+              - attack:
+                  attacker: own_first_creature
+                  target: enemy_taunt_else_hero
+              - play_card:
+                  slug: grenade
     side_b:
       controller: guest
       hero:
@@ -46,9 +60,11 @@
       opening_hand:
         - powerup
         - decoy
-        - mongoose
       deck:
-        - sharpen
+        - mongoose
+        - bandage
+        - harbinger
+        #- sharpen
         - cleave
         - drawtwo
         - archer

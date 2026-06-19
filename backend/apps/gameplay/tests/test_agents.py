@@ -1,8 +1,9 @@
 from django.test import TestCase
 
-from apps.builder.schemas import DamageAction, DrawAction, HeroPower, Taunt
+from apps.builder.schemas import DamageAction, DeckScript, DrawAction, HeroPower, Taunt
 from apps.gameplay.agents.legal import list_legal_commands
 from apps.gameplay.agents.observation import filter_state_for_player, make_observation
+from apps.gameplay.agents.policies.scripted import ScriptedPolicy
 from apps.gameplay.agents.simulator import apply_command
 from apps.gameplay.schemas.commands import AttackCommand, UseHeroCommand
 from apps.gameplay.schemas.game import CardInPlay, Creature, GameState, HeroInPlay
@@ -214,3 +215,108 @@ class LegalCommandTests(TestCase):
             {(command.target_type, command.target_id) for command in commands},
             {("creature", "creature_a_1"), ("hero", "hero_a")},
         )
+
+
+class ScriptedPolicyTests(TestCase):
+    def make_recruit_selector_state(self) -> GameState:
+        state = make_agent_test_state()
+        state.turn = 3
+        state.hands["side_a"] = []
+        state.board["side_a"] = ["new_recruit", "buffed_recruit"]
+        state.board["side_b"] = []
+        state.cards["new_recruit_card"] = CardInPlay(
+            card_id="new_recruit_card",
+            card_type="creature",
+            template_slug="recruit",
+            name="Recruit",
+            attack=1,
+            health=1,
+        )
+        state.cards["buffed_recruit_card"] = CardInPlay(
+            card_id="buffed_recruit_card",
+            card_type="creature",
+            template_slug="recruit",
+            name="Recruit",
+            attack=4,
+            health=1,
+        )
+        state.creatures["new_recruit"] = Creature(
+            creature_id="new_recruit",
+            card_id="new_recruit_card",
+            name="Recruit",
+            attack=1,
+            health=1,
+            exhausted=False,
+        )
+        state.creatures["buffed_recruit"] = Creature(
+            creature_id="buffed_recruit",
+            card_id="buffed_recruit_card",
+            name="Recruit",
+            attack=4,
+            health=1,
+            exhausted=False,
+        )
+        return state
+
+    def test_structured_attacker_selector_matches_buffed_recruit(self):
+        state = self.make_recruit_selector_state()
+        policy = ScriptedPolicy(
+            DeckScript(
+                strategy="control",
+                opening=[
+                    {
+                        "turn": 3,
+                        "commands": [
+                            {
+                                "attack": {
+                                    "attacker": {
+                                        "side": "own",
+                                        "template_slug": "recruit",
+                                        "attack": 4,
+                                    },
+                                    "target": "enemy_taunt_else_hero",
+                                }
+                            }
+                        ],
+                    }
+                ],
+            )
+        )
+
+        command = policy.select_command(state, list_legal_commands(state, "side_a"))
+
+        self.assertIsInstance(command, AttackCommand)
+        self.assertEqual(command.card_id, "buffed_recruit")
+        self.assertEqual(command.target_type, "hero")
+        self.assertEqual(command.target_id, "hero_b")
+
+    def test_unmatched_structured_attacker_selector_falls_back_to_strategy(self):
+        state = self.make_recruit_selector_state()
+        state.creatures["buffed_recruit"].attack = 3
+        policy = ScriptedPolicy(
+            DeckScript(
+                strategy="rush",
+                opening=[
+                    {
+                        "turn": 3,
+                        "commands": [
+                            {
+                                "attack": {
+                                    "attacker": {
+                                        "side": "own",
+                                        "template_slug": "recruit",
+                                        "attack": 4,
+                                    },
+                                    "target": "enemy_taunt_else_hero",
+                                }
+                            }
+                        ],
+                    }
+                ],
+            )
+        )
+
+        command = policy.select_command(state, list_legal_commands(state, "side_a"))
+
+        self.assertIsInstance(command, AttackCommand)
+        self.assertEqual(command.target_type, "hero")

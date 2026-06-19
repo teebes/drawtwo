@@ -315,6 +315,35 @@ class IntroScenarioTests(TestCase):
             ],
         )
         self.create_card(
+            "bandage",
+            card_type="spell",
+            cost=1,
+            traits=[
+                {
+                    "type": "battlecry",
+                    "actions": [
+                        {
+                            "action": "heal",
+                            "amount": 3,
+                            "target": "friendly",
+                        }
+                    ],
+                }
+            ],
+        )
+        self.create_card(
+            "harbinger",
+            cost=2,
+            attack=1,
+            health=2,
+            traits=[
+                {
+                    "type": "deathrattle",
+                    "actions": [{"action": "draw", "amount": 1}],
+                }
+            ],
+        )
+        self.create_card(
             "shieldwall",
             cost=5,
             attack=3,
@@ -355,17 +384,16 @@ class IntroScenarioTests(TestCase):
         self.assertEqual(self.slugs_for(state, state.hands["side_a"]), [])
         self.assertEqual(
             self.slugs_for(state, state.hands["side_b"]),
-            ["powerup", "decoy", "mongoose"],
+            ["powerup", "decoy"],
         )
         self.assertEqual(
             self.slugs_for(state, state.decks["side_a"]),
             [
                 "sharpen",
+                "grenade",
                 "decoy",
                 "brute",
                 "soldier",
-                "grenade",
-                "mongoose",
                 "medic",
                 "phalanx",
                 "cheerleader",
@@ -375,7 +403,9 @@ class IntroScenarioTests(TestCase):
         self.assertEqual(
             self.slugs_for(state, state.decks["side_b"]),
             [
-                "sharpen",
+                "mongoose",
+                "bandage",
+                "harbinger",
                 "cleave",
                 "drawtwo",
                 "archer",
@@ -460,8 +490,14 @@ class IntroScenarioTests(TestCase):
         self.assertEqual(state.active, "side_b")
         self.assertEqual(state.phase, "main")
         self.assertEqual(state.turn, 2)
-        recruit = state.creatures[state.board["side_a"][0]]
-        self.assertEqual(recruit.attack, 4)
-        self.assertFalse(recruit.exhausted)
+        self.assertEqual(len(state.board["side_a"]), 2)
+        new_recruit = state.creatures[state.board["side_a"][0]]
+        buffed_recruit = state.creatures[state.board["side_a"][1]]
+        self.assertEqual(new_recruit.name, "Recruit")
+        self.assertEqual(new_recruit.attack, 1)
+        self.assertFalse(new_recruit.exhausted)
+        self.assertEqual(buffed_recruit.name, "Recruit")
+        self.assertEqual(buffed_recruit.attack, 4)
+        self.assertFalse(buffed_recruit.exhausted)
         self.assertEqual(state.heroes["side_b"].health, 6)
         self.assertEqual(self.slugs_for(state, state.graveyard["side_a"]), ["sharpen"])

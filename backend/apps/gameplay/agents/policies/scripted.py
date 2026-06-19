@@ -9,6 +9,8 @@ from apps.gameplay.schemas.commands import (
 )
 from apps.gameplay.schemas.game import GameState, deterministic_choice
 
+TargetSpec = str | dict | None
+
 
 class ScriptedPolicy:
     """
@@ -216,13 +218,16 @@ class ScriptedPolicy:
     def _resolve_target(
         self,
         state: GameState,
-        target: str | None,
+        target: TargetSpec,
     ) -> tuple[str | None, str | None]:
         if not target:
             return None, None
 
         own_side = state.active
         enemy_side = state.opposite_side
+
+        if isinstance(target, dict):
+            return self._resolve_structured_target(state, target)
 
         if target == "own_first_creature":
             creature_id = next(iter(state.board.get(own_side, [])), None)
@@ -241,3 +246,49 @@ class ScriptedPolicy:
             return ("hero", hero.hero_id) if hero else (None, None)
 
         return None, None
+
+    def _resolve_structured_target(
+        self,
+        state: GameState,
+        target: dict,
+    ) -> tuple[str | None, str | None]:
+        target_type = target.get("type", "creature")
+        side_selector = target.get("side", "own")
+        if side_selector == "own":
+            side = state.active
+        elif side_selector in ("enemy", "opponent"):
+            side = state.opposite_side
+        else:
+            return None, None
+
+        if target_type == "hero":
+            hero = state.heroes.get(side)
+            return ("hero", hero.hero_id) if hero else (None, None)
+
+        if target_type != "creature":
+            return None, None
+
+        for creature_id in state.board.get(side, []):
+            creature = state.creatures.get(creature_id)
+            if not creature:
+                continue
+            if not self._creature_matches_structured_target(state, creature, target):
+                continue
+            return "creature", creature_id
+        return None, None
+
+    def _creature_matches_structured_target(
+        self,
+        state: GameState,
+        creature,
+        target: dict,
+    ) -> bool:
+        card = state.cards.get(creature.card_id)
+        template_slug = target.get("template_slug")
+        if template_slug and (not card or card.template_slug != template_slug):
+            return False
+        if "attack" in target and creature.attack != target["attack"]:
+            return False
+        if "health" in target and creature.health != target["health"]:
+            return False
+        return True
