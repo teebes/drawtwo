@@ -80,6 +80,7 @@ const props = defineProps<{
     showExtendTime: boolean
     titleSlug: string | undefined
     gameOver: boolean
+    isIntroGame: boolean
     nextGame?: {
         id: number
         type: 'pve' | 'ranked' | 'friendly' | 'intro'
@@ -150,7 +151,11 @@ const handleExitGame = () => {
     // Disconnect WebSocket intentionally before navigating
     gameStore.disconnectWebSocket()
 
-    // Navigate to title page
+    if (props.isIntroGame || !props.titleSlug) {
+        router.push({ name: 'Home' })
+        return
+    }
+
     router.push({ name: 'Title', params: { slug: props.titleSlug } })
 }
 

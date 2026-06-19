@@ -346,6 +346,7 @@
                 :show-extend-time="canShowExtendTime"
                 :title-slug="titleStore.titleSlug ?? undefined"
                 :game-over="gameOver.isGameOver"
+                :is-intro-game="isIntroGame"
                 :next-game="nextGame"
                 @click-updates="handleClickUpdates"
                 @click-how-to-play="handleClickHowToPlay"
