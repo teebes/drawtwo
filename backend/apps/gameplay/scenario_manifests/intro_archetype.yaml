@@ -13,15 +13,17 @@
       opening_hand: []
       deck:
         - sharpen
-        - grenade
         - decoy
         - brute
-        - soldier
+        - grenade
+        - mine
         # - mongoose
+        - archer
         - medic
-        - phalanx
         - cheerleader
-        - meteor
+        - decoy
+        - shieldwall
+        - phoenix
       ai:
         fallback_strategy: control
         opening:
@@ -60,13 +62,15 @@
       opening_hand:
         - powerup
         - decoy
+        - bandage
       deck:
         - mongoose
-        - bandage
         - harbinger
-        #- sharpen
+        - brute
+        - phalanx
         - cleave
         - drawtwo
+        - remove
         - archer
         - shieldwall
         - ambusher

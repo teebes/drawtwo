@@ -107,9 +107,11 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { computed, ref } from 'vue'
+import { useAuthStore } from '../stores/auth'
 import { startIntroScenario } from '../services/introScenario'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const startingIntro = ref(false)
 const playError = ref('')
 
@@ -117,6 +119,12 @@ const currentYear = computed(() => new Date().getFullYear())
 
 const handlePlayClick = async () => {
   if (startingIntro.value) {
+    return
+  }
+
+  if (authStore.isAuthenticated) {
+    playError.value = ''
+    router.push({ name: 'Play' })
     return
   }
 
