@@ -26,21 +26,53 @@
             Debug
         </div>
 
-        <div
+        <button
             v-if="!gameOver"
-            class="text-2xl cursor-pointer hover:text-red-400"
+            type="button"
+            class="appearance-none bg-transparent text-2xl cursor-pointer hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="concedeSubmitted"
             @click="handleConcede">
             Concede
-        </div>
+        </button>
 
         <div class="text-2xl cursor-pointer hover:text-gray-400" @click="handleExitGame">
             Exit Game
         </div>
     </div>
+
+    <BaseModal :show="showConcedeModal" @close="closeConcedeModal">
+        <div class="p-6">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+                Concede game?
+            </h2>
+            <p class="mt-3 text-sm text-gray-600 dark:text-gray-300">
+                This will immediately end the game and count as a loss.
+            </p>
+
+            <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <button
+                    type="button"
+                    class="ui-btn ui-btn-md ui-btn-secondary"
+                    :disabled="concedeSubmitted"
+                    @click="closeConcedeModal">
+                    Cancel
+                </button>
+                <button
+                    type="button"
+                    class="ui-btn ui-btn-md ui-btn-danger"
+                    :disabled="concedeSubmitted"
+                    @click="confirmConcede">
+                    {{ concedeSubmitted ? 'Conceding...' : 'Concede' }}
+                </button>
+            </div>
+        </div>
+    </BaseModal>
 </template>
 
 <script setup lang="ts">
+import BaseModal from '@/components/modals/BaseModal.vue'
 import { useGameStore } from '@/stores/game'
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 const props = defineProps<{
@@ -64,6 +96,8 @@ const emit = defineEmits<{
 
 const gameStore = useGameStore()
 const router = useRouter()
+const showConcedeModal = ref(false)
+const concedeSubmitted = ref(false)
 
 const handleClickUpdates = () => {
     emit('clickUpdates')
@@ -95,9 +129,21 @@ const handleNextGame = () => {
 }
 
 const handleConcede = () => {
-    if (confirm('Are you sure you want to concede this game?')) {
-        gameStore.concedeGame()
-    }
+    if (props.gameOver || concedeSubmitted.value) return
+    showConcedeModal.value = true
+}
+
+const closeConcedeModal = () => {
+    if (concedeSubmitted.value) return
+    showConcedeModal.value = false
+}
+
+const confirmConcede = () => {
+    if (props.gameOver || concedeSubmitted.value) return
+
+    concedeSubmitted.value = true
+    gameStore.concedeGame()
+    showConcedeModal.value = false
 }
 
 const handleExitGame = () => {
@@ -107,4 +153,13 @@ const handleExitGame = () => {
     // Navigate to title page
     router.push({ name: 'Title', params: { slug: props.titleSlug } })
 }
+
+watch(
+    () => props.gameOver,
+    (isGameOver) => {
+        if (isGameOver) {
+            showConcedeModal.value = false
+        }
+    }
+)
 </script>
