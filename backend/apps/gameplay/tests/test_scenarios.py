@@ -169,6 +169,26 @@ class IntroScenarioTests(TestCase):
             ],
         )
         self.create_card(
+            "mine",
+            cost=3,
+            attack=2,
+            health=1,
+            traits=[
+                {
+                    "type": "deathrattle",
+                    "actions": [
+                        {
+                            "action": "damage",
+                            "amount": 1,
+                            "target": "enemy",
+                            "scope": "all",
+                            "damage_type": "spell",
+                        }
+                    ],
+                }
+            ],
+        )
+        self.create_card(
             "drawtwo",
             card_type="spell",
             cost=3,
@@ -213,6 +233,17 @@ class IntroScenarioTests(TestCase):
                             "scope": "single",
                         }
                     ],
+                }
+            ],
+        )
+        self.create_card(
+            "remove",
+            card_type="spell",
+            cost=4,
+            traits=[
+                {
+                    "type": "battlecry",
+                    "actions": [{"action": "remove", "target": "enemy"}],
                 }
             ],
         )
@@ -384,30 +415,34 @@ class IntroScenarioTests(TestCase):
         self.assertEqual(self.slugs_for(state, state.hands["side_a"]), [])
         self.assertEqual(
             self.slugs_for(state, state.hands["side_b"]),
-            ["powerup", "decoy"],
+            ["powerup", "decoy", "bandage"],
         )
         self.assertEqual(
             self.slugs_for(state, state.decks["side_a"]),
             [
                 "sharpen",
-                "grenade",
                 "decoy",
                 "brute",
-                "soldier",
+                "grenade",
+                "mine",
+                "archer",
                 "medic",
-                "phalanx",
                 "cheerleader",
-                "meteor",
+                "decoy",
+                "shieldwall",
+                "phoenix",
             ],
         )
         self.assertEqual(
             self.slugs_for(state, state.decks["side_b"]),
             [
                 "mongoose",
-                "bandage",
                 "harbinger",
+                "brute",
+                "phalanx",
                 "cleave",
                 "drawtwo",
+                "remove",
                 "archer",
                 "shieldwall",
                 "ambusher",
