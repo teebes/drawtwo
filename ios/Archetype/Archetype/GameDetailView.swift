@@ -4305,7 +4305,7 @@ private struct UpdatesSheet: View {
     private static let bottomID = "updates-bottom"
 
     var body: some View {
-        GameOverlayFrame(title: "Game Updates", onDismiss: onDismiss) {
+        GameOverlayFrame(title: "Game Log", onDismiss: onDismiss) {
             ScrollViewReader { proxy in
                 ScrollView {
                     if updates.isEmpty {
@@ -4876,7 +4876,7 @@ private struct GameMenuSheet: View {
                     )
                 }
 
-                GameMenuTextButton(title: "Updates", color: ArchetypeTheme.text, action: onUpdates)
+                GameMenuTextButton(title: "Log", color: ArchetypeTheme.text, action: onUpdates)
 
                 GameMenuTextButton(title: "How to Play", color: ArchetypeTheme.text, action: onHowToPlay)
 

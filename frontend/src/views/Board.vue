@@ -1596,7 +1596,7 @@ const handleMenuClick = () => {
 
 const handleClickUpdates = () => {
     overlay.value = 'updates'
-    overlayTitle.value = "Game Updates"
+    overlayTitle.value = "Game Log"
 }
 
 const handleClickHowToPlay = () => {

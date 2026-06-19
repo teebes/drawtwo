@@ -8,7 +8,7 @@
         </div>
 
         <div class="text-2xl cursor-pointer hover:text-gray-400" @click="handleClickUpdates">
-            Updates
+            Log
         </div>
 
         <div class="text-2xl cursor-pointer hover:text-gray-400" @click="handleClickHowToPlay">
