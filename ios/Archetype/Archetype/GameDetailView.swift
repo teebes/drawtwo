@@ -2366,7 +2366,6 @@ private struct NativeBoardSurface: View {
 
             TurnDivider(
                 turn: model.turn,
-                phase: model.phase,
                 timeText: timeText,
                 isPlayerTurn: model.isPlayerTurn,
                 highlightEndTurn: model.hasNoAvailableActions,
@@ -3020,10 +3019,6 @@ private struct HeroTile: View {
                 .font(.archetypeBody(17, weight: .bold))
                 .foregroundStyle(ArchetypeTheme.text)
 
-            if isActive {
-                Rectangle()
-                    .stroke(ArchetypeTheme.gold2, lineWidth: 4)
-            }
         }
         .frame(width: 96, height: 96)
         .clipped()
@@ -3032,6 +3027,12 @@ private struct HeroTile: View {
             Rectangle()
                 .fill(ArchetypeTheme.border)
                 .frame(width: 1)
+        }
+        .overlay {
+            if isActive {
+                Rectangle()
+                    .strokeBorder(ArchetypeTheme.gold2, lineWidth: 4)
+            }
         }
     }
 
@@ -3204,7 +3205,6 @@ private struct BoardLane: View {
 
 private struct TurnDivider: View {
     let turn: String
-    let phase: String
     let timeText: String?
     let isPlayerTurn: Bool
     let highlightEndTurn: Bool
@@ -3218,9 +3218,11 @@ private struct TurnDivider: View {
                 .font(.archetypeBody(14, weight: .bold))
                 .foregroundStyle(ArchetypeTheme.text)
 
-            Text("[ \(timeText ?? phase) ]")
-                .font(.archetypeBody(12, weight: .semibold))
-                .foregroundStyle(timeText == nil ? ArchetypeTheme.muted : ArchetypeTheme.gold2)
+            if let timeText {
+                Text("[ \(timeText) ]")
+                    .font(.archetypeBody(12, weight: .semibold))
+                    .foregroundStyle(ArchetypeTheme.gold2)
+            }
 
             Spacer()
 

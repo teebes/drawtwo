@@ -119,10 +119,9 @@
             <div class="flex flex-row justify-between border-gray-700 border-t border-b min-h-14">
                 <div class="flex items-center justify-center ml-2">
                     Turn {{ gameState.turn }}
-                    <span v-if="gameState.time_per_turn && gameState.time_per_turn > 0" class="text-gray-500 ml-2">
+                    <span v-if="timeLeft !== null" class="text-gray-500 ml-2">
                         [ {{ timeLeftString }} ]
                     </span>
-                    <span v-else class="text-gray-500 ml-2">[ {{ gameState.phase }} ]</span>
                 </div>
                 <GameButton
                     v-if="gameState.winner === 'none' && gameState.active === bottomSide && gameState.phase === 'main'"
@@ -735,8 +734,7 @@ const timeLeft = computed(() => {
 const timeLeftString = computed(() => {
     const left = timeLeft.value
     if (left === null) {
-        // If timer hasn't started yet (turn_expires is null), show phase as fallback
-        return gameState.value.phase
+        return ''
     }
 
     const hours = Math.floor(left / 3600)
