@@ -2,6 +2,7 @@ import Foundation
 
 enum AppConfig {
     static let titleSlug = "archetype"
+    static let introScenarioSlug = "intro-archetype-v1"
     static var backendBaseURL: URL {
         configuredURL(named: "ARCHETYPE_BACKEND_BASE_URL")
             ?? URL(string: "https://drawtwo.com")!

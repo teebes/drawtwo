@@ -25,27 +25,44 @@ final class DrawTwoWebSocket: ObservableObject {
     private var queuedMessages: [String] = []
     private var currentPath: String?
     private var currentAccessToken: String?
+    private var currentGuestToken: String?
     private var currentHeartbeatEnabled = true
     private var intentionalDisconnect = false
     private var reconnectAttempts = 0
 
     private let maxReconnectAttempts = 10
 
-    func connect(path: String, accessToken: String, heartbeatEnabled: Bool = true) {
+    func connect(
+        path: String,
+        accessToken: String? = nil,
+        guestToken: String? = nil,
+        heartbeatEnabled: Bool = true
+    ) {
         intentionalDisconnect = false
         reconnectAttempts = 0
         currentPath = path
         currentAccessToken = accessToken
+        currentGuestToken = guestToken
         currentHeartbeatEnabled = heartbeatEnabled
         reconnectTask?.cancel()
         reconnectTask = nil
 
         closeSocket()
-        openSocket(path: path, accessToken: accessToken, isReconnect: false)
+        openSocket(
+            path: path,
+            accessToken: accessToken,
+            guestToken: guestToken,
+            isReconnect: false
+        )
     }
 
-    private func openSocket(path: String, accessToken: String, isReconnect: Bool) {
-        guard let url = makeURL(path: path, accessToken: accessToken) else {
+    private func openSocket(
+        path: String,
+        accessToken: String?,
+        guestToken: String?,
+        isReconnect: Bool
+    ) {
+        guard let url = makeURL(path: path, accessToken: accessToken, guestToken: guestToken) else {
             status = .failed
             errorMessage = "Could not build WebSocket URL."
             return
@@ -121,6 +138,7 @@ final class DrawTwoWebSocket: ObservableObject {
         reconnectAttempts = 0
         currentPath = nil
         currentAccessToken = nil
+        currentGuestToken = nil
         currentHeartbeatEnabled = true
         closeSocket()
         status = .disconnected
@@ -260,7 +278,7 @@ final class DrawTwoWebSocket: ObservableObject {
         guard
             reconnectAttempts < maxReconnectAttempts,
             let currentPath,
-            let currentAccessToken
+            currentAccessToken != nil || currentGuestToken != nil
         else {
             status = .failed
             if errorMessage == nil {
@@ -289,6 +307,7 @@ final class DrawTwoWebSocket: ObservableObject {
                 self.openSocket(
                     path: currentPath,
                     accessToken: currentAccessToken,
+                    guestToken: currentGuestToken,
                     isReconnect: true
                 )
             }
@@ -308,15 +327,20 @@ final class DrawTwoWebSocket: ObservableObject {
         }
     }
 
-    private func makeURL(path: String, accessToken: String) -> URL? {
+    private func makeURL(path: String, accessToken: String?, guestToken: String?) -> URL? {
         var components = URLComponents(
             url: AppConfig.websocketBaseURL,
             resolvingAgainstBaseURL: false
         )
         components?.path = path.hasPrefix("/") ? path : "/\(path)"
-        components?.queryItems = [
-            URLQueryItem(name: "token", value: accessToken)
-        ]
+        var queryItems: [URLQueryItem] = []
+        if let accessToken {
+            queryItems.append(URLQueryItem(name: "token", value: accessToken))
+        }
+        if let guestToken {
+            queryItems.append(URLQueryItem(name: "guest_token", value: guestToken))
+        }
+        components?.queryItems = queryItems.isEmpty ? nil : queryItems
         return components?.url
     }
 }

@@ -418,6 +418,8 @@ final class GameDetailViewModel: ObservableObject {
     @Published var statusMessage: String?
     @Published var activeGames: [GameSummary] = []
 
+    private let api = APIClient.shared
+
     private static let displayUpdateTypes: Set<String> = [
         "update_draw_card",
         "update_play_card",
@@ -570,12 +572,19 @@ final class GameDetailViewModel: ObservableObject {
         activeGames.first { $0.isUserTurn && $0.id != currentGameId }
     }
 
-    func load(gameId: Int, using authStore: AuthStore) async {
+    func load(gameId: Int, using authStore: AuthStore, guestAccessToken: String? = nil) async {
         isLoading = true
         errorMessage = nil
 
         do {
-            gameJSON = try await authStore.authenticatedGet("/gameplay/games/\(gameId)/")
+            if let guestAccessToken {
+                gameJSON = try await api.get(
+                    "/gameplay/games/\(gameId)/",
+                    queryItems: guestQueryItems(guestAccessToken)
+                )
+            } else {
+                gameJSON = try await authStore.authenticatedGet("/gameplay/games/\(gameId)/")
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -583,7 +592,12 @@ final class GameDetailViewModel: ObservableObject {
         isLoading = false
     }
 
-    func loadActiveGames(using authStore: AuthStore) async {
+    func loadActiveGames(using authStore: AuthStore, guestAccessToken: String? = nil) async {
+        guard guestAccessToken == nil else {
+            activeGames = []
+            return
+        }
+
         do {
             let response: GameListResponse = try await authStore.authenticatedGet(
                 "/titles/\(AppConfig.titleSlug)/games/"
@@ -594,8 +608,15 @@ final class GameDetailViewModel: ObservableObject {
         }
     }
 
-    func fetchEloChangeIfNeeded(gameId: Int, using authStore: AuthStore) async {
+    func fetchEloChangeIfNeeded(
+        gameId: Int,
+        using authStore: AuthStore,
+        guestAccessToken: String? = nil
+    ) async {
         guard winner != "none", eloChange == nil else {
+            return
+        }
+        guard guestAccessToken == nil else {
             return
         }
 
@@ -1279,6 +1300,10 @@ final class GameDetailViewModel: ObservableObject {
 
         return nil
     }
+
+    private func guestQueryItems(_ token: String) -> [URLQueryItem] {
+        [URLQueryItem(name: "guest_token", value: token)]
+    }
 }
 
 struct GameDetailView: View {
@@ -1295,6 +1320,7 @@ struct GameDetailView: View {
     @State private var showConcedeConfirmation = false
     @State private var autoSwitchTarget: GameSummary?
     @State private var isAutoSwitchingGame = false
+    @State private var isIntroRestartLoading = false
     @State private var autoSwitchTask: Task<Void, Never>?
     #if DEBUG
     @State private var didApplyInitialGameOverlay = false
@@ -1305,7 +1331,10 @@ struct GameDetailView: View {
     private let autoSwitchNavigateDelayNs: UInt64 = 760_000_000
 
     let gameId: Int
+    var guestAccessToken: String? = nil
     var onOpenGame: (Int) -> Void = { _ in }
+    var onOpenIntroGame: (Int, String) -> Void = { _, _ in }
+    var onIntroSignUp: () -> Void = {}
 
     var body: some View {
         ArchetypeScreen {
@@ -1353,16 +1382,20 @@ struct GameDetailView: View {
 
                 if model.winner != "none", showGameOverOverlay {
                     GameOverOverlay(
-                        title: model.currentGameOverTitle,
+                        title: gameOverTitle,
                         winnerText: winnerText,
                         isVictory: model.winner == model.viewerSide,
                         eloChange: model.eloChange,
+                        isIntroGame: isIntroGuestGame,
                         canRematch: model.canRequestRematch,
                         isRematchLoading: model.isRematchLoading,
+                        isIntroRetryLoading: isIntroRestartLoading,
                         noticeText: model.statusMessage ?? model.errorMessage,
                         noticeColor: model.statusMessage == nil ? ArchetypeTheme.red : ArchetypeTheme.green,
                         onExit: { dismiss() },
                         onRematch: requestRematch,
+                        onIntroSignUp: openIntroSignUp,
+                        onIntroRetry: restartIntroGame,
                         onReturn: { showGameOverOverlay = false }
                     )
                 }
@@ -1396,9 +1429,13 @@ struct GameDetailView: View {
             socket.onTextMessage = { text in
                 model.applySocketText(text)
             }
-            await model.load(gameId: gameId, using: authStore)
-            await model.loadActiveGames(using: authStore)
-            await model.fetchEloChangeIfNeeded(gameId: gameId, using: authStore)
+            await model.load(gameId: gameId, using: authStore, guestAccessToken: guestAccessToken)
+            await model.loadActiveGames(using: authStore, guestAccessToken: guestAccessToken)
+            await model.fetchEloChangeIfNeeded(
+                gameId: gameId,
+                using: authStore,
+                guestAccessToken: guestAccessToken
+            )
             connectSocketIfPossible()
             #if DEBUG
             applyInitialGameCommandIfNeeded()
@@ -1416,9 +1453,13 @@ struct GameDetailView: View {
                 return
             }
             Task {
-                await model.load(gameId: gameId, using: authStore)
-                await model.loadActiveGames(using: authStore)
-                await model.fetchEloChangeIfNeeded(gameId: gameId, using: authStore)
+                await model.load(gameId: gameId, using: authStore, guestAccessToken: guestAccessToken)
+                await model.loadActiveGames(using: authStore, guestAccessToken: guestAccessToken)
+                await model.fetchEloChangeIfNeeded(
+                    gameId: gameId,
+                    using: authStore,
+                    guestAccessToken: guestAccessToken
+                )
                 connectSocketIfPossible()
                 #if DEBUG
                 applyInitialGameCommandIfNeeded()
@@ -1512,6 +1553,17 @@ struct GameDetailView: View {
         return "\(model.winner) wins."
     }
 
+    private var isIntroGuestGame: Bool {
+        guestAccessToken != nil || model.gameType == "intro"
+    }
+
+    private var gameOverTitle: String {
+        if isIntroGuestGame, model.winner == model.viewerSide {
+            return "Intro Complete!"
+        }
+        return model.currentGameOverTitle
+    }
+
     private var boardMessages: some View {
         VStack(spacing: 8) {
             if let error = model.errorMessage {
@@ -1537,6 +1589,11 @@ struct GameDetailView: View {
     }
 
     private func connectSocketIfPossible() {
+        if let guestAccessToken {
+            socket.connect(path: "/ws/game/\(gameId)/", guestToken: guestAccessToken)
+            return
+        }
+
         guard let accessToken = authStore.currentAccessToken else {
             return
         }
@@ -1860,9 +1917,13 @@ struct GameDetailView: View {
             return
         }
 
-        isAutoSwitchingGame = true
         socket.send(json: ["type": "cmd_end_turn"])
 
+        guard guestAccessToken == nil else {
+            return
+        }
+
+        isAutoSwitchingGame = true
         autoSwitchTask?.cancel()
         autoSwitchTask = Task { @MainActor in
             await model.loadActiveGames(using: authStore)
@@ -1916,8 +1977,10 @@ struct GameDetailView: View {
 
     private func openMenu() {
         overlay = .menu
-        Task {
-            await model.loadActiveGames(using: authStore)
+        if guestAccessToken == nil {
+            Task {
+                await model.loadActiveGames(using: authStore)
+            }
         }
     }
 
@@ -1938,7 +2001,39 @@ struct GameDetailView: View {
 
     private func fetchEloChangeIfNeeded() {
         Task {
-            await model.fetchEloChangeIfNeeded(gameId: gameId, using: authStore)
+            await model.fetchEloChangeIfNeeded(
+                gameId: gameId,
+                using: authStore,
+                guestAccessToken: guestAccessToken
+            )
+        }
+    }
+
+    private func openIntroSignUp() {
+        socket.disconnect()
+        onIntroSignUp()
+    }
+
+    private func restartIntroGame() {
+        guard !isIntroRestartLoading else {
+            return
+        }
+
+        isIntroRestartLoading = true
+        Task {
+            do {
+                let response: IntroScenarioStartResponse = try await APIClient.shared.post(
+                    "/gameplay/scenarios/\(AppConfig.introScenarioSlug)/start/",
+                    body: EmptyBody()
+                )
+                socket.disconnect()
+                onOpenIntroGame(response.id, response.accessToken)
+            } catch {
+                model.errorMessage = error.localizedDescription
+                showGameOverOverlay = false
+            }
+
+            isIntroRestartLoading = false
         }
     }
 
@@ -4717,12 +4812,16 @@ private struct GameOverOverlay: View {
     let winnerText: String
     let isVictory: Bool
     let eloChange: EloRatingChangeSnapshot?
+    let isIntroGame: Bool
     let canRematch: Bool
     let isRematchLoading: Bool
+    let isIntroRetryLoading: Bool
     let noticeText: String?
     let noticeColor: Color
     let onExit: () -> Void
     let onRematch: () -> Void
+    let onIntroSignUp: () -> Void
+    let onIntroRetry: () -> Void
     let onReturn: () -> Void
 
     var body: some View {
@@ -4739,6 +4838,14 @@ private struct GameOverOverlay: View {
                         Text(title)
                             .font(.archetypeBody(30, weight: .black))
                             .foregroundStyle(ArchetypeTheme.text)
+
+                        if isIntroGame {
+                            Text(introResultText)
+                                .font(.archetypeBody(14))
+                                .foregroundStyle(ArchetypeTheme.muted)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
 
                     if let noticeText {
@@ -4750,18 +4857,33 @@ private struct GameOverOverlay: View {
                     }
 
                     VStack(spacing: 10) {
-                        Button(action: onExit) {
-                            Text("Exit Game")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(
-                            FilledGameButtonStyle(
-                                color: Color(hex: 0x2563EB),
-                                pressedColor: Color(hex: 0x1D4ED8)
+                        if isIntroGame {
+                            Button(action: isVictory ? onIntroSignUp : onIntroRetry) {
+                                Text(introPrimaryActionText)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(
+                                FilledGameButtonStyle(
+                                    color: Color(hex: 0x2563EB),
+                                    pressedColor: Color(hex: 0x1D4ED8)
+                                )
                             )
-                        )
+                            .disabled(isIntroRetryLoading)
+                            .opacity(isIntroRetryLoading ? 0.65 : 1)
+                        } else {
+                            Button(action: onExit) {
+                                Text("Exit Game")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(
+                                FilledGameButtonStyle(
+                                    color: Color(hex: 0x2563EB),
+                                    pressedColor: Color(hex: 0x1D4ED8)
+                                )
+                            )
+                        }
 
-                        if canRematch {
+                        if !isIntroGame, canRematch {
                             Button(action: onRematch) {
                                 Text(isRematchLoading ? "Creating..." : "Rematch")
                                     .frame(maxWidth: .infinity)
@@ -4774,6 +4896,19 @@ private struct GameOverOverlay: View {
                             )
                             .disabled(isRematchLoading)
                             .opacity(isRematchLoading ? 0.65 : 1)
+                        }
+
+                        if isIntroGame {
+                            Button(action: onExit) {
+                                Text("Exit Game")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(
+                                FilledGameButtonStyle(
+                                    color: Color(hex: 0x4B5563),
+                                    pressedColor: Color(hex: 0x374151)
+                                )
+                            )
                         }
 
                         Button(action: onReturn) {
@@ -4796,6 +4931,20 @@ private struct GameOverOverlay: View {
             .frame(maxWidth: 420)
             .padding(.horizontal, 32)
         }
+    }
+
+    private var introResultText: String {
+        if isVictory {
+            return "Create an account to keep playing Draw Two."
+        }
+        return "Try the intro match again with the same starting setup."
+    }
+
+    private var introPrimaryActionText: String {
+        if isVictory {
+            return "Create Account"
+        }
+        return isIntroRetryLoading ? "Starting..." : "Try Again"
     }
 }
 

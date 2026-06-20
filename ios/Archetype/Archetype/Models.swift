@@ -144,6 +144,16 @@ struct GameListResponse: Decodable {
     let games: [GameSummary]
 }
 
+struct IntroScenarioStartResponse: Decodable, Hashable {
+    let id: Int
+    let status: String?
+    let gameType: String
+    let titleSlug: String
+    let viewerSide: String
+    let accessToken: String
+    let message: String?
+}
+
 enum LadderType: String, CaseIterable, Identifiable, Codable {
     case rapid
     case daily

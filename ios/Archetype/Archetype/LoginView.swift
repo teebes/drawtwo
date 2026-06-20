@@ -1,21 +1,43 @@
 import SwiftUI
 
+enum LoginInitialMode {
+    case login
+    case signup
+    case confirm
+
+    static var configuredDefault: LoginInitialMode {
+        #if DEBUG
+        switch AppConfig.initialLoginMode {
+        case "signup":
+            return .signup
+        case "confirm":
+            return .confirm
+        default:
+            return .login
+        }
+        #else
+        return .login
+        #endif
+    }
+}
+
 struct LoginView: View {
     @EnvironmentObject private var authStore: AuthStore
+
+    private let onClose: (() -> Void)?
 
     @State private var email = ""
     @State private var username = ""
     @State private var confirmationKey = ""
-    #if DEBUG
-    @State private var isSignUp = AppConfig.initialLoginMode == "signup"
-    #else
-    @State private var isSignUp = false
-    #endif
-    #if DEBUG
-    @State private var showConfirmationForm = AppConfig.initialLoginMode == "confirm"
-    #else
-    @State private var showConfirmationForm = false
-    #endif
+    @State private var isSignUp: Bool
+    @State private var showConfirmationForm: Bool
+
+    init(initialMode: LoginInitialMode? = nil, onClose: (() -> Void)? = nil) {
+        let resolvedMode = initialMode ?? LoginInitialMode.configuredDefault
+        self.onClose = onClose
+        _isSignUp = State(initialValue: resolvedMode == .signup)
+        _showConfirmationForm = State(initialValue: resolvedMode == .confirm)
+    }
 
     private var trimmedEmail: String {
         email.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -81,7 +103,15 @@ struct LoginView: View {
     }
 
     private var loginTopBar: some View {
-        HStack {
+        HStack(spacing: 10) {
+            if let onClose {
+                Button(action: onClose) {
+                    Image(systemName: "chevron.left")
+                }
+                .buttonStyle(IconGameButtonStyle())
+                .accessibilityLabel("Back")
+            }
+
             DrawTwoLogoMark()
                 .frame(width: 34, height: 34, alignment: .leading)
 
