@@ -30,6 +30,9 @@ private enum GuestRoute: Hashable {
 }
 
 private struct IntroLandingView: View {
+    private let playSectionSpacing: CGFloat = 26
+    private let playToGuideSpacing: CGFloat = 125
+
     @State private var path: [GuestRoute] = []
     @State private var isStartingIntro = false
     @State private var isShowingLogin = false
@@ -46,16 +49,18 @@ private struct IntroLandingView: View {
                             .padding(.top, 6)
                             .padding(.bottom, 20)
 
-                        VStack(spacing: 26) {
+                        VStack(spacing: 0) {
                             Spacer(minLength: 42)
 
-                            IntroTitleBanner()
-                                .frame(maxWidth: 430)
+                            VStack(spacing: 50) {
+                                IntroTitleBanner()
+                                    .frame(maxWidth: 430)
 
-                            Text("by DrawTwo")
-                                .font(.archetypeBody(18, weight: .semibold))
-                                .foregroundStyle(ArchetypeTheme.muted)
-                                .frame(maxWidth: .infinity)
+                                Text("by DrawTwo")
+                                    .font(.archetypeBody(18, weight: .semibold))
+                                    .foregroundStyle(ArchetypeTheme.muted)
+                                    .frame(maxWidth: .infinity)
+                            }
 
                             VStack(spacing: 12) {
                                 Button(action: startIntroGame) {
@@ -82,10 +87,13 @@ private struct IntroLandingView: View {
                                 }
                             }
                             .frame(maxWidth: 290)
+                            .padding(.top, playSectionSpacing)
 
-                            Spacer(minLength: 120)
+                            HowToGuideSection(horizontalInset: 14)
+                                .padding(.top, playToGuideSpacing)
                         }
                         .padding(.horizontal, 24)
+                        .padding(.bottom, 36)
                     }
                     .frame(maxWidth: .infinity)
                 }

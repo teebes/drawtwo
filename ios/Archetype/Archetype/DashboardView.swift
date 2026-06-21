@@ -753,16 +753,10 @@ struct DashboardView: View {
     }
 
     private var howToPanel: some View {
-        VStack(spacing: 24) {
-            Text("How to Play")
-                .font(.archetypeBody(28, weight: .bold))
-                .foregroundStyle(ArchetypeTheme.text)
-                .frame(maxWidth: .infinity)
-                .id(DashboardSection.howTo)
-
-            HowToGuideContent(horizontalInset: 14)
-        }
-        .frame(maxWidth: 672)
+        HowToGuideSection(
+            horizontalInset: 14,
+            titleID: AnyHashable(DashboardSection.howTo)
+        )
         .padding(.top, 20)
     }
 

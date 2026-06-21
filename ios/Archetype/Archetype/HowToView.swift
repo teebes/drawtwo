@@ -12,18 +12,10 @@ struct HowToView: View {
                         .padding(.top, 6)
                         .padding(.bottom, 16)
 
-                    VStack(spacing: 24) {
-                        Text("How to Play")
-                            .font(.archetypeBody(28, weight: .bold))
-                            .foregroundStyle(ArchetypeTheme.text)
-                            .frame(maxWidth: .infinity)
-
-                        HowToGuideContent()
-                    }
-                    .frame(maxWidth: 672)
-                    .padding(.horizontal, 18)
-                    .padding(.top, 20)
-                    .padding(.bottom, 32)
+                    HowToGuideSection()
+                        .padding(.horizontal, 18)
+                        .padding(.top, 20)
+                        .padding(.bottom, 32)
                 }
             }
         }
@@ -39,6 +31,34 @@ struct HowToView: View {
             ArchetypeProfileLink(user: authStore.user) {
                 ProfileView()
             }
+        }
+    }
+}
+
+struct HowToGuideSection: View {
+    var horizontalInset: CGFloat = 0
+    var titleID: AnyHashable?
+
+    var body: some View {
+        VStack(spacing: 24) {
+            title
+
+            HowToGuideContent(horizontalInset: horizontalInset)
+        }
+        .frame(maxWidth: 672)
+    }
+
+    @ViewBuilder
+    private var title: some View {
+        let title = Text("How to Play")
+            .font(.archetypeBody(28, weight: .bold))
+            .foregroundStyle(ArchetypeTheme.text)
+            .frame(maxWidth: .infinity)
+
+        if let titleID {
+            title.id(titleID)
+        } else {
+            title
         }
     }
 }
@@ -219,17 +239,20 @@ private struct GuideHeroRow: View {
                 .frame(width: 96, height: 96)
                 .clipped()
 
-                Color.black.opacity(0.42)
+                Color.black.opacity(0.5)
 
                 Text(health)
-                    .font(.archetypeBody(22, weight: .black))
-                    .foregroundStyle(Color.white)
+                    .font(.archetypeBody(17, weight: .bold))
+                    .foregroundStyle(ArchetypeTheme.text)
             }
             .frame(width: 96, height: 96)
             .overlay(
-                Rectangle()
-                    .inset(by: active ? 2 : 0.5)
-                    .stroke(active ? ArchetypeTheme.gold2 : ArchetypeTheme.border, lineWidth: active ? 4 : 1)
+                Group {
+                    if active {
+                        Rectangle()
+                            .strokeBorder(ArchetypeTheme.gold2, lineWidth: 4)
+                    }
+                }
             )
 
             HStack(spacing: 9) {
