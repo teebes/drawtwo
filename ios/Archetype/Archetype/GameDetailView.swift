@@ -4446,6 +4446,7 @@ private struct UpdatesSheet: View {
                                             )
                                         }
                                     }
+                                    .padding(.top, 16)
                                     .padding(.horizontal, 18)
                                     .padding(.bottom, 14)
                                 }
@@ -4549,7 +4550,7 @@ private struct UpdateLogRow: View {
                         UpdateCardThumb(card: card, borderColor: ArchetypeTheme.green)
                     }
                 } else {
-                    UpdateHiddenCardThumb(borderColor: ArchetypeTheme.red)
+                    UpdateHeroThumb(hero: hero, borderColor: ArchetypeTheme.red)
                     Text("Draws a card")
                 }
             case "update_play_card":
