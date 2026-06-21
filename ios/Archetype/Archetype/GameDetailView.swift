@@ -3029,6 +3029,16 @@ private struct HeroTile: View {
     let isActive: Bool
     var combatRole: BoardCombatRole? = nil
 
+    private var outlineColor: Color? {
+        if let combatRole {
+            return combatRole.borderColor
+        }
+        if isActive {
+            return ArchetypeTheme.gold2
+        }
+        return nil
+    }
+
     var body: some View {
         ZStack {
             if let heroArtURL = snapshot.heroArtURL {
@@ -3055,18 +3065,32 @@ private struct HeroTile: View {
         }
         .frame(width: 96, height: 96)
         .clipped()
-        .modifier(BoardCombatModifier(role: combatRole, cornerRadius: 0))
         .overlay(alignment: .trailing) {
             Rectangle()
                 .fill(ArchetypeTheme.border)
                 .frame(width: 1)
         }
         .overlay {
-            if isActive {
+            if let outlineColor {
                 Rectangle()
-                    .strokeBorder(ArchetypeTheme.gold2, lineWidth: 4)
+                    .strokeBorder(outlineColor, lineWidth: 4)
             }
         }
+        .overlay(alignment: .top) {
+            if let value = combatRole?.valueText {
+                Text(value)
+                    .font(.archetypeBody(12, weight: .black))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .frame(height: 24)
+                    .background(combatRole?.borderColor ?? ArchetypeTheme.red)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color.black.opacity(0.78), lineWidth: 1))
+                    .shadow(color: Color.black.opacity(0.38), radius: 5, x: 0, y: 2)
+                    .offset(y: -16)
+            }
+        }
+        .animation(.spring(response: 0.28, dampingFraction: 0.72), value: combatRole != nil)
     }
 
     private var heroFallback: some View {
