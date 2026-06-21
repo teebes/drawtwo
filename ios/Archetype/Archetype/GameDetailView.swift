@@ -587,12 +587,16 @@ final class GameDetailViewModel: ObservableObject {
 
         do {
             if let guestAccessToken {
-                gameJSON = try await api.get(
+                let response: JSONValue = try await api.get(
                     "/gameplay/games/\(gameId)/",
                     queryItems: guestQueryItems(guestAccessToken)
                 )
+                gameJSON = response
+                prefetchArt(in: response)
             } else {
-                gameJSON = try await authStore.authenticatedGet("/gameplay/games/\(gameId)/")
+                let response: JSONValue = try await authStore.authenticatedGet("/gameplay/games/\(gameId)/")
+                gameJSON = response
+                prefetchArt(in: response)
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -686,7 +690,9 @@ final class GameDetailViewModel: ObservableObject {
                 for key in Self.socketPreservedKeys where stateObject[key] == nil {
                     stateObject[key] = existingObject[key]
                 }
-                gameJSON = .object(stateObject)
+                let mergedState = JSONValue.object(stateObject)
+                gameJSON = mergedState
+                prefetchArt(in: mergedState)
             }
             appendErrors(from: payload)
             appendUpdates(from: payload)
@@ -1141,6 +1147,66 @@ final class GameDetailViewModel: ObservableObject {
             return nil
         }
         return URL(string: string)
+    }
+
+    private func prefetchArt(in state: JSONValue?) {
+        guard let state else {
+            return
+        }
+
+        var urls: [URL] = []
+
+        func append(_ string: String?) {
+            if let url = url(from: string) {
+                urls.append(url)
+            }
+        }
+
+        if let heroes = state["heroes"]?.objectValue {
+            for hero in heroes.values {
+                append(resolvedHeroArtURL(from: hero))
+            }
+        }
+
+        if let cards = state["cards"]?.objectValue {
+            for card in cards.values {
+                append(resolvedCardArtURL(from: card, state: state))
+            }
+        }
+
+        if let creatures = state["creatures"]?.objectValue {
+            for creature in creatures.values {
+                append(resolvedCardArtURL(from: creature, state: state))
+            }
+        }
+
+        RemoteImageCache.shared.prefetch(urls)
+    }
+
+    private func resolvedHeroArtURL(from value: JSONValue) -> String? {
+        if let artURL = value["art_url"]?.stringValue, !artURL.isEmpty {
+            return artURL
+        }
+
+        return AppConfig.heroArtURL(slug: value["template_slug"]?.stringValue)
+    }
+
+    private func resolvedCardArtURL(from value: JSONValue, state: JSONValue) -> String? {
+        if let artURL = value["art_url"]?.stringValue, !artURL.isEmpty {
+            return artURL
+        }
+
+        if let slug = value["template_slug"]?.stringValue ?? value["slug"]?.stringValue {
+            return AppConfig.cardArtURL(slug: slug)
+        }
+
+        if let linkedCardId = value["card_id"]?.stringValue,
+           let linkedCard = state["cards"]?[linkedCardId],
+           let linkedSlug = linkedCard["template_slug"]?.stringValue ?? linkedCard["slug"]?.stringValue {
+            return AppConfig.cardArtURL(slug: linkedSlug)
+        }
+
+        return nil
     }
 
     private static func traitIcon(for traitTypes: [String]) -> String? {
@@ -2996,15 +3062,12 @@ private struct UpdateCardThumb: View {
                 .fill(Color(hex: 0xD1D5DB))
 
             if let artURL = card.artURL {
-                AsyncImage(url: artURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        cardFallback
-                    }
+                CachedRemoteImage(url: artURL) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                } placeholder: {
+                    cardFallback
                 }
             } else {
                 cardFallback
@@ -3042,15 +3105,12 @@ private struct HeroTile: View {
     var body: some View {
         ZStack {
             if let heroArtURL = snapshot.heroArtURL {
-                AsyncImage(url: heroArtURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        heroFallback
-                    }
+                CachedRemoteImage(url: heroArtURL) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                } placeholder: {
+                    heroFallback
                 }
             } else {
                 heroFallback
@@ -3354,15 +3414,12 @@ private struct MiniGameCard: View {
             GeometryReader { proxy in
                 Group {
                     if let artURL = card.artURL {
-                        AsyncImage(url: artURL) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                            default:
-                                cardFallback
-                            }
+                        CachedRemoteImage(url: artURL) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        } placeholder: {
+                            cardFallback
                         }
                     } else {
                         cardFallback
@@ -3411,10 +3468,7 @@ private struct MiniGameCard: View {
     }
 
     private var cardFallback: some View {
-        DrawTwoCardBackFill(
-            logoSize: isLarge ? 72 : 24,
-            showsWordmark: isLarge
-        )
+        RemoteImagePlaceholder()
     }
 }
 
@@ -4759,15 +4813,12 @@ private struct UpdateHeroThumb: View {
                 .fill(Color(hex: 0xD1D5DB))
 
             if let heroArtURL = hero.heroArtURL {
-                AsyncImage(url: heroArtURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        fallback
-                    }
+                CachedRemoteImage(url: heroArtURL) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                } placeholder: {
+                    fallback
                 }
             } else {
                 fallback
@@ -4783,7 +4834,7 @@ private struct UpdateHeroThumb: View {
     }
 
     private var fallback: some View {
-        DrawTwoCardBackFill(logoSize: 20)
+        RemoteImagePlaceholder()
     }
 }
 
@@ -5201,15 +5252,12 @@ private struct HeroDetailCard: View {
     var body: some View {
         ZStack {
             if let heroArtURL = hero.heroArtURL {
-                AsyncImage(url: heroArtURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        heroFallback
-                    }
+                CachedRemoteImage(url: heroArtURL) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                } placeholder: {
+                    heroFallback
                 }
             } else {
                 heroFallback
@@ -5227,7 +5275,7 @@ private struct HeroDetailCard: View {
     }
 
     private var heroFallback: some View {
-        DrawTwoCardBackFill(logoSize: 72, showsWordmark: true)
+        RemoteImagePlaceholder()
     }
 }
 

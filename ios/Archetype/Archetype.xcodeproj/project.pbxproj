@@ -16,6 +16,7 @@
 		8A00000B2C9B410100000001 /* AuthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A00000C2C9B410100000001 /* AuthStore.swift */; };
 		8A00000D2C9B410100000001 /* DrawTwoWebSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A00000E2C9B410100000001 /* DrawTwoWebSocket.swift */; };
 		8A0000492C9B410100000001 /* PushNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A00004A2C9B410100000001 /* PushNotificationManager.swift */; };
+		8A00004B2C9B410100000001 /* CachedRemoteImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A00004C2C9B410100000001 /* CachedRemoteImage.swift */; };
 		8A00000F2C9B410100000001 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0000102C9B410100000001 /* RootView.swift */; };
 		8A0000112C9B410100000001 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0000122C9B410100000001 /* LoginView.swift */; };
 		8A0000132C9B410100000001 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0000142C9B410100000001 /* DashboardView.swift */; };
@@ -45,6 +46,7 @@
 		8A00000C2C9B410100000001 /* AuthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthStore.swift; sourceTree = "<group>"; };
 		8A00000E2C9B410100000001 /* DrawTwoWebSocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawTwoWebSocket.swift; sourceTree = "<group>"; };
 		8A00004A2C9B410100000001 /* PushNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationManager.swift; sourceTree = "<group>"; };
+		8A00004C2C9B410100000001 /* CachedRemoteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedRemoteImage.swift; sourceTree = "<group>"; };
 		8A0000102C9B410100000001 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		8A0000122C9B410100000001 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		8A0000142C9B410100000001 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
@@ -103,6 +105,7 @@
 				8A00000C2C9B410100000001 /* AuthStore.swift */,
 				8A00000E2C9B410100000001 /* DrawTwoWebSocket.swift */,
 				8A00004A2C9B410100000001 /* PushNotificationManager.swift */,
+				8A00004C2C9B410100000001 /* CachedRemoteImage.swift */,
 				8A0000182C9B410100000001 /* DesignSystem.swift */,
 				8A00003C2C9B410100000001 /* FontRegistry.swift */,
 				8A0000412C9B410100000001 /* Fonts */,
@@ -222,6 +225,7 @@
 				8A00000B2C9B410100000001 /* AuthStore.swift in Sources */,
 				8A00000D2C9B410100000001 /* DrawTwoWebSocket.swift in Sources */,
 				8A0000492C9B410100000001 /* PushNotificationManager.swift in Sources */,
+				8A00004B2C9B410100000001 /* CachedRemoteImage.swift in Sources */,
 				8A0000172C9B410100000001 /* DesignSystem.swift in Sources */,
 				8A00003B2C9B410100000001 /* FontRegistry.swift in Sources */,
 				8A00000F2C9B410100000001 /* RootView.swift in Sources */,

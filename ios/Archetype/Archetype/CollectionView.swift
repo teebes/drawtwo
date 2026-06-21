@@ -73,11 +73,22 @@ final class CollectionViewModel: ObservableObject {
             self.title = title
             self.decks = deckResponse.decks
             self.cards = cards
+            prefetchArt(title: title, decks: deckResponse.decks, cards: cards)
         } catch {
             errorMessage = error.localizedDescription
         }
 
         isLoading = false
+    }
+
+    private func prefetchArt(title: Title, decks: [Deck], cards: [CardTemplate]) {
+        let urlStrings =
+            [title.resolvedArtUrl]
+            + decks.map { $0.hero.resolvedArtUrl }
+            + cards.map { $0.resolvedArtUrl }
+        let urls = urlStrings.compactMap { $0 }.compactMap(URL.init(string:))
+
+        RemoteImageCache.shared.prefetch(urls)
     }
 
     private func groupedCards(from cards: [CardTemplate]) -> [(name: String, cards: [CardTemplate])] {
@@ -403,15 +414,12 @@ private struct CollectionDeckRow: View {
     @ViewBuilder
     private var heroArt: some View {
         if let artUrl = deck.hero.resolvedArtUrl, let url = URL(string: artUrl) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFit()
-                default:
-                    fallbackHero
-                }
+            CachedRemoteImage(url: url) { image in
+                image
+                    .resizable()
+                    .scaledToFit()
+            } placeholder: {
+                fallbackHero
             }
         } else {
             fallbackHero
@@ -570,15 +578,12 @@ private struct CollectionCardView: View {
         GeometryReader { proxy in
             Group {
                 if let artUrl = card.resolvedArtUrl, let url = URL(string: artUrl) {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        default:
-                            placeholder
-                        }
+                    CachedRemoteImage(url: url) { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    } placeholder: {
+                        placeholder
                     }
                 } else {
                     placeholder
@@ -590,7 +595,7 @@ private struct CollectionCardView: View {
     }
 
     private var placeholder: some View {
-        DrawTwoCardBackFill(logoSize: 72, showsWordmark: true)
+        RemoteImagePlaceholder()
     }
 }
 

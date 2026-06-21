@@ -144,12 +144,24 @@ final class DeckDetailViewModel: ObservableObject {
         errorMessage = nil
 
         do {
-            deck = try await authStore.authenticatedGet("/collection/decks/\(deckId)/")
+            let loadedDeck: DeckDetail = try await authStore.authenticatedGet("/collection/decks/\(deckId)/")
+            deck = loadedDeck
+            prefetchArt(in: loadedDeck)
         } catch {
             errorMessage = error.localizedDescription
         }
 
         isLoading = false
+    }
+
+    private func prefetchArt(in deck: DeckDetail) {
+        let urlStrings =
+            [deck.hero.resolvedArtUrl]
+            + deck.cards.map { $0.resolvedArtUrl }
+            + (deck.allCards?.map { $0.resolvedArtUrl } ?? [])
+        let urls = urlStrings.compactMap { $0 }.compactMap(URL.init(string:))
+
+        RemoteImageCache.shared.prefetch(urls)
     }
 
 }
@@ -365,15 +377,12 @@ struct DeckDetailView: View {
     @ViewBuilder
     private func heroArt(_ hero: DeckDetailHero) -> some View {
         if let artUrl = hero.resolvedArtUrl, let url = URL(string: artUrl) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                default:
-                    heroFallback(hero)
-                }
+            CachedRemoteImage(url: url) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+            } placeholder: {
+                heroFallback(hero)
             }
         } else {
             heroFallback(hero)
@@ -675,15 +684,12 @@ private struct DeckCardDetailOverlay: View {
         GeometryReader { proxy in
             Group {
                 if let artUrl = card.resolvedArtUrl, let url = URL(string: artUrl) {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        default:
-                            placeholder
-                        }
+                    CachedRemoteImage(url: url) { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    } placeholder: {
+                        placeholder
                     }
                 } else {
                     placeholder
@@ -695,7 +701,7 @@ private struct DeckCardDetailOverlay: View {
     }
 
     private var placeholder: some View {
-        DrawTwoCardBackFill(logoSize: 72, showsWordmark: true)
+        RemoteImagePlaceholder()
     }
 
 }

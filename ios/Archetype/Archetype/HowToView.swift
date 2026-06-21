@@ -222,19 +222,16 @@ private struct GuideHeroRow: View {
     var body: some View {
         HStack(spacing: 0) {
             ZStack {
-                AsyncImage(url: imageURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        LinearGradient(
-                            colors: [ArchetypeTheme.panel2, ArchetypeTheme.gold.opacity(0.28)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    }
+                CachedRemoteImage(url: imageURL) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                } placeholder: {
+                    LinearGradient(
+                        colors: [ArchetypeTheme.panel2, ArchetypeTheme.gold.opacity(0.28)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
                 }
                 .frame(width: 96, height: 96)
                 .clipped()
@@ -403,15 +400,12 @@ private struct GuideCard: View {
     @ViewBuilder
     private var cardArt: some View {
         if let artURL {
-            AsyncImage(url: artURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                default:
-                    placeholder
-                }
+            CachedRemoteImage(url: artURL) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+            } placeholder: {
+                placeholder
             }
         } else {
             placeholder
@@ -419,7 +413,7 @@ private struct GuideCard: View {
     }
 
     private var placeholder: some View {
-        DrawTwoCardBackFill(logoSize: 72, showsWordmark: true)
+        RemoteImagePlaceholder()
     }
 }
 
