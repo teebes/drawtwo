@@ -1,6 +1,7 @@
 from allauth.account import app_settings as allauth_settings
 from allauth.account.adapter import get_adapter
 from allauth.account.utils import setup_user_email
+from allauth.socialaccount.models import SocialAccount
 from dj_rest_auth.registration.serializers import RegisterSerializer
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
@@ -14,6 +15,7 @@ class UserSerializer(serializers.ModelSerializer):
     """Serializer for user details."""
 
     display_name = serializers.ReadOnlyField()
+    apple_connected = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -26,6 +28,7 @@ class UserSerializer(serializers.ModelSerializer):
             "is_email_verified",
             "is_staff",
             "status",
+            "apple_connected",
             "created_at",
             "updated_at",
         )
@@ -36,7 +39,11 @@ class UserSerializer(serializers.ModelSerializer):
             "is_email_verified",
             "is_staff",
             "status",
+            "apple_connected",
         )
+
+    def get_apple_connected(self, obj):
+        return SocialAccount.objects.filter(user=obj, provider="apple").exists()
 
 
 class CustomRegisterSerializer(RegisterSerializer):

@@ -338,11 +338,7 @@ class AppleLoginView(APIView):
                 uid=apple_sub,
                 defaults={
                     "user": user,
-                    "extra_data": {
-                        key: value
-                        for key, value in token_info.items()
-                        if key not in {"sub", "email"}
-                    },
+                    "extra_data": _apple_extra_data(token_info),
                 },
             )
 
@@ -391,6 +387,107 @@ class AppleLoginView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class AppleLinkView(APIView):
+    """Link Sign in with Apple to the currently authenticated DrawTwo account."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = AppleLoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        if not configured_apple_client_ids():
+            return Response(
+                {"error": "Apple login is not configured."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        try:
+            token_info = verify_apple_identity_token(
+                serializer.validated_data["identity_token"]
+            )
+        except ValueError:
+            return Response(
+                {"error": "Invalid Apple login token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        apple_sub = token_info.get("sub")
+        if not apple_sub:
+            return Response(
+                {"error": "Apple did not return a user identifier."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        linked_account = (
+            SocialAccount.objects.filter(provider="apple", uid=apple_sub)
+            .select_related("user")
+            .first()
+        )
+
+        if linked_account:
+            if linked_account.user_id != request.user.id:
+                return Response(
+                    {
+                        "error": (
+                            "This Apple account is already linked to another "
+                            "Draw Two account."
+                        ),
+                        "apple_account_conflict": True,
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            linked_account.extra_data = _apple_extra_data(token_info)
+            linked_account.save(update_fields=["extra_data"])
+            return Response(
+                {
+                    "message": "Apple sign-in is already connected.",
+                    "user": UserSerializer(request.user).data,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        existing_account = SocialAccount.objects.filter(
+            provider="apple",
+            user=request.user,
+        ).first()
+        if existing_account:
+            return Response(
+                {
+                    "error": (
+                        "This Draw Two account is already linked to a different "
+                        "Apple account."
+                    ),
+                    "apple_account_conflict": True,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        SocialAccount.objects.create(
+            user=request.user,
+            provider="apple",
+            uid=apple_sub,
+            extra_data=_apple_extra_data(token_info),
+        )
+
+        return Response(
+            {
+                "message": "Apple sign-in connected.",
+                "user": UserSerializer(request.user).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+def _apple_extra_data(token_info):
+    return {
+        key: value for key, value in token_info.items() if key not in {"sub", "email"}
+    }
 
 
 def _apple_email_verified(value):

@@ -95,6 +95,7 @@ class AuthenticationAPITestCase(APITestCase):
         self.email_confirm_url = reverse("authentication:email_confirm")
         self.google_native_login_url = reverse("authentication:google_native_login")
         self.apple_login_url = reverse("authentication:apple_login")
+        self.apple_link_url = reverse("authentication:apple_link")
         self.protected_test_url = reverse("authentication:protected_test")
 
     def tearDown(self):
@@ -474,6 +475,115 @@ class AuthenticationAPITestCase(APITestCase):
             User.objects.filter(email="blocked-apple@example.com").exists()
         )
 
+    @override_settings(
+        APPLE_SIGN_IN_WEB_CLIENT_ID="com.morelsoft.drawtwo.dev.web",
+        APPLE_SIGN_IN_IOS_CLIENT_ID="com.morelsoft.drawtwo.dev",
+    )
+    @patch("apps.authentication.views.verify_apple_identity_token")
+    def test_apple_link_connects_authenticated_user(self, mock_verify_token):
+        """A logged-in user can connect Apple even with a hidden Apple email."""
+        user = User.objects.create_user(
+            email="real-email@example.com",
+            username="realuser",
+        )
+        self.client.force_authenticate(user=user)
+        mock_verify_token.return_value = {
+            "sub": "apple-linked-user",
+            "aud": "com.morelsoft.drawtwo.dev",
+            "email": "private-relay@privaterelay.appleid.com",
+            "email_verified": "true",
+        }
+
+        response = self.client.post(
+            self.apple_link_url,
+            {"identity_token": "valid-apple-identity-token"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["user"]["email"], "real-email@example.com")
+        self.assertTrue(response.data["user"]["apple_connected"])
+
+        social_account = SocialAccount.objects.get(provider="apple")
+        self.assertEqual(social_account.uid, "apple-linked-user")
+        self.assertEqual(social_account.user, user)
+
+    @override_settings(
+        APPLE_SIGN_IN_WEB_CLIENT_ID="com.morelsoft.drawtwo.dev.web",
+        APPLE_SIGN_IN_IOS_CLIENT_ID="com.morelsoft.drawtwo.dev",
+    )
+    @patch("apps.authentication.views.verify_apple_identity_token")
+    def test_apple_link_is_idempotent_for_existing_link(self, mock_verify_token):
+        """Linking the same Apple account to the same user is a no-op success."""
+        user = User.objects.create_user(email="linked-real@example.com")
+        SocialAccount.objects.create(
+            user=user,
+            provider="apple",
+            uid="apple-existing-link",
+        )
+        self.client.force_authenticate(user=user)
+        mock_verify_token.return_value = {
+            "sub": "apple-existing-link",
+            "aud": "com.morelsoft.drawtwo.dev",
+        }
+
+        response = self.client.post(
+            self.apple_link_url,
+            {"identity_token": "valid-apple-identity-token"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(SocialAccount.objects.filter(provider="apple").count(), 1)
+        self.assertTrue(response.data["user"]["apple_connected"])
+
+    @override_settings(
+        APPLE_SIGN_IN_WEB_CLIENT_ID="com.morelsoft.drawtwo.dev.web",
+        APPLE_SIGN_IN_IOS_CLIENT_ID="com.morelsoft.drawtwo.dev",
+    )
+    @patch("apps.authentication.views.verify_apple_identity_token")
+    def test_apple_link_rejects_apple_account_used_by_other_user(
+        self, mock_verify_token
+    ):
+        """An Apple credential cannot silently merge into a second account."""
+        intended_user = User.objects.create_user(email="intended@example.com")
+        duplicate_user = User.objects.create_user(email="relay@example.com")
+        SocialAccount.objects.create(
+            user=duplicate_user,
+            provider="apple",
+            uid="apple-duplicate-link",
+        )
+        self.client.force_authenticate(user=intended_user)
+        mock_verify_token.return_value = {
+            "sub": "apple-duplicate-link",
+            "aud": "com.morelsoft.drawtwo.dev",
+        }
+
+        response = self.client.post(
+            self.apple_link_url,
+            {"identity_token": "valid-apple-identity-token"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertTrue(response.data["apple_account_conflict"])
+        self.assertFalse(
+            SocialAccount.objects.filter(
+                user=intended_user,
+                provider="apple",
+            ).exists()
+        )
+
+    def test_apple_link_requires_authentication(self):
+        """Apple linking is only available from an existing Draw Two session."""
+        response = self.client.post(
+            self.apple_link_url,
+            {"identity_token": "valid-apple-identity-token"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
     def test_email_confirmation_invalid_key(self):
         """Test email confirmation with invalid key."""
         data = {"key": "invalid-key-12345"}
@@ -590,6 +700,20 @@ class UserProfileAPITestCase(APITestCase):
         self.assertEqual(response.data["email"], "profile@example.com")
         self.assertEqual(response.data["username"], "profileuser")
         self.assertEqual(response.data["display_name"], "profileuser")
+        self.assertFalse(response.data["apple_connected"])
+
+    def test_get_user_profile_reports_connected_apple_account(self):
+        """Profile includes whether Apple sign-in is connected."""
+        SocialAccount.objects.create(
+            user=self.user,
+            provider="apple",
+            uid="apple-profile-link",
+        )
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(self.profile_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["apple_connected"])
 
     def test_get_user_profile_unauthenticated(self):
         """Test getting user profile when not authenticated."""

@@ -212,6 +212,30 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    // Connect Apple Sign in to the currently authenticated account
+    async linkApple(identityToken: string): Promise<ApiResponse> {
+      this.loading = true
+      this.error = null
+
+      try {
+        const response = await axios.post('/auth/apple/link/', {
+          identity_token: identityToken
+        })
+
+        if (response.data.user) {
+          this.user = response.data.user as User
+          localStorage.setItem('userData', JSON.stringify(response.data.user))
+        }
+
+        this.loading = false
+        return { success: true, data: response.data }
+      } catch (error: any) {
+        this.loading = false
+        this.error = error.response?.data || { message: 'Apple account linking failed' }
+        return { success: false, error: this.error }
+      }
+    },
+
     // Logout
     async logout(): Promise<void> {
       this.loading = true

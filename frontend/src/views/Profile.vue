@@ -80,8 +80,38 @@
                   <span class="text-right text-gray-900 dark:text-white">{{ formatDate(authStore.user.created_at) }}</span>
                 </div>
 
+                <div class="flex items-center justify-between gap-3 py-3 border-b border-gray-200 dark:border-gray-700">
+                  <span class="font-medium text-gray-700 dark:text-gray-300">Apple:</span>
+                  <div class="flex min-w-0 items-center justify-end">
+                    <span
+                      v-if="appleConnected"
+                      class="inline-flex items-center gap-1.5 text-sm font-medium text-green-700 dark:text-green-300"
+                    >
+                      <CheckCircle class="h-4 w-4" aria-hidden="true" />
+                      Connected
+                    </span>
+                    <button
+                      v-else
+                      type="button"
+                      @click="connectApple"
+                      :disabled="authStore.loading || !appleClientId"
+                      class="inline-flex items-center justify-center gap-1.5 rounded-md bg-black px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
+                    >
+                      <Loader2 v-if="authStore.loading" class="h-4 w-4 animate-spin" aria-hidden="true" />
+                      <LinkIcon v-else class="h-4 w-4" aria-hidden="true" />
+                      {{ appleClientId ? 'Connect Apple' : 'Apple unavailable' }}
+                    </button>
+                  </div>
+                </div>
 
               </div>
+
+              <p v-if="appleStatus" class="mt-4 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800 dark:border-green-700 dark:bg-green-900/30 dark:text-green-200">
+                {{ appleStatus }}
+              </p>
+              <p v-if="appleError" class="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-700 dark:bg-red-900/30 dark:text-red-200">
+                {{ appleError }}
+              </p>
             </div>
           </div>
         </div>
@@ -91,12 +121,24 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { CheckCircle, Link as LinkIcon, Loader2 } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
+import {
+  isAppleSignInCancellation,
+  requestAppleIdentityToken
+} from '../utils/appleSignIn'
 
 const authStore = useAuthStore()
 const isEditingUsername = ref(false)
 const newUsername = ref('')
+const appleStatus = ref('')
+const appleError = ref('')
+
+const appleClientId = import.meta.env.VITE_APPLE_SIGN_IN_CLIENT_ID as string | undefined
+const appleRedirectUri = (import.meta.env.VITE_APPLE_REDIRECT_URI as string | undefined)
+  || `${window.location.origin}/auth/callback/apple`
+const appleConnected = computed(() => Boolean(authStore.user?.apple_connected))
 
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('en-US', {
@@ -124,6 +166,37 @@ const saveUsername = async () => {
   const result = await authStore.updateProfile({ username: newUsername.value })
   if (result.success) {
     isEditingUsername.value = false
+  }
+}
+
+const connectApple = async () => {
+  appleStatus.value = ''
+  appleError.value = ''
+
+  if (!appleClientId) {
+    appleError.value = 'Apple sign-in is not configured.'
+    return
+  }
+
+  try {
+    const identityToken = await requestAppleIdentityToken(appleClientId, appleRedirectUri)
+    const result = await authStore.linkApple(identityToken)
+
+    if (result.success) {
+      appleStatus.value = result.data?.message || 'Apple sign-in connected.'
+      return
+    }
+
+    appleError.value = result.error?.error
+      || result.error?.detail
+      || result.error?.message
+      || 'Apple account linking failed.'
+  } catch (error: any) {
+    if (isAppleSignInCancellation(error)) {
+      return
+    }
+
+    appleError.value = error?.message || 'Unable to connect Apple sign-in.'
   }
 }
 

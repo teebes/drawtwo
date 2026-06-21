@@ -56,6 +56,7 @@ urlpatterns = [
     ),
     path("google/", views.GoogleLogin.as_view(), name="google_login"),
     path("apple/", views.AppleLoginView.as_view(), name="apple_login"),
+    path("apple/link/", views.AppleLinkView.as_view(), name="apple_link"),
     # Friend system
     path("friends/", views.FriendshipListView.as_view(), name="friends_list"),
     path(

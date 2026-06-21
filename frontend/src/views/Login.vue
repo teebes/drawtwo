@@ -152,34 +152,20 @@
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import {
+  initAppleSignIn,
+  isAppleSignInCancellation,
+  requestAppleIdentityToken
+} from '../utils/appleSignIn'
 
 declare global {
   interface Window {
     google?: any
-    AppleID?: AppleIDNamespace
   }
 }
 
 type GoogleTokenClient = {
   requestAccessToken: (options?: { prompt?: string }) => void
-}
-
-type AppleSignInResponse = {
-  authorization?: {
-    id_token?: string
-  }
-}
-
-type AppleIDNamespace = {
-  auth?: {
-    init: (options: {
-      clientId: string
-      scope: string
-      redirectURI: string
-      usePopup: boolean
-    }) => void
-    signIn: () => Promise<AppleSignInResponse>
-  }
 }
 
 const authStore = useAuthStore()
@@ -202,7 +188,6 @@ const appleRedirectUri = (import.meta.env.VITE_APPLE_REDIRECT_URI as string | un
   || `${window.location.origin}/auth/callback/apple`
 let tokenClient: GoogleTokenClient | null = null
 let googleScriptPromise: Promise<void> | null = null
-let appleScriptPromise: Promise<void> | null = null
 
 const showMessage = (text: string, type: 'info' | 'success' | 'error' = 'info') => {
   message.value = text
@@ -246,37 +231,6 @@ const loadGoogleScript = (): Promise<void> => {
   })
 
   return googleScriptPromise
-}
-
-const loadAppleScript = (): Promise<void> => {
-  if (window.AppleID?.auth) {
-    return Promise.resolve()
-  }
-
-  if (appleScriptPromise) {
-    return appleScriptPromise
-  }
-
-  appleScriptPromise = new Promise((resolve, reject) => {
-    const existingScript = document.querySelector<HTMLScriptElement>('script[data-apple-identity="true"]')
-
-    if (existingScript) {
-      existingScript.addEventListener('load', () => resolve(), { once: true })
-      existingScript.addEventListener('error', () => reject(new Error('Failed to load Apple Sign in script')), { once: true })
-      return
-    }
-
-    const script = document.createElement('script')
-    script.src = 'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js'
-    script.async = true
-    script.defer = true
-    script.dataset.appleIdentity = 'true'
-    script.onload = () => resolve()
-    script.onerror = () => reject(new Error('Failed to load Apple Sign in script'))
-    document.head.appendChild(script)
-  })
-
-  return appleScriptPromise
 }
 
 const initGoogleClient = async () => {
@@ -334,15 +288,7 @@ const initAppleClient = async () => {
   }
 
   try {
-    await loadAppleScript()
-
-    window.AppleID?.auth?.init({
-      clientId: appleClientId,
-      scope: 'name email',
-      redirectURI: appleRedirectUri,
-      usePopup: true
-    })
-
+    await initAppleSignIn(appleClientId, appleRedirectUri)
     appleReady.value = true
     appleError.value = ''
   } catch (error) {
@@ -419,7 +365,7 @@ const handleGoogleLogin = async () => {
 }
 
 const handleAppleLogin = async () => {
-  if (!appleReady.value || !window.AppleID?.auth) {
+  if (!appleReady.value || !appleClientId) {
     if (appleError.value) {
       showMessage(appleError.value, 'error')
     } else {
@@ -429,14 +375,7 @@ const handleAppleLogin = async () => {
   }
 
   try {
-    const appleResponse = await window.AppleID.auth.signIn()
-    const identityToken = appleResponse?.authorization?.id_token
-
-    if (!identityToken) {
-      showMessage('Apple did not return an identity token. Please try again.', 'error')
-      return
-    }
-
+    const identityToken = await requestAppleIdentityToken(appleClientId, appleRedirectUri)
     const result = await authStore.appleLogin(identityToken)
     if (result.success) {
       showMessage('Apple login successful! Redirecting...', 'success')
@@ -452,7 +391,7 @@ const handleAppleLogin = async () => {
       showMessage(errorMsg, 'error')
     }
   } catch (error: any) {
-    if (error?.error === 'popup_closed_by_user' || error?.error === 'user_cancelled_authorize') {
+    if (isAppleSignInCancellation(error)) {
       return
     }
 

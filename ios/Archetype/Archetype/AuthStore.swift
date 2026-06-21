@@ -231,6 +231,31 @@ final class AuthStore: ObservableObject {
         }
     }
 
+    @discardableResult
+    func linkApple(identityToken: String) async -> Bool {
+        isLoading = true
+        errorMessage = nil
+        statusMessage = nil
+        defer { isLoading = false }
+
+        do {
+            let response: AuthResponse = try await authenticatedPost(
+                "/auth/apple/link/",
+                body: AppleSignInRequest(identityToken: identityToken)
+            )
+
+            if let linkedUser = response.user {
+                user = linkedUser
+            }
+
+            statusMessage = response.message ?? "Apple sign-in connected."
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     func authenticatedGet<Response: Decodable>(_ path: String) async throws -> Response {
         do {
             return try await api.get(path, accessToken: accessToken)

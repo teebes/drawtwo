@@ -9,6 +9,7 @@ struct User: Codable, Identifiable, Equatable {
     let isEmailVerified: Bool?
     let isStaff: Bool?
     let status: String?
+    let appleConnected: Bool?
     let createdAt: String?
     let updatedAt: String?
 }

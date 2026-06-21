@@ -1,3 +1,4 @@
+import AuthenticationServices
 import SwiftUI
 
 struct ProfileView: View {
@@ -75,6 +76,9 @@ struct ProfileView: View {
                     Divider().overlay(ArchetypeTheme.border)
                     ProfileInfoRow(label: "Member Since", value: formattedDate(createdAt))
                 }
+
+                Divider().overlay(ArchetypeTheme.border)
+                appleRow
             }
         }
         .padding(24)
@@ -153,6 +157,38 @@ struct ProfileView: View {
         }
     }
 
+    private var appleRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text("Apple:")
+                    .font(.archetypeBody(15, weight: .medium))
+                    .foregroundStyle(Color(hex: 0xD1D5DB))
+
+                Spacer(minLength: 12)
+
+                if appleConnected {
+                    Label("Connected", systemImage: "checkmark.circle.fill")
+                        .font(.archetypeBody(15, weight: .medium))
+                        .foregroundStyle(ArchetypeTheme.green)
+                }
+            }
+
+            if !appleConnected {
+                SignInWithAppleButton(.continue) { request in
+                    request.requestedScopes = [.email]
+                } onCompletion: { result in
+                    handleAppleLinkCompletion(result)
+                }
+                .signInWithAppleButtonStyle(.white)
+                .frame(height: 42)
+                .clipShape(RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius))
+                .allowsHitTesting(!authStore.isLoading)
+                .opacity(authStore.isLoading ? 0.55 : 1)
+            }
+        }
+        .padding(.vertical, 13)
+    }
+
     @ViewBuilder
     private var noticePanel: some View {
         if let error = authStore.errorMessage {
@@ -168,6 +204,10 @@ struct ProfileView: View {
 
     private var currentUsername: String {
         authStore.user?.username ?? ""
+    }
+
+    private var appleConnected: Bool {
+        authStore.user?.appleConnected == true
     }
 
     private func startUsernameEdit() {
@@ -201,6 +241,41 @@ struct ProfileView: View {
             profileStatusMessage = "Profile updated."
         }
         recordCaptureState()
+    }
+
+    private func handleAppleLinkCompletion(_ result: Result<ASAuthorization, Error>) {
+        profileStatusMessage = nil
+
+        switch result {
+        case .success(let authorization):
+            guard
+                let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                let tokenData = credential.identityToken,
+                let identityToken = String(data: tokenData, encoding: .utf8)
+            else {
+                authStore.statusMessage = nil
+                authStore.errorMessage = "Apple sign-in did not return an identity token."
+                return
+            }
+
+            Task {
+                if await authStore.linkApple(identityToken: identityToken) {
+                    profileStatusMessage = authStore.statusMessage ?? "Apple sign-in connected."
+                }
+            }
+
+        case .failure(let error):
+            let nsError = error as NSError
+            if
+                nsError.domain == ASAuthorizationError.errorDomain,
+                nsError.code == ASAuthorizationError.Code.canceled.rawValue
+            {
+                return
+            }
+
+            authStore.statusMessage = nil
+            authStore.errorMessage = error.localizedDescription
+        }
     }
 
     private func applyInitialEditIfNeeded() {
