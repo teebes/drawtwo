@@ -430,6 +430,7 @@ private struct UserSocketEvent: Decodable {
 struct DashboardView: View {
     @EnvironmentObject private var authStore: AuthStore
     @Environment(\.scenePhase) private var scenePhase
+    @ObservedObject private var pushNotifications = PushNotificationManager.shared
     @StateObject private var model = DashboardViewModel()
     @StateObject private var userSocket = DrawTwoWebSocket()
     @State private var path = NavigationPath()
@@ -575,7 +576,10 @@ struct DashboardView: View {
             }
             .task {
                 await model.load(using: authStore)
+                await pushNotifications.requestAuthorizationAndRegister()
+                await pushNotifications.registerCurrentDevice(using: authStore)
                 connectUserSocketIfPossible()
+                handlePendingPushRoute()
                 applyInitialDashboardSectionIfNeeded()
                 applyInitialProfileMenuIfNeeded()
                 recordDashboardCaptureState()
@@ -593,6 +597,14 @@ struct DashboardView: View {
                 path.append(DashboardRoute.game(gameId))
                 model.matchedGameId = nil
             }
+            .onChange(of: pushNotifications.deviceTokenVersion) { _, _ in
+                Task {
+                    await pushNotifications.registerCurrentDevice(using: authStore)
+                }
+            }
+            .onChange(of: pushNotifications.pendingRoute) { _, _ in
+                handlePendingPushRoute()
+            }
             .onChange(of: isProfileMenuOpen) { _, _ in
                 recordDashboardCaptureState()
             }
@@ -602,7 +614,9 @@ struct DashboardView: View {
                 }
                 Task {
                     await model.load(using: authStore)
+                    await pushNotifications.registerCurrentDevice(using: authStore)
                     connectUserSocketIfPossible()
+                    handlePendingPushRoute()
                     recordDashboardCaptureState()
                 }
             }
@@ -853,6 +867,22 @@ struct DashboardView: View {
 
             await model.loadNotifications(using: authStore)
             await model.loadRankedQueueStatuses(using: authStore)
+        }
+    }
+
+    private func handlePendingPushRoute() {
+        guard let route = pushNotifications.consumePendingRoute() else {
+            return
+        }
+
+        switch route {
+        case .game(let gameId):
+            path.append(DashboardRoute.game(gameId))
+        case .friendChallenge:
+            path = NavigationPath()
+            Task {
+                await model.loadNotifications(using: authStore)
+            }
         }
     }
 

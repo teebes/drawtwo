@@ -615,6 +615,44 @@ struct RematchResponse: Decodable {
     let titleSlug: String?
 }
 
+struct PushDeviceRegistrationRequest: Encodable {
+    let token: String
+    let platform: String
+    let bundleId: String
+    let environment: String
+
+    enum CodingKeys: String, CodingKey {
+        case token
+        case platform
+        case bundleId = "bundle_id"
+        case environment
+    }
+}
+
+struct PushDeviceRegistrationResponse: Decodable {
+    let id: Int
+    let platform: String
+    let environment: String
+    let bundleId: String
+    let isActive: Bool
+}
+
+struct PushDeviceDeactivationRequest: Encodable {
+    let token: String
+    let bundleId: String
+    let environment: String
+
+    enum CodingKeys: String, CodingKey {
+        case token
+        case bundleId = "bundle_id"
+        case environment
+    }
+}
+
+struct PushDeviceDeactivationResponse: Decodable {
+    let deactivated: Int
+}
+
 struct EmptyBody: Encodable {}
 struct EmptyResponse: Decodable, Equatable {}
 

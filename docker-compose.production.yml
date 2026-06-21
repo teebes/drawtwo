@@ -46,6 +46,11 @@ services:
       - APPLE_SIGN_IN_PRIVATE_KEY_PATH=${APPLE_SIGN_IN_PRIVATE_KEY_PATH}
       - APPLE_SIGN_IN_WEB_CLIENT_ID=${APPLE_SIGN_IN_WEB_CLIENT_ID}
       - APPLE_SIGN_IN_IOS_CLIENT_ID=${APPLE_SIGN_IN_IOS_CLIENT_ID}
+      - APNS_TEAM_ID=${APNS_TEAM_ID:-}
+      - APNS_KEY_ID=${APNS_KEY_ID:-}
+      - APNS_AUTH_KEY_PATH=${APNS_AUTH_KEY_PATH:-}
+      - APNS_AUTH_KEY=${APNS_AUTH_KEY:-}
+      - APNS_TOPIC=${APNS_TOPIC:-}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       # Cloudflare R2 Configuration
       - CARD_ASSETS_BASE_URL=${CARD_ASSETS_BASE_URL}
@@ -54,6 +59,7 @@ services:
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
       - R2_BUCKET_NAME=${R2_BUCKET_NAME}
     volumes:
+      - ./secrets/apns/AuthKey.p8:/run/secrets/drawtwo/apns/AuthKey.p8:ro
       - static_volume:/app/staticfiles
       - media_volume:/app/media
     depends_on:
@@ -94,6 +100,11 @@ services:
       - APPLE_SIGN_IN_PRIVATE_KEY_PATH=${APPLE_SIGN_IN_PRIVATE_KEY_PATH}
       - APPLE_SIGN_IN_WEB_CLIENT_ID=${APPLE_SIGN_IN_WEB_CLIENT_ID}
       - APPLE_SIGN_IN_IOS_CLIENT_ID=${APPLE_SIGN_IN_IOS_CLIENT_ID}
+      - APNS_TEAM_ID=${APNS_TEAM_ID:-}
+      - APNS_KEY_ID=${APNS_KEY_ID:-}
+      - APNS_AUTH_KEY_PATH=${APNS_AUTH_KEY_PATH:-}
+      - APNS_AUTH_KEY=${APNS_AUTH_KEY:-}
+      - APNS_TOPIC=${APNS_TOPIC:-}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       # Cloudflare R2 Configuration
       - CARD_ASSETS_BASE_URL=${CARD_ASSETS_BASE_URL}
@@ -102,6 +113,7 @@ services:
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
       - R2_BUCKET_NAME=${R2_BUCKET_NAME}
     volumes:
+      - ./secrets/apns/AuthKey.p8:/run/secrets/drawtwo/apns/AuthKey.p8:ro
       - media_volume:/app/media
     depends_on:
       redis:
@@ -140,6 +152,11 @@ services:
       - APPLE_SIGN_IN_PRIVATE_KEY_PATH=${APPLE_SIGN_IN_PRIVATE_KEY_PATH}
       - APPLE_SIGN_IN_WEB_CLIENT_ID=${APPLE_SIGN_IN_WEB_CLIENT_ID}
       - APPLE_SIGN_IN_IOS_CLIENT_ID=${APPLE_SIGN_IN_IOS_CLIENT_ID}
+      - APNS_TEAM_ID=${APNS_TEAM_ID:-}
+      - APNS_KEY_ID=${APNS_KEY_ID:-}
+      - APNS_AUTH_KEY_PATH=${APNS_AUTH_KEY_PATH:-}
+      - APNS_AUTH_KEY=${APNS_AUTH_KEY:-}
+      - APNS_TOPIC=${APNS_TOPIC:-}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       # Cloudflare R2 Configuration
       - CARD_ASSETS_BASE_URL=${CARD_ASSETS_BASE_URL}
@@ -147,6 +164,8 @@ services:
       - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
       - R2_BUCKET_NAME=${R2_BUCKET_NAME}
+    volumes:
+      - ./secrets/apns/AuthKey.p8:/run/secrets/drawtwo/apns/AuthKey.p8:ro
     depends_on:
       redis:
         condition: service_healthy

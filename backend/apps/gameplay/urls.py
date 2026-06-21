@@ -1,8 +1,9 @@
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from . import views
 from apps.authentication.views import LeaderboardView, UserTitleRatingView
+
+from . import views
 
 # Create a router for ViewSets (if needed later)
 router = DefaultRouter()
@@ -18,6 +19,12 @@ urlpatterns = [
     path("games/<int:game_id>/rematch/", views.rematch_game, name="game-rematch"),
     path("games/", views.current_games, name="current-games"),
     path("games/new/", views.create_game, name="game-create"),
+    path("push/devices/", views.register_push_device, name="push-device-register"),
+    path(
+        "push/devices/current/deactivate/",
+        views.deactivate_current_push_device,
+        name="push-device-deactivate",
+    ),
     path(
         "scenarios/<slug:scenario_slug>/start/",
         views.start_scenario,

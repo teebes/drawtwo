@@ -258,6 +258,14 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 FRONTEND_EMAIL_CONFIRM_URL = os.environ.get(
     "FRONTEND_EMAIL_CONFIRM_URL", f"{FRONTEND_URL}/auth/email-confirm"
 )
+
+# Apple Push Notification service. APNs itself is free; these credentials come
+# from your Apple Developer account and are only needed outside local tests.
+APNS_TEAM_ID = os.environ.get("APNS_TEAM_ID", "")
+APNS_KEY_ID = os.environ.get("APNS_KEY_ID", "")
+APNS_AUTH_KEY = os.environ.get("APNS_AUTH_KEY", "")
+APNS_AUTH_KEY_PATH = os.environ.get("APNS_AUTH_KEY_PATH", "")
+APNS_TOPIC = os.environ.get("APNS_TOPIC", "")
 IOS_APP_LOGIN_URL = os.environ.get("IOS_APP_LOGIN_URL", f"{FRONTEND_URL}/app/login")
 IOS_LOGIN_URL_SCHEME = os.environ.get("IOS_LOGIN_URL_SCHEME") or "drawtwo://login"
 

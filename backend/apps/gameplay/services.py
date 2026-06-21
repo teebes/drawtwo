@@ -315,6 +315,7 @@ class GameService:
             return
         game.status = Game.GAME_STATUS_IN_PROGRESS
         game_state = GameState.model_validate(game.state)
+        turn_ready_before = GameService._turn_ready_sides(game_state)
 
         # Check for turn timeout - automatically concede if time expired
         if (
@@ -544,6 +545,11 @@ class GameService:
         # Single DB save for all processed events
         game.state = game_state.model_dump()
         game.save()
+        GameService._notify_new_turn_ready_sides(
+            game=game,
+            before_sides=turn_ready_before,
+            game_state=game_state,
+        )
 
         # Send filtered updates to clients
         send_game_updates_to_clients(
@@ -611,6 +617,29 @@ class GameService:
                 DEFAULT_AI_COMMAND_DELAY_SECONDS,
             )
         )
+
+    @staticmethod
+    def _turn_ready_sides(game_state: GameState) -> set[str]:
+        if game_state.phase != "main":
+            return set()
+        return {game_state.active}
+
+    @staticmethod
+    def _notify_new_turn_ready_sides(
+        *, game, before_sides: set[str], game_state: GameState
+    ) -> None:
+        new_sides = GameService._turn_ready_sides(game_state) - before_sides
+        if not new_sides:
+            return
+
+        from apps.gameplay.push import enqueue_turn_ready_notification
+
+        for side in new_sides:
+            enqueue_turn_ready_notification(
+                game=game,
+                side=side,
+                game_state=game_state,
+            )
 
     @staticmethod
     @transaction.atomic
@@ -1865,11 +1894,22 @@ class GameService:
 
                 # Notify both players via websocket
                 from apps.gameplay.notifications import send_matchmaking_success
+                from apps.gameplay.push import enqueue_match_started_notification
 
                 title_slug = getattr(entry_a.deck.title, "slug", None)
                 if title_slug:
                     send_matchmaking_success(entry_a.user_id, game.id, title_slug)
                     send_matchmaking_success(entry_b.user_id, game.id, title_slug)
+                    enqueue_match_started_notification(
+                        user_id=entry_a.user_id,
+                        game=game,
+                        ladder_type=ladder_type,
+                    )
+                    enqueue_match_started_notification(
+                        user_id=entry_b.user_id,
+                        game=game,
+                        ladder_type=ladder_type,
+                    )
 
                 matches_created += 1
 

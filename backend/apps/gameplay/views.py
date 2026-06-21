@@ -12,6 +12,7 @@ from apps.gameplay.models import (
     FriendlyChallenge,
     Game,
     MatchmakingQueue,
+    PushDevice,
     UserTitleRating,
 )
 from apps.gameplay.scenarios import ScenarioConfigurationError, ScenarioGameService
@@ -271,6 +272,67 @@ def current_games(request):
         )
 
     return Response(GameList(games=game_summaries).model_dump())
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def register_push_device(request):
+    from apps.gameplay.push import register_push_device as register_device
+
+    token = request.data.get("token")
+    if not token:
+        return Response(
+            {"error": "token is required"}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    platform = request.data.get("platform", PushDevice.PLATFORM_IOS)
+    if platform not in dict(PushDevice.PLATFORM_CHOICES):
+        return Response(
+            {"error": "Invalid platform"}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    environment = request.data.get("environment", PushDevice.ENVIRONMENT_PRODUCTION)
+    if environment not in dict(PushDevice.ENVIRONMENT_CHOICES):
+        return Response(
+            {"error": "Invalid environment"}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    device = register_device(
+        user=request.user,
+        token=token,
+        platform=platform,
+        bundle_id=request.data.get("bundle_id") or "",
+        environment=environment,
+    )
+    return Response(
+        {
+            "id": device.id,
+            "platform": device.platform,
+            "environment": device.environment,
+            "bundle_id": device.bundle_id,
+            "is_active": device.is_active,
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def deactivate_current_push_device(request):
+    from apps.gameplay.push import deactivate_push_device
+
+    token = request.data.get("token")
+    if not token:
+        return Response(
+            {"error": "token is required"}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    deactivated = deactivate_push_device(
+        user=request.user,
+        token=token,
+        environment=request.data.get("environment"),
+        bundle_id=request.data.get("bundle_id"),
+    )
+    return Response({"deactivated": deactivated})
 
 
 @api_view(["GET"])
@@ -563,6 +625,10 @@ def rematch_game(request, game_id):
     )
     _set_last_used_friend(request.user, game.title, challengee)
     _set_last_used_deck(request.user, challenger_deck)
+
+    from apps.gameplay.push import enqueue_friend_challenge_notification
+
+    enqueue_friend_challenge_notification(challenge)
 
     logger.info(
         f"Rematch challenge created: {challenge.id} from game {game.id} "
@@ -916,6 +982,10 @@ def create_friendly_challenge(request):
     )
     _set_last_used_friend(request.user, title, challengee)
     _set_last_used_deck(request.user, challenger_deck)
+
+    from apps.gameplay.push import enqueue_friend_challenge_notification
+
+    enqueue_friend_challenge_notification(challenge)
 
     return Response(
         {

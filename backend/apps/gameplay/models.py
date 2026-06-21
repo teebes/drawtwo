@@ -624,3 +624,86 @@ class PlayerNotification(TimestampedModel):
         indexes = [
             models.Index(fields=["user", "is_read"]),
         ]
+
+
+class PushDevice(TimestampedModel):
+    """APNs device token registered by a signed-in mobile client."""
+
+    PLATFORM_IOS = "ios"
+    PLATFORM_CHOICES = list_to_choices([PLATFORM_IOS])
+
+    ENVIRONMENT_SANDBOX = "sandbox"
+    ENVIRONMENT_PRODUCTION = "production"
+    ENVIRONMENT_CHOICES = list_to_choices([ENVIRONMENT_SANDBOX, ENVIRONMENT_PRODUCTION])
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="push_devices"
+    )
+    token = models.CharField(max_length=255)
+    platform = models.CharField(
+        max_length=20, choices=PLATFORM_CHOICES, default=PLATFORM_IOS
+    )
+    bundle_id = models.CharField(max_length=255, blank=True, default="")
+    environment = models.CharField(
+        max_length=20,
+        choices=ENVIRONMENT_CHOICES,
+        default=ENVIRONMENT_PRODUCTION,
+    )
+    is_active = models.BooleanField(default=True)
+    last_seen_at = models.DateTimeField(default=timezone.now)
+    last_error = models.TextField(blank=True, default="")
+
+    class Meta:
+        db_table = "gameplay_push_device"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["token", "environment", "bundle_id"],
+                name="gameplay_push_device_token_env_bundle_unique",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["user", "is_active"], name="gameplay_pu_user_id_b1d806_idx"
+            ),
+            models.Index(fields=["token"], name="gameplay_pu_token_7b9001_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} {self.platform} {self.environment}"
+
+
+class PushNotificationEvent(TimestampedModel):
+    """Deduplicated logical push event before fan-out to active devices."""
+
+    TYPE_TURN_READY = "turn_ready"
+    TYPE_FRIEND_CHALLENGE = "friend_challenge"
+    TYPE_MATCH_STARTED = "match_started"
+    TYPE_CHOICES = list_to_choices(
+        [TYPE_TURN_READY, TYPE_FRIEND_CHALLENGE, TYPE_MATCH_STARTED]
+    )
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="push_notification_events"
+    )
+    notification_type = models.CharField(max_length=40, choices=TYPE_CHOICES)
+    dedupe_key = models.CharField(max_length=255, unique=True)
+    title = models.CharField(max_length=120)
+    body = models.CharField(max_length=240)
+    data = models.JSONField(default=dict, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True, default="")
+
+    class Meta:
+        db_table = "gameplay_push_notification_event"
+        indexes = [
+            models.Index(
+                fields=["user", "-created_at"], name="gameplay_pu_user_id_975f67_idx"
+            ),
+            models.Index(
+                fields=["notification_type", "-created_at"],
+                name="gameplay_pu_notific_860a26_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.notification_type} for {self.user_id}: {self.dedupe_key}"

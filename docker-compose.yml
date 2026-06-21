@@ -59,9 +59,15 @@ services:
       - APPLE_SIGN_IN_PRIVATE_KEY_PATH=${APPLE_SIGN_IN_PRIVATE_KEY_PATH:-}
       - APPLE_SIGN_IN_WEB_CLIENT_ID=${APPLE_SIGN_IN_WEB_CLIENT_ID:-}
       - APPLE_SIGN_IN_IOS_CLIENT_ID=${APPLE_SIGN_IN_IOS_CLIENT_ID:-}
+      - APNS_TEAM_ID=${APNS_TEAM_ID:-}
+      - APNS_KEY_ID=${APNS_KEY_ID:-}
+      - APNS_AUTH_KEY_PATH=${APNS_AUTH_KEY_PATH:-}
+      - APNS_AUTH_KEY=${APNS_AUTH_KEY:-}
+      - APNS_TOPIC=${APNS_TOPIC:-}
     volumes:
       - ./backend:/app
       - ./ai:/app/ai
+      - ${APNS_AUTH_KEY_HOST_PATH:-/dev/null}:/run/secrets/drawtwo/apns/AuthKey.p8:ro
       - static_volume:/app/staticfiles
       - media_volume:/app/media
     ports:
@@ -100,9 +106,15 @@ services:
       - APPLE_SIGN_IN_PRIVATE_KEY_PATH=${APPLE_SIGN_IN_PRIVATE_KEY_PATH:-}
       - APPLE_SIGN_IN_WEB_CLIENT_ID=${APPLE_SIGN_IN_WEB_CLIENT_ID:-}
       - APPLE_SIGN_IN_IOS_CLIENT_ID=${APPLE_SIGN_IN_IOS_CLIENT_ID:-}
+      - APNS_TEAM_ID=${APNS_TEAM_ID:-}
+      - APNS_KEY_ID=${APNS_KEY_ID:-}
+      - APNS_AUTH_KEY_PATH=${APNS_AUTH_KEY_PATH:-}
+      - APNS_AUTH_KEY=${APNS_AUTH_KEY:-}
+      - APNS_TOPIC=${APNS_TOPIC:-}
     volumes:
       - ./backend:/app
       - ./ai:/app/ai
+      - ${APNS_AUTH_KEY_HOST_PATH:-/dev/null}:/run/secrets/drawtwo/apns/AuthKey.p8:ro
     depends_on:
       db:
         condition: service_healthy
@@ -131,9 +143,15 @@ services:
       - APPLE_SIGN_IN_PRIVATE_KEY_PATH=${APPLE_SIGN_IN_PRIVATE_KEY_PATH:-}
       - APPLE_SIGN_IN_WEB_CLIENT_ID=${APPLE_SIGN_IN_WEB_CLIENT_ID:-}
       - APPLE_SIGN_IN_IOS_CLIENT_ID=${APPLE_SIGN_IN_IOS_CLIENT_ID:-}
+      - APNS_TEAM_ID=${APNS_TEAM_ID:-}
+      - APNS_KEY_ID=${APNS_KEY_ID:-}
+      - APNS_AUTH_KEY_PATH=${APNS_AUTH_KEY_PATH:-}
+      - APNS_AUTH_KEY=${APNS_AUTH_KEY:-}
+      - APNS_TOPIC=${APNS_TOPIC:-}
     volumes:
       - ./backend:/app
       - ./ai:/app/ai
+      - ${APNS_AUTH_KEY_HOST_PATH:-/dev/null}:/run/secrets/drawtwo/apns/AuthKey.p8:ro
     depends_on:
       db:
         condition: service_healthy

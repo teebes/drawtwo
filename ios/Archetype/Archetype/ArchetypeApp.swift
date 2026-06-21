@@ -1,12 +1,15 @@
 import GoogleSignIn
 import SwiftUI
+import UIKit
 
 @main
 struct ArchetypeApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var authStore = AuthStore()
 
     init() {
         FontRegistry.registerBundledFonts()
+        PushNotificationManager.shared.configure()
         #if DEBUG
         if let initialTheme = AppConfig.initialThemePreference {
             UserDefaults.standard.set(initialTheme, forKey: "archetype.theme")

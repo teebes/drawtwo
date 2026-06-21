@@ -422,6 +422,10 @@ final class AuthStore: ObservableObject {
     func signOut() async {
         isLoading = true
 
+        await PushNotificationManager.shared.unregisterCurrentDevice(
+            accessToken: accessToken
+        )
+
         if let refreshToken {
             do {
                 let _: EmptyResponse = try await api.post(
