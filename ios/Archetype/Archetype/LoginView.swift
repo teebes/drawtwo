@@ -1,3 +1,4 @@
+import AuthenticationServices
 import SwiftUI
 import UIKit
 
@@ -194,6 +195,8 @@ struct LoginView: View {
             .buttonStyle(GoogleLoginButtonStyle())
             .disabled(authStore.isLoading)
 
+            appleSignInButton
+
             if showConfirmationForm {
                 confirmationForm
             }
@@ -286,6 +289,19 @@ struct LoginView: View {
         }
     }
 
+    private var appleSignInButton: some View {
+        SignInWithAppleButton(.continue) { request in
+            request.requestedScopes = [.email]
+        } onCompletion: { result in
+            handleAppleSignInCompletion(result)
+        }
+        .signInWithAppleButtonStyle(.white)
+        .frame(height: 46)
+        .clipShape(RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius))
+        .allowsHitTesting(!authStore.isLoading)
+        .opacity(authStore.isLoading ? 0.55 : 1)
+    }
+
     @ViewBuilder
     private var feedback: some View {
         if let status = authStore.statusMessage {
@@ -294,6 +310,37 @@ struct LoginView: View {
 
         if let error = authStore.errorMessage {
             AuthMessage(text: error, color: ArchetypeTheme.red)
+        }
+    }
+
+    private func handleAppleSignInCompletion(_ result: Result<ASAuthorization, Error>) {
+        switch result {
+        case .success(let authorization):
+            guard
+                let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                let tokenData = credential.identityToken,
+                let identityToken = String(data: tokenData, encoding: .utf8)
+            else {
+                authStore.statusMessage = nil
+                authStore.errorMessage = "Apple sign-in did not return an identity token."
+                return
+            }
+
+            Task {
+                await authStore.signInWithApple(identityToken: identityToken)
+            }
+
+        case .failure(let error):
+            let nsError = error as NSError
+            if
+                nsError.domain == ASAuthorizationError.errorDomain,
+                nsError.code == ASAuthorizationError.Code.canceled.rawValue
+            {
+                return
+            }
+
+            authStore.statusMessage = nil
+            authStore.errorMessage = error.localizedDescription
         }
     }
 

@@ -74,6 +74,8 @@ build-prod:
 	docker buildx build --platform linux/amd64,linux/arm64 -t teebes/drawtwo-backend:latest -f backend/Dockerfile . --push
 	docker buildx build --platform linux/amd64,linux/arm64 -t teebes/drawtwo-frontend:latest -f frontend/Dockerfile.production \
 		--build-arg VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID} \
+		--build-arg VITE_APPLE_SIGN_IN_CLIENT_ID=$(or $(VITE_APPLE_SIGN_IN_CLIENT_ID),$(APPLE_SIGN_IN_WEB_CLIENT_ID)) \
+		--build-arg VITE_APPLE_REDIRECT_URI=$(or $(VITE_APPLE_REDIRECT_URI),https://drawtwo.com/auth/callback/apple) \
 		./frontend --push
 
 up:

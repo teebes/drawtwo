@@ -66,6 +66,14 @@ struct GoogleNativeSignInRequest: Encodable {
     }
 }
 
+struct AppleSignInRequest: Encodable {
+    let identityToken: String
+
+    enum CodingKeys: String, CodingKey {
+        case identityToken = "identity_token"
+    }
+}
+
 struct LoginLinkResponse: Decodable {
     let message: String?
     let email: String?

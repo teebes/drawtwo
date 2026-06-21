@@ -136,6 +136,23 @@ class GoogleNativeLoginSerializer(serializers.Serializer):
     id_token = serializers.CharField(required=True)
 
 
+class AppleLoginSerializer(serializers.Serializer):
+    """Serializer for Sign in with Apple identity tokens."""
+
+    identity_token = serializers.CharField(required=False)
+    id_token = serializers.CharField(required=False)
+
+    def validate(self, attrs):
+        identity_token = attrs.get("identity_token") or attrs.get("id_token")
+        if not identity_token:
+            raise serializers.ValidationError(
+                {"identity_token": "This field is required."}
+            )
+
+        attrs["identity_token"] = identity_token
+        return attrs
+
+
 class FriendUserSerializer(serializers.ModelSerializer):
     """Simplified user serializer for friend lists."""
 

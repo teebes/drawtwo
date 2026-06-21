@@ -1,4 +1,5 @@
 from allauth.account.models import EmailAddress, EmailConfirmation
+from allauth.socialaccount.models import SocialAccount
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 from dj_rest_auth.registration.views import SocialLoginView
@@ -20,7 +21,9 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from .apple import configured_apple_client_ids, verify_apple_identity_token
 from .serializers import (
+    AppleLoginSerializer,
     EmailVerificationSerializer,
     FriendRequestSerializer,
     FriendshipSerializer,
@@ -242,6 +245,162 @@ class GoogleNativeLoginView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class AppleLoginView(APIView):
+    """Exchange a Sign in with Apple identity token for DrawTwo JWTs."""
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        serializer = AppleLoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        if not configured_apple_client_ids():
+            return Response(
+                {"error": "Apple login is not configured."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        try:
+            token_info = verify_apple_identity_token(
+                serializer.validated_data["identity_token"]
+            )
+        except ValueError:
+            return Response(
+                {"error": "Invalid Apple login token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        apple_sub = token_info.get("sub")
+        if not apple_sub:
+            return Response(
+                {"error": "Apple did not return a user identifier."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        email = token_info.get("email")
+        email_verified = _apple_email_verified(token_info.get("email_verified"))
+        if email and not email_verified:
+            return Response(
+                {"error": "Apple did not return a verified email address."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from apps.control.models import SiteSettings
+
+        site_settings = SiteSettings.get_cached_settings()
+        social_account = (
+            SocialAccount.objects.filter(
+                provider="apple",
+                uid=apple_sub,
+            )
+            .select_related("user")
+            .first()
+        )
+
+        user = social_account.user if social_account else None
+        if not user and email:
+            user = User.objects.filter(email__iexact=email).first()
+
+        if not user:
+            if not email:
+                return Response(
+                    {
+                        "error": (
+                            "Apple did not return an email address for this "
+                            "unlinked account."
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if site_settings.signup_disabled:
+                return Response(
+                    {
+                        "error": (
+                            "User registration is currently disabled. "
+                            "Please contact an administrator."
+                        ),
+                        "signup_disabled": True,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            user = User.objects.create_user(email=email)
+
+        if not social_account:
+            SocialAccount.objects.update_or_create(
+                provider="apple",
+                uid=apple_sub,
+                defaults={
+                    "user": user,
+                    "extra_data": {
+                        key: value
+                        for key, value in token_info.items()
+                        if key not in {"sub", "email"}
+                    },
+                },
+            )
+
+        update_fields = []
+        if (
+            email
+            and email_verified
+            and email.casefold() == user.email.casefold()
+            and not user.is_email_verified
+        ):
+            user.is_email_verified = True
+            update_fields.append("is_email_verified")
+
+        if update_fields:
+            user.save(update_fields=update_fields)
+
+        if email and email_verified and email.casefold() == user.email.casefold():
+            EmailAddress.objects.update_or_create(
+                user=user,
+                email=user.email,
+                defaults={"verified": True, "primary": True},
+            )
+
+        if site_settings.whitelist_mode_enabled and not user.can_login():
+            return Response(
+                {
+                    "message": (
+                        "Apple login succeeded, but your account is pending "
+                        "approval."
+                    ),
+                    "user": UserSerializer(user).data,
+                    "requires_approval": True,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        refresh = RefreshToken.for_user(user)
+        return Response(
+            {
+                "message": "Apple login successful.",
+                "user": UserSerializer(user).data,
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+def _apple_email_verified(value):
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, str):
+        return value.lower() == "true"
+
+    return False
 
 
 @method_decorator(csrf_exempt, name="dispatch")

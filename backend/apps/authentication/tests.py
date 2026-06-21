@@ -14,6 +14,7 @@ Total tests: 29 (5 model tests + 24 API/integration tests)
 from unittest.mock import patch
 
 from allauth.account.models import EmailAddress, EmailConfirmation
+from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase, override_settings
@@ -93,6 +94,7 @@ class AuthenticationAPITestCase(APITestCase):
         self.passwordless_login_url = reverse("authentication:passwordless_login")
         self.email_confirm_url = reverse("authentication:email_confirm")
         self.google_native_login_url = reverse("authentication:google_native_login")
+        self.apple_login_url = reverse("authentication:apple_login")
         self.protected_test_url = reverse("authentication:protected_test")
 
     def tearDown(self):
@@ -359,6 +361,117 @@ class AuthenticationAPITestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertFalse(
             User.objects.filter(email="blocked-google@example.com").exists()
+        )
+
+    @override_settings(
+        APPLE_SIGN_IN_WEB_CLIENT_ID="com.morelsoft.drawtwo.dev.web",
+        APPLE_SIGN_IN_IOS_CLIENT_ID="com.morelsoft.drawtwo.dev",
+    )
+    @patch("apps.authentication.views.verify_apple_identity_token")
+    def test_apple_login_creates_verified_user(self, mock_verify_token):
+        """Apple login creates a verified user and returns JWTs."""
+        mock_verify_token.return_value = {
+            "sub": "apple-user-123",
+            "aud": "com.morelsoft.drawtwo.dev",
+            "email": "native-apple@example.com",
+            "email_verified": "true",
+        }
+
+        response = self.client.post(
+            self.apple_login_url,
+            {"identity_token": "valid-apple-identity-token"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+        self.assertEqual(response.data["user"]["email"], "native-apple@example.com")
+
+        user = User.objects.get(email="native-apple@example.com")
+        self.assertTrue(user.is_email_verified)
+
+        email_address = EmailAddress.objects.get(email="native-apple@example.com")
+        self.assertTrue(email_address.verified)
+        self.assertTrue(email_address.primary)
+
+        social_account = SocialAccount.objects.get(provider="apple")
+        self.assertEqual(social_account.uid, "apple-user-123")
+        self.assertEqual(social_account.user, user)
+        mock_verify_token.assert_called_once_with("valid-apple-identity-token")
+
+    @override_settings(
+        APPLE_SIGN_IN_WEB_CLIENT_ID="com.morelsoft.drawtwo.dev.web",
+        APPLE_SIGN_IN_IOS_CLIENT_ID="com.morelsoft.drawtwo.dev",
+    )
+    @patch("apps.authentication.views.verify_apple_identity_token")
+    def test_apple_login_uses_linked_account_without_email(self, mock_verify_token):
+        """Apple login can reuse a linked account when Apple omits email."""
+        user = User.objects.create_user(email="linked-apple@example.com")
+        SocialAccount.objects.create(
+            user=user,
+            provider="apple",
+            uid="apple-user-456",
+        )
+        mock_verify_token.return_value = {
+            "sub": "apple-user-456",
+            "aud": "com.morelsoft.drawtwo.dev",
+        }
+
+        response = self.client.post(
+            self.apple_login_url,
+            {"id_token": "valid-apple-identity-token"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["user"]["email"], "linked-apple@example.com")
+
+    @override_settings(
+        APPLE_SIGN_IN_WEB_CLIENT_ID="com.morelsoft.drawtwo.dev.web",
+        APPLE_SIGN_IN_IOS_CLIENT_ID="com.morelsoft.drawtwo.dev",
+    )
+    @patch("apps.authentication.views.verify_apple_identity_token")
+    def test_apple_login_rejects_invalid_token(self, mock_verify_token):
+        """Apple login rejects tokens that fail Apple verification."""
+        mock_verify_token.side_effect = ValueError("bad token")
+
+        response = self.client.post(
+            self.apple_login_url,
+            {"identity_token": "invalid-apple-identity-token"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", response.data)
+
+    @override_settings(
+        APPLE_SIGN_IN_WEB_CLIENT_ID="com.morelsoft.drawtwo.dev.web",
+        APPLE_SIGN_IN_IOS_CLIENT_ID="com.morelsoft.drawtwo.dev",
+    )
+    @patch("apps.authentication.views.verify_apple_identity_token")
+    def test_apple_login_respects_disabled_signups(self, mock_verify_token):
+        """Apple login cannot create new users when signup is disabled."""
+        site_settings = SiteSettings.get_settings()
+        site_settings.signup_disabled = True
+        site_settings.save()
+
+        mock_verify_token.return_value = {
+            "sub": "apple-user-blocked",
+            "aud": "com.morelsoft.drawtwo.dev",
+            "email": "blocked-apple@example.com",
+            "email_verified": "true",
+        }
+
+        response = self.client.post(
+            self.apple_login_url,
+            {"identity_token": "valid-apple-identity-token"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(
+            User.objects.filter(email="blocked-apple@example.com").exists()
         )
 
     def test_email_confirmation_invalid_key(self):

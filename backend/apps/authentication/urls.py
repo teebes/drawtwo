@@ -11,18 +11,22 @@ from . import views
 
 app_name = "authentication"
 
+
 # Create CSRF-exempt versions of JWT views
-@method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(csrf_exempt, name="dispatch")
 class CSRFExemptTokenObtainPairView(TokenObtainPairView):
     pass
 
-@method_decorator(csrf_exempt, name='dispatch')
+
+@method_decorator(csrf_exempt, name="dispatch")
 class CSRFExemptTokenRefreshView(TokenRefreshView):
     pass
 
-@method_decorator(csrf_exempt, name='dispatch')
+
+@method_decorator(csrf_exempt, name="dispatch")
 class CSRFExemptTokenVerifyView(TokenVerifyView):
     pass
+
 
 urlpatterns = [
     # JWT Token endpoints (CSRF exempt)
@@ -51,7 +55,10 @@ urlpatterns = [
         name="google_native_login",
     ),
     path("google/", views.GoogleLogin.as_view(), name="google_login"),
+    path("apple/", views.AppleLoginView.as_view(), name="apple_login"),
     # Friend system
     path("friends/", views.FriendshipListView.as_view(), name="friends_list"),
-    path("friends/<int:pk>/", views.FriendshipDetailView.as_view(), name="friends_detail"),
+    path(
+        "friends/<int:pk>/", views.FriendshipDetailView.as_view(), name="friends_detail"
+    ),
 ]

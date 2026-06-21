@@ -119,6 +119,18 @@
             {{ googleError }}
           </p>
 
+          <!-- Apple Login -->
+          <button
+            @click="handleAppleLogin"
+            :disabled="authStore.loading || !appleReady"
+            class="mt-3 flex w-full items-center justify-center rounded-lg border border-black bg-black px-4 py-3 text-sm font-medium text-white shadow-sm transition-all hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:border-white dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 dark:focus:ring-offset-gray-900"
+          >
+            {{ appleReady ? 'Continue with Apple' : 'Apple login unavailable' }}
+          </button>
+          <p v-if="appleError" class="mt-2 text-center text-xs text-red-500 dark:text-red-400">
+            {{ appleError }}
+          </p>
+
           <!-- Toggle between Login/Register -->
           <div class="mt-6 text-center">
             <button
@@ -144,11 +156,30 @@ import { useAuthStore } from '../stores/auth'
 declare global {
   interface Window {
     google?: any
+    AppleID?: AppleIDNamespace
   }
 }
 
 type GoogleTokenClient = {
   requestAccessToken: (options?: { prompt?: string }) => void
+}
+
+type AppleSignInResponse = {
+  authorization?: {
+    id_token?: string
+  }
+}
+
+type AppleIDNamespace = {
+  auth?: {
+    init: (options: {
+      clientId: string
+      scope: string
+      redirectURI: string
+      usePopup: boolean
+    }) => void
+    signIn: () => Promise<AppleSignInResponse>
+  }
 }
 
 const authStore = useAuthStore()
@@ -162,10 +193,16 @@ const message = ref('')
 const messageType = ref<'info' | 'success' | 'error'>('info')
 const googleReady = ref(false)
 const googleError = ref('')
+const appleReady = ref(false)
+const appleError = ref('')
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
+const appleClientId = import.meta.env.VITE_APPLE_SIGN_IN_CLIENT_ID as string | undefined
+const appleRedirectUri = (import.meta.env.VITE_APPLE_REDIRECT_URI as string | undefined)
+  || `${window.location.origin}/auth/callback/apple`
 let tokenClient: GoogleTokenClient | null = null
 let googleScriptPromise: Promise<void> | null = null
+let appleScriptPromise: Promise<void> | null = null
 
 const showMessage = (text: string, type: 'info' | 'success' | 'error' = 'info') => {
   message.value = text
@@ -209,6 +246,37 @@ const loadGoogleScript = (): Promise<void> => {
   })
 
   return googleScriptPromise
+}
+
+const loadAppleScript = (): Promise<void> => {
+  if (window.AppleID?.auth) {
+    return Promise.resolve()
+  }
+
+  if (appleScriptPromise) {
+    return appleScriptPromise
+  }
+
+  appleScriptPromise = new Promise((resolve, reject) => {
+    const existingScript = document.querySelector<HTMLScriptElement>('script[data-apple-identity="true"]')
+
+    if (existingScript) {
+      existingScript.addEventListener('load', () => resolve(), { once: true })
+      existingScript.addEventListener('error', () => reject(new Error('Failed to load Apple Sign in script')), { once: true })
+      return
+    }
+
+    const script = document.createElement('script')
+    script.src = 'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js'
+    script.async = true
+    script.defer = true
+    script.dataset.appleIdentity = 'true'
+    script.onload = () => resolve()
+    script.onerror = () => reject(new Error('Failed to load Apple Sign in script'))
+    document.head.appendChild(script)
+  })
+
+  return appleScriptPromise
 }
 
 const initGoogleClient = async () => {
@@ -258,11 +326,38 @@ const initGoogleClient = async () => {
   }
 }
 
+const initAppleClient = async () => {
+  if (!appleClientId) {
+    appleError.value = 'Apple client ID is not configured.'
+    appleReady.value = false
+    return
+  }
+
+  try {
+    await loadAppleScript()
+
+    window.AppleID?.auth?.init({
+      clientId: appleClientId,
+      scope: 'name email',
+      redirectURI: appleRedirectUri,
+      usePopup: true
+    })
+
+    appleReady.value = true
+    appleError.value = ''
+  } catch (error) {
+    console.error('Failed to initialize Apple login:', error)
+    appleError.value = 'Unable to load Apple login. Please refresh and try again.'
+    appleReady.value = false
+  }
+}
+
 onMounted(() => {
   if (route.query.signup === '1') {
     isSignUp.value = true
   }
   initGoogleClient()
+  initAppleClient()
 })
 
 const handleSubmit = async () => {
@@ -320,6 +415,49 @@ const handleGoogleLogin = async () => {
   } catch (error) {
     console.error('Google login failed to start:', error)
     showMessage('Unable to start Google login. Please try again.', 'error')
+  }
+}
+
+const handleAppleLogin = async () => {
+  if (!appleReady.value || !window.AppleID?.auth) {
+    if (appleError.value) {
+      showMessage(appleError.value, 'error')
+    } else {
+      showMessage('Apple login is not ready yet. Please try again shortly.', 'info')
+    }
+    return
+  }
+
+  try {
+    const appleResponse = await window.AppleID.auth.signIn()
+    const identityToken = appleResponse?.authorization?.id_token
+
+    if (!identityToken) {
+      showMessage('Apple did not return an identity token. Please try again.', 'error')
+      return
+    }
+
+    const result = await authStore.appleLogin(identityToken)
+    if (result.success) {
+      showMessage('Apple login successful! Redirecting...', 'success')
+      const redirect = (route.query.redirect as string) || '/play'
+      setTimeout(() => {
+        router.push(redirect)
+      }, 800)
+    } else {
+      const errorMsg = result.error?.error
+        || result.error?.detail
+        || result.error?.message
+        || 'Apple login failed'
+      showMessage(errorMsg, 'error')
+    }
+  } catch (error: any) {
+    if (error?.error === 'popup_closed_by_user' || error?.error === 'user_cancelled_authorize') {
+      return
+    }
+
+    console.error('Apple login failed to start:', error)
+    showMessage('Unable to complete Apple login. Please try again.', 'error')
   }
 }
 </script>

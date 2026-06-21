@@ -2,10 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>GIDServerClientID</key>
-	<string>291299812498-8j9bm4sqcedrk1hplme8jreosp5ilclg.apps.googleusercontent.com</string>
-	<key>GIDClientID</key>
-	<string>291299812498-b4pjfjce5uoiv4i9p5vpmt629o75qacj.apps.googleusercontent.com</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -25,12 +21,12 @@
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.googleusercontent.apps.291299812498-b4pjfjce5uoiv4i9p5vpmt629o75qacj</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>com.googleusercontent.apps.291299812498-b4pjfjce5uoiv4i9p5vpmt629o75qacj</string>
 			</array>
-			<key>CFBundleURLName</key>
-			<string>com.googleusercontent.apps.291299812498-b4pjfjce5uoiv4i9p5vpmt629o75qacj</string>
 		</dict>
 		<dict>
 			<key>CFBundleURLName</key>
@@ -43,6 +39,10 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>GIDClientID</key>
+	<string>291299812498-b4pjfjce5uoiv4i9p5vpmt629o75qacj.apps.googleusercontent.com</string>
+	<key>GIDServerClientID</key>
+	<string>291299812498-8j9bm4sqcedrk1hplme8jreosp5ilclg.apps.googleusercontent.com</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.games</string>
 	<key>NSAppTransportSecurity</key>
@@ -54,15 +54,15 @@
 	<string>Archetype can connect to a local DrawTwo development backend on your network for testing.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	<key>UIStatusBarHidden</key>
-	<true/>
-	<key>UIViewControllerBasedStatusBarAppearance</key>
-	<false/>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<key>UIStatusBarHidden</key>
+	<true/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<false/>
 </dict>
 </plist>

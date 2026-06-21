@@ -193,6 +193,44 @@ final class AuthStore: ObservableObject {
         }
     }
 
+    func signInWithApple(identityToken: String) async {
+        isLoading = true
+        errorMessage = nil
+        statusMessage = nil
+        defer { isLoading = false }
+
+        do {
+            let response: AuthResponse = try await api.post(
+                "/auth/apple/",
+                body: AppleSignInRequest(identityToken: identityToken)
+            )
+
+            if response.requiresApproval == true {
+                user = response.user
+                isAuthenticated = false
+                statusMessage = response.message
+                    ?? "Apple login succeeded, but your account is pending approval."
+                return
+            }
+
+            guard
+                let access = response.resolvedAccessToken,
+                let refresh = response.resolvedRefreshToken,
+                let user = response.user
+            else {
+                throw APIError.decodingFailed(
+                    "Apple sign-in did not return a complete session."
+                )
+            }
+
+            try storeSession(access: access, refresh: refresh, user: user)
+            statusMessage = response.message
+                ?? "Signed in as \(user.displayName ?? user.email)."
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func authenticatedGet<Response: Decodable>(_ path: String) async throws -> Response {
         do {
             return try await api.get(path, accessToken: accessToken)

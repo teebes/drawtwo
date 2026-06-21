@@ -358,7 +358,7 @@
 				CODE_SIGN_ENTITLEMENTS = Archetype/Archetype.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 4P7Z23L3F7;
+				DEVELOPMENT_TEAM = X84Q7QHUZJ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Archetype/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -366,7 +366,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.drawtwo.archetype.dev;
+				PRODUCT_BUNDLE_IDENTIFIER = com.morelsoft.drawtwo.dev;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -383,7 +383,7 @@
 				CODE_SIGN_ENTITLEMENTS = Archetype/Archetype.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 4P7Z23L3F7;
+				DEVELOPMENT_TEAM = X84Q7QHUZJ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Archetype/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -391,7 +391,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.drawtwo.archetype.dev;
+				PRODUCT_BUNDLE_IDENTIFIER = com.morelsoft.drawtwo.dev;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;

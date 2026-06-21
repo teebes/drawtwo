@@ -187,6 +187,31 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    // Apple Sign in login
+    async appleLogin(identityToken: string): Promise<ApiResponse> {
+      this.loading = true
+      this.error = null
+
+      try {
+        const response = await axios.post('/auth/apple/', { identity_token: identityToken })
+
+        const access = response.data.access_token || response.data.access
+        const refresh = response.data.refresh_token || response.data.refresh
+        const user = response.data.user
+
+        if (access && refresh && user) {
+          this.setAuthData(access, refresh, user)
+        }
+
+        this.loading = false
+        return { success: true, data: response.data }
+      } catch (error: any) {
+        this.loading = false
+        this.error = error.response?.data || { message: 'Apple login failed' }
+        return { success: false, error: this.error }
+      }
+    },
+
     // Logout
     async logout(): Promise<void> {
       this.loading = true

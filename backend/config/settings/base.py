@@ -261,6 +261,13 @@ FRONTEND_EMAIL_CONFIRM_URL = os.environ.get(
 IOS_APP_LOGIN_URL = os.environ.get("IOS_APP_LOGIN_URL", f"{FRONTEND_URL}/app/login")
 IOS_LOGIN_URL_SCHEME = os.environ.get("IOS_LOGIN_URL_SCHEME") or "drawtwo://login"
 
+# Sign in with Apple settings
+APPLE_SIGN_IN_TEAM_ID = os.environ.get("APPLE_SIGN_IN_TEAM_ID")
+APPLE_SIGN_IN_KEY_ID = os.environ.get("APPLE_SIGN_IN_KEY_ID")
+APPLE_SIGN_IN_PRIVATE_KEY_PATH = os.environ.get("APPLE_SIGN_IN_PRIVATE_KEY_PATH")
+APPLE_SIGN_IN_WEB_CLIENT_ID = os.environ.get("APPLE_SIGN_IN_WEB_CLIENT_ID")
+APPLE_SIGN_IN_IOS_CLIENT_ID = os.environ.get("APPLE_SIGN_IN_IOS_CLIENT_ID")
+
 # dj-rest-auth settings
 REST_AUTH = {
     "USE_JWT": True,
