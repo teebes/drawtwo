@@ -1259,10 +1259,19 @@ const toggleMulliganCard = (cardId: string) => {
     mulliganSelectedCardIds.value = [...mulliganSelectedCardIds.value, cardId]
 }
 
-const handleSubmitMulligan = () => {
+const handleSubmitMulligan = async () => {
     if (ownMulliganDone.value || mulliganSubmitting.value) return
+    if (isAutoSwitchingGame.value) return
+
     mulliganSubmitting.value = true
-    gameStore.submitMulligan([...mulliganSelectedCardIds.value])
+    const selectedCardIds = [...mulliganSelectedCardIds.value]
+    const sent = await sendTurnPassingAction(() => {
+        gameStore.submitMulligan(selectedCardIds)
+    })
+
+    if (!sent) {
+        mulliganSubmitting.value = false
+    }
 }
 
 /* Click Handlers - Opening Entity Details or Initiating Actions */
@@ -1561,17 +1570,23 @@ const onTargetSelected = (target: { target_type: 'creature' | 'hero'; target_id:
 const handleEndTurn = async () => {
     if (gameOver.value.isGameOver) return
 
+    await sendTurnPassingAction(() => {
+        gameStore.endTurn()
+    })
+}
+
+const sendTurnPassingAction = async (sendAction: () => void): Promise<boolean> => {
     if (isIntroGame.value) {
         clearAutoSwitch()
         activeGames.value = []
-        gameStore.endTurn()
-        return
+        sendAction()
+        return true
     }
 
-    if (isAutoSwitchingGame.value) return
+    if (isAutoSwitchingGame.value) return false
 
     autoSwitchLookupInFlight.value = true
-    gameStore.endTurn()
+    sendAction()
 
     const games = await fetchActiveGames()
     const availableNextGame = getNextGame(games)
@@ -1580,6 +1595,8 @@ const handleEndTurn = async () => {
     } else {
         autoSwitchLookupInFlight.value = false
     }
+
+    return true
 }
 
 const handleMenuClick = () => {

@@ -572,6 +572,15 @@ final class GameDetailViewModel: ObservableObject {
         activeGames.first { $0.isUserTurn && $0.id != currentGameId }
     }
 
+    func resetForGameLoad() {
+        gameJSON = nil
+        updates = []
+        errorMessage = nil
+        statusMessage = nil
+        isLoading = false
+        isRematchLoading = false
+    }
+
     func load(gameId: Int, using authStore: AuthStore, guestAccessToken: String? = nil) async {
         isLoading = true
         errorMessage = nil
@@ -1425,23 +1434,9 @@ struct GameDetailView: View {
         } message: {
             Text("This will end the game as a loss.")
         }
-        .task {
-            socket.onTextMessage = { text in
-                model.applySocketText(text)
-            }
-            await model.load(gameId: gameId, using: authStore, guestAccessToken: guestAccessToken)
-            await model.loadActiveGames(using: authStore, guestAccessToken: guestAccessToken)
-            await model.fetchEloChangeIfNeeded(
-                gameId: gameId,
-                using: authStore,
-                guestAccessToken: guestAccessToken
-            )
-            connectSocketIfPossible()
-            #if DEBUG
-            applyInitialGameCommandIfNeeded()
-            applyInitialGameOverlayIfNeeded()
-            #endif
-            recordCaptureState()
+        .task(id: gameLoadKey) {
+            prepareForGameLoad()
+            await refreshCurrentGame()
         }
         .onDisappear {
             autoSwitchTask?.cancel()
@@ -1453,19 +1448,7 @@ struct GameDetailView: View {
                 return
             }
             Task {
-                await model.load(gameId: gameId, using: authStore, guestAccessToken: guestAccessToken)
-                await model.loadActiveGames(using: authStore, guestAccessToken: guestAccessToken)
-                await model.fetchEloChangeIfNeeded(
-                    gameId: gameId,
-                    using: authStore,
-                    guestAccessToken: guestAccessToken
-                )
-                connectSocketIfPossible()
-                #if DEBUG
-                applyInitialGameCommandIfNeeded()
-                applyInitialGameOverlayIfNeeded()
-                #endif
-                recordCaptureState()
+                await refreshCurrentGame()
             }
         }
         .onChange(of: model.phase) { _, phase in
@@ -1557,6 +1540,10 @@ struct GameDetailView: View {
         guestAccessToken != nil || model.gameType == "intro"
     }
 
+    private var gameLoadKey: String {
+        "\(gameId):\(guestAccessToken ?? "")"
+    }
+
     private var gameOverTitle: String {
         if isIntroGuestGame, model.winner == model.viewerSide {
             return "Intro Complete!"
@@ -1586,6 +1573,42 @@ struct GameDetailView: View {
                     .clipShape(RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius))
             }
         }
+    }
+
+    private func prepareForGameLoad() {
+        autoSwitchTask?.cancel()
+        autoSwitchTask = nil
+        autoSwitchTarget = nil
+        isAutoSwitchingGame = false
+        overlay = nil
+        selectedMulliganCardIds = []
+        showConcedeConfirmation = false
+        showGameOverOverlay = true
+        model.resetForGameLoad()
+        socket.disconnect()
+        socket.onTextMessage = { text in
+            model.applySocketText(text)
+        }
+        #if DEBUG
+        didApplyInitialGameCommand = false
+        didApplyInitialGameOverlay = false
+        #endif
+    }
+
+    private func refreshCurrentGame() async {
+        await model.load(gameId: gameId, using: authStore, guestAccessToken: guestAccessToken)
+        await model.loadActiveGames(using: authStore, guestAccessToken: guestAccessToken)
+        await model.fetchEloChangeIfNeeded(
+            gameId: gameId,
+            using: authStore,
+            guestAccessToken: guestAccessToken
+        )
+        connectSocketIfPossible()
+        #if DEBUG
+        applyInitialGameCommandIfNeeded()
+        applyInitialGameOverlayIfNeeded()
+        #endif
+        recordCaptureState()
     }
 
     private func connectSocketIfPossible() {
@@ -1913,12 +1936,15 @@ struct GameDetailView: View {
     }
 
     private func sendEndTurn() {
+        sendTurnPassingCommand(["type": "cmd_end_turn"])
+    }
+
+    private func sendTurnPassingCommand(_ command: [String: Any]) {
         guard !isAutoSwitchingGame else {
             return
         }
 
-        socket.send(json: ["type": "cmd_end_turn"])
-
+        socket.send(json: command)
         guard guestAccessToken == nil else {
             return
         }
@@ -1956,6 +1982,8 @@ struct GameDetailView: View {
             }
 
             socket.disconnect()
+            isAutoSwitchingGame = false
+            autoSwitchTarget = nil
             onOpenGame(nextGame.id)
         }
     }
@@ -2038,11 +2066,16 @@ struct GameDetailView: View {
     }
 
     private func submitMulligan() {
-        socket.send(json: [
-            "type": "cmd_mulligan",
-            "card_ids": Array(selectedMulliganCardIds).sorted(),
-        ])
+        guard !isAutoSwitchingGame else {
+            return
+        }
+
+        let cardIds = Array(selectedMulliganCardIds).sorted()
         selectedMulliganCardIds = []
+        sendTurnPassingCommand([
+            "type": "cmd_mulligan",
+            "card_ids": cardIds,
+        ])
     }
 
     #if DEBUG
