@@ -4,27 +4,30 @@ from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 from dj_rest_auth.registration.views import SocialLoginView
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from rest_framework.exceptions import PermissionDenied
 from django.core.mail import send_mail
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 from rest_framework import permissions, status
 from rest_framework.decorators import (
     api_view,
-    permission_classes,
     authentication_classes,
+    permission_classes,
 )
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .serializers import (
     EmailVerificationSerializer,
+    FriendRequestSerializer,
+    FriendshipSerializer,
+    GoogleNativeLoginSerializer,
+    LeaderboardUserSerializer,
     PasswordlessLoginSerializer,
     UserSerializer,
-    FriendshipSerializer,
-    FriendRequestSerializer,
-    LeaderboardUserSerializer,
 )
 
 User = get_user_model()
@@ -134,6 +137,111 @@ class GoogleLogin(SocialLoginView):
                         user_data["is_email_verified"] = True
 
         return response
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class GoogleNativeLoginView(APIView):
+    """Exchange a native Google Sign-In ID token for DrawTwo JWTs."""
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        serializer = GoogleNativeLoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        audience = settings.GOOGLE_OAUTH2_CLIENT_ID
+        if not audience:
+            return Response(
+                {"error": "Google login is not configured."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        try:
+            token_info = google_id_token.verify_oauth2_token(
+                serializer.validated_data["id_token"],
+                google_requests.Request(),
+                audience,
+            )
+        except ValueError:
+            return Response(
+                {"error": "Invalid Google login token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        email = token_info.get("email")
+        email_verified = token_info.get("email_verified")
+        if not email or email_verified is not True:
+            return Response(
+                {"error": "Google did not return a verified email address."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from apps.control.models import SiteSettings
+
+        site_settings = SiteSettings.get_cached_settings()
+        user = User.objects.filter(email__iexact=email).first()
+
+        if not user:
+            if site_settings.signup_disabled:
+                return Response(
+                    {
+                        "error": (
+                            "User registration is currently disabled. "
+                            "Please contact an administrator."
+                        ),
+                        "signup_disabled": True,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            user = User.objects.create_user(
+                email=email,
+                avatar=token_info.get("picture") or None,
+            )
+        elif token_info.get("picture") and user.avatar != token_info["picture"]:
+            user.avatar = token_info["picture"]
+
+        if not user.is_email_verified:
+            user.is_email_verified = True
+
+        update_fields = ["is_email_verified"]
+        if token_info.get("picture"):
+            update_fields.append("avatar")
+        user.save(update_fields=list(dict.fromkeys(update_fields)))
+
+        EmailAddress.objects.update_or_create(
+            user=user,
+            email=user.email,
+            defaults={"verified": True, "primary": True},
+        )
+
+        if site_settings.whitelist_mode_enabled and not user.can_login():
+            return Response(
+                {
+                    "message": (
+                        "Google login succeeded, but your account is pending "
+                        "approval."
+                    ),
+                    "user": UserSerializer(user).data,
+                    "requires_approval": True,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        refresh = RefreshToken.for_user(user)
+        return Response(
+            {
+                "message": "Google login successful.",
+                "user": UserSerializer(user).data,
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -308,8 +416,9 @@ def protected_test_view(request):
 @csrf_exempt
 def register_view(request):
     """Register a new user and send email verification."""
-    from .serializers import CustomRegisterSerializer
     from apps.control.models import SiteSettings
+
+    from .serializers import CustomRegisterSerializer
 
     # Check if signup is disabled
     site_settings = SiteSettings.get_cached_settings()
@@ -372,8 +481,9 @@ class FriendshipListView(APIView):
 
     def post(self, request):
         """Create a new friend request."""
-        from .models import Friendship
         from django.db import transaction
+
+        from .models import Friendship
 
         serializer = FriendRequestSerializer(
             data=request.data, context={"request": request}
@@ -416,8 +526,9 @@ class FriendshipDetailView(APIView):
 
     def patch(self, request, pk):
         """Accept or decline a friend request."""
-        from .models import Friendship
         from django.db import transaction
+
+        from .models import Friendship
 
         try:
             # Get the friendship where the current user is the recipient
@@ -470,8 +581,9 @@ class FriendshipDetailView(APIView):
 
     def delete(self, request, pk):
         """Remove a friend."""
-        from .models import Friendship
         from django.db import transaction
+
+        from .models import Friendship
 
         try:
             friendship = Friendship.objects.get(pk=pk, user=request.user)
@@ -506,8 +618,9 @@ class LeaderboardView(APIView):
             title_slug: The slug of the title to get leaderboard for
         """
         from django.db.models import Count, F, Q
+
         from apps.builder.models import Title
-        from apps.gameplay.models import UserTitleRating, Game
+        from apps.gameplay.models import Game, UserTitleRating
 
         # Get the title
         try:
@@ -590,9 +703,10 @@ class UserTitleRatingView(APIView):
 
     def get(self, request, title_slug):
         """Get the authenticated user's rating for a specific title."""
-        from apps.builder.models import Title
-        from apps.gameplay.models import UserTitleRating, Game
         from django.db.models import Count, Q
+
+        from apps.builder.models import Title
+        from apps.gameplay.models import Game, UserTitleRating
 
         try:
             title = Title.objects.get(slug=title_slug)

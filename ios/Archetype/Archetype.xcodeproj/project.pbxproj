@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		67E57F492FE741E0006617B0 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 67E57F482FE741E0006617B0 /* GoogleSignIn */; };
 		8A0000012C9B410100000001 /* ArchetypeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0000022C9B410100000001 /* ArchetypeApp.swift */; };
 		8A0000032C9B410100000001 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0000042C9B410100000001 /* AppConfig.swift */; };
 		8A0000052C9B410100000001 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0000062C9B410100000001 /* Models.swift */; };
@@ -50,6 +51,7 @@
 		8A00001A2C9B410100000001 /* CollectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionView.swift; sourceTree = "<group>"; };
 		8A00001C2C9B410100000001 /* GamesHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamesHistoryView.swift; sourceTree = "<group>"; };
 		8A00001E2C9B410100000001 /* LeaderboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaderboardView.swift; sourceTree = "<group>"; };
+		8A0000202C9B410100000001 /* Archetype.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Archetype.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8A0000302C9B410100000001 /* DeckDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeckDetailView.swift; sourceTree = "<group>"; };
 		8A0000342C9B410100000001 /* FriendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsView.swift; sourceTree = "<group>"; };
 		8A0000362C9B410100000001 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
@@ -58,11 +60,10 @@
 		8A00003C2C9B410100000001 /* FontRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontRegistry.swift; sourceTree = "<group>"; };
 		8A00003E2C9B410100000001 /* Cinzel.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Cinzel.ttf; sourceTree = "<group>"; };
 		8A0000402C9B410100000001 /* Inter.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Inter.ttf; sourceTree = "<group>"; };
+		8A0000422C9B410100000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		8A0000442C9B410100000001 /* drawtwo_logo.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = drawtwo_logo.png; sourceTree = "<group>"; };
 		8A0000462C9B410100000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		8A0000472C9B410100000001 /* Archetype.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Archetype.entitlements; sourceTree = "<group>"; };
-		8A0000422C9B410100000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		8A0000202C9B410100000001 /* Archetype.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Archetype.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -70,6 +71,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				67E57F492FE741E0006617B0 /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -117,6 +119,14 @@
 			path = Archetype;
 			sourceTree = "<group>";
 		};
+		8A0000242C9B410100000001 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				8A0000202C9B410100000001 /* Archetype.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
 		8A0000412C9B410100000001 /* Fonts */ = {
 			isa = PBXGroup;
 			children = (
@@ -124,14 +134,6 @@
 				8A0000402C9B410100000001 /* Inter.ttf */,
 			);
 			path = Fonts;
-			sourceTree = "<group>";
-		};
-		8A0000242C9B410100000001 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				8A0000202C9B410100000001 /* Archetype.app */,
-			);
-			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -178,6 +180,9 @@
 				Base,
 			);
 			mainGroup = 8A0000222C9B410100000001;
+			packageReferences = (
+				67E57F472FE741E0006617B0 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+			);
 			productRefGroup = 8A0000242C9B410100000001 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -418,6 +423,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		67E57F472FE741E0006617B0 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.2.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		67E57F482FE741E0006617B0 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 67E57F472FE741E0006617B0 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 8A0000292C9B410100000001 /* Project object */;
 }

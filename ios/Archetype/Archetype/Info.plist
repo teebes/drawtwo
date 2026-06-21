@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>GIDServerClientID</key>
+	<string>291299812498-8j9bm4sqcedrk1hplme8jreosp5ilclg.apps.googleusercontent.com</string>
+	<key>GIDClientID</key>
+	<string>291299812498-b4pjfjce5uoiv4i9p5vpmt629o75qacj.apps.googleusercontent.com</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -20,6 +24,14 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleURLTypes</key>
 	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.291299812498-b4pjfjce5uoiv4i9p5vpmt629o75qacj</string>
+			</array>
+			<key>CFBundleURLName</key>
+			<string>com.googleusercontent.apps.291299812498-b4pjfjce5uoiv4i9p5vpmt629o75qacj</string>
+		</dict>
 		<dict>
 			<key>CFBundleURLName</key>
 			<string>com.drawtwo.archetype.login</string>

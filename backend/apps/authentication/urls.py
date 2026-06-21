@@ -45,6 +45,11 @@ urlpatterns = [
     path("profile/", views.UserProfileView.as_view(), name="user_profile"),
     path("test/", views.protected_test_view, name="protected_test"),
     # Social authentication
+    path(
+        "google/native/",
+        views.GoogleNativeLoginView.as_view(),
+        name="google_native_login",
+    ),
     path("google/", views.GoogleLogin.as_view(), name="google_login"),
     # Friend system
     path("friends/", views.FriendshipListView.as_view(), name="friends_list"),

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum LoginInitialMode {
     case login
@@ -186,7 +187,7 @@ struct LoginView: View {
             LoginDivider(text: "or")
 
             Button {
-                showGoogleUnavailableMessage()
+                startGoogleSignIn()
             } label: {
                 GoogleLoginLabel()
             }
@@ -328,9 +329,47 @@ struct LoginView: View {
         }
     }
 
-    private func showGoogleUnavailableMessage() {
-        authStore.statusMessage = nil
-        authStore.errorMessage = "Google sign-in is not available in the native app yet."
+    private func startGoogleSignIn() {
+        guard let viewController = UIApplication.shared.archetypeTopViewController else {
+            authStore.statusMessage = nil
+            authStore.errorMessage = "Google sign-in could not open."
+            return
+        }
+
+        Task {
+            await authStore.signInWithGoogle(presenting: viewController)
+        }
+    }
+}
+
+private extension UIApplication {
+    var archetypeTopViewController: UIViewController? {
+        connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .rootViewController?
+            .archetypeTopPresentedViewController
+    }
+}
+
+private extension UIViewController {
+    var archetypeTopPresentedViewController: UIViewController {
+        if let navigationController = self as? UINavigationController {
+            return navigationController.visibleViewController?
+                .archetypeTopPresentedViewController ?? navigationController
+        }
+
+        if let tabBarController = self as? UITabBarController {
+            return tabBarController.selectedViewController?
+                .archetypeTopPresentedViewController ?? tabBarController
+        }
+
+        if let presentedViewController {
+            return presentedViewController.archetypeTopPresentedViewController
+        }
+
+        return self
     }
 }
 

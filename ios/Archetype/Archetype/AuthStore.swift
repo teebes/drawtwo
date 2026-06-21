@@ -1,4 +1,6 @@
 import Foundation
+import GoogleSignIn
+import UIKit
 
 @MainActor
 final class AuthStore: ObservableObject {
@@ -146,6 +148,49 @@ final class AuthStore: ObservableObject {
         }
 
         await confirmEmail(key: key)
+    }
+
+    func signInWithGoogle(presenting viewController: UIViewController) async {
+        isLoading = true
+        errorMessage = nil
+        statusMessage = nil
+        defer { isLoading = false }
+
+        do {
+            let idToken = try await requestGoogleIDToken(presenting: viewController)
+            let response: AuthResponse = try await api.post(
+                "/auth/google/native/",
+                body: GoogleNativeSignInRequest(idToken: idToken)
+            )
+
+            if response.requiresApproval == true {
+                user = response.user
+                isAuthenticated = false
+                statusMessage = response.message
+                    ?? "Google login succeeded, but your account is pending approval."
+                return
+            }
+
+            guard
+                let access = response.resolvedAccessToken,
+                let refresh = response.resolvedRefreshToken,
+                let user = response.user
+            else {
+                throw APIError.decodingFailed(
+                    "Google sign-in did not return a complete session."
+                )
+            }
+
+            try storeSession(access: access, refresh: refresh, user: user)
+            statusMessage = response.message
+                ?? "Signed in as \(user.displayName ?? user.email)."
+        } catch {
+            if Self.isGoogleSignInCancellation(error) {
+                return
+            }
+
+            errorMessage = error.localizedDescription
+        }
     }
 
     func authenticatedGet<Response: Decodable>(_ path: String) async throws -> Response {
@@ -327,9 +372,37 @@ final class AuthStore: ObservableObject {
             }
         }
 
+        GIDSignIn.sharedInstance.signOut()
         clearSession()
         statusMessage = "Signed out."
         isLoading = false
+    }
+
+    private func requestGoogleIDToken(presenting viewController: UIViewController) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            GIDSignIn.sharedInstance.signIn(withPresenting: viewController) { result, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                guard let idToken = result?.user.idToken?.tokenString else {
+                    continuation.resume(
+                        throwing: APIError.decodingFailed(
+                            "Google sign-in did not return an ID token."
+                        )
+                    )
+                    return
+                }
+
+                continuation.resume(returning: idToken)
+            }
+        }
+    }
+
+    private static func isGoogleSignInCancellation(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        return nsError.domain == kGIDSignInErrorDomain && nsError.code == -5
     }
 
     private func runLoading(_ operation: () async throws -> Void) async {

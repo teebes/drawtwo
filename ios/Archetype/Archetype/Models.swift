@@ -14,11 +14,13 @@ struct User: Codable, Identifiable, Equatable {
 }
 
 struct AuthResponse: Decodable {
+    let message: String?
     let access: String?
     let refresh: String?
     let accessToken: String?
     let refreshToken: String?
     let user: User?
+    let requiresApproval: Bool?
 
     var resolvedAccessToken: String? {
         access ?? accessToken
@@ -54,6 +56,14 @@ struct PasswordSignInRequest: Encodable {
 
 struct EmailConfirmationRequest: Encodable {
     let key: String
+}
+
+struct GoogleNativeSignInRequest: Encodable {
+    let idToken: String
+
+    enum CodingKeys: String, CodingKey {
+        case idToken = "id_token"
+    }
 }
 
 struct LoginLinkResponse: Decodable {

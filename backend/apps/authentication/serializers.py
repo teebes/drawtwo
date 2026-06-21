@@ -4,6 +4,7 @@ from allauth.account.utils import setup_user_email
 from dj_rest_auth.registration.serializers import RegisterSerializer
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
+
 from .models import Friendship
 
 User = get_user_model()
@@ -127,6 +128,12 @@ class SocialLoginSerializer(serializers.Serializer):
     """
 
     access_token = serializers.CharField(required=True)
+
+
+class GoogleNativeLoginSerializer(serializers.Serializer):
+    """Serializer for native Google Sign-In ID tokens."""
+
+    id_token = serializers.CharField(required=True)
 
 
 class FriendUserSerializer(serializers.ModelSerializer):

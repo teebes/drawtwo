@@ -15,10 +15,13 @@ from unittest.mock import patch
 
 from allauth.account.models import EmailAddress, EmailConfirmation
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
+
+from apps.control.models import SiteSettings
 
 User = get_user_model()
 
@@ -85,10 +88,16 @@ class AuthenticationAPITestCase(APITestCase):
 
     def setUp(self):
         """Set up test data."""
+        cache.clear()
         self.register_url = reverse("authentication:register")
         self.passwordless_login_url = reverse("authentication:passwordless_login")
         self.email_confirm_url = reverse("authentication:email_confirm")
+        self.google_native_login_url = reverse("authentication:google_native_login")
         self.protected_test_url = reverse("authentication:protected_test")
+
+    def tearDown(self):
+        cache.clear()
+        super().tearDown()
 
     def test_register_with_email_only(self):
         """Test user registration with just email (minimal friction)."""
@@ -276,6 +285,81 @@ class AuthenticationAPITestCase(APITestCase):
         self.assertIn(f"drawtwo://login/{confirmation.key}", message)
         self.assertIn(confirmation.key, message)
         self.assertNotIn("/auth/email-confirm/", message)
+
+    @override_settings(
+        GOOGLE_OAUTH2_CLIENT_ID="server-client-id.apps.googleusercontent.com"
+    )
+    @patch("apps.authentication.views.google_id_token.verify_oauth2_token")
+    def test_google_native_login_creates_verified_user(self, mock_verify_token):
+        """Native Google login creates a verified user and returns JWTs."""
+        mock_verify_token.return_value = {
+            "email": "native-google@example.com",
+            "email_verified": True,
+            "picture": "https://example.com/avatar.png",
+        }
+
+        response = self.client.post(
+            self.google_native_login_url,
+            {"id_token": "valid-google-id-token"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+        self.assertEqual(response.data["user"]["email"], "native-google@example.com")
+
+        user = User.objects.get(email="native-google@example.com")
+        self.assertTrue(user.is_email_verified)
+        self.assertEqual(user.avatar, "https://example.com/avatar.png")
+
+        email_address = EmailAddress.objects.get(email="native-google@example.com")
+        self.assertTrue(email_address.verified)
+        self.assertTrue(email_address.primary)
+        mock_verify_token.assert_called_once()
+
+    @override_settings(
+        GOOGLE_OAUTH2_CLIENT_ID="server-client-id.apps.googleusercontent.com"
+    )
+    @patch("apps.authentication.views.google_id_token.verify_oauth2_token")
+    def test_google_native_login_rejects_invalid_token(self, mock_verify_token):
+        """Native Google login rejects tokens that fail Google verification."""
+        mock_verify_token.side_effect = ValueError("bad token")
+
+        response = self.client.post(
+            self.google_native_login_url,
+            {"id_token": "invalid-google-id-token"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", response.data)
+
+    @override_settings(
+        GOOGLE_OAUTH2_CLIENT_ID="server-client-id.apps.googleusercontent.com"
+    )
+    @patch("apps.authentication.views.google_id_token.verify_oauth2_token")
+    def test_google_native_login_respects_disabled_signups(self, mock_verify_token):
+        """Native Google login cannot create new users when signup is disabled."""
+        site_settings = SiteSettings.get_settings()
+        site_settings.signup_disabled = True
+        site_settings.save()
+
+        mock_verify_token.return_value = {
+            "email": "blocked-google@example.com",
+            "email_verified": True,
+        }
+
+        response = self.client.post(
+            self.google_native_login_url,
+            {"id_token": "valid-google-id-token"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(
+            User.objects.filter(email="blocked-google@example.com").exists()
+        )
 
     def test_email_confirmation_invalid_key(self):
         """Test email confirmation with invalid key."""

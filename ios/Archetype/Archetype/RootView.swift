@@ -26,13 +26,14 @@ struct RootView: View {
 }
 
 private enum GuestRoute: Hashable {
-    case login(signUp: Bool)
     case introGame(id: Int, accessToken: String)
 }
 
 private struct IntroLandingView: View {
     @State private var path: [GuestRoute] = []
     @State private var isStartingIntro = false
+    @State private var isShowingLogin = false
+    @State private var loginMode: LoginInitialMode = .login
     @State private var errorMessage: String?
 
     var body: some View {
@@ -92,11 +93,6 @@ private struct IntroLandingView: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: GuestRoute.self) { route in
                 switch route {
-                case .login(let signUp):
-                    LoginView(
-                        initialMode: signUp ? .signup : .login,
-                        onClose: popRoute
-                    )
                 case .introGame(let id, let accessToken):
                     GameDetailView(
                         gameId: id,
@@ -109,6 +105,11 @@ private struct IntroLandingView: View {
             .onAppear {
                 CaptureStateRecorder.record("intro-landing")
             }
+            .fullScreenCover(isPresented: $isShowingLogin) {
+                LoginView(initialMode: loginMode) {
+                    isShowingLogin = false
+                }
+            }
         }
     }
 
@@ -120,7 +121,7 @@ private struct IntroLandingView: View {
             Spacer()
 
             Button {
-                path.append(.login(signUp: false))
+                showLogin(.login)
             } label: {
                 Text("Login / Sign Up")
                     .font(.archetypeBody(14, weight: .semibold))
@@ -157,13 +158,6 @@ private struct IntroLandingView: View {
         }
     }
 
-    private func popRoute() {
-        guard !path.isEmpty else {
-            return
-        }
-        path.removeLast()
-    }
-
     private func replaceIntroGame(id: Int, accessToken: String) {
         if !path.isEmpty {
             path.removeLast()
@@ -172,7 +166,12 @@ private struct IntroLandingView: View {
     }
 
     private func openSignUpFromIntro() {
-        path = [.login(signUp: true)]
+        showLogin(.signup)
+    }
+
+    private func showLogin(_ mode: LoginInitialMode) {
+        loginMode = mode
+        isShowingLogin = true
     }
 }
 
