@@ -412,6 +412,8 @@ enum GameOverlay: Identifiable {
 final class GameDetailViewModel: ObservableObject {
     @Published var gameJSON: JSONValue?
     @Published var updates: [GameUpdateSnapshot] = []
+    @Published private(set) var liveUpdateBatch: [GameUpdateSnapshot] = []
+    @Published private(set) var liveUpdateBatchId = 0
     @Published var isLoading = false
     @Published var isRematchLoading = false
     @Published var errorMessage: String?
@@ -419,6 +421,7 @@ final class GameDetailViewModel: ObservableObject {
     @Published var activeGames: [GameSummary] = []
 
     private let api = APIClient.shared
+    private var hasReceivedInitialSocketSnapshot = false
 
     private static let displayUpdateTypes: Set<String> = [
         "update_draw_card",
@@ -575,6 +578,9 @@ final class GameDetailViewModel: ObservableObject {
     func resetForGameLoad() {
         gameJSON = nil
         updates = []
+        liveUpdateBatch = []
+        liveUpdateBatchId = 0
+        hasReceivedInitialSocketSnapshot = false
         errorMessage = nil
         statusMessage = nil
         isLoading = false
@@ -677,12 +683,15 @@ final class GameDetailViewModel: ObservableObject {
 
         do {
             let payload = try JSONDecoder().decode(JSONValue.self, from: data)
+            let shouldPublishLiveBatch = hasReceivedInitialSocketSnapshot
+            hasReceivedInitialSocketSnapshot = true
+
             guard
                 let state = payload["state"],
                 state.objectValue != nil
             else {
                 appendErrors(from: payload)
-                appendUpdates(from: payload)
+                appendUpdates(from: payload, publishLiveBatch: shouldPublishLiveBatch)
                 return
             }
             if var stateObject = state.objectValue {
@@ -695,7 +704,7 @@ final class GameDetailViewModel: ObservableObject {
                 prefetchArt(in: mergedState)
             }
             appendErrors(from: payload)
-            appendUpdates(from: payload)
+            appendUpdates(from: payload, publishLiveBatch: shouldPublishLiveBatch)
         } catch {
             errorMessage = "Could not parse live game update: \(error.localizedDescription)"
         }
@@ -1302,12 +1311,13 @@ final class GameDetailViewModel: ObservableObject {
         )
     }
 
-    private func appendUpdates(from payload: JSONValue) {
+    private func appendUpdates(from payload: JSONValue, publishLiveBatch: Bool = false) {
         guard let rawUpdates = payload["updates"]?.arrayValue else {
             return
         }
 
         var nextUpdates = updates
+        var newUpdates: [GameUpdateSnapshot] = []
         for update in rawUpdates {
             let snapshot = GameUpdateSnapshot(
                 id: updateId(update),
@@ -1317,12 +1327,19 @@ final class GameDetailViewModel: ObservableObject {
                 continue
             }
             nextUpdates.append(snapshot)
+            newUpdates.append(snapshot)
         }
 
         if nextUpdates.count > 160 {
             nextUpdates = Array(nextUpdates.suffix(160))
         }
         updates = nextUpdates
+
+        guard publishLiveBatch, !newUpdates.isEmpty else {
+            return
+        }
+        liveUpdateBatch = newUpdates
+        liveUpdateBatchId += 1
     }
 
     private func appendErrors(from payload: JSONValue) {
@@ -2513,11 +2530,8 @@ private struct NativeBoardSurface: View {
                 .fill(ArchetypeTheme.border)
                 .frame(width: 1)
         }
-        .onReceive(model.$updates) { _ in
-            triggerTransientCombatIfNeeded()
-        }
-        .task(id: model.displayUpdates.last?.id) {
-            triggerTransientCombatIfNeeded()
+        .onChange(of: model.liveUpdateBatchId) { _, _ in
+            triggerTransientCombatIfNeeded(from: model.liveUpdateBatch)
         }
     }
 
@@ -2575,8 +2589,8 @@ private struct NativeBoardSurface: View {
         }
     }
 
-    private func triggerTransientCombatIfNeeded() {
-        guard let update = model.displayUpdates.last, canAnimate(update) else {
+    private func triggerTransientCombatIfNeeded(from updates: [GameUpdateSnapshot]) {
+        guard let update = updates.last(where: canAnimate) else {
             return
         }
         guard transientUpdateId != update.id else {
