@@ -1291,7 +1291,8 @@ const handleClickHandCard = (card_id: string) => {
             scope: getSpellTargetScope(card),
             sourceCard: card,
             errorMessage: null,
-            title: 'Cast Spell'
+            title: 'Cast Spell',
+            bypassTaunt: true
         }
         overlay.value = 'select_target'
         overlayTitle.value = 'Select Target'
@@ -1419,7 +1420,8 @@ const handleCastSpell = (card_id: string) => {
             scope: getSpellTargetScope(card),
             sourceCard: card,
             errorMessage: null,
-            title: 'Cast Spell'
+            title: 'Cast Spell',
+            bypassTaunt: true
         }
         overlay.value = 'select_target'
         overlayTitle.value = 'Select Target'

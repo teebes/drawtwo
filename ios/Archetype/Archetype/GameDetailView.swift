@@ -839,7 +839,16 @@ final class GameDetailViewModel: ObservableObject {
     }
 
     func targetRules(for card: BoardCardSnapshot, battlecryOnly: Bool = false) -> TargetRules {
-        Self.targetRules(from: card.traits, battlecryOnly: battlecryOnly)
+        let rules = Self.targetRules(from: card.traits, battlecryOnly: battlecryOnly)
+        if card.isSpell && !battlecryOnly {
+            return TargetRules(
+                requiresTarget: rules.requiresTarget,
+                allowed: rules.allowed,
+                scope: rules.scope,
+                bypassTaunt: true
+            )
+        }
+        return rules
     }
 
     func heroTargetRules(for side: String) -> TargetRules {
