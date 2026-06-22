@@ -33,6 +33,15 @@ final class DashboardViewModel: ObservableObject {
 
     private var lastUsedFriendId: Int?
 
+    private static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError {
+            return true
+        }
+
+        let nsError = error as NSError
+        return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled
+    }
+
     var selectedDeck: Deck? {
         decks.first { $0.id == selectedDeckId }
     }
@@ -82,10 +91,21 @@ final class DashboardViewModel: ObservableObject {
                 selectedOpponentId = self.pveOpponents.first?.id
             }
         } catch {
+            isLoading = false
+
+            if Self.isCancellation(error) || Task.isCancelled {
+                return
+            }
+
             errorMessage = error.localizedDescription
         }
 
         isLoading = false
+
+        guard !Task.isCancelled else {
+            return
+        }
+
         await loadLeaderboard(using: authStore)
         await loadRankedQueueStatuses(using: authStore)
         await loadNotifications(using: authStore)
@@ -112,6 +132,10 @@ final class DashboardViewModel: ObservableObject {
                 } ?? friends.first?.friendData.id
             }
         } catch {
+            if Self.isCancellation(error) || Task.isCancelled {
+                return
+            }
+
             friendsErrorMessage = error.localizedDescription
             friends = []
             selectedFriendId = nil
@@ -127,6 +151,10 @@ final class DashboardViewModel: ObservableObject {
             )
             pendingOutgoingChallenges = response.outgoing
         } catch {
+            if Self.isCancellation(error) || Task.isCancelled {
+                return
+            }
+
             challengeErrorMessage = error.localizedDescription
             pendingOutgoingChallenges = []
         }
@@ -141,6 +169,10 @@ final class DashboardViewModel: ObservableObject {
             )
             notifications = response
         } catch {
+            if Self.isCancellation(error) || Task.isCancelled {
+                return
+            }
+
             notificationErrorMessage = error.localizedDescription
             notifications = []
         }
@@ -160,6 +192,11 @@ final class DashboardViewModel: ObservableObject {
             )
             topPlayers = players
         } catch {
+            if Self.isCancellation(error) || Task.isCancelled {
+                isLeaderboardLoading = false
+                return
+            }
+
             leaderboardErrorMessage = error.localizedDescription
             topPlayers = []
         }
@@ -183,6 +220,11 @@ final class DashboardViewModel: ObservableObject {
             rapidQueueEntry = try await rankedQueueEntry(.rapid, using: authStore)
             dailyQueueEntry = try await rankedQueueEntry(.daily, using: authStore)
         } catch {
+            if Self.isCancellation(error) || Task.isCancelled {
+                isRankedQueueLoading = false
+                return
+            }
+
             rankedQueueErrorMessage = error.localizedDescription
         }
 
