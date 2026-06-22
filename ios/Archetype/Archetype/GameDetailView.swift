@@ -2982,9 +2982,9 @@ private struct LatestUpdateChip: View {
                 UpdateCardThumb(card: card, borderColor: borderColor)
             }
             .frame(maxWidth: .infinity)
-        } else if actorHero != nil {
+        } else if let actorHero {
             HStack(spacing: 12) {
-                UpdateHiddenCardThumb(borderColor: borderColor)
+                UpdateHeroThumb(hero: actorHero, borderColor: borderColor)
 
                 Text("Draws a card")
                     .font(.archetypeBody(16, weight: .medium))
@@ -4858,21 +4858,6 @@ private struct UpdateHeroThumb: View {
 
     private var fallback: some View {
         RemoteImagePlaceholder()
-    }
-}
-
-private struct UpdateHiddenCardThumb: View {
-    let borderColor: Color
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 10)
-            .fill(Color(hex: 0xD1D5DB))
-            .frame(width: 40, height: 56)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(borderColor, lineWidth: 2)
-            )
-            .accessibilityLabel("Hidden card")
     }
 }
 
