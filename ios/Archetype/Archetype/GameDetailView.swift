@@ -2486,6 +2486,7 @@ private struct NativeBoardSurface: View {
             PlayerFooter(
                 snapshot: player,
                 isActive: model.activeSide == player.side,
+                isHeroDimmed: model.heroPowerUnavailableReason(for: player.side) != nil,
                 combatRole: combatMarker?.role(forHeroId: player.heroId),
                 handCards: model.handCards(for: player.side),
                 isPlayable: model.isHandCardPlayable,
@@ -2830,6 +2831,7 @@ private struct BoardSideHeader: View {
 private struct PlayerFooter: View {
     let snapshot: GameSideSnapshot
     let isActive: Bool
+    let isHeroDimmed: Bool
     let combatRole: BoardCombatRole?
     let handCards: [BoardCardSnapshot]
     let isPlayable: (BoardCardSnapshot) -> Bool
@@ -2839,7 +2841,12 @@ private struct PlayerFooter: View {
     var body: some View {
         HStack(spacing: 0) {
             Button(action: onHeroTap) {
-                HeroTile(snapshot: snapshot, isActive: isActive, combatRole: combatRole)
+                HeroTile(
+                    snapshot: snapshot,
+                    isActive: isActive,
+                    isDimmed: isHeroDimmed,
+                    combatRole: combatRole
+                )
             }
             .buttonStyle(.plain)
             .frame(width: 96, height: 96)
@@ -3090,6 +3097,7 @@ private struct UpdateCardThumb: View {
 private struct HeroTile: View {
     let snapshot: GameSideSnapshot
     let isActive: Bool
+    var isDimmed = false
     var combatRole: BoardCombatRole? = nil
 
     private var outlineColor: Color? {
@@ -3136,6 +3144,7 @@ private struct HeroTile: View {
                     .strokeBorder(outlineColor, lineWidth: 4)
             }
         }
+        .opacity(isDimmed ? 0.35 : 1)
         .overlay(alignment: .top) {
             if let value = combatRole?.valueText {
                 Text(value)
