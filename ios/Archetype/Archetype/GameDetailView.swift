@@ -250,6 +250,13 @@ struct BoardTransientCombat {
     let playedSpellCard: BoardCardSnapshot?
 }
 
+struct BoardPlayedSpellCard: Identifiable, Equatable {
+    let id: String
+    let side: String
+    let card: BoardCardSnapshot
+    let isLeaving: Bool
+}
+
 struct BoardEntityAnchorPreferenceKey: PreferenceKey {
     static var defaultValue: [String: Anchor<CGRect>] = [:]
 
@@ -1437,6 +1444,7 @@ struct GameDetailView: View {
                         socketStatus: socket.status,
                         gameId: gameId,
                         timeText: model.timeLeftString(now: now),
+                        isMulliganPhase: model.isMulliganPhase,
                         onHandCardTap: handleHandCardTap,
                         onOwnCreatureTap: handleOwnCreatureTap,
                         onOpponentCreatureTap: handleOpponentCreatureTap,
@@ -1873,10 +1881,16 @@ struct GameDetailView: View {
             return
         }
 
+        let boardCards = model.boardCards(for: model.viewerSide)
+        guard !boardCards.isEmpty else {
+            playCreature(card, at: 0)
+            return
+        }
+
         overlay = .placement(
             GamePlacementContext(
                 card: card,
-                boardCards: model.boardCards(for: model.viewerSide)
+                boardCards: boardCards
             )
         )
     }
@@ -2414,6 +2428,7 @@ private struct NativeBoardSurface: View {
     let socketStatus: SocketStatus
     let gameId: Int
     let timeText: String?
+    let isMulliganPhase: Bool
     let onHandCardTap: (BoardCardSnapshot) -> Void
     let onOwnCreatureTap: (BoardCardSnapshot) -> Void
     let onOpponentCreatureTap: (BoardCardSnapshot) -> Void
@@ -2427,6 +2442,17 @@ private struct NativeBoardSurface: View {
     @State private var transientUpdate: GameUpdateSnapshot?
     @State private var transientUpdateId: String?
     @State private var transientAnimationId = UUID()
+    @State private var combatAnimationQueue: [GameUpdateSnapshot] = []
+    @State private var combatClearWorkItem: DispatchWorkItem?
+    @State private var playedSpellCards: [BoardPlayedSpellCard] = []
+    @State private var playedSpellHideWorkItems: [String: DispatchWorkItem] = [:]
+    @State private var playedSpellRemoveWorkItems: [String: DispatchWorkItem] = [:]
+    @State private var entityPointCache: [String: CGPoint] = [:]
+
+    private static let combatAnimationDuration: TimeInterval = 0.62
+    private static let playedSpellCardDuration: TimeInterval = 1.7
+    private static let playedSpellCardExitDuration: TimeInterval = 0.26
+    private static let playedSpellCardAfterAnimationDuration: TimeInterval = 0.4
 
     private var opponent: GameSideSnapshot {
         model.snapshot(for: model.opponentSide, label: "Opponent")
@@ -2465,6 +2491,7 @@ private struct NativeBoardSurface: View {
                     idKey: "target_id"
                 ),
                 isViewerUpdate: model.displayUpdates.last?.side == model.viewerSide,
+                showsMenuButton: !isMulliganPhase,
                 onHeroTap: { onOpponentHeroTap(opponent) },
                 onCenterTap: onUpdatesTap,
                 onMenuTap: onMenuTap
@@ -2513,10 +2540,19 @@ private struct NativeBoardSurface: View {
         }
         .frame(maxWidth: 448)
         .frame(maxHeight: .infinity)
-        .background(ArchetypeTheme.ink2)
+        .background(ArchetypeTheme.ink2, ignoresSafeAreaEdges: [])
         .overlayPreferenceValue(BoardEntityAnchorPreferenceKey.self) { anchors in
             GeometryReader { proxy in
-                transientCombatOverlay(in: proxy.size, anchors: anchors, proxy: proxy)
+                ZStack {
+                    transientCombatOverlay(in: proxy.size, anchors: anchors, proxy: proxy)
+                    playedSpellCardOverlay(in: proxy.size)
+                }
+                .onAppear {
+                    cacheEntityPoints(anchors: anchors, proxy: proxy)
+                }
+                .onChange(of: entityAnchorCacheKey) { _, _ in
+                    cacheEntityPoints(anchors: anchors, proxy: proxy)
+                }
             }
             .allowsHitTesting(false)
         }
@@ -2533,6 +2569,27 @@ private struct NativeBoardSurface: View {
         .onChange(of: model.liveUpdateBatchId) { _, _ in
             triggerTransientCombatIfNeeded(from: model.liveUpdateBatch)
         }
+        .onChange(of: gameId) { _, _ in
+            resetTransientCombatState()
+        }
+        .onDisappear {
+            resetTransientCombatState()
+        }
+    }
+
+    private var entityAnchorCacheKey: String {
+        (
+            [
+                opponent.side,
+                opponent.heroId,
+                player.side,
+                player.heroId,
+            ]
+                .compactMap { $0 }
+            + model.boardCards(for: opponent.side).map(\.id)
+            + model.boardCards(for: player.side).map(\.id)
+        )
+        .joined(separator: "|")
     }
 
     private var winnerText: String? {
@@ -2589,30 +2646,238 @@ private struct NativeBoardSurface: View {
         }
     }
 
-    private func triggerTransientCombatIfNeeded(from updates: [GameUpdateSnapshot]) {
-        guard let update = updates.last(where: canAnimate) else {
-            return
+    @ViewBuilder
+    private func playedSpellCardOverlay(in size: CGSize) -> some View {
+        ForEach(playedSpellCards) { playedSpell in
+            BoardPlayedSpellCardView(
+                playedSpell: playedSpell,
+                isBottomSide: playedSpell.side == player.side,
+                point: spellSourcePoint(for: playedSpell.side, in: size)
+            )
         }
-        guard transientUpdateId != update.id else {
+    }
+
+    private func triggerTransientCombatIfNeeded(from updates: [GameUpdateSnapshot]) {
+        queuePlayedSpellCards(from: updates)
+
+        for update in updates where canAnimate(update) {
+            guard transientUpdateId != update.id,
+                  !combatAnimationQueue.contains(where: { $0.id == update.id })
+            else {
+                continue
+            }
+
+            if let card = spellCard(
+                sourceType: update.value["source_type"]?.stringValue,
+                sourceId: update.value["source_id"]?.stringValue,
+                side: update.side
+            ) {
+                showPlayedSpellCard(
+                    card,
+                    side: update.side,
+                    duration: spellCardAnimationLingerDuration()
+                )
+            }
+
+            combatAnimationQueue.append(update)
+        }
+
+        playNextTransientCombatIfNeeded()
+    }
+
+    private func playNextTransientCombatIfNeeded() {
+        guard transientUpdate == nil, !combatAnimationQueue.isEmpty else {
             return
         }
 
+        let update = combatAnimationQueue.removeFirst()
         transientUpdate = update
         transientUpdateId = update.id
         transientAnimationId = UUID()
 
         let updateId = update.id
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.25) {
+        combatClearWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem {
             guard transientUpdateId == updateId else {
                 return
             }
             transientUpdate = nil
             transientUpdateId = nil
+            combatClearWorkItem = nil
+            playNextTransientCombatIfNeeded()
         }
+        combatClearWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.combatAnimationDuration,
+            execute: workItem
+        )
     }
 
     private func canAnimate(_ update: GameUpdateSnapshot) -> Bool {
-        update.type == "update_damage" || update.type == "update_heal"
+        guard update.type == "update_damage" || update.type == "update_heal" else {
+            return false
+        }
+
+        return update.value["target_id"]?.stringValue != nil
+    }
+
+    private func queuePlayedSpellCards(from updates: [GameUpdateSnapshot]) {
+        for update in updates {
+            if let card = playedSpellCard(from: update) {
+                showPlayedSpellCard(card, side: update.side)
+            }
+        }
+    }
+
+    private func playedSpellCard(from update: GameUpdateSnapshot) -> BoardCardSnapshot? {
+        guard update.type == "update_play_card" else {
+            return nil
+        }
+
+        if let card = model.updateCardSnapshot(update), card.isSpell {
+            return card
+        }
+
+        let cardId = update.value["card_id"]?.stringValue
+            ?? update.value["source_id"]?.stringValue
+        guard let cardId,
+              case .card(let card) = model.updateEntitySnapshot(
+                type: "card",
+                id: cardId,
+                side: update.side
+              ),
+              card.isSpell
+        else {
+            return nil
+        }
+
+        return card
+    }
+
+    private func spellCardAnimationLingerDuration() -> TimeInterval {
+        let queuedAnimationCount = combatAnimationQueue.count + (transientUpdate == nil ? 0 : 1)
+        return (Double(queuedAnimationCount) * Self.combatAnimationDuration)
+            + Self.combatAnimationDuration
+            + Self.playedSpellCardAfterAnimationDuration
+    }
+
+    private func showPlayedSpellCard(
+        _ card: BoardCardSnapshot,
+        side: String,
+        duration: TimeInterval = Self.playedSpellCardDuration
+    ) {
+        let cardId = card.id
+
+        playedSpellRemoveWorkItems[cardId]?.cancel()
+        playedSpellRemoveWorkItems[cardId] = nil
+
+        if playedSpellCards.contains(where: { $0.id == cardId }) {
+            playedSpellCards = playedSpellCards.map { playedSpell in
+                playedSpell.id == cardId
+                    ? BoardPlayedSpellCard(
+                        id: cardId,
+                        side: side,
+                        card: card,
+                        isLeaving: false
+                    )
+                    : playedSpell
+            }
+        } else {
+            playedSpellCards.append(
+                BoardPlayedSpellCard(
+                    id: cardId,
+                    side: side,
+                    card: card,
+                    isLeaving: false
+                )
+            )
+        }
+
+        playedSpellHideWorkItems[cardId]?.cancel()
+
+        let workItem = DispatchWorkItem {
+            hidePlayedSpellCard(cardId)
+        }
+        playedSpellHideWorkItems[cardId] = workItem
+
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + max(duration, Self.playedSpellCardDuration),
+            execute: workItem
+        )
+    }
+
+    private func hidePlayedSpellCard(_ cardId: String) {
+        playedSpellHideWorkItems[cardId] = nil
+
+        guard playedSpellCards.contains(where: { $0.id == cardId && !$0.isLeaving }) else {
+            return
+        }
+
+        playedSpellCards = playedSpellCards.map { playedSpell in
+            playedSpell.id == cardId
+                ? BoardPlayedSpellCard(
+                    id: playedSpell.id,
+                    side: playedSpell.side,
+                    card: playedSpell.card,
+                    isLeaving: true
+                )
+                : playedSpell
+        }
+
+        playedSpellRemoveWorkItems[cardId]?.cancel()
+        let workItem = DispatchWorkItem {
+            removePlayedSpellCard(cardId)
+        }
+        playedSpellRemoveWorkItems[cardId] = workItem
+
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.playedSpellCardExitDuration,
+            execute: workItem
+        )
+    }
+
+    private func removePlayedSpellCard(_ cardId: String) {
+        playedSpellHideWorkItems[cardId]?.cancel()
+        playedSpellRemoveWorkItems[cardId]?.cancel()
+        playedSpellHideWorkItems[cardId] = nil
+        playedSpellRemoveWorkItems[cardId] = nil
+        playedSpellCards.removeAll { $0.id == cardId }
+    }
+
+    private func resetTransientCombatState() {
+        combatClearWorkItem?.cancel()
+        combatClearWorkItem = nil
+        transientUpdate = nil
+        transientUpdateId = nil
+        combatAnimationQueue = []
+
+        for workItem in playedSpellHideWorkItems.values {
+            workItem.cancel()
+        }
+        for workItem in playedSpellRemoveWorkItems.values {
+            workItem.cancel()
+        }
+        playedSpellHideWorkItems = [:]
+        playedSpellRemoveWorkItems = [:]
+        playedSpellCards = []
+        entityPointCache = [:]
+    }
+
+    private func cacheEntityPoints(
+        anchors: [String: Anchor<CGRect>],
+        proxy: GeometryProxy
+    ) {
+        guard !anchors.isEmpty else {
+            return
+        }
+
+        var nextCache = entityPointCache
+        for (id, anchor) in anchors {
+            let rect = proxy[anchor]
+            nextCache[id] = CGPoint(x: rect.midX, y: rect.midY)
+        }
+        entityPointCache = nextCache
     }
 
     private func transientCombat(
@@ -2667,7 +2932,7 @@ private struct NativeBoardSurface: View {
             source: source ?? target,
             target: target,
             value: value,
-            playedSpellCard: playedSpellCard
+            playedSpellCard: nil
         )
     }
 
@@ -2701,6 +2966,10 @@ private struct NativeBoardSurface: View {
         if let anchor = anchors[id] {
             let rect = proxy[anchor]
             return CGPoint(x: rect.midX, y: rect.midY)
+        }
+
+        if let cachedPoint = entityPointCache[id] {
+            return cachedPoint
         }
 
         if type == "hero" {
@@ -2780,6 +3049,7 @@ private struct BoardSideHeader: View {
     let latestSourceEntity: GameUpdateEntitySnapshot?
     let latestTargetEntity: GameUpdateEntitySnapshot?
     let isViewerUpdate: Bool
+    var showsMenuButton = true
     let onHeroTap: () -> Void
     let onCenterTap: () -> Void
     let onMenuTap: () -> Void
@@ -2822,7 +3092,14 @@ private struct BoardSideHeader: View {
             .buttonStyle(.plain)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            BoardMenuButton(socketStatus: socketStatus, onMenuTap: onMenuTap)
+            Group {
+                if showsMenuButton {
+                    BoardMenuButton(socketStatus: socketStatus, onMenuTap: onMenuTap)
+                } else {
+                    Color.clear
+                        .accessibilityHidden(true)
+                }
+            }
             .frame(width: 96)
             .frame(maxHeight: .infinity)
             .overlay(alignment: .leading) {
@@ -2832,7 +3109,7 @@ private struct BoardSideHeader: View {
             }
         }
         .frame(height: 96)
-        .background(ArchetypeTheme.ink)
+        .background(ArchetypeTheme.ink, ignoresSafeAreaEdges: [])
         .overlay(alignment: isTop ? .bottom : .top) {
             Rectangle()
                 .fill(ArchetypeTheme.border)
@@ -3230,24 +3507,31 @@ private struct MulliganMenuButtonLayer: View {
     let onMenuTap: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                Spacer(minLength: 0)
+        GeometryReader { proxy in
+            let boardWidth = min(proxy.size.width, 448)
+            let tileLeft = max((proxy.size.width + boardWidth) / 2 - 96, 0)
+
+            ZStack(alignment: .topLeading) {
+                Canvas { context, _ in
+                    context.fill(
+                        Path(CGRect(x: tileLeft, y: 0, width: 96, height: 96)),
+                        with: .color(ArchetypeTheme.ink2)
+                    )
+                    context.fill(
+                        Path(CGRect(x: tileLeft, y: 0, width: 1, height: 96)),
+                        with: .color(ArchetypeTheme.border)
+                    )
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
 
                 BoardMenuButton(socketStatus: socketStatus, onMenuTap: onMenuTap)
                     .frame(width: 96, height: 96)
-                    .background(ArchetypeTheme.ink2)
-                    .overlay(alignment: .leading) {
-                        Rectangle()
-                            .fill(ArchetypeTheme.border)
-                            .frame(width: 1)
-                    }
+                    .offset(x: tileLeft, y: 0)
             }
-            .frame(height: 96)
-
-            Spacer(minLength: 0)
         }
-        .frame(maxWidth: 448, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .zIndex(90)
     }
 }
 
@@ -3555,6 +3839,68 @@ private struct BoardCombatModifier: ViewModifier {
             }
             .scaleEffect(role == nil ? 1 : 1.035)
             .animation(.spring(response: 0.28, dampingFraction: 0.72), value: role != nil)
+    }
+}
+
+private struct BoardPlayedSpellCardView: View {
+    let playedSpell: BoardPlayedSpellCard
+    let isBottomSide: Bool
+    let point: CGPoint
+
+    @State private var isVisible = false
+
+    var body: some View {
+        MiniGameCard(
+            card: playedSpell.card,
+            active: true,
+            inLane: false,
+            isLarge: true
+        )
+        .frame(width: 76, height: 106)
+        .shadow(color: Color.black.opacity(0.42), radius: 18, x: 0, y: 12)
+        .shadow(color: ArchetypeTheme.sky.opacity(0.26), radius: 18, x: 0, y: 0)
+        .rotationEffect(.degrees(rotation))
+        .scaleEffect(scale)
+        .opacity(opacity)
+        .offset(y: yOffset)
+        .position(point)
+        .animation(.timingCurve(0.16, 0.84, 0.24, 1, duration: 0.28), value: isVisible)
+        .animation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.26), value: playedSpell.isLeaving)
+        .onAppear {
+            isVisible = true
+        }
+        .accessibilityHidden(true)
+    }
+
+    private var yOffset: CGFloat {
+        if playedSpell.isLeaving {
+            return isBottomSide ? -24 : 24
+        }
+        if isVisible {
+            return isBottomSide ? -12 : 12
+        }
+        return isBottomSide ? 14 : -14
+    }
+
+    private var rotation: Double {
+        if playedSpell.isLeaving {
+            return isBottomSide ? -3 : 3
+        }
+        return isVisible ? 0 : (isBottomSide ? -3 : 3)
+    }
+
+    private var scale: CGFloat {
+        if playedSpell.isLeaving {
+            return 0.88
+        }
+        return isVisible ? 1 : 0.78
+    }
+
+    private var opacity: Double {
+        if playedSpell.isLeaving {
+            return 0
+        }
+        return isVisible ? 1 : 0
     }
 }
 
@@ -4469,7 +4815,9 @@ private struct MulliganOverlay: View {
                             HStack(spacing: 12) {
                                 ForEach(cards) { card in
                                     Button {
-                                        toggle(card)
+                                        if !isDone {
+                                            toggle(card)
+                                        }
                                     } label: {
                                         MiniGameCard(
                                             card: card,
@@ -4478,7 +4826,7 @@ private struct MulliganOverlay: View {
                                         )
                                     }
                                     .buttonStyle(.plain)
-                                    .disabled(isDone)
+                                    .allowsHitTesting(!isDone)
                                     .frame(width: 76, height: 106)
                                 }
                             }

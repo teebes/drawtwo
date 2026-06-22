@@ -253,12 +253,11 @@ final class DashboardViewModel: ObservableObject {
         return response.inQueue ? response.queueEntry : nil
     }
 
-    func acceptChallenge(_ notification: TitleNotification, using authStore: AuthStore) async -> Int? {
-        guard let selectedDeckId else {
-            notificationErrorMessage = "Choose one of your decks before accepting."
-            return nil
-        }
-
+    func acceptChallenge(
+        _ notification: TitleNotification,
+        deckId: Int,
+        using authStore: AuthStore
+    ) async -> Int? {
         isNotificationActionLoading = true
         notificationErrorMessage = nil
         statusMessage = nil
@@ -266,7 +265,7 @@ final class DashboardViewModel: ObservableObject {
         do {
             let response: ChallengeAcceptResponse = try await authStore.authenticatedPost(
                 "/gameplay/challenges/\(notification.refId)/accept/",
-                body: ChallengeAcceptRequest(challengeeDeckId: selectedDeckId)
+                body: ChallengeAcceptRequest(challengeeDeckId: deckId)
             )
             notifications.removeAll { $0.id == notification.id }
             statusMessage = "Challenge accepted."
@@ -436,6 +435,8 @@ struct DashboardView: View {
     @State private var path = NavigationPath()
     @State private var isProfileMenuOpen = false
     @State private var dashboardScrollTarget: DashboardSection?
+    @State private var challengeDeckNotification: TitleNotification?
+    @State private var challengeDeckSelectionId: Int?
     @State private var appliedInitialDashboardSection = false
 
     var body: some View {
@@ -517,6 +518,37 @@ struct DashboardView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
+            .sheet(
+                item: $challengeDeckNotification,
+                onDismiss: {
+                    challengeDeckSelectionId = nil
+                }
+            ) { notification in
+                ChallengeDeckSelectionSheet(
+                    notification: notification,
+                    decks: model.decks,
+                    isLoading: model.isLoading,
+                    isAccepting: model.isNotificationActionLoading,
+                    selectedDeckId: $challengeDeckSelectionId,
+                    onCancel: {
+                        challengeDeckNotification = nil
+                    },
+                    onAccept: { deck in
+                        Task {
+                            if let gameId = await model.acceptChallenge(
+                                notification,
+                                deckId: deck.id,
+                                using: authStore
+                            ) {
+                                challengeDeckNotification = nil
+                                challengeDeckSelectionId = nil
+                                await model.load(using: authStore)
+                                path.append(DashboardRoute.game(gameId))
+                            }
+                        }
+                    }
+                )
+            }
             .navigationDestination(for: DashboardRoute.self) { route in
                 switch route {
                 case .newGame:
@@ -736,7 +768,6 @@ struct DashboardView: View {
                         NotificationRow(
                             notification: notification,
                             isActionLoading: model.isNotificationActionLoading,
-                            canAcceptChallenge: model.selectedDeckId != nil,
                             openGame: { gameId in
                                 path.append(DashboardRoute.game(gameId))
                             },
@@ -747,12 +778,8 @@ struct DashboardView: View {
                                 path.append(DashboardRoute.friends)
                             },
                             accept: {
-                                Task {
-                                    if let gameId = await model.acceptChallenge(notification, using: authStore) {
-                                        await model.load(using: authStore)
-                                        path.append(DashboardRoute.game(gameId))
-                                    }
-                                }
+                                challengeDeckSelectionId = nil
+                                challengeDeckNotification = notification
                             },
                             decline: {
                                 Task {
@@ -2010,7 +2037,6 @@ private struct WebOutlineButtonStyle: ButtonStyle {
 private struct NotificationRow: View {
     let notification: TitleNotification
     let isActionLoading: Bool
-    let canAcceptChallenge: Bool
     let openGame: (Int) -> Void
     let openQueue: (Int) -> Void
     let openFriends: () -> Void
@@ -2035,8 +2061,8 @@ private struct NotificationRow: View {
                                 .frame(width: 94)
                         }
                         .buttonStyle(NotificationActionButtonStyle(kind: .primary))
-                        .disabled(isActionLoading || !canAcceptChallenge)
-                        .opacity(isActionLoading || !canAcceptChallenge ? 0.55 : 1)
+                        .disabled(isActionLoading)
+                        .opacity(isActionLoading ? 0.55 : 1)
 
                         Button {
                             decline()
@@ -2095,6 +2121,202 @@ private struct NotificationRow: View {
         } else if notification.type == "friend_request" {
             openFriends()
         }
+    }
+}
+
+private struct ChallengeDeckSelectionSheet: View {
+    let notification: TitleNotification
+    let decks: [Deck]
+    let isLoading: Bool
+    let isAccepting: Bool
+    @Binding var selectedDeckId: Int?
+    let onCancel: () -> Void
+    let onAccept: (Deck) -> Void
+
+    private var selectedDeck: Deck? {
+        decks.first { $0.id == selectedDeckId }
+    }
+
+    var body: some View {
+        ArchetypeScreen {
+            VStack(spacing: 0) {
+                header
+                    .padding(.horizontal, 18)
+                    .padding(.top, 20)
+                    .padding(.bottom, 16)
+
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                actionBar
+                    .padding(18)
+                    .background(ArchetypeTheme.panel)
+                    .overlay(alignment: .top) {
+                        Rectangle()
+                            .fill(ArchetypeTheme.border)
+                            .frame(height: 1)
+                    }
+            }
+            .frame(maxWidth: 520)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Accept Challenge")
+                    .font(.archetypeBody(22, weight: .bold))
+                    .foregroundStyle(ArchetypeTheme.text)
+
+                Text("Choose a deck to play with.")
+                    .font(.archetypeBody(14))
+                    .foregroundStyle(ArchetypeTheme.muted)
+
+                Text(notification.message)
+                    .font(.archetypeBody(13))
+                    .foregroundStyle(Color(hex: 0xD1D5DB))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
+            }
+
+            Spacer(minLength: 12)
+
+            Button(action: onCancel) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .bold))
+            }
+            .buttonStyle(IconGameButtonStyle())
+            .accessibilityLabel("Close")
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if isLoading && decks.isEmpty {
+            ProgressRow(text: "Loading your decks...")
+        } else if decks.isEmpty {
+            EmptyState(
+                title: "No Decks Found",
+                detail: "Decks created on drawtwo.com appear here automatically.",
+                systemImage: "rectangle.stack.badge.plus"
+            )
+            .padding(24)
+        } else {
+            ScrollView {
+                VStack(spacing: 10) {
+                    ForEach(decks) { deck in
+                        Button {
+                            selectedDeckId = deck.id
+                        } label: {
+                            ChallengeDeckChoiceRow(
+                                deck: deck,
+                                isSelected: selectedDeckId == deck.id
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.bottom, 18)
+            }
+        }
+    }
+
+    private var actionBar: some View {
+        HStack(spacing: 12) {
+            Button(action: onCancel) {
+                Text("Cancel")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(SecondaryGameButtonStyle())
+
+            Button {
+                if let selectedDeck {
+                    onAccept(selectedDeck)
+                }
+            } label: {
+                Text(isAccepting ? "Accepting..." : "Accept Challenge")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(WebActionButtonStyle(color: ArchetypeTheme.sky600))
+            .disabled(selectedDeck == nil || isAccepting)
+        }
+    }
+}
+
+private struct ChallengeDeckChoiceRow: View {
+    let deck: Deck
+    let isSelected: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ChallengeDeckHeroThumb(deck: deck)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(deck.name)
+                    .font(.archetypeBody(16, weight: .medium))
+                    .foregroundStyle(ArchetypeTheme.text)
+                    .lineLimit(1)
+
+                Text("\(deck.hero.name) • \(deck.cardCount ?? 0) cards")
+                    .font(.archetypeBody(13))
+                    .foregroundStyle(ArchetypeTheme.muted)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 10)
+
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(isSelected ? ArchetypeTheme.sky : ArchetypeTheme.muted)
+        }
+        .padding(14)
+        .background(isSelected ? Color(hex: 0x0C4A6E, alpha: 0.20) : ArchetypeTheme.panel)
+        .overlay(
+            RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius)
+                .stroke(
+                    isSelected ? ArchetypeTheme.sky.opacity(0.86) : ArchetypeTheme.border,
+                    lineWidth: isSelected ? 2 : 1
+                )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius))
+    }
+}
+
+private struct ChallengeDeckHeroThumb: View {
+    let deck: Deck
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius)
+                .fill(Color(hex: 0xE0F2FE))
+
+            if let artUrl = deck.hero.resolvedArtUrl, let url = URL(string: artUrl) {
+                CachedRemoteImage(url: url) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                } placeholder: {
+                    fallback
+                }
+            } else {
+                fallback
+            }
+        }
+        .frame(width: 46, height: 46)
+        .clipShape(RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius)
+                .stroke(ArchetypeTheme.border, lineWidth: 1)
+        )
+    }
+
+    private var fallback: some View {
+        Text(String(deck.hero.name.prefix(1)).uppercased())
+            .font(.archetypeBody(14, weight: .bold))
+            .foregroundStyle(ArchetypeTheme.sky600)
     }
 }
 
