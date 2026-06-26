@@ -4767,11 +4767,12 @@ private struct TargetBoardBand: View {
                                     if let card = option.card {
                                         MiniGameCard(card: card, active: false, inLane: true)
                                             .frame(width: 56, height: 78)
+                                            .compositingGroup()
+                                            .opacity(option.enabled ? 1 : 0.3)
                                     }
                                 }
                                 .buttonStyle(.plain)
                                 .disabled(!option.enabled)
-                                .opacity(option.enabled ? 1 : 0.3)
                             }
 
                             Spacer(minLength: 0)
