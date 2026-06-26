@@ -47,6 +47,9 @@
         <div v-if="notification.type === 'game_pve'" class="mr-2">
           <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary-100 text-2xl font-bold text-secondary-600">👾</div>
         </div>
+        <div v-if="notification.type === 'game_ended'" class="mr-2">
+          <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary-100 text-2xl font-bold text-secondary-600">🏁</div>
+        </div>
         <div class="ml-2">{{ notification.message }}</div>
       </div>
     </div>
@@ -69,6 +72,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import axios from '../../config/api'
 import { useNotificationStore } from '../../stores/notifications'
 import { challengesApi } from '../../services/challenges'
 import DeckSelectModal from '../modals/DeckSelectModal.vue'
@@ -156,6 +160,14 @@ const handleDecline = async (challengeId: number) => {
   }
 }
 
+const acknowledgeEndedGameNotification = async (gameId: number) => {
+  try {
+    await axios.post(`/gameplay/games/${gameId}/notifications/read/`)
+  } catch (err) {
+    console.error('Error acknowledging ended game notification:', err)
+  }
+}
+
 const handleNotificationClick = (notification: Notification) => {
   if (notification.type === 'game_ranked') {
     router.push({
@@ -172,6 +184,12 @@ const handleNotificationClick = (notification: Notification) => {
       name: 'Friends',
     })
   } else if (notification.type === 'game_pve') {
+    router.push({
+      name: 'Board',
+      params: { game_id: notification.ref_id, slug: props.titleSlug }
+    })
+  } else if (notification.type === 'game_ended') {
+    void acknowledgeEndedGameNotification(notification.ref_id)
     router.push({
       name: 'Board',
       params: { game_id: notification.ref_id, slug: props.titleSlug }

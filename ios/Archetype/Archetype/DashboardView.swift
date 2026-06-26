@@ -341,6 +341,25 @@ final class DashboardViewModel: ObservableObject {
         isNotificationActionLoading = false
     }
 
+    func acknowledgeEndedGameNotification(
+        _ notification: TitleNotification,
+        using authStore: AuthStore
+    ) async {
+        guard notification.type == "game_ended" else {
+            return
+        }
+
+        do {
+            let _: EmptyResponse = try await authStore.authenticatedPost(
+                "/gameplay/games/\(notification.refId)/notifications/read/",
+                body: EmptyBody()
+            )
+            notifications.removeAll { $0.id == notification.id }
+        } catch {
+            notificationErrorMessage = error.localizedDescription
+        }
+    }
+
     func outgoingChallenge(for friendship: Friendship) -> FriendlyChallenge? {
         pendingOutgoingChallenges.first { challenge in
             challenge.challengee.id == friendship.friendData.id
@@ -474,12 +493,13 @@ struct DashboardView: View {
     @ObservedObject private var pushNotifications = PushNotificationManager.shared
     @StateObject private var model = DashboardViewModel()
     @StateObject private var userSocket = DrawTwoWebSocket()
-    @State private var path = NavigationPath()
+    @State private var path: [DashboardRoute] = []
     @State private var isProfileMenuOpen = false
     @State private var dashboardScrollTarget: DashboardSection?
     @State private var challengeDeckNotification: TitleNotification?
     @State private var challengeDeckSelectionId: Int?
     @State private var appliedInitialDashboardSection = false
+    @State private var handledPushRouteRequestId: UUID?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -616,6 +636,9 @@ struct DashboardView: View {
                             path.append(DashboardRoute.game(nextGameId))
                         }
                     )
+                    .onAppear {
+                        completePushRouteIfMatchingGame(gameId)
+                    }
                 case .collection:
                     CollectionView(
                         openDeck: { deckId in
@@ -649,11 +672,13 @@ struct DashboardView: View {
                 }
             }
             .task {
+                await MainActor.run {
+                    handlePendingPushRouteIfNeeded()
+                }
                 await model.load(using: authStore)
                 await pushNotifications.requestAuthorizationAndRegister()
                 await pushNotifications.registerCurrentDevice(using: authStore)
                 connectUserSocketIfPossible()
-                handlePendingPushRoute()
                 applyInitialDashboardSectionIfNeeded()
                 applyInitialProfileMenuIfNeeded()
                 recordDashboardCaptureState()
@@ -676,8 +701,21 @@ struct DashboardView: View {
                     await pushNotifications.registerCurrentDevice(using: authStore)
                 }
             }
-            .onChange(of: pushNotifications.pendingRoute) { _, _ in
-                handlePendingPushRoute()
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: PushNotificationManager.routeRequestNotification
+                )
+            ) { notification in
+                guard
+                    let request = notification.userInfo?[
+                        PushNotificationManager.routeRequestUserInfoKey
+                    ] as? PushNotificationRouteRequest
+                else {
+                    return
+                }
+                Task { @MainActor in
+                    handlePushRouteRequest(request)
+                }
             }
             .onChange(of: isProfileMenuOpen) { _, _ in
                 recordDashboardCaptureState()
@@ -687,10 +725,12 @@ struct DashboardView: View {
                     return
                 }
                 Task {
+                    await MainActor.run {
+                        handlePendingPushRouteIfNeeded()
+                    }
                     await model.load(using: authStore)
                     await pushNotifications.registerCurrentDevice(using: authStore)
                     connectUserSocketIfPossible()
-                    handlePendingPushRoute()
                     recordDashboardCaptureState()
                 }
             }
@@ -810,8 +850,14 @@ struct DashboardView: View {
                         NotificationRow(
                             notification: notification,
                             isActionLoading: model.isNotificationActionLoading,
-                            openGame: { gameId in
-                                path.append(DashboardRoute.game(gameId))
+                            openGame: { notification in
+                                path.append(DashboardRoute.game(notification.refId))
+                                Task {
+                                    await model.acknowledgeEndedGameNotification(
+                                        notification,
+                                        using: authStore
+                                    )
+                                }
                             },
                             openQueue: { queueId in
                                 openRankedQueueNotification(queueId: queueId)
@@ -939,20 +985,53 @@ struct DashboardView: View {
         }
     }
 
-    private func handlePendingPushRoute() {
-        guard let route = pushNotifications.consumePendingRoute() else {
+    @MainActor
+    private func handlePendingPushRouteIfNeeded() {
+        guard let request = pushNotifications.pendingRouteRequest else {
             return
         }
 
-        switch route {
+        handlePushRouteRequest(request)
+    }
+
+    @MainActor
+    private func handlePushRouteRequest(_ request: PushNotificationRouteRequest) {
+        guard handledPushRouteRequestId != request.id else {
+            return
+        }
+        handledPushRouteRequestId = request.id
+
+        switch request.route {
         case .game(let gameId):
-            path.append(DashboardRoute.game(gameId))
+            openGameFromPush(gameId)
         case .friendChallenge:
-            path = NavigationPath()
+            path = []
             Task {
                 await model.loadNotifications(using: authStore)
+                await MainActor.run {
+                    pushNotifications.completeRouteRequest(id: request.id)
+                }
             }
         }
+    }
+
+    @MainActor
+    private func openGameFromPush(_ gameId: Int) {
+        challengeDeckNotification = nil
+        path = [.game(gameId)]
+    }
+
+    @MainActor
+    private func completePushRouteIfMatchingGame(_ gameId: Int) {
+        guard let request = pushNotifications.pendingRouteRequest else {
+            return
+        }
+
+        guard case .game(gameId) = request.route else {
+            return
+        }
+
+        pushNotifications.completeRouteRequest(id: request.id)
     }
 
     private func openNewGame() {
@@ -2079,7 +2158,7 @@ private struct WebOutlineButtonStyle: ButtonStyle {
 private struct NotificationRow: View {
     let notification: TitleNotification
     let isActionLoading: Bool
-    let openGame: (Int) -> Void
+    let openGame: (TitleNotification) -> Void
     let openQueue: (Int) -> Void
     let openFriends: () -> Void
     let accept: () -> Void
@@ -2157,7 +2236,7 @@ private struct NotificationRow: View {
 
     private func handleTap() {
         if notification.isGameNotification {
-            openGame(notification.refId)
+            openGame(notification)
         } else if notification.type == "game_ranked_queued" {
             openQueue(notification.refId)
         } else if notification.type == "friend_request" {

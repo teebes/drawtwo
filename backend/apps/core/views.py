@@ -14,8 +14,10 @@ from apps.builder.serializers import TitleSerializer
 from apps.collection.models import Deck
 from apps.gameplay.models import (
     ELORatingChange,
+    FriendlyChallenge,
     Game,
     MatchmakingQueue,
+    PlayerNotification,
     UserTitleRating,
 )
 from apps.gameplay.schemas import GameList, GameSummary
@@ -47,6 +49,33 @@ def _is_user_action_required(game_state, user_side: str) -> bool:
     if game_state.phase == "mulligan":
         return not game_state.mulligan_done.get(user_side, False)
     return game_state.active == user_side
+
+
+def _opponent_name_for_deck(deck: Deck | None) -> str:
+    if not deck:
+        return "your opponent"
+    if deck.is_ai_deck:
+        return deck.name
+    return deck.owner_name
+
+
+def _game_ended_notification_message(game: Game, user, user_side: str) -> str:
+    user_deck = game.side_a if user_side == "side_a" else game.side_b
+    opponent_deck = game.opponent_deck_for_user(user)
+    opponent_name = _opponent_name_for_deck(opponent_deck)
+
+    if game.winner_id == user_deck.id:
+        result = f"you defeated {opponent_name}"
+    elif opponent_deck and game.winner_id == opponent_deck.id:
+        result = f"{opponent_name} defeated you"
+    else:
+        result = f"your game against {opponent_name} ended"
+
+    if game.type == Game.GAME_TYPE_RANKED:
+        return f"Game over: {result} in {game.get_ladder_type_display()} ranked."
+    if game.type == Game.GAME_TYPE_FRIENDLY:
+        return f"Game over: {result} in a friendly game."
+    return f"Game over: {result}."
 
 
 def health_check(request):
@@ -280,12 +309,6 @@ def title_pve(request, slug):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def title_notifications(request, slug):
-    from apps.builder.models import Title
-    from apps.gameplay.models import FriendlyChallenge
-    from apps.gameplay.schemas.game import Notification
-
-    print(f"list_notifications called with title_slug: {slug}")
-
     try:
         title = Title.objects.get(slug=slug)
     except Title.DoesNotExist:
@@ -372,6 +395,38 @@ def title_notifications(request, slug):
                 type="game_pve",
                 message=message,
                 is_user_turn=is_player_turn,
+            )
+        )
+
+    # Recently ended games stay visible until this user opens the game once.
+    ended_notifications = (
+        PlayerNotification.objects.filter(
+            user=request.user,
+            is_read=False,
+            game__title=title,
+            game__status=Game.GAME_STATUS_ENDED,
+        )
+        .select_related(
+            "game",
+            "game__side_a",
+            "game__side_a__user",
+            "game__side_b",
+            "game__side_b__user",
+            "game__winner",
+        )
+        .order_by("-created_at")
+    )
+    for ended_notification in ended_notifications:
+        game = ended_notification.game
+        is_side_a = game.player_a_user_id == request.user.id
+        user_side = "side_a" if is_side_a else "side_b"
+        message = _game_ended_notification_message(game, request.user, user_side)
+        notifications.append(
+            Notification(
+                ref_id=game.id,
+                type="game_ended",
+                message=message,
+                is_user_turn=False,
             )
         )
 

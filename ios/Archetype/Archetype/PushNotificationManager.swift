@@ -7,11 +7,23 @@ enum PushNotificationRoute: Equatable {
     case friendChallenge
 }
 
+struct PushNotificationRouteRequest: Equatable, Identifiable {
+    let id: UUID
+    let route: PushNotificationRoute
+
+    init(id: UUID = UUID(), route: PushNotificationRoute) {
+        self.id = id
+        self.route = route
+    }
+}
+
 final class PushNotificationManager: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
     static let shared = PushNotificationManager()
+    static let routeRequestNotification = Notification.Name("PushNotificationRouteRequest")
+    static let routeRequestUserInfoKey = "request"
 
     @Published private(set) var deviceTokenVersion = 0
-    @Published private(set) var pendingRoute: PushNotificationRoute?
+    private(set) var pendingRouteRequest: PushNotificationRouteRequest?
 
     private var deviceToken: String?
     private var authorizationRequested = false
@@ -23,6 +35,30 @@ final class PushNotificationManager: NSObject, ObservableObject, UNUserNotificat
 
     func configure() {
         UNUserNotificationCenter.current().delegate = self
+    }
+
+    @MainActor
+    func applicationDidFinishLaunching(launchOptions: [UIApplication.LaunchOptionsKey: Any]?) {
+        configure()
+
+        guard
+            let userInfo = launchOptions?[.remoteNotification] as? [AnyHashable: Any]
+        else {
+            return
+        }
+
+        #if DEBUG
+        print("Push notification launch userInfo: \(userInfo)")
+        #endif
+
+        guard let route = Self.route(from: userInfo) else {
+            #if DEBUG
+            print("Push notification launch had no route.")
+            #endif
+            return
+        }
+
+        enqueueRouteOnMain(route, source: "launch")
     }
 
     func requestAuthorizationAndRegister() async {
@@ -118,41 +154,97 @@ final class PushNotificationManager: NSObject, ObservableObject, UNUserNotificat
         #endif
     }
 
-    func consumePendingRoute() -> PushNotificationRoute? {
-        let route = pendingRoute
-        pendingRoute = nil
-        return route
+    @MainActor
+    func completeRouteRequest(id: UUID) {
+        guard pendingRouteRequest?.id == id else {
+            return
+        }
+        pendingRouteRequest = nil
     }
 
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification
-    ) async -> UNNotificationPresentationOptions {
-        [.banner, .sound, .list]
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound, .list])
     }
 
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse
-    ) async {
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        defer {
+            completionHandler()
+        }
+
         let userInfo = response.notification.request.content.userInfo
+        #if DEBUG
+        print("Push notification tap userInfo: \(userInfo)")
+        #endif
+
         guard let route = Self.route(from: userInfo) else {
+            #if DEBUG
+            print("Push notification tap had no route.")
+            #endif
             return
         }
 
-        await MainActor.run {
-            self.pendingRoute = route
+        enqueueRouteOnMain(route, source: "tap")
+    }
+
+    private func enqueueRouteOnMain(_ route: PushNotificationRoute, source: String) {
+        DispatchQueue.main.async { [weak self] in
+            self?.enqueueRoute(route, source: source)
         }
     }
 
+    private func enqueueRoute(_ route: PushNotificationRoute, source: String) {
+        let request = PushNotificationRouteRequest(route: route)
+        #if DEBUG
+        print(
+            "Push notification route from \(source): \(route), "
+            + "mainThread=\(Thread.isMainThread)"
+        )
+        #endif
+        pendingRouteRequest = request
+        NotificationCenter.default.post(
+            name: Self.routeRequestNotification,
+            object: self,
+            userInfo: [Self.routeRequestUserInfoKey: request]
+        )
+    }
+
     private static func route(from userInfo: [AnyHashable: Any]) -> PushNotificationRoute? {
-        let type = stringValue(userInfo["notification_type"] ?? userInfo["type"])
-        if let gameId = intValue(userInfo["game_id"]) {
+        let type = stringValue(
+            value(for: "notification_type", in: userInfo)
+                ?? value(for: "type", in: userInfo)
+        )
+        if let gameId = intValue(value(for: "game_id", in: userInfo)) {
             return .game(gameId)
         }
         if type == "friend_challenge" {
             return .friendChallenge
         }
+        return nil
+    }
+
+    private static func value(for key: String, in userInfo: [AnyHashable: Any]) -> Any? {
+        if let value = userInfo[key] {
+            return value
+        }
+
+        if let data = userInfo["data"] as? [AnyHashable: Any],
+           let value = data[key] {
+            return value
+        }
+
+        if let data = userInfo["data"] as? [String: Any],
+           let value = data[key] {
+            return value
+        }
+
         return nil
     }
 
@@ -193,6 +285,16 @@ final class PushNotificationManager: NSObject, ObservableObject, UNUserNotificat
 }
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        PushNotificationManager.shared.applicationDidFinishLaunching(
+            launchOptions: launchOptions
+        )
+        return true
+    }
+
     func application(
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data

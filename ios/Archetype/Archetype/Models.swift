@@ -314,7 +314,7 @@ struct TitleNotification: Codable, Identifiable, Equatable {
 
     var isGameNotification: Bool {
         switch type {
-        case "game_ranked", "game_friendly", "game_pve":
+        case "game_ranked", "game_friendly", "game_pve", "game_ended":
             return true
         default:
             return false
@@ -331,6 +331,8 @@ struct TitleNotification: Codable, Identifiable, Equatable {
             return "👥"
         case "game_pve":
             return "👾"
+        case "game_ended":
+            return "🏁"
         default:
             return "🔔"
         }

@@ -14,6 +14,11 @@ urlpatterns = [
     path("", include(router.urls)),
     # Game endpoints
     path("games/<int:game_id>/", views.game_detail, name="game-detail"),
+    path(
+        "games/<int:game_id>/notifications/read/",
+        views.acknowledge_game_notification,
+        name="game-notification-read",
+    ),
     path("games/<int:game_id>/queue/", views.game_queue, name="game-queue"),
     path("games/<int:game_id>/advance/", views.advance_game, name="game-advance"),
     path("games/<int:game_id>/rematch/", views.rematch_game, name="game-rematch"),

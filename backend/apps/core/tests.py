@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from apps.builder.models import AIPlayer, HeroTemplate, Title
 from apps.collection.models import Deck
+from apps.gameplay.models import Game, PlayerNotification
 
 from .models import BaseModel, SoftDeleteModel, TimestampedModel
 
@@ -102,6 +103,142 @@ class TitlePveEndpointTestCase(TestCase):
         self.assertEqual(
             [deck["name"] for deck in response.json()],
             ["Practice", "Vanilla", "Control"],
+        )
+
+
+class TitleEndedGameNotificationsTestCase(TestCase):
+    """Test cases for ended-game lobby notifications."""
+
+    def setUp(self):
+        self.user_a = User.objects.create_user(
+            email="ended-a@example.com",
+            username="ended_a",
+        )
+        self.user_b = User.objects.create_user(
+            email="ended-b@example.com",
+            username="ended_b",
+        )
+        self.title = Title.objects.create(
+            slug="ended-notifications",
+            name="Ended Notifications",
+            author=self.user_a,
+            status=Title.STATUS_PUBLISHED,
+            is_latest=True,
+        )
+        self.hero_a = HeroTemplate.objects.create(
+            title=self.title,
+            slug="hero-a",
+            name="Hero A",
+            health=20,
+            is_latest=True,
+        )
+        self.hero_b = HeroTemplate.objects.create(
+            title=self.title,
+            slug="hero-b",
+            name="Hero B",
+            health=20,
+            is_latest=True,
+        )
+        self.deck_a = Deck.objects.create(
+            title=self.title,
+            user=self.user_a,
+            name="Deck A",
+            hero=self.hero_a,
+        )
+        self.deck_b = Deck.objects.create(
+            title=self.title,
+            user=self.user_b,
+            name="Deck B",
+            hero=self.hero_b,
+        )
+        self.game = Game.objects.create(
+            title=self.title,
+            side_a=self.deck_a,
+            side_b=self.deck_b,
+            type=Game.GAME_TYPE_RANKED,
+            ladder_type=Game.LADDER_TYPE_DAILY,
+            status=Game.GAME_STATUS_ENDED,
+            winner=self.deck_b,
+            state={
+                "heroes": {
+                    "side_a": {
+                        "hero_id": "side_a_hero",
+                        "template_slug": self.hero_a.slug,
+                        "health": 0,
+                        "name": self.hero_a.name,
+                        "hero_power": {},
+                    },
+                    "side_b": {
+                        "hero_id": "side_b_hero",
+                        "template_slug": self.hero_b.slug,
+                        "health": 20,
+                        "name": self.hero_b.name,
+                        "hero_power": {},
+                    },
+                },
+                "winner": "side_b",
+            },
+        )
+        self.notification_a = PlayerNotification.objects.create(
+            user=self.user_a,
+            game=self.game,
+            message="Game over.",
+        )
+        self.notification_b = PlayerNotification.objects.create(
+            user=self.user_b,
+            game=self.game,
+            message="Game over.",
+        )
+
+    def test_unread_ended_game_notification_appears_in_lobby(self):
+        self.client.force_login(self.user_a)
+
+        response = self.client.get(f"/api/titles/{self.title.slug}/notifications/")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        ended_notifications = [
+            notification
+            for notification in response.json()
+            if notification["type"] == "game_ended"
+        ]
+        self.assertEqual(len(ended_notifications), 1)
+        self.assertEqual(ended_notifications[0]["ref_id"], self.game.id)
+        self.assertIn("Game over:", ended_notifications[0]["message"])
+        self.assertIn("ended_b defeated you", ended_notifications[0]["message"])
+        self.assertFalse(ended_notifications[0]["is_user_turn"])
+
+    def test_game_detail_does_not_clear_ended_game_notification(self):
+        self.client.force_login(self.user_a)
+
+        response = self.client.get(f"/api/gameplay/games/{self.game.id}/")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.notification_a.refresh_from_db()
+        self.notification_b.refresh_from_db()
+        self.assertFalse(self.notification_a.is_read)
+        self.assertFalse(self.notification_b.is_read)
+
+    def test_acknowledging_ended_game_clears_only_current_players_notification(self):
+        self.client.force_login(self.user_a)
+
+        response = self.client.post(
+            f"/api/gameplay/games/{self.game.id}/notifications/read/"
+        )
+
+        self.assertEqual(response.status_code, 204, response.content)
+        self.notification_a.refresh_from_db()
+        self.notification_b.refresh_from_db()
+        self.assertTrue(self.notification_a.is_read)
+        self.assertFalse(self.notification_b.is_read)
+
+        response = self.client.get(f"/api/titles/{self.title.slug}/notifications/")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(
+            any(
+                notification["type"] == "game_ended"
+                and notification["ref_id"] == self.game.id
+                for notification in response.json()
+            )
         )
 
 

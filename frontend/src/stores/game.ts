@@ -404,10 +404,12 @@ export const useGameStore = defineStore('game', {
     },
 
     connectWebSocket(gameId: string): void {
+      const isReconnecting = this.reconnectAttempts > 0
+
       // Store game ID for reconnection attempts
       this.currentGameId = gameId
       this.intentionalDisconnect = false
-      this.awaitingInitialUpdateSnapshot = true
+      this.awaitingInitialUpdateSnapshot = !isReconnecting
 
       const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
       const baseUrl = getBaseUrl().replace(/^https?:/, protocol + ':')
@@ -427,7 +429,6 @@ export const useGameStore = defineStore('game', {
       const wsUrl = `${baseUrl}/ws/game/${gameId}/${queryString ? `?${queryString}` : ''}`
 
       // Set status based on whether this is initial connection or reconnection
-      const isReconnecting = this.reconnectAttempts > 0
       this.wsStatus = isReconnecting ? 'reconnecting' : 'connecting'
 
       if (isReconnecting) {
@@ -660,6 +661,16 @@ export const useGameStore = defineStore('game', {
       this.currentLadderType = null
     },
 
+    async acknowledgeEndedGameNotification(): Promise<void> {
+      if (!this.currentGameId || this.currentGameType === 'intro') return
+
+      try {
+        await axios.post(`/gameplay/games/${this.currentGameId}/notifications/read/`)
+      } catch (err) {
+        console.error('Failed to acknowledge ended game notification', err)
+      }
+    },
+
     handleWebSocketMessage(data: any): void {
       console.log('WebSocket message:', data)
 
@@ -675,6 +686,7 @@ export const useGameStore = defineStore('game', {
 
       const isInitialSnapshot = this.awaitingInitialUpdateSnapshot
       this.awaitingInitialUpdateSnapshot = false
+      let sawGameOver = false
 
       // Handle errors first
       if (data.errors && Array.isArray(data.errors)) {
@@ -731,6 +743,7 @@ export const useGameStore = defineStore('game', {
         // Check if the game is over based on the state's winner field
         if (data.state.winner && data.state.winner !== 'none' && !this.gameOver.isGameOver) {
           this.setGameOver(data.state.winner)
+          sawGameOver = true
         }
       }
 
@@ -741,6 +754,7 @@ export const useGameStore = defineStore('game', {
         for (const update of data.updates) {
           if (update.type === 'update_game_over') {
             this.setGameOver(update.winner)
+            sawGameOver = true
             break
           }
         }
@@ -761,6 +775,10 @@ export const useGameStore = defineStore('game', {
           this.liveUpdateBatchId++
         }
 
+      }
+
+      if (sawGameOver && !isInitialSnapshot) {
+        void this.acknowledgeEndedGameNotification()
       }
     },
 

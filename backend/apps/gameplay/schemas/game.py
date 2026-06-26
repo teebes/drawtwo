@@ -205,6 +205,7 @@ class Notification(BaseModel):
         "game_challenge",
         "game_ranked",
         "game_ranked_queued",
+        "game_ended",
         "game_pve",
         "friend_request",
     ]

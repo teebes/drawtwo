@@ -421,6 +421,7 @@ final class GameDetailViewModel: ObservableObject {
     @Published var updates: [GameUpdateSnapshot] = []
     @Published private(set) var liveUpdateBatch: [GameUpdateSnapshot] = []
     @Published private(set) var liveUpdateBatchId = 0
+    @Published private(set) var liveGameOverVersion = 0
     @Published var isLoading = false
     @Published var isRematchLoading = false
     @Published var errorMessage: String?
@@ -587,6 +588,7 @@ final class GameDetailViewModel: ObservableObject {
         updates = []
         liveUpdateBatch = []
         liveUpdateBatchId = 0
+        liveGameOverVersion = 0
         hasReceivedInitialSocketSnapshot = false
         errorMessage = nil
         statusMessage = nil
@@ -692,6 +694,7 @@ final class GameDetailViewModel: ObservableObject {
             let payload = try JSONDecoder().decode(JSONValue.self, from: data)
             let shouldPublishLiveBatch = hasReceivedInitialSocketSnapshot
             hasReceivedInitialSocketSnapshot = true
+            let previousWinner = winner
 
             guard
                 let state = payload["state"],
@@ -699,6 +702,9 @@ final class GameDetailViewModel: ObservableObject {
             else {
                 appendErrors(from: payload)
                 appendUpdates(from: payload, publishLiveBatch: shouldPublishLiveBatch)
+                if shouldPublishLiveBatch, payloadIncludesGameOverUpdate(payload) {
+                    liveGameOverVersion += 1
+                }
                 return
             }
             if var stateObject = state.objectValue {
@@ -712,6 +718,9 @@ final class GameDetailViewModel: ObservableObject {
             }
             appendErrors(from: payload)
             appendUpdates(from: payload, publishLiveBatch: shouldPublishLiveBatch)
+            if shouldPublishLiveBatch, previousWinner == "none", winner != "none" {
+                liveGameOverVersion += 1
+            }
         } catch {
             errorMessage = "Could not parse live game update: \(error.localizedDescription)"
         }
@@ -1358,6 +1367,12 @@ final class GameDetailViewModel: ObservableObject {
         liveUpdateBatchId += 1
     }
 
+    private func payloadIncludesGameOverUpdate(_ payload: JSONValue) -> Bool {
+        payload["updates"]?.arrayValue?.contains { update in
+            update["type"]?.stringValue == "update_game_over"
+        } ?? false
+    }
+
     private func appendErrors(from payload: JSONValue) {
         guard let errors = payload["errors"]?.arrayValue, !errors.isEmpty else {
             return
@@ -1563,6 +1578,9 @@ struct GameDetailView: View {
                 fetchEloChangeIfNeeded()
             }
             recordCaptureState()
+        }
+        .onChange(of: model.liveGameOverVersion) { _, _ in
+            acknowledgeActiveGameOverNotification()
         }
         .onChange(of: model.displayUpdates.count) { _, _ in
             recordCaptureState()
@@ -2140,6 +2158,23 @@ struct GameDetailView: View {
                 using: authStore,
                 guestAccessToken: guestAccessToken
             )
+        }
+    }
+
+    private func acknowledgeActiveGameOverNotification() {
+        guard guestAccessToken == nil else {
+            return
+        }
+
+        Task {
+            do {
+                let _: EmptyResponse = try await authStore.authenticatedPost(
+                    "/gameplay/games/\(gameId)/notifications/read/",
+                    body: EmptyBody()
+                )
+            } catch {
+                // Best effort: leave the dashboard notification if this fails.
+            }
         }
     }
 

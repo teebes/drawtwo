@@ -35,7 +35,7 @@ from apps.collection.validation import (
 from apps.core.card_assets import get_hero_art_url
 from apps.core.serializers import serialize_cards_with_traits, to_card_schema
 from apps.gameplay.engine.dispatcher import resolve
-from apps.gameplay.models import Game
+from apps.gameplay.models import Game, PlayerNotification
 from apps.gameplay.notifications import send_game_updates_to_clients
 from apps.gameplay.schemas.commands import (
     AttackCommand,
@@ -81,6 +81,34 @@ DEFAULT_AI_COMMAND_DELAY_SECONDS = 1.0
 
 
 class GameService:
+    @staticmethod
+    def _create_game_ended_notifications(game: Game) -> None:
+        participants = (
+            (game.player_a_user, game.side_b),
+            (game.player_b_user, game.side_a),
+        )
+        notified_user_ids = set()
+
+        for user, opponent_deck in participants:
+            if not user or user.id in notified_user_ids:
+                continue
+
+            notified_user_ids.add(user.id)
+            opponent_name = (
+                opponent_deck.name
+                if opponent_deck.is_ai_deck
+                else opponent_deck.owner_name
+            )
+            notification_exists = PlayerNotification.objects.filter(
+                user=user,
+                game=game,
+            ).exists()
+            if not notification_exists:
+                PlayerNotification.objects.create(
+                    user=user,
+                    game=game,
+                    message=f"Game over against {opponent_name}.",
+                )
 
     def get_card_in_play(card: Card, card_id: int) -> CardInPlay:
         return CardInPlay(
@@ -396,6 +424,7 @@ class GameService:
                             game.winner = getattr(game, event.winner)
                             game.save(update_fields=["status", "winner"])
                             GameService._mark_actions_final_winner(game, event.winner)
+                            GameService._create_game_ended_notifications(game)
                             game_state.winner = event.winner
                             game_state.queue = []
                             # Clear the queue immediately to prevent processing any remaining effects

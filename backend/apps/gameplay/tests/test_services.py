@@ -10,7 +10,7 @@ from apps.authentication.models import User
 from apps.builder.models import CardTemplate, HeroTemplate, Title
 from apps.collection.models import Deck, DeckCard
 from apps.collection.validation import DeckValidationError
-from apps.gameplay.models import Game, MatchmakingQueue
+from apps.gameplay.models import Game, MatchmakingQueue, PlayerNotification
 from apps.gameplay.services import GameService
 from apps.gameplay.tests import ServiceTestsBase
 
@@ -265,6 +265,35 @@ class MatchmakingTests(TestCase):
             ladder_type=Game.LADDER_TYPE_DAILY,
         ).count()
         self.assertEqual(game_count, 2)
+
+    def test_game_end_creates_unread_notifications_for_players(self):
+        game = GameService.create_game(
+            self.deck_a,
+            self.deck_b,
+            randomize_starting_player=False,
+        )
+        game.type = Game.GAME_TYPE_RANKED
+        game.ladder_type = Game.LADDER_TYPE_RAPID
+        game.save(update_fields=["type", "ladder_type"])
+
+        GameService.step(game.id)
+        game.refresh_from_db()
+        GameService.process_command(game.id, {"type": "cmd_concede"}, "side_a")
+        GameService.step(game.id)
+
+        game.refresh_from_db()
+        self.assertEqual(game.status, Game.GAME_STATUS_ENDED)
+        self.assertEqual(game.winner, game.side_b)
+        self.assertEqual(
+            PlayerNotification.objects.filter(game=game, is_read=False).count(),
+            2,
+        )
+        self.assertTrue(
+            PlayerNotification.objects.filter(user=self.user_a, game=game).exists()
+        )
+        self.assertTrue(
+            PlayerNotification.objects.filter(user=self.user_b, game=game).exists()
+        )
 
     def test_create_game_rejects_deck_with_too_many_copies(self):
         deck_card = self.deck_a.deckcard_set.first()

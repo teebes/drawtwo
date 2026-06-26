@@ -12,6 +12,7 @@ from apps.gameplay.models import (
     FriendlyChallenge,
     Game,
     MatchmakingQueue,
+    PlayerNotification,
     PushDevice,
     UserTitleRating,
 )
@@ -148,6 +149,21 @@ def _viewer_for_request(request, game: Game) -> str | None:
     return None
 
 
+def _mark_ended_game_notifications_read(request, game: Game) -> None:
+    if game.status != Game.GAME_STATUS_ENDED:
+        return
+
+    user = request.user
+    if user.id not in {game.player_a_user_id, game.player_b_user_id}:
+        return
+
+    PlayerNotification.objects.filter(
+        user=user,
+        game=game,
+        is_read=False,
+    ).update(is_read=True)
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def game_detail(request, game_id):
@@ -205,6 +221,21 @@ def game_detail(request, game_id):
         }
 
     return Response(game_data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def acknowledge_game_notification(request, game_id):
+    game = get_object_or_404(Game, id=game_id)
+
+    if request.user.id not in {game.player_a_user_id, game.player_b_user_id}:
+        return Response(
+            {"error": "You do not have access to this game"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    _mark_ended_game_notifications_read(request, game)
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(["POST"])
