@@ -35,6 +35,7 @@
 		8A00003F2C9B410100000001 /* Inter.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8A0000402C9B410100000001 /* Inter.ttf */; };
 		8A0000432C9B410100000001 /* drawtwo_logo.png in Resources */ = {isa = PBXBuildFile; fileRef = 8A0000442C9B410100000001 /* drawtwo_logo.png */; };
 		8A0000452C9B410100000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8A0000462C9B410100000001 /* Assets.xcassets */; };
+		8A00004D2C9B410100000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 8A00004E2C9B410100000001 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -68,6 +69,7 @@
 		8A0000442C9B410100000001 /* drawtwo_logo.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = drawtwo_logo.png; sourceTree = "<group>"; };
 		8A0000462C9B410100000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		8A0000472C9B410100000001 /* Archetype.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Archetype.entitlements; sourceTree = "<group>"; };
+		8A00004E2C9B410100000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -95,6 +97,7 @@
 			children = (
 				8A0000022C9B410100000001 /* ArchetypeApp.swift */,
 				8A0000422C9B410100000001 /* Info.plist */,
+				8A00004E2C9B410100000001 /* PrivacyInfo.xcprivacy */,
 				8A0000472C9B410100000001 /* Archetype.entitlements */,
 				8A0000462C9B410100000001 /* Assets.xcassets */,
 				8A0000442C9B410100000001 /* drawtwo_logo.png */,
@@ -207,6 +210,7 @@
 				8A00003D2C9B410100000001 /* Cinzel.ttf in Resources */,
 				8A00003F2C9B410100000001 /* Inter.ttf in Resources */,
 				8A0000432C9B410100000001 /* drawtwo_logo.png in Resources */,
+				8A00004D2C9B410100000001 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -362,6 +366,7 @@
 		8A00002D2C9B410100000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APP_DISPLAY_NAME = "Draw Two Dev";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				APS_ENVIRONMENT = development;
 				CODE_SIGN_ENTITLEMENTS = Archetype/Archetype.entitlements;
@@ -369,6 +374,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = X84Q7QHUZJ;
 				GENERATE_INFOPLIST_FILE = NO;
+				GOOGLE_IOS_CLIENT_ID = "291299812498-b4pjfjce5uoiv4i9p5vpmt629o75qacj.apps.googleusercontent.com";
+				GOOGLE_IOS_REVERSED_CLIENT_ID = "com.googleusercontent.apps.291299812498-b4pjfjce5uoiv4i9p5vpmt629o75qacj";
 				INFOPLIST_FILE = Archetype/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -388,6 +395,7 @@
 		8A00002E2C9B410100000001 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APP_DISPLAY_NAME = "Draw Two";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				APS_ENVIRONMENT = production;
 				CODE_SIGN_ENTITLEMENTS = Archetype/Archetype.entitlements;
@@ -395,12 +403,14 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = X84Q7QHUZJ;
 				GENERATE_INFOPLIST_FILE = NO;
+				GOOGLE_IOS_CLIENT_ID = "REPLACE_WITH_PROD_GOOGLE_IOS_CLIENT_ID";
+				GOOGLE_IOS_REVERSED_CLIENT_ID = "REPLACE_WITH_PROD_GOOGLE_IOS_REVERSED_CLIENT_ID";
 				INFOPLIST_FILE = Archetype/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.morelsoft.drawtwo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

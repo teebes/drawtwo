@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+
 from .models import Friendship
 
 User = get_user_model()
@@ -18,6 +19,7 @@ class UserAdmin(BaseUserAdmin):
         "is_email_verified",
         "is_staff",
         "is_active",
+        "deleted_at",
         "created_at",
     )
     list_filter = (
@@ -26,6 +28,7 @@ class UserAdmin(BaseUserAdmin):
         "is_superuser",
         "is_active",
         "is_email_verified",
+        "deleted_at",
         "created_at",
     )
     search_fields = ("email", "username")
@@ -33,7 +36,7 @@ class UserAdmin(BaseUserAdmin):
 
     fieldsets = (
         (None, {"fields": ("email", "password")}),
-        ("Personal info", {"fields": ("username", "avatar", "status")}),
+        ("Personal info", {"fields": ("username", "avatar", "status", "deleted_at")}),
         (
             "Permissions",
             {
@@ -68,7 +71,13 @@ class UserAdmin(BaseUserAdmin):
         ),
     )
 
-    readonly_fields = ("created_at", "updated_at", "date_joined", "last_login")
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+        "date_joined",
+        "last_login",
+        "deleted_at",
+    )
 
     # Remove username from the form
     username = None

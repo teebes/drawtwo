@@ -16,6 +16,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     display_name = serializers.ReadOnlyField()
     apple_connected = serializers.SerializerMethodField()
+    google_connected = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -29,6 +30,7 @@ class UserSerializer(serializers.ModelSerializer):
             "is_staff",
             "status",
             "apple_connected",
+            "google_connected",
             "created_at",
             "updated_at",
         )
@@ -40,10 +42,14 @@ class UserSerializer(serializers.ModelSerializer):
             "is_staff",
             "status",
             "apple_connected",
+            "google_connected",
         )
 
     def get_apple_connected(self, obj):
         return SocialAccount.objects.filter(user=obj, provider="apple").exists()
+
+    def get_google_connected(self, obj):
+        return SocialAccount.objects.filter(user=obj, provider="google").exists()
 
 
 class CustomRegisterSerializer(RegisterSerializer):
@@ -148,6 +154,14 @@ class AppleLoginSerializer(serializers.Serializer):
 
     identity_token = serializers.CharField(required=False)
     id_token = serializers.CharField(required=False)
+    authorization_code = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+    redirect_uri = serializers.URLField(
+        required=False, allow_blank=True, allow_null=True
+    )
 
     def validate(self, attrs):
         identity_token = attrs.get("identity_token") or attrs.get("id_token")

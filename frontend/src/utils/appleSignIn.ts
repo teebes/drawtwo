@@ -6,8 +6,14 @@ declare global {
 
 type AppleSignInResponse = {
   authorization?: {
+    code?: string
     id_token?: string
   }
+}
+
+export type AppleSignInCredential = {
+  identityToken: string
+  authorizationCode?: string
 }
 
 type AppleIDNamespace = {
@@ -76,6 +82,14 @@ export const requestAppleIdentityToken = async (
   clientId: string,
   redirectUri: string
 ): Promise<string> => {
+  const credential = await requestAppleCredential(clientId, redirectUri)
+  return credential.identityToken
+}
+
+export const requestAppleCredential = async (
+  clientId: string,
+  redirectUri: string
+): Promise<AppleSignInCredential> => {
   await initAppleSignIn(clientId, redirectUri)
 
   const appleResponse = await window.AppleID?.auth?.signIn()
@@ -85,7 +99,10 @@ export const requestAppleIdentityToken = async (
     throw new Error('Apple did not return an identity token. Please try again.')
   }
 
-  return identityToken
+  return {
+    identityToken,
+    authorizationCode: appleResponse?.authorization?.code
+  }
 }
 
 export const isAppleSignInCancellation = (error: any): boolean => {

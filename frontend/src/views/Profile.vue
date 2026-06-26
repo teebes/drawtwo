@@ -83,13 +83,23 @@
                 <div class="flex items-center justify-between gap-3 py-3 border-b border-gray-200 dark:border-gray-700">
                   <span class="font-medium text-gray-700 dark:text-gray-300">Apple:</span>
                   <div class="flex min-w-0 items-center justify-end">
-                    <span
-                      v-if="appleConnected"
-                      class="inline-flex items-center gap-1.5 text-sm font-medium text-green-700 dark:text-green-300"
-                    >
-                      <CheckCircle class="h-4 w-4" aria-hidden="true" />
-                      Connected
-                    </span>
+                    <div v-if="appleConnected" class="flex items-center gap-3">
+                      <span
+                        class="inline-flex items-center gap-1.5 text-sm font-medium text-green-700 dark:text-green-300"
+                      >
+                        <CheckCircle class="h-4 w-4" aria-hidden="true" />
+                        Connected
+                      </span>
+                      <button
+                        type="button"
+                        @click="disconnectProvider('apple')"
+                        :disabled="authStore.loading"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-800 dark:text-gray-100 dark:ring-gray-600 dark:hover:bg-gray-700"
+                      >
+                        <Unlink class="h-4 w-4" aria-hidden="true" />
+                        Disconnect
+                      </button>
+                    </div>
                     <button
                       v-else
                       type="button"
@@ -102,6 +112,48 @@
                       {{ appleClientId ? 'Connect Apple' : 'Apple unavailable' }}
                     </button>
                   </div>
+                </div>
+
+                <div class="flex items-center justify-between gap-3 py-3 border-b border-gray-200 dark:border-gray-700">
+                  <span class="font-medium text-gray-700 dark:text-gray-300">Google:</span>
+                  <div class="flex min-w-0 items-center justify-end">
+                    <div v-if="googleConnected" class="flex items-center gap-3">
+                      <span
+                        class="inline-flex items-center gap-1.5 text-sm font-medium text-green-700 dark:text-green-300"
+                      >
+                        <CheckCircle class="h-4 w-4" aria-hidden="true" />
+                        Connected
+                      </span>
+                      <button
+                        type="button"
+                        @click="disconnectProvider('google')"
+                        :disabled="authStore.loading"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-800 dark:text-gray-100 dark:ring-gray-600 dark:hover:bg-gray-700"
+                      >
+                        <Unlink class="h-4 w-4" aria-hidden="true" />
+                        Disconnect
+                      </button>
+                    </div>
+                    <span
+                      v-else
+                      class="text-sm font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Not connected
+                    </span>
+                  </div>
+                </div>
+
+                <div class="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <span class="font-medium text-gray-700 dark:text-gray-300">Account:</span>
+                  <button
+                    type="button"
+                    @click="deleteAccount"
+                    :disabled="authStore.loading"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Trash2 class="h-4 w-4" aria-hidden="true" />
+                    Delete Account
+                  </button>
                 </div>
 
               </div>
@@ -122,14 +174,16 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { CheckCircle, Link as LinkIcon, Loader2 } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
+import { CheckCircle, Link as LinkIcon, Loader2, Trash2, Unlink } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import {
   isAppleSignInCancellation,
-  requestAppleIdentityToken
+  requestAppleCredential
 } from '../utils/appleSignIn'
 
 const authStore = useAuthStore()
+const router = useRouter()
 const isEditingUsername = ref(false)
 const newUsername = ref('')
 const appleStatus = ref('')
@@ -139,6 +193,7 @@ const appleClientId = import.meta.env.VITE_APPLE_SIGN_IN_CLIENT_ID as string | u
 const appleRedirectUri = (import.meta.env.VITE_APPLE_REDIRECT_URI as string | undefined)
   || `${window.location.origin}/auth/callback/apple`
 const appleConnected = computed(() => Boolean(authStore.user?.apple_connected))
+const googleConnected = computed(() => Boolean(authStore.user?.google_connected))
 
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('en-US', {
@@ -179,8 +234,12 @@ const connectApple = async () => {
   }
 
   try {
-    const identityToken = await requestAppleIdentityToken(appleClientId, appleRedirectUri)
-    const result = await authStore.linkApple(identityToken)
+    const credential = await requestAppleCredential(appleClientId, appleRedirectUri)
+    const result = await authStore.linkApple(
+      credential.identityToken,
+      credential.authorizationCode,
+      appleRedirectUri
+    )
 
     if (result.success) {
       appleStatus.value = result.data?.message || 'Apple sign-in connected.'
@@ -198,6 +257,45 @@ const connectApple = async () => {
 
     appleError.value = error?.message || 'Unable to connect Apple sign-in.'
   }
+}
+
+const disconnectProvider = async (provider: 'apple' | 'google') => {
+  appleStatus.value = ''
+  appleError.value = ''
+
+  const result = await authStore.disconnectSocial(provider)
+  if (result.success) {
+    appleStatus.value = result.data?.message || `${provider} sign-in disconnected.`
+    return
+  }
+
+  appleError.value = result.error?.error
+    || result.error?.detail
+    || result.error?.message
+    || `Unable to disconnect ${provider} sign-in.`
+}
+
+const deleteAccount = async () => {
+  appleStatus.value = ''
+  appleError.value = ''
+
+  const confirmed = window.confirm(
+    'Delete your Draw Two account? This removes your login access and profile information.'
+  )
+  if (!confirmed) {
+    return
+  }
+
+  const result = await authStore.deleteAccount()
+  if (result.success) {
+    await router.push('/')
+    return
+  }
+
+  appleError.value = result.error?.error
+    || result.error?.detail
+    || result.error?.message
+    || 'Unable to delete account.'
 }
 
 onMounted(async () => {

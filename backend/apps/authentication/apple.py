@@ -1,4 +1,6 @@
 import json
+import time
+from pathlib import Path
 
 import jwt
 import requests
@@ -7,8 +9,11 @@ from django.core.cache import cache
 
 APPLE_ISSUER = "https://appleid.apple.com"
 APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys"
+APPLE_TOKEN_URL = "https://appleid.apple.com/auth/token"
+APPLE_REVOKE_URL = "https://appleid.apple.com/auth/revoke"
 APPLE_JWKS_CACHE_KEY = "authentication:apple:jwks"
 APPLE_JWKS_CACHE_TIMEOUT = 60 * 60
+APPLE_CLIENT_SECRET_TTL_SECONDS = 60 * 60 * 24 * 30
 
 
 def configured_apple_client_ids():
@@ -33,6 +38,67 @@ def verify_apple_identity_token(identity_token):
         header = jwt.get_unverified_header(identity_token)
     except jwt.PyJWTError as exc:
         raise ValueError("Invalid Apple login token.") from exc
+
+
+def exchange_apple_authorization_code(client_id, authorization_code, redirect_uri=None):
+    """Exchange a one-time Apple authorization code for tokens."""
+    if not authorization_code:
+        return {}
+
+    data = {
+        "client_id": client_id,
+        "client_secret": make_apple_client_secret(client_id),
+        "code": authorization_code,
+        "grant_type": "authorization_code",
+    }
+    if redirect_uri:
+        data["redirect_uri"] = redirect_uri
+
+    try:
+        response = requests.post(APPLE_TOKEN_URL, data=data, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise ValueError("Could not exchange Apple authorization code.") from exc
+
+
+def revoke_apple_token(client_id, token, token_type_hint="refresh_token"):
+    """Ask Apple to revoke a Sign in with Apple refresh or access token."""
+    if not token:
+        return
+
+    data = {
+        "client_id": client_id,
+        "client_secret": make_apple_client_secret(client_id),
+        "token": token,
+        "token_type_hint": token_type_hint,
+    }
+
+    try:
+        response = requests.post(APPLE_REVOKE_URL, data=data, timeout=10)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise ValueError("Could not revoke Apple token.") from exc
+
+
+def make_apple_client_secret(client_id):
+    """Build the ES256 client-secret JWT Apple requires for token APIs."""
+    team_id = getattr(settings, "APPLE_SIGN_IN_TEAM_ID", None)
+    key_id = getattr(settings, "APPLE_SIGN_IN_KEY_ID", None)
+    private_key_path = getattr(settings, "APPLE_SIGN_IN_PRIVATE_KEY_PATH", None)
+    if not all([team_id, key_id, private_key_path]):
+        raise ValueError("Apple token API credentials are not configured.")
+
+    issued_at = int(time.time())
+    payload = {
+        "iss": team_id,
+        "iat": issued_at,
+        "exp": issued_at + APPLE_CLIENT_SECRET_TTL_SECONDS,
+        "aud": APPLE_ISSUER,
+        "sub": client_id,
+    }
+    private_key = Path(private_key_path).read_text()
+    return jwt.encode(payload, private_key, algorithm="ES256", headers={"kid": key_id})
 
     if header.get("alg") != "RS256":
         raise ValueError("Invalid Apple login token algorithm.")

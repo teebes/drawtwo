@@ -306,8 +306,8 @@ final class DrawTwoWebSocket: ObservableObject {
                 }
                 self.openSocket(
                     path: currentPath,
-                    accessToken: currentAccessToken,
-                    guestToken: currentGuestToken,
+                    accessToken: self.currentAccessToken,
+                    guestToken: self.currentGuestToken,
                     isReconnect: true
                 )
             }

@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Archetype</string>
+	<string>$(APP_DISPLAY_NAME)</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -22,15 +22,15 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.googleusercontent.apps.291299812498-b4pjfjce5uoiv4i9p5vpmt629o75qacj</string>
+			<string>$(GOOGLE_IOS_REVERSED_CLIENT_ID)</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.291299812498-b4pjfjce5uoiv4i9p5vpmt629o75qacj</string>
+				<string>$(GOOGLE_IOS_REVERSED_CLIENT_ID)</string>
 			</array>
 		</dict>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.drawtwo.archetype.login</string>
+			<string>com.morelsoft.drawtwo.login</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>drawtwo</string>
@@ -40,7 +40,7 @@
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>GIDClientID</key>
-	<string>291299812498-b4pjfjce5uoiv4i9p5vpmt629o75qacj.apps.googleusercontent.com</string>
+	<string>$(GOOGLE_IOS_CLIENT_ID)</string>
 	<key>GIDServerClientID</key>
 	<string>291299812498-8j9bm4sqcedrk1hplme8jreosp5ilclg.apps.googleusercontent.com</string>
 	<key>LSApplicationCategoryType</key>
@@ -51,7 +51,7 @@
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Archetype can connect to a local DrawTwo development backend on your network for testing.</string>
+	<string>Draw Two can connect to local game services on your network.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchScreen</key>

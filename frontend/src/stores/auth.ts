@@ -188,12 +188,20 @@ export const useAuthStore = defineStore('auth', {
     },
 
     // Apple Sign in login
-    async appleLogin(identityToken: string): Promise<ApiResponse> {
+    async appleLogin(
+      identityToken: string,
+      authorizationCode?: string,
+      redirectUri?: string
+    ): Promise<ApiResponse> {
       this.loading = true
       this.error = null
 
       try {
-        const response = await axios.post('/auth/apple/', { identity_token: identityToken })
+        const response = await axios.post('/auth/apple/', {
+          identity_token: identityToken,
+          authorization_code: authorizationCode,
+          redirect_uri: redirectUri
+        })
 
         const access = response.data.access_token || response.data.access
         const refresh = response.data.refresh_token || response.data.refresh
@@ -213,13 +221,19 @@ export const useAuthStore = defineStore('auth', {
     },
 
     // Connect Apple Sign in to the currently authenticated account
-    async linkApple(identityToken: string): Promise<ApiResponse> {
+    async linkApple(
+      identityToken: string,
+      authorizationCode?: string,
+      redirectUri?: string
+    ): Promise<ApiResponse> {
       this.loading = true
       this.error = null
 
       try {
         const response = await axios.post('/auth/apple/link/', {
-          identity_token: identityToken
+          identity_token: identityToken,
+          authorization_code: authorizationCode,
+          redirect_uri: redirectUri
         })
 
         if (response.data.user) {
@@ -232,6 +246,43 @@ export const useAuthStore = defineStore('auth', {
       } catch (error: any) {
         this.loading = false
         this.error = error.response?.data || { message: 'Apple account linking failed' }
+        return { success: false, error: this.error }
+      }
+    },
+
+    async disconnectSocial(provider: 'apple' | 'google'): Promise<ApiResponse> {
+      this.loading = true
+      this.error = null
+
+      try {
+        const response = await axios.delete(`/auth/social/${provider}/`)
+
+        if (response.data.user) {
+          this.user = response.data.user as User
+          localStorage.setItem('userData', JSON.stringify(response.data.user))
+        }
+
+        this.loading = false
+        return { success: true, data: response.data }
+      } catch (error: any) {
+        this.loading = false
+        this.error = error.response?.data || { message: 'Sign-in disconnect failed' }
+        return { success: false, error: this.error }
+      }
+    },
+
+    async deleteAccount(): Promise<ApiResponse> {
+      this.loading = true
+      this.error = null
+
+      try {
+        await axios.delete('/auth/account/')
+        this.clearAuth()
+        this.loading = false
+        return { success: true }
+      } catch (error: any) {
+        this.loading = false
+        this.error = error.response?.data || { message: 'Account deletion failed' }
         return { success: false, error: this.error }
       }
     },

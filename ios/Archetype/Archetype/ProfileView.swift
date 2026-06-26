@@ -8,6 +8,7 @@ struct ProfileView: View {
     @State private var profileStatusMessage: String?
     @State private var didApplyInitialEdit = false
     @State private var didApplyInitialUsername = false
+    @State private var showDeleteAccountConfirmation = false
 
     var body: some View {
         ArchetypeScreen {
@@ -45,6 +46,20 @@ struct ProfileView: View {
         .onChange(of: isEditingUsername) { _, _ in
             recordCaptureState()
         }
+        .confirmationDialog(
+            "Delete your Draw Two account?",
+            isPresented: $showDeleteAccountConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Account", role: .destructive) {
+                Task {
+                    await deleteAccount()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes your login access and profile information.")
+        }
     }
 
     private func recordCaptureState() {
@@ -79,6 +94,12 @@ struct ProfileView: View {
 
                 Divider().overlay(ArchetypeTheme.border)
                 appleRow
+
+                Divider().overlay(ArchetypeTheme.border)
+                googleRow
+
+                Divider().overlay(ArchetypeTheme.border)
+                accountActionsRow
             }
         }
         .padding(24)
@@ -167,9 +188,20 @@ struct ProfileView: View {
                 Spacer(minLength: 12)
 
                 if appleConnected {
-                    Label("Connected", systemImage: "checkmark.circle.fill")
-                        .font(.archetypeBody(15, weight: .medium))
-                        .foregroundStyle(ArchetypeTheme.green)
+                    HStack(spacing: 10) {
+                        Label("Connected", systemImage: "checkmark.circle.fill")
+                            .font(.archetypeBody(15, weight: .medium))
+                            .foregroundStyle(ArchetypeTheme.green)
+
+                        Button("Disconnect") {
+                            Task {
+                                await disconnectProvider("apple")
+                            }
+                        }
+                        .font(.archetypeBody(13, weight: .medium))
+                        .foregroundStyle(Color(hex: 0xF87171))
+                        .disabled(authStore.isLoading)
+                    }
                 }
             }
 
@@ -185,6 +217,63 @@ struct ProfileView: View {
                 .allowsHitTesting(!authStore.isLoading)
                 .opacity(authStore.isLoading ? 0.55 : 1)
             }
+        }
+        .padding(.vertical, 13)
+    }
+
+    private var googleRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text("Google:")
+                .font(.archetypeBody(15, weight: .medium))
+                .foregroundStyle(Color(hex: 0xD1D5DB))
+
+            Spacer(minLength: 12)
+
+            if googleConnected {
+                HStack(spacing: 10) {
+                    Label("Connected", systemImage: "checkmark.circle.fill")
+                        .font(.archetypeBody(15, weight: .medium))
+                        .foregroundStyle(ArchetypeTheme.green)
+
+                    Button("Disconnect") {
+                        Task {
+                            await disconnectProvider("google")
+                        }
+                    }
+                    .font(.archetypeBody(13, weight: .medium))
+                    .foregroundStyle(Color(hex: 0xF87171))
+                    .disabled(authStore.isLoading)
+                }
+            } else {
+                Text("Not connected")
+                    .font(.archetypeBody(15))
+                    .foregroundStyle(ArchetypeTheme.muted)
+            }
+        }
+        .padding(.vertical, 13)
+    }
+
+    private var accountActionsRow: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text("Account:")
+                .font(.archetypeBody(15, weight: .medium))
+                .foregroundStyle(Color(hex: 0xD1D5DB))
+
+            Spacer(minLength: 12)
+
+            Button(role: .destructive) {
+                showDeleteAccountConfirmation = true
+            } label: {
+                Label("Delete Account", systemImage: "trash")
+                    .font(.archetypeBody(13, weight: .semibold))
+                    .foregroundStyle(Color.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(ArchetypeTheme.red)
+                    .clipShape(RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius))
+            }
+            .buttonStyle(.plain)
+            .disabled(authStore.isLoading)
         }
         .padding(.vertical, 13)
     }
@@ -208,6 +297,10 @@ struct ProfileView: View {
 
     private var appleConnected: Bool {
         authStore.user?.appleConnected == true
+    }
+
+    private var googleConnected: Bool {
+        authStore.user?.googleConnected == true
     }
 
     private func startUsernameEdit() {
@@ -257,9 +350,15 @@ struct ProfileView: View {
                 authStore.errorMessage = "Apple sign-in did not return an identity token."
                 return
             }
+            let authorizationCode = credential.authorizationCode.flatMap {
+                String(data: $0, encoding: .utf8)
+            }
 
             Task {
-                if await authStore.linkApple(identityToken: identityToken) {
+                if await authStore.linkApple(
+                    identityToken: identityToken,
+                    authorizationCode: authorizationCode
+                ) {
                     profileStatusMessage = authStore.statusMessage ?? "Apple sign-in connected."
                 }
             }
@@ -276,6 +375,18 @@ struct ProfileView: View {
             authStore.statusMessage = nil
             authStore.errorMessage = error.localizedDescription
         }
+    }
+
+    private func disconnectProvider(_ provider: String) async {
+        profileStatusMessage = nil
+        if await authStore.disconnectSocial(provider: provider) {
+            profileStatusMessage = authStore.statusMessage
+        }
+    }
+
+    private func deleteAccount() async {
+        profileStatusMessage = nil
+        _ = await authStore.deleteAccount()
     }
 
     private func applyInitialEditIfNeeded() {

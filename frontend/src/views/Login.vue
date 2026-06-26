@@ -155,7 +155,7 @@ import { useAuthStore } from '../stores/auth'
 import {
   initAppleSignIn,
   isAppleSignInCancellation,
-  requestAppleIdentityToken
+  requestAppleCredential
 } from '../utils/appleSignIn'
 
 declare global {
@@ -375,8 +375,12 @@ const handleAppleLogin = async () => {
   }
 
   try {
-    const identityToken = await requestAppleIdentityToken(appleClientId, appleRedirectUri)
-    const result = await authStore.appleLogin(identityToken)
+    const credential = await requestAppleCredential(appleClientId, appleRedirectUri)
+    const result = await authStore.appleLogin(
+      credential.identityToken,
+      credential.authorizationCode,
+      appleRedirectUri
+    )
     if (result.success) {
       showMessage('Apple login successful! Redirecting...', 'success')
       const redirect = (route.query.redirect as string) || '/play'

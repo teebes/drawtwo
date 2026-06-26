@@ -1,7 +1,8 @@
 """
 Signal handlers for authentication app.
 """
-from allauth.socialaccount.signals import social_account_added, pre_social_login
+
+from allauth.socialaccount.signals import pre_social_login, social_account_added
 from django.contrib.auth import get_user_model
 from django.dispatch import receiver
 from rest_framework.exceptions import PermissionDenied
@@ -47,4 +48,4 @@ def mark_email_verified_on_social_login(sender, request, sociallogin, **kwargs):
     user = sociallogin.user
     if user and not user.is_email_verified:
         user.is_email_verified = True
-        user.save(update_fields=['is_email_verified'])
+        user.save(update_fields=["is_email_verified"])

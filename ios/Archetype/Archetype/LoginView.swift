@@ -325,9 +325,15 @@ struct LoginView: View {
                 authStore.errorMessage = "Apple sign-in did not return an identity token."
                 return
             }
+            let authorizationCode = credential.authorizationCode.flatMap {
+                String(data: $0, encoding: .utf8)
+            }
 
             Task {
-                await authStore.signInWithApple(identityToken: identityToken)
+                await authStore.signInWithApple(
+                    identityToken: identityToken,
+                    authorizationCode: authorizationCode
+                )
             }
 
         case .failure(let error):

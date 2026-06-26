@@ -29,6 +29,7 @@ import Board from '../views/Board.vue'
 import Friends from '../views/Friends.vue'
 import PrivacyPolicy from '../views/PrivacyPolicy.vue'
 import TermsOfService from '../views/TermsOfService.vue'
+import Support from '../views/Support.vue'
 import Howto from '../views/Howto.vue'
 import Games from '../views/Games.vue'
 
@@ -49,6 +50,12 @@ const routes = [
     path: '/terms',
     name: 'TermsOfService',
     component: TermsOfService,
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/support',
+    name: 'Support',
+    component: Support,
     meta: { requiresAuth: false }
   },
   {

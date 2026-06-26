@@ -1,3 +1,5 @@
+import logging
+
 from allauth.account.models import EmailAddress, EmailConfirmation
 from allauth.socialaccount.models import SocialAccount
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
@@ -6,6 +8,7 @@ from dj_rest_auth.registration.views import SocialLoginView
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
+from django.db import models, transaction
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -21,7 +24,12 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .apple import configured_apple_client_ids, verify_apple_identity_token
+from .apple import (
+    configured_apple_client_ids,
+    exchange_apple_authorization_code,
+    revoke_apple_token,
+    verify_apple_identity_token,
+)
 from .serializers import (
     AppleLoginSerializer,
     EmailVerificationSerializer,
@@ -34,6 +42,7 @@ from .serializers import (
 )
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 def _login_url(base_url, key):
@@ -174,6 +183,7 @@ class GoogleNativeLoginView(APIView):
             )
 
         email = token_info.get("email")
+        google_sub = token_info.get("sub")
         email_verified = token_info.get("email_verified")
         if not email or email_verified is not True:
             return Response(
@@ -184,7 +194,17 @@ class GoogleNativeLoginView(APIView):
         from apps.control.models import SiteSettings
 
         site_settings = SiteSettings.get_cached_settings()
-        user = User.objects.filter(email__iexact=email).first()
+        social_account = None
+        if google_sub:
+            social_account = (
+                SocialAccount.objects.filter(provider="google", uid=google_sub)
+                .select_related("user")
+                .first()
+            )
+
+        user = social_account.user if social_account else None
+        if not user:
+            user = User.objects.filter(email__iexact=email).first()
 
         if not user:
             if site_settings.signup_disabled:
@@ -219,6 +239,15 @@ class GoogleNativeLoginView(APIView):
             email=user.email,
             defaults={"verified": True, "primary": True},
         )
+        if google_sub:
+            SocialAccount.objects.update_or_create(
+                provider="google",
+                uid=google_sub,
+                defaults={
+                    "user": user,
+                    "extra_data": _google_extra_data(token_info),
+                },
+            )
 
         if site_settings.whitelist_mode_enabled and not user.can_login():
             return Response(
@@ -333,7 +362,7 @@ class AppleLoginView(APIView):
             user = User.objects.create_user(email=email)
 
         if not social_account:
-            SocialAccount.objects.update_or_create(
+            social_account, _ = SocialAccount.objects.update_or_create(
                 provider="apple",
                 uid=apple_sub,
                 defaults={
@@ -341,6 +370,18 @@ class AppleLoginView(APIView):
                     "extra_data": _apple_extra_data(token_info),
                 },
             )
+        else:
+            _update_social_account_extra_data(
+                social_account,
+                _apple_extra_data(token_info),
+            )
+
+        _try_store_apple_refresh_token(
+            social_account=social_account,
+            token_info=token_info,
+            authorization_code=serializer.validated_data.get("authorization_code"),
+            redirect_uri=serializer.validated_data.get("redirect_uri"),
+        )
 
         update_fields = []
         if (
@@ -442,8 +483,16 @@ class AppleLinkView(APIView):
                     status=status.HTTP_409_CONFLICT,
                 )
 
-            linked_account.extra_data = _apple_extra_data(token_info)
-            linked_account.save(update_fields=["extra_data"])
+            _update_social_account_extra_data(
+                linked_account,
+                _apple_extra_data(token_info),
+            )
+            _try_store_apple_refresh_token(
+                social_account=linked_account,
+                token_info=token_info,
+                authorization_code=serializer.validated_data.get("authorization_code"),
+                redirect_uri=serializer.validated_data.get("redirect_uri"),
+            )
             return Response(
                 {
                     "message": "Apple sign-in is already connected.",
@@ -468,11 +517,17 @@ class AppleLinkView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        SocialAccount.objects.create(
+        social_account = SocialAccount.objects.create(
             user=request.user,
             provider="apple",
             uid=apple_sub,
             extra_data=_apple_extra_data(token_info),
+        )
+        _try_store_apple_refresh_token(
+            social_account=social_account,
+            token_info=token_info,
+            authorization_code=serializer.validated_data.get("authorization_code"),
+            redirect_uri=serializer.validated_data.get("redirect_uri"),
         )
 
         return Response(
@@ -488,6 +543,109 @@ def _apple_extra_data(token_info):
     return {
         key: value for key, value in token_info.items() if key not in {"sub", "email"}
     }
+
+
+def _google_extra_data(token_info):
+    return {key: value for key, value in token_info.items() if key != "sub"}
+
+
+def _update_social_account_extra_data(social_account, updates):
+    extra_data = dict(social_account.extra_data or {})
+    extra_data.update(updates)
+    social_account.extra_data = extra_data
+    social_account.save(update_fields=["extra_data"])
+
+
+def _try_store_apple_refresh_token(
+    social_account,
+    token_info,
+    authorization_code,
+    redirect_uri=None,
+):
+    if not authorization_code:
+        return
+
+    client_id = token_info.get("aud")
+    if not client_id:
+        return
+
+    try:
+        token_response = exchange_apple_authorization_code(
+            client_id=client_id,
+            authorization_code=authorization_code,
+            redirect_uri=redirect_uri,
+        )
+    except ValueError:
+        logger.warning("Could not exchange Apple authorization code.", exc_info=True)
+        return
+
+    refresh_token = token_response.get("refresh_token")
+    if not refresh_token:
+        return
+
+    extra_data = dict(social_account.extra_data or {})
+    extra_data["apple_client_id"] = client_id
+    extra_data["apple_refresh_token"] = refresh_token
+    social_account.extra_data = extra_data
+    social_account.save(update_fields=["extra_data"])
+
+
+def _revoke_apple_social_account(social_account):
+    extra_data = social_account.extra_data or {}
+    refresh_token = extra_data.get("apple_refresh_token")
+    client_id = extra_data.get("apple_client_id") or extra_data.get("aud")
+    if not refresh_token or not client_id:
+        return
+
+    revoke_apple_token(
+        client_id=client_id,
+        token=refresh_token,
+        token_type_hint="refresh_token",
+    )
+
+
+def _blacklist_user_refresh_tokens(user):
+    try:
+        from rest_framework_simplejwt.token_blacklist.models import (
+            BlacklistedToken,
+            OutstandingToken,
+        )
+    except ImportError:
+        return
+
+    for token in OutstandingToken.objects.filter(user=user):
+        BlacklistedToken.objects.get_or_create(token=token)
+
+
+def _delete_account_related_data(user):
+    EmailConfirmation.objects.filter(email_address__user=user).delete()
+    EmailAddress.objects.filter(user=user).delete()
+    SocialAccount.objects.filter(user=user).delete()
+
+    from .models import Friendship
+
+    Friendship.objects.filter(
+        models.Q(user=user) | models.Q(friend=user) | models.Q(initiated_by=user)
+    ).delete()
+
+    try:
+        from apps.gameplay.models import (
+            FriendlyChallenge,
+            MatchmakingQueue,
+            PlayerNotification,
+            PushDevice,
+            PushNotificationEvent,
+        )
+    except ImportError:
+        return
+
+    MatchmakingQueue.objects.filter(user=user).delete()
+    FriendlyChallenge.objects.filter(
+        models.Q(challenger=user) | models.Q(challengee=user)
+    ).delete()
+    PlayerNotification.objects.filter(user=user).delete()
+    PushDevice.objects.filter(user=user).delete()
+    PushNotificationEvent.objects.filter(user=user).delete()
 
 
 def _apple_email_verified(value):
@@ -648,6 +806,82 @@ class UserProfileView(APIView):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SocialDisconnectView(APIView):
+    """Disconnect a social sign-in provider from the current account."""
+
+    permission_classes = [permissions.IsAuthenticated]
+    allowed_providers = {"apple", "google"}
+
+    def delete(self, request, provider):
+        provider = provider.lower()
+        if provider not in self.allowed_providers:
+            return Response(
+                {"error": "Unsupported sign-in provider."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        social_account = SocialAccount.objects.filter(
+            user=request.user,
+            provider=provider,
+        ).first()
+        if not social_account:
+            return Response(
+                {"error": f"{provider.title()} sign-in is not connected."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if provider == "apple":
+            try:
+                _revoke_apple_social_account(social_account)
+            except ValueError:
+                logger.warning("Could not revoke Apple token.", exc_info=True)
+                return Response(
+                    {"error": "Could not disconnect Apple sign-in. Please try again."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+
+        social_account.delete()
+        return Response(
+            {
+                "message": f"{provider.title()} sign-in disconnected.",
+                "user": UserSerializer(request.user).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class AccountDeletionView(APIView):
+    """Delete the current user's account while preserving non-personal game history."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request):
+        user = request.user
+        social_accounts = list(SocialAccount.objects.filter(user=user))
+        for social_account in social_accounts:
+            if social_account.provider != "apple":
+                continue
+
+            try:
+                _revoke_apple_social_account(social_account)
+            except ValueError:
+                logger.warning(
+                    "Could not revoke Apple token during account deletion.",
+                    exc_info=True,
+                )
+                return Response(
+                    {"error": "Could not delete account. Please try again."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+
+        with transaction.atomic():
+            _blacklist_user_refresh_tokens(user)
+            _delete_account_related_data(user)
+            user.anonymize_for_deletion()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(["GET"])

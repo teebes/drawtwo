@@ -296,6 +296,7 @@ class AuthenticationAPITestCase(APITestCase):
     def test_google_native_login_creates_verified_user(self, mock_verify_token):
         """Native Google login creates a verified user and returns JWTs."""
         mock_verify_token.return_value = {
+            "sub": "google-native-user",
             "email": "native-google@example.com",
             "email_verified": True,
             "picture": "https://example.com/avatar.png",
@@ -319,6 +320,9 @@ class AuthenticationAPITestCase(APITestCase):
         email_address = EmailAddress.objects.get(email="native-google@example.com")
         self.assertTrue(email_address.verified)
         self.assertTrue(email_address.primary)
+        social_account = SocialAccount.objects.get(provider="google")
+        self.assertEqual(social_account.uid, "google-native-user")
+        self.assertEqual(social_account.user, user)
         mock_verify_token.assert_called_once()
 
     @override_settings(
@@ -400,6 +404,51 @@ class AuthenticationAPITestCase(APITestCase):
         self.assertEqual(social_account.uid, "apple-user-123")
         self.assertEqual(social_account.user, user)
         mock_verify_token.assert_called_once_with("valid-apple-identity-token")
+
+    @override_settings(
+        APPLE_SIGN_IN_WEB_CLIENT_ID="com.morelsoft.drawtwo.dev.web",
+        APPLE_SIGN_IN_IOS_CLIENT_ID="com.morelsoft.drawtwo.dev",
+    )
+    @patch("apps.authentication.views.exchange_apple_authorization_code")
+    @patch("apps.authentication.views.verify_apple_identity_token")
+    def test_apple_login_stores_refresh_token_when_authorization_code_is_available(
+        self, mock_verify_token, mock_exchange_code
+    ):
+        """Apple login stores a refresh token so the account can be revoked later."""
+        mock_verify_token.return_value = {
+            "sub": "apple-user-token",
+            "aud": "com.morelsoft.drawtwo.dev",
+            "email": "apple-token@example.com",
+            "email_verified": "true",
+        }
+        mock_exchange_code.return_value = {
+            "refresh_token": "apple-refresh-token",
+        }
+
+        response = self.client.post(
+            self.apple_login_url,
+            {
+                "identity_token": "valid-apple-identity-token",
+                "authorization_code": "apple-authorization-code",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        social_account = SocialAccount.objects.get(provider="apple")
+        self.assertEqual(
+            social_account.extra_data["apple_client_id"],
+            "com.morelsoft.drawtwo.dev",
+        )
+        self.assertEqual(
+            social_account.extra_data["apple_refresh_token"],
+            "apple-refresh-token",
+        )
+        mock_exchange_code.assert_called_once_with(
+            client_id="com.morelsoft.drawtwo.dev",
+            authorization_code="apple-authorization-code",
+            redirect_uri=None,
+        )
 
     @override_settings(
         APPLE_SIGN_IN_WEB_CLIENT_ID="com.morelsoft.drawtwo.dev.web",
@@ -690,6 +739,7 @@ class UserProfileAPITestCase(APITestCase):
             email="profile@example.com", username="profileuser"
         )
         self.profile_url = reverse("authentication:user_profile")
+        self.account_delete_url = reverse("authentication:account_delete")
 
     def test_get_user_profile_authenticated(self):
         """Test getting user profile when authenticated."""
@@ -701,6 +751,7 @@ class UserProfileAPITestCase(APITestCase):
         self.assertEqual(response.data["username"], "profileuser")
         self.assertEqual(response.data["display_name"], "profileuser")
         self.assertFalse(response.data["apple_connected"])
+        self.assertFalse(response.data["google_connected"])
 
     def test_get_user_profile_reports_connected_apple_account(self):
         """Profile includes whether Apple sign-in is connected."""
@@ -714,6 +765,19 @@ class UserProfileAPITestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["apple_connected"])
+
+    def test_get_user_profile_reports_connected_google_account(self):
+        """Profile includes whether Google sign-in is connected."""
+        SocialAccount.objects.create(
+            user=self.user,
+            provider="google",
+            uid="google-profile-link",
+        )
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(self.profile_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["google_connected"])
 
     def test_get_user_profile_unauthenticated(self):
         """Test getting user profile when not authenticated."""
@@ -744,6 +808,116 @@ class UserProfileAPITestCase(APITestCase):
         response = self.client.patch(self.profile_url, data, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_disconnect_google_account(self):
+        """A user can disconnect a linked Google account."""
+        SocialAccount.objects.create(
+            user=self.user,
+            provider="google",
+            uid="google-disconnect",
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.delete(
+            reverse("authentication:social_disconnect", args=["google"])
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(
+            SocialAccount.objects.filter(user=self.user, provider="google").exists()
+        )
+        self.assertFalse(response.data["user"]["google_connected"])
+
+    @patch("apps.authentication.views.revoke_apple_token")
+    def test_disconnect_apple_account_revokes_stored_token(self, mock_revoke):
+        """Disconnecting Apple revokes its stored refresh token when available."""
+        SocialAccount.objects.create(
+            user=self.user,
+            provider="apple",
+            uid="apple-disconnect",
+            extra_data={
+                "apple_client_id": "com.morelsoft.drawtwo.dev",
+                "apple_refresh_token": "apple-refresh-token",
+            },
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.delete(
+            reverse("authentication:social_disconnect", args=["apple"])
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mock_revoke.assert_called_once_with(
+            client_id="com.morelsoft.drawtwo.dev",
+            token="apple-refresh-token",
+            token_type_hint="refresh_token",
+        )
+        self.assertFalse(
+            SocialAccount.objects.filter(user=self.user, provider="apple").exists()
+        )
+
+    def test_disconnect_missing_social_account_returns_error(self):
+        """Disconnect requires the provider to be linked first."""
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.delete(
+            reverse("authentication:social_disconnect", args=["google"])
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_account_delete_anonymizes_user_and_removes_auth_links(self):
+        """Account deletion removes login links while preserving the user row."""
+        EmailAddress.objects.create(
+            user=self.user,
+            email=self.user.email,
+            primary=True,
+            verified=True,
+        )
+        SocialAccount.objects.create(
+            user=self.user,
+            provider="google",
+            uid="google-delete",
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.delete(self.account_delete_url)
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.user.refresh_from_db()
+        self.assertIsNotNone(self.user.deleted_at)
+        self.assertFalse(self.user.is_active)
+        self.assertFalse(self.user.can_login())
+        self.assertEqual(
+            self.user.email,
+            f"deleted-user-{self.user.id}@deleted.drawtwo.local",
+        )
+        self.assertIsNone(self.user.username)
+        self.assertFalse(EmailAddress.objects.filter(user=self.user).exists())
+        self.assertFalse(SocialAccount.objects.filter(user=self.user).exists())
+
+    @patch("apps.authentication.views.revoke_apple_token")
+    def test_account_delete_revokes_apple_refresh_token(self, mock_revoke):
+        """Account deletion revokes linked Apple tokens before anonymizing the user."""
+        SocialAccount.objects.create(
+            user=self.user,
+            provider="apple",
+            uid="apple-delete",
+            extra_data={
+                "apple_client_id": "com.morelsoft.drawtwo.dev",
+                "apple_refresh_token": "apple-refresh-token",
+            },
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.delete(self.account_delete_url)
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        mock_revoke.assert_called_once_with(
+            client_id="com.morelsoft.drawtwo.dev",
+            token="apple-refresh-token",
+            token_type_hint="refresh_token",
+        )
 
 
 class AuthenticationIntegrationTestCase(APITestCase):

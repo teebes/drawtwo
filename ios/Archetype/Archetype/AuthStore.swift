@@ -193,7 +193,7 @@ final class AuthStore: ObservableObject {
         }
     }
 
-    func signInWithApple(identityToken: String) async {
+    func signInWithApple(identityToken: String, authorizationCode: String? = nil) async {
         isLoading = true
         errorMessage = nil
         statusMessage = nil
@@ -202,7 +202,10 @@ final class AuthStore: ObservableObject {
         do {
             let response: AuthResponse = try await api.post(
                 "/auth/apple/",
-                body: AppleSignInRequest(identityToken: identityToken)
+                body: AppleSignInRequest(
+                    identityToken: identityToken,
+                    authorizationCode: authorizationCode
+                )
             )
 
             if response.requiresApproval == true {
@@ -232,7 +235,7 @@ final class AuthStore: ObservableObject {
     }
 
     @discardableResult
-    func linkApple(identityToken: String) async -> Bool {
+    func linkApple(identityToken: String, authorizationCode: String? = nil) async -> Bool {
         isLoading = true
         errorMessage = nil
         statusMessage = nil
@@ -241,7 +244,10 @@ final class AuthStore: ObservableObject {
         do {
             let response: AuthResponse = try await authenticatedPost(
                 "/auth/apple/link/",
-                body: AppleSignInRequest(identityToken: identityToken)
+                body: AppleSignInRequest(
+                    identityToken: identityToken,
+                    authorizationCode: authorizationCode
+                )
             )
 
             if let linkedUser = response.user {
@@ -249,6 +255,53 @@ final class AuthStore: ObservableObject {
             }
 
             statusMessage = response.message ?? "Apple sign-in connected."
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    func disconnectSocial(provider: String) async -> Bool {
+        isLoading = true
+        errorMessage = nil
+        statusMessage = nil
+        defer { isLoading = false }
+
+        do {
+            let response: AuthResponse = try await authenticatedDelete(
+                "/auth/social/\(provider)/"
+            )
+            if let updatedUser = response.user {
+                user = updatedUser
+            }
+            statusMessage = response.message ?? "\(provider.capitalized) sign-in disconnected."
+            if provider == "google" {
+                GIDSignIn.sharedInstance.signOut()
+            }
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    func deleteAccount() async -> Bool {
+        isLoading = true
+        errorMessage = nil
+        statusMessage = nil
+        defer { isLoading = false }
+
+        do {
+            await PushNotificationManager.shared.unregisterCurrentDevice(
+                accessToken: accessToken
+            )
+            let _: EmptyResponse = try await authenticatedDelete("/auth/account/")
+            GIDSignIn.sharedInstance.signOut()
+            clearSession()
+            statusMessage = "Account deleted."
             return true
         } catch {
             errorMessage = error.localizedDescription

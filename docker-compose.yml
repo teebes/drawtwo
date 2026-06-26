@@ -56,7 +56,7 @@ services:
       - GOOGLE_OAUTH2_CLIENT_SECRET=${GOOGLE_OAUTH2_CLIENT_SECRET:-}
       - APPLE_SIGN_IN_TEAM_ID=${APPLE_SIGN_IN_TEAM_ID:-}
       - APPLE_SIGN_IN_KEY_ID=${APPLE_SIGN_IN_KEY_ID:-}
-      - APPLE_SIGN_IN_PRIVATE_KEY_PATH=${APPLE_SIGN_IN_PRIVATE_KEY_PATH:-}
+      - APPLE_SIGN_IN_PRIVATE_KEY_PATH=${APPLE_SIGN_IN_PRIVATE_KEY_PATH:-/run/secrets/drawtwo/apple-sign-in/AuthKey.p8}
       - APPLE_SIGN_IN_WEB_CLIENT_ID=${APPLE_SIGN_IN_WEB_CLIENT_ID:-}
       - APPLE_SIGN_IN_IOS_CLIENT_ID=${APPLE_SIGN_IN_IOS_CLIENT_ID:-}
       - APNS_TEAM_ID=${APNS_TEAM_ID:-}
@@ -67,6 +67,7 @@ services:
     volumes:
       - ./backend:/app
       - ./ai:/app/ai
+      - ${APPLE_SIGN_IN_PRIVATE_KEY_HOST_PATH:-/dev/null}:/run/secrets/drawtwo/apple-sign-in/AuthKey.p8:ro
       - ${APNS_AUTH_KEY_HOST_PATH:-/dev/null}:/run/secrets/drawtwo/apns/AuthKey.p8:ro
       - static_volume:/app/staticfiles
       - media_volume:/app/media
@@ -103,7 +104,7 @@ services:
       - GOOGLE_OAUTH2_CLIENT_SECRET=${GOOGLE_OAUTH2_CLIENT_SECRET:-}
       - APPLE_SIGN_IN_TEAM_ID=${APPLE_SIGN_IN_TEAM_ID:-}
       - APPLE_SIGN_IN_KEY_ID=${APPLE_SIGN_IN_KEY_ID:-}
-      - APPLE_SIGN_IN_PRIVATE_KEY_PATH=${APPLE_SIGN_IN_PRIVATE_KEY_PATH:-}
+      - APPLE_SIGN_IN_PRIVATE_KEY_PATH=${APPLE_SIGN_IN_PRIVATE_KEY_PATH:-/run/secrets/drawtwo/apple-sign-in/AuthKey.p8}
       - APPLE_SIGN_IN_WEB_CLIENT_ID=${APPLE_SIGN_IN_WEB_CLIENT_ID:-}
       - APPLE_SIGN_IN_IOS_CLIENT_ID=${APPLE_SIGN_IN_IOS_CLIENT_ID:-}
       - APNS_TEAM_ID=${APNS_TEAM_ID:-}
@@ -114,6 +115,7 @@ services:
     volumes:
       - ./backend:/app
       - ./ai:/app/ai
+      - ${APPLE_SIGN_IN_PRIVATE_KEY_HOST_PATH:-/dev/null}:/run/secrets/drawtwo/apple-sign-in/AuthKey.p8:ro
       - ${APNS_AUTH_KEY_HOST_PATH:-/dev/null}:/run/secrets/drawtwo/apns/AuthKey.p8:ro
     depends_on:
       db:
@@ -140,7 +142,7 @@ services:
       - GOOGLE_OAUTH2_CLIENT_SECRET=${GOOGLE_OAUTH2_CLIENT_SECRET:-}
       - APPLE_SIGN_IN_TEAM_ID=${APPLE_SIGN_IN_TEAM_ID:-}
       - APPLE_SIGN_IN_KEY_ID=${APPLE_SIGN_IN_KEY_ID:-}
-      - APPLE_SIGN_IN_PRIVATE_KEY_PATH=${APPLE_SIGN_IN_PRIVATE_KEY_PATH:-}
+      - APPLE_SIGN_IN_PRIVATE_KEY_PATH=${APPLE_SIGN_IN_PRIVATE_KEY_PATH:-/run/secrets/drawtwo/apple-sign-in/AuthKey.p8}
       - APPLE_SIGN_IN_WEB_CLIENT_ID=${APPLE_SIGN_IN_WEB_CLIENT_ID:-}
       - APPLE_SIGN_IN_IOS_CLIENT_ID=${APPLE_SIGN_IN_IOS_CLIENT_ID:-}
       - APNS_TEAM_ID=${APNS_TEAM_ID:-}
@@ -151,6 +153,7 @@ services:
     volumes:
       - ./backend:/app
       - ./ai:/app/ai
+      - ${APPLE_SIGN_IN_PRIVATE_KEY_HOST_PATH:-/dev/null}:/run/secrets/drawtwo/apple-sign-in/AuthKey.p8:ro
       - ${APNS_AUTH_KEY_HOST_PATH:-/dev/null}:/run/secrets/drawtwo/apns/AuthKey.p8:ro
     depends_on:
       db:

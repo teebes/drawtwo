@@ -47,6 +47,7 @@ urlpatterns = [
     ),
     path("email-confirm/", views.EmailConfirmationView.as_view(), name="email_confirm"),
     path("profile/", views.UserProfileView.as_view(), name="user_profile"),
+    path("account/", views.AccountDeletionView.as_view(), name="account_delete"),
     path("test/", views.protected_test_view, name="protected_test"),
     # Social authentication
     path(
@@ -57,6 +58,11 @@ urlpatterns = [
     path("google/", views.GoogleLogin.as_view(), name="google_login"),
     path("apple/", views.AppleLoginView.as_view(), name="apple_login"),
     path("apple/link/", views.AppleLinkView.as_view(), name="apple_link"),
+    path(
+        "social/<str:provider>/",
+        views.SocialDisconnectView.as_view(),
+        name="social_disconnect",
+    ),
     # Friend system
     path("friends/", views.FriendshipListView.as_view(), name="friends_list"),
     path(

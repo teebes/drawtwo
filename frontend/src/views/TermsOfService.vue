@@ -108,7 +108,8 @@
           <section>
             <h2 class="text-2xl font-bold text-gray-900 dark:text-white">11. Contact Information</h2>
             <p class="mt-4 leading-relaxed">
-              If you have any questions about these Terms of Service, please contact us through our GitHub repository.
+              If you have any questions about these Terms of Service, please contact us through the
+              <router-link to="/support" class="underline decoration-1 underline-offset-4">Draw Two support page</router-link>.
             </p>
           </section>
         </div>

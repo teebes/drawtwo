@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
+from django.utils import timezone
 
 
 class UserManager(BaseUserManager):
@@ -76,6 +77,11 @@ class User(AbstractUser):
 
     # Authentication fields
     is_email_verified = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this account was deleted by the user.",
+    )
 
     # User status for approval workflow
     status = models.CharField(
@@ -98,11 +104,15 @@ class User(AbstractUser):
         verbose_name_plural = "Users"
 
     def __str__(self):
+        if self.deleted_at:
+            return f"Deleted user {self.id}"
         return self.username or self.email
 
     @property
     def display_name(self):
         """Returns the user's display name."""
+        if self.deleted_at:
+            return "Deleted player"
         return self.username or f"Gamer {self.id}"
 
     @property
@@ -112,7 +122,36 @@ class User(AbstractUser):
 
     def can_login(self):
         """Check if user can log in based on their status."""
-        return self.status in [self.STATUS_APPROVED] and self.is_active
+        return (
+            self.deleted_at is None
+            and self.status in [self.STATUS_APPROVED]
+            and self.is_active
+        )
+
+    def anonymize_for_deletion(self):
+        """Remove account identifiers while keeping protected game history intact."""
+        deleted_at = timezone.now()
+        self.deleted_at = deleted_at
+        self.email = f"deleted-user-{self.pk}@deleted.drawtwo.local"
+        self.username = None
+        self.avatar = None
+        self.is_active = False
+        self.is_email_verified = False
+        self.status = self.STATUS_SUSPENDED
+        self.set_unusable_password()
+        self.save(
+            update_fields=[
+                "deleted_at",
+                "email",
+                "username",
+                "avatar",
+                "is_active",
+                "is_email_verified",
+                "status",
+                "password",
+                "updated_at",
+            ]
+        )
 
 
 class Friendship(models.Model):
