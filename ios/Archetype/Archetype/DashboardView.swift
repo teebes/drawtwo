@@ -643,6 +643,9 @@ struct DashboardView: View {
                     CollectionView(
                         openDeck: { deckId in
                             path.append(DashboardRoute.deck(deckId))
+                        },
+                        createDeck: {
+                            path.append(DashboardRoute.deckEditor(nil))
                         }
                     )
                 case .games:
@@ -666,7 +669,27 @@ struct DashboardView: View {
                         path.append(DashboardRoute.game(gameId))
                     }
                 case .deck(let deckId):
-                    DeckDetailView(deckId: deckId)
+                    DeckDetailView(
+                        deckId: deckId,
+                        editDeck: { deckId in
+                            path.append(DashboardRoute.deckEditor(deckId))
+                        },
+                        onArchived: {
+                            returnToCollectionAfterDeckArchive()
+                        }
+                    )
+                case .deckEditor(let deckId):
+                    DeckEditorView(
+                        deckId: deckId,
+                        onSaved: { savedDeckId in
+                            openDeckAfterEditing(savedDeckId)
+                        },
+                        onCancel: {
+                            if !path.isEmpty {
+                                path.removeLast()
+                            }
+                        }
+                    )
                 case .howTo:
                     HowToView()
                 }
@@ -1042,6 +1065,28 @@ struct DashboardView: View {
         path.append(DashboardRoute.newGame)
     }
 
+    private func openDeckAfterEditing(_ deckId: Int) {
+        if !path.isEmpty {
+            path.removeLast()
+        }
+
+        if let last = path.last, case .deck = last {
+            path.removeLast()
+        }
+
+        path.append(DashboardRoute.deck(deckId))
+    }
+
+    private func returnToCollectionAfterDeckArchive() {
+        if !path.isEmpty {
+            path.removeLast()
+        }
+
+        if path.last != .collection {
+            path.append(DashboardRoute.collection)
+        }
+    }
+
     private func openRankedQueueNotification(queueId: Int) {
         model.gameMode = .pvp
 
@@ -1180,6 +1225,7 @@ private enum DashboardRoute: Hashable {
     case profile
     case rankedQueue(LadderType, Int?)
     case deck(Int)
+    case deckEditor(Int?)
     case howTo
 }
 

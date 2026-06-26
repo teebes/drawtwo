@@ -4,10 +4,10 @@ Native SwiftUI client for the Archetype title. It talks directly to the DrawTwo
 backend. By default it uses production at `https://drawtwo.com`; simulator runs
 can point at a local Docker backend with launch environment variables.
 
-The iOS app is intentionally play-only. Builder, title configuration, card
-editing, deck editing, Control Panel, and Game Config workflows remain web-only.
-Collection and deck screens are read-only browsing surfaces that let players
-inspect the cards and decks they already have.
+The iOS app focuses on player workflows. Builder, title configuration, card
+editing, Control Panel, and Game Config workflows remain web-only. Collection
+and deck screens let players inspect cards, create decks, edit deck metadata,
+archive decks, and manage the cards assigned to their decks.
 
 ## What Works
 
@@ -19,8 +19,9 @@ inspect the cards and decks they already have.
 - Session refresh through the existing JWT refresh endpoint.
 - Archetype dashboard, notifications, active games, title stats, and embedded
   leaderboard preview.
-- Read-only Collection, deck detail, collection card detail, and deck card
-  detail views.
+- Collection, deck detail, collection card detail, and deck card detail views.
+- Native deck creation, deck metadata editing, deck archiving, card add/remove,
+  and deck card count management.
 - PvE opponent loading from `/api/titles/archetype/pve/`.
 - PvE game creation, ranked queue entry/leave flows, friendly challenge sending,
   accepting, declining, and cancelling.

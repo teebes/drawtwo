@@ -10,6 +10,7 @@ struct User: Codable, Identifiable, Equatable {
     let isStaff: Bool?
     let status: String?
     let appleConnected: Bool?
+    let googleConnected: Bool?
     let createdAt: String?
     let updatedAt: String?
 }
@@ -69,9 +70,11 @@ struct GoogleNativeSignInRequest: Encodable {
 
 struct AppleSignInRequest: Encodable {
     let identityToken: String
+    let authorizationCode: String?
 
     enum CodingKeys: String, CodingKey {
         case identityToken = "identity_token"
+        case authorizationCode = "authorization_code"
     }
 }
 
@@ -590,6 +593,49 @@ struct DeckDetail: Codable, Identifiable, Equatable {
     var totalCards: Int
     let createdAt: String?
     var updatedAt: String?
+}
+
+struct DeckSaveRequest: Encodable {
+    let name: String
+    let description: String
+    let heroId: Int
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case description
+        case heroId = "hero_id"
+    }
+}
+
+struct DeckSaveResponse: Decodable {
+    let id: Int
+    let message: String?
+}
+
+struct DeckArchiveResponse: Decodable {
+    let message: String?
+    let titleSlug: String?
+}
+
+struct DeckCardAddRequest: Encodable {
+    let cardSlug: String
+    let count: Int
+
+    enum CodingKeys: String, CodingKey {
+        case cardSlug = "card_slug"
+        case count
+    }
+}
+
+struct DeckCardCountRequest: Encodable {
+    let count: Int
+}
+
+struct DeckCardMutationResponse: Decodable {
+    let id: Int?
+    let name: String?
+    let count: Int?
+    let message: String?
 }
 
 struct CreateGameRequest: Encodable {

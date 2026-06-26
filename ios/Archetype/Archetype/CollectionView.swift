@@ -105,16 +105,20 @@ final class CollectionViewModel: ObservableObject {
 struct CollectionView: View {
     @EnvironmentObject private var authStore: AuthStore
     @StateObject private var model = CollectionViewModel()
+    @State private var hasLoaded = false
     #if DEBUG
     @State private var didApplyInitialCardPreview = false
     #endif
 
     let openDeck: (Int) -> Void
+    let createDeck: () -> Void
 
     init(
-        openDeck: @escaping (Int) -> Void = { _ in }
+        openDeck: @escaping (Int) -> Void = { _ in },
+        createDeck: @escaping () -> Void = {}
     ) {
         self.openDeck = openDeck
+        self.createDeck = createDeck
     }
 
     private let cardColumns = [
@@ -157,12 +161,20 @@ struct CollectionView: View {
             }
         }
         .task {
-            await model.load(using: authStore)
-            applyInitialCardPreviewIfNeeded()
-            recordCaptureState()
+            await loadInitialData()
         }
         .onChange(of: model.selectedCard?.id) { _, _ in
             recordCaptureState()
+        }
+        .onAppear {
+            guard hasLoaded else {
+                return
+            }
+
+            Task {
+                await model.load(using: authStore)
+                recordCaptureState()
+            }
         }
     }
 
@@ -210,24 +222,52 @@ struct CollectionView: View {
         #endif
     }
 
+    private func loadInitialData() async {
+        guard !hasLoaded else {
+            return
+        }
+
+        hasLoaded = true
+        await model.load(using: authStore)
+        applyInitialCardPreviewIfNeeded()
+        recordCaptureState()
+    }
+
     private var decksPanel: some View {
         ArchetypeWebPanel(padding: 24) {
             VStack(alignment: .leading, spacing: 16) {
-                HStack {
+                HStack(spacing: 12) {
                     Text("Your Decks")
                         .font(.archetypeBody(18, weight: .semibold))
                         .foregroundStyle(ArchetypeTheme.text)
+
+                    Spacer()
+
+                    Button(action: createDeck) {
+                        Label("New Deck", systemImage: "plus")
+                            .labelStyle(.titleAndIcon)
+                    }
+                    .buttonStyle(SecondaryGameButtonStyle())
+                    .accessibilityLabel("Create new deck")
                 }
 
                 if model.isLoading && model.decks.isEmpty {
                     CollectionProgressRow(text: "Loading decks...")
                 } else if model.decks.isEmpty {
-                    EmptyState(
-                        title: "No decks found.",
-                        detail: "Decks created on drawtwo.com appear here automatically.",
-                        systemImage: "rectangle.stack.badge.plus"
-                    )
-                    .padding(.horizontal, 16)
+                    VStack(spacing: 16) {
+                        EmptyState(
+                            title: "No decks found.",
+                            detail: "Create a deck to start building your collection.",
+                            systemImage: "rectangle.stack.badge.plus"
+                        )
+                        .padding(.horizontal, 16)
+
+                        Button(action: createDeck) {
+                            Label("Create Your First Deck", systemImage: "plus")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(PrimaryGameButtonStyle())
+                    }
                 } else {
                     VStack(spacing: 0) {
                         ForEach(Array(model.decks.enumerated()), id: \.element.id) { index, deck in
@@ -243,6 +283,13 @@ struct CollectionView: View {
                                     .frame(height: 10)
                             }
                         }
+
+                        Button(action: createDeck) {
+                            Label("New Deck", systemImage: "plus")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(DashedActionButtonStyle())
+                        .padding(.top, 12)
                     }
                 }
             }
@@ -362,6 +409,456 @@ struct CollectionView: View {
         }
     }
 
+}
+
+@MainActor
+final class DeckEditorViewModel: ObservableObject {
+    @Published var heroes: [Hero] = []
+    @Published var deckName = ""
+    @Published var deckDescription = ""
+    @Published var selectedHeroId: Int?
+    @Published var isLoading = false
+    @Published var isSaving = false
+    @Published var errorMessage: String?
+    @Published var statusMessage: String?
+
+    let deckId: Int?
+
+    init(deckId: Int?) {
+        self.deckId = deckId
+    }
+
+    var isEditMode: Bool {
+        deckId != nil
+    }
+
+    var selectedHero: Hero? {
+        guard let selectedHeroId else {
+            return nil
+        }
+
+        return heroes.first { $0.id == selectedHeroId }
+    }
+
+    var canSave: Bool {
+        !deckName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            selectedHeroId != nil &&
+            !isLoading &&
+            !isSaving
+    }
+
+    func selectHero(_ hero: Hero) {
+        guard !isSaving else {
+            return
+        }
+
+        selectedHeroId = hero.id
+    }
+
+    func load(using authStore: AuthStore) async {
+        isLoading = true
+        errorMessage = nil
+        statusMessage = nil
+
+        do {
+            if let deckId {
+                async let heroesRequest: [Hero] = authStore.authenticatedGet(
+                    "/titles/\(AppConfig.titleSlug)/heroes/"
+                )
+                async let deckRequest: DeckDetail = authStore.authenticatedGet(
+                    "/collection/decks/\(deckId)/"
+                )
+
+                let (loadedHeroes, deck) = try await (heroesRequest, deckRequest)
+                heroes = loadedHeroes
+                deckName = deck.name
+                deckDescription = deck.description ?? ""
+                selectedHeroId = deck.hero.id
+            } else {
+                let loadedHeroes: [Hero] = try await authStore.authenticatedGet(
+                    "/titles/\(AppConfig.titleSlug)/heroes/"
+                )
+                heroes = loadedHeroes
+
+                if selectedHeroId == nil, loadedHeroes.count == 1 {
+                    selectedHeroId = loadedHeroes[0].id
+                }
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+
+        isLoading = false
+    }
+
+    func save(using authStore: AuthStore) async -> Int? {
+        let trimmedName = deckName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDescription = deckDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedName.isEmpty else {
+            errorMessage = "Deck name is required."
+            return nil
+        }
+
+        guard let selectedHeroId else {
+            errorMessage = "Choose a hero for this deck."
+            return nil
+        }
+
+        isSaving = true
+        errorMessage = nil
+        statusMessage = nil
+
+        do {
+            let request = DeckSaveRequest(
+                name: trimmedName,
+                description: trimmedDescription,
+                heroId: selectedHeroId
+            )
+            let response: DeckSaveResponse
+
+            if let deckId {
+                response = try await authStore.authenticatedPut(
+                    "/collection/decks/\(deckId)/",
+                    body: request
+                )
+            } else {
+                response = try await authStore.authenticatedPost(
+                    "/collection/titles/\(AppConfig.titleSlug)/decks/",
+                    body: request
+                )
+            }
+
+            statusMessage = response.message
+            isSaving = false
+            return response.id
+        } catch {
+            errorMessage = error.localizedDescription
+            isSaving = false
+            return nil
+        }
+    }
+}
+
+struct DeckEditorView: View {
+    @EnvironmentObject private var authStore: AuthStore
+    @StateObject private var model: DeckEditorViewModel
+    @State private var hasLoaded = false
+
+    let onSaved: (Int) -> Void
+    let onCancel: () -> Void
+
+    init(
+        deckId: Int?,
+        onSaved: @escaping (Int) -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        _model = StateObject(wrappedValue: DeckEditorViewModel(deckId: deckId))
+        self.onSaved = onSaved
+        self.onCancel = onCancel
+    }
+
+    var body: some View {
+        ArchetypeScreen {
+            ScrollView {
+                VStack(spacing: 0) {
+                    topBar
+                        .padding(.horizontal, 18)
+                        .padding(.top, 6)
+                        .padding(.bottom, 16)
+
+                    ArchetypePageBanner(title: model.isEditMode ? "Edit Deck" : "New Deck")
+
+                    VStack(spacing: 20) {
+                        ArchetypeWebPanel(padding: 24) {
+                            if model.isLoading && model.heroes.isEmpty {
+                                CollectionProgressRow(text: "Loading deck...")
+                            } else {
+                                deckForm
+                            }
+                        }
+
+                        if let error = model.errorMessage {
+                            DeckEditorNotice(text: error, color: ArchetypeTheme.red)
+                        }
+
+                        if let status = model.statusMessage {
+                            DeckEditorNotice(text: status, color: ArchetypeTheme.green)
+                        }
+                    }
+                    .frame(maxWidth: 620)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 32)
+                    .padding(.bottom, 40)
+                }
+            }
+        }
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
+        .task {
+            await loadInitialData()
+        }
+    }
+
+    private var topBar: some View {
+        ArchetypeTopBar(title: "Collection", showsBackButton: true) {
+            ArchetypeProfileLink(user: authStore.user) {
+                ProfileView()
+            }
+        }
+    }
+
+    private var deckForm: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            DeckFormField(label: "Deck Name") {
+                TextField("Enter deck name", text: $model.deckName)
+                    .font(.archetypeBody(15))
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+                    .foregroundStyle(ArchetypeTheme.text)
+                    .tint(ArchetypeTheme.gold2)
+                    .submitLabel(.done)
+                    .disabled(model.isSaving)
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Hero")
+                    .font(.archetypeBody(14, weight: .semibold))
+                    .foregroundStyle(ArchetypeTheme.secondaryText)
+
+                if let selectedHero = model.selectedHero {
+                    Text("Selected hero: \(selectedHero.name)")
+                        .font(.archetypeBody(13))
+                        .foregroundStyle(ArchetypeTheme.muted)
+                }
+
+                if model.heroes.isEmpty {
+                    EmptyState(
+                        title: "No heroes available.",
+                        detail: "This title needs a hero before decks can be created.",
+                        systemImage: "person.crop.rectangle.stack"
+                    )
+                } else {
+                    VStack(spacing: 10) {
+                        ForEach(model.heroes) { hero in
+                            Button {
+                                model.selectHero(hero)
+                            } label: {
+                                DeckHeroChoiceRow(
+                                    hero: hero,
+                                    isSelected: model.selectedHeroId == hero.id
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(model.isSaving)
+                        }
+                    }
+                }
+            }
+
+            DeckFormField(label: "Description", isOptional: true) {
+                TextField("Enter deck description", text: $model.deckDescription, axis: .vertical)
+                    .font(.archetypeBody(15))
+                    .textInputAutocapitalization(.sentences)
+                    .foregroundStyle(ArchetypeTheme.text)
+                    .tint(ArchetypeTheme.gold2)
+                    .lineLimit(3...5)
+                    .disabled(model.isSaving)
+            }
+
+            HStack(spacing: 12) {
+                Button {
+                    Task {
+                        if let deckId = await model.save(using: authStore) {
+                            onSaved(deckId)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        if model.isSaving {
+                            ProgressView()
+                                .tint(.white)
+                        }
+
+                        Text(model.isEditMode ? "Update Deck" : "Create Deck")
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(PrimaryGameButtonStyle())
+                .disabled(!model.canSave)
+                .opacity(model.canSave ? 1 : 0.55)
+
+                Button(action: onCancel) {
+                    Text("Cancel")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(SecondaryGameButtonStyle())
+                .disabled(model.isSaving)
+            }
+        }
+    }
+
+    private func loadInitialData() async {
+        guard !hasLoaded else {
+            return
+        }
+
+        hasLoaded = true
+        await model.load(using: authStore)
+    }
+}
+
+private struct DeckFormField<Content: View>: View {
+    let label: String
+    var isOptional = false
+    let content: Content
+
+    init(
+        label: String,
+        isOptional: Bool = false,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.label = label
+        self.isOptional = isOptional
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text(label)
+                    .font(.archetypeBody(14, weight: .semibold))
+                    .foregroundStyle(ArchetypeTheme.secondaryText)
+
+                if isOptional {
+                    Text("optional")
+                        .font(.archetypeBody(11, weight: .medium))
+                        .foregroundStyle(ArchetypeTheme.muted)
+                }
+            }
+
+            content
+                .padding(14)
+                .background(ArchetypeTheme.inputSurface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius)
+                        .stroke(ArchetypeTheme.border, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius))
+        }
+    }
+}
+
+private struct DeckHeroChoiceRow: View {
+    let hero: Hero
+    let isSelected: Bool
+
+    var body: some View {
+        HStack(spacing: 14) {
+            heroArt
+                .frame(width: 46, height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7)
+                        .stroke(isSelected ? ArchetypeTheme.gold2 : ArchetypeTheme.border, lineWidth: isSelected ? 2 : 1)
+                )
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(hero.name)
+                    .font(.archetypeBody(16, weight: .semibold))
+                    .foregroundStyle(ArchetypeTheme.text)
+                    .lineLimit(1)
+
+                if let detail = heroDetail {
+                    Text(detail)
+                        .font(.archetypeBody(12))
+                        .foregroundStyle(ArchetypeTheme.muted)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            if let health = hero.health {
+                VStack(spacing: 2) {
+                    Text("Health")
+                        .font(.archetypeBody(9, weight: .bold))
+                        .foregroundStyle(ArchetypeTheme.muted)
+                    Text("\(health)")
+                        .font(.archetypeBody(17, weight: .black))
+                        .foregroundStyle(ArchetypeTheme.text)
+                }
+                .padding(.horizontal, 11)
+                .padding(.vertical, 8)
+                .background(ArchetypeTheme.subtleSurface)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(isSelected ? ArchetypeTheme.gold2 : ArchetypeTheme.muted)
+        }
+        .padding(12)
+        .background(isSelected ? ArchetypeTheme.gold.opacity(0.09) : ArchetypeTheme.subtleSurface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isSelected ? ArchetypeTheme.gold2.opacity(0.65) : ArchetypeTheme.border, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .contentShape(Rectangle())
+    }
+
+    private var heroDetail: String? {
+        if let description = hero.heroPower?["description"]?.stringValue, !description.isEmpty {
+            return description
+        }
+
+        if let name = hero.heroPower?["name"]?.stringValue, !name.isEmpty {
+            return name
+        }
+
+        return hero.faction
+    }
+
+    @ViewBuilder
+    private var heroArt: some View {
+        if let artUrl = hero.resolvedArtUrl, let url = URL(string: artUrl) {
+            CachedRemoteImage(url: url) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+            } placeholder: {
+                fallbackHero
+            }
+        } else {
+            fallbackHero
+        }
+    }
+
+    private var fallbackHero: some View {
+        ZStack {
+            ArchetypeTheme.sky.opacity(0.16)
+            Text(hero.name.prefix(1).uppercased())
+                .font(.archetypeBody(18, weight: .black))
+                .foregroundStyle(ArchetypeTheme.sky)
+        }
+    }
+}
+
+private struct DeckEditorNotice: View {
+    let text: String
+    let color: Color
+
+    var body: some View {
+        Text(text)
+            .font(.archetypeBody(12))
+            .foregroundStyle(color)
+            .padding(11)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(color.opacity(0.11))
+            .clipShape(RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius))
+    }
 }
 
 private struct CollectionProgressRow: View {

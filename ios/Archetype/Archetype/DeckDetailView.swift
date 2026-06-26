@@ -83,7 +83,10 @@ struct DeckCardListItem: Identifiable, Equatable {
 final class DeckDetailViewModel: ObservableObject {
     @Published var deck: DeckDetail?
     @Published var isLoading = false
+    @Published var isMutating = false
+    @Published var isArchiving = false
     @Published var errorMessage: String?
+    @Published var statusMessage: String?
     @Published var selectedCard: DeckCardListItem?
 
     let deckId: Int
@@ -103,6 +106,28 @@ final class DeckDetailViewModel: ObservableObject {
 
     var displayItems: [DeckCardListItem] {
         sortedDeckCards.map(DeckCardListItem.init(deckCard:))
+    }
+
+    var deckCardMap: [Int: DeckCard] {
+        Dictionary(uniqueKeysWithValues: (deck?.cards ?? []).map { ($0.id, $0) })
+    }
+
+    func displayItems(includeAvailableCards: Bool) -> [DeckCardListItem] {
+        guard includeAvailableCards, let deck else {
+            return displayItems
+        }
+
+        let map = deckCardMap
+        return (deck.allCards ?? [])
+            .map { card in
+                DeckCardListItem(card: card, deckCard: map[card.id])
+            }
+            .sorted { first, second in
+                if first.cost != second.cost {
+                    return first.cost < second.cost
+                }
+                return first.name.localizedCaseInsensitiveCompare(second.name) == .orderedAscending
+            }
     }
 
     var averageCost: Double {
@@ -154,6 +179,142 @@ final class DeckDetailViewModel: ObservableObject {
         isLoading = false
     }
 
+    func canAddCard(_ item: DeckCardListItem) -> Bool {
+        guard let deck else {
+            return false
+        }
+
+        if item.isInDeck {
+            return canIncrementCard(item)
+        }
+
+        return deck.totalCards < deck.config.deckSizeLimit
+    }
+
+    func canIncrementCard(_ item: DeckCardListItem) -> Bool {
+        let currentCount = item.count ?? 0
+        return currentCount < maxCount(for: item)
+    }
+
+    func maxCount(for item: DeckCardListItem) -> Int {
+        guard let deck else {
+            return 0
+        }
+
+        let currentCount = item.count ?? 0
+        let availableDeckSlots = deck.config.deckSizeLimit - (deck.totalCards - currentCount)
+        let cardLimit = item.isUnique ? 1 : deck.config.deckCardMaxCount
+        return max(0, min(cardLimit, availableDeckSlots))
+    }
+
+    func addCard(_ item: DeckCardListItem, using authStore: AuthStore) async {
+        guard canAddCard(item) else {
+            errorMessage = "Deck cannot have more than \(deck?.config.deckSizeLimit ?? 0) cards."
+            return
+        }
+
+        await mutate(using: authStore) {
+            try await authStore.authenticatedPost(
+                "/collection/decks/\(deckId)/cards/add/",
+                body: DeckCardAddRequest(cardSlug: item.slug, count: 1)
+            )
+        }
+    }
+
+    func updateCardCount(_ item: DeckCardListItem, count: Int, using authStore: AuthStore) async {
+        guard count >= 1 else {
+            return
+        }
+
+        let maxCount = maxCount(for: item)
+        guard count <= maxCount else {
+            errorMessage = "This deck can only use \(maxCount) \(copyLabel(maxCount)) of \(item.name)."
+            return
+        }
+
+        await mutate(using: authStore) {
+            try await authStore.authenticatedPut(
+                "/collection/decks/\(deckId)/cards/\(item.id)/",
+                body: DeckCardCountRequest(count: count)
+            )
+        }
+    }
+
+    func incrementCard(_ item: DeckCardListItem, using authStore: AuthStore) async {
+        guard let count = item.count else {
+            await addCard(item, using: authStore)
+            return
+        }
+
+        await updateCardCount(item, count: count + 1, using: authStore)
+    }
+
+    func decrementCard(_ item: DeckCardListItem, using authStore: AuthStore) async {
+        guard let count = item.count, count > 1 else {
+            return
+        }
+
+        await updateCardCount(item, count: count - 1, using: authStore)
+    }
+
+    func removeCard(_ item: DeckCardListItem, using authStore: AuthStore) async {
+        await mutate(using: authStore) {
+            try await authStore.authenticatedDelete(
+                "/collection/decks/\(deckId)/cards/\(item.id)/delete/"
+            )
+        }
+    }
+
+    func archive(using authStore: AuthStore) async -> Bool {
+        guard !isArchiving else {
+            return false
+        }
+
+        isArchiving = true
+        errorMessage = nil
+        statusMessage = nil
+
+        do {
+            let response: DeckArchiveResponse = try await authStore.authenticatedDelete(
+                "/collection/decks/\(deckId)/"
+            )
+            statusMessage = response.message
+            isArchiving = false
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            isArchiving = false
+            return false
+        }
+    }
+
+    private func mutate(
+        using authStore: AuthStore,
+        operation: () async throws -> DeckCardMutationResponse
+    ) async {
+        guard !isMutating else {
+            return
+        }
+
+        isMutating = true
+        errorMessage = nil
+        statusMessage = nil
+
+        do {
+            let response = try await operation()
+            await load(using: authStore)
+            statusMessage = response.message
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+
+        isMutating = false
+    }
+
+    private func copyLabel(_ count: Int) -> String {
+        count == 1 ? "copy" : "copies"
+    }
+
     private func prefetchArt(in deck: DeckDetail) {
         let urlStrings =
             [deck.hero.resolvedArtUrl]
@@ -169,12 +330,24 @@ final class DeckDetailViewModel: ObservableObject {
 struct DeckDetailView: View {
     @EnvironmentObject private var authStore: AuthStore
     @StateObject private var model: DeckDetailViewModel
+    @State private var isEditingCards = false
+    @State private var isConfirmingArchive = false
+    @State private var pendingRemoval: DeckCardListItem?
     #if DEBUG
     @State private var didApplyInitialCardPreview = false
     #endif
 
-    init(deckId: Int) {
+    let editDeck: (Int) -> Void
+    let onArchived: () -> Void
+
+    init(
+        deckId: Int,
+        editDeck: @escaping (Int) -> Void = { _ in },
+        onArchived: @escaping () -> Void = {}
+    ) {
         _model = StateObject(wrappedValue: DeckDetailViewModel(deckId: deckId))
+        self.editDeck = editDeck
+        self.onArchived = onArchived
     }
 
     var body: some View {
@@ -192,6 +365,7 @@ struct DeckDetailView: View {
 
                             VStack(spacing: 20) {
                                 deckStatsPanel(deck)
+                                deckActionsPanel(deck)
                                 cardListPanel(deck)
                             }
                             .padding(.horizontal, 18)
@@ -238,6 +412,47 @@ struct DeckDetailView: View {
         }
         .onChange(of: model.selectedCard?.id) { _, _ in
             recordCaptureState()
+        }
+        .confirmationDialog(
+            "Remove card?",
+            isPresented: Binding(
+                get: { pendingRemoval != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        pendingRemoval = nil
+                    }
+                }
+            ),
+            presenting: pendingRemoval
+        ) { item in
+            Button("Remove \(item.name)", role: .destructive) {
+                Task {
+                    await model.removeCard(item, using: authStore)
+                    pendingRemoval = nil
+                }
+            }
+
+            Button("Cancel", role: .cancel) {
+                pendingRemoval = nil
+            }
+        } message: { item in
+            Text("Remove \(item.name) from \(model.deck?.name ?? "this deck")?")
+        }
+        .confirmationDialog(
+            "Archive deck?",
+            isPresented: $isConfirmingArchive
+        ) {
+            Button("Archive Deck", role: .destructive) {
+                Task {
+                    if await model.archive(using: authStore) {
+                        onArchived()
+                    }
+                }
+            }
+
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The deck will be removed from deck lists and game setup, while past games keep their history.")
         }
     }
 
@@ -344,28 +559,111 @@ struct DeckDetailView: View {
         }
     }
 
+    private func deckActionsPanel(_ deck: DeckDetail) -> some View {
+        ArchetypeWebPanel(padding: 16) {
+            VStack(spacing: 10) {
+                HStack(spacing: 10) {
+                    Button {
+                        isConfirmingArchive = true
+                    } label: {
+                        Label(model.isArchiving ? "Archiving..." : "Archive Deck", systemImage: "archivebox")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(FilledGameButtonStyle(color: ArchetypeTheme.red))
+                    .disabled(model.isArchiving || model.isMutating)
+                    .opacity(model.isArchiving ? 0.65 : 1)
+
+                    Button {
+                        editDeck(deck.id)
+                    } label: {
+                        Label("Edit Deck", systemImage: "pencil")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(SecondaryGameButtonStyle())
+                    .disabled(model.isArchiving || model.isMutating)
+                }
+
+                if isEditingCards {
+                    Button {
+                        withAnimation(.snappy) {
+                            isEditingCards = false
+                        }
+                    } label: {
+                        Label("Done", systemImage: "checkmark")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(SecondaryGameButtonStyle())
+                    .disabled(model.isArchiving)
+                } else {
+                    Button {
+                        withAnimation(.snappy) {
+                            isEditingCards = true
+                        }
+                    } label: {
+                        Label("Edit Cards", systemImage: "rectangle.stack.badge.plus")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(PrimaryGameButtonStyle())
+                    .disabled(model.isArchiving)
+                }
+            }
+        }
+    }
+
     private func cardListPanel(_ deck: DeckDetail) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let items = model.displayItems(includeAvailableCards: isEditingCards)
+
+        return VStack(alignment: .leading, spacing: 10) {
             if let error = model.errorMessage {
                 DeckNotice(text: error, color: ArchetypeTheme.red)
             }
 
+            if let status = model.statusMessage {
+                DeckNotice(text: status, color: ArchetypeTheme.green)
+            }
+
             ArchetypeWebPanel(padding: 24) {
-                if model.isLoading && model.displayItems.isEmpty {
+                if model.isLoading && items.isEmpty {
                     DeckProgressRow(text: "Loading cards...")
-                } else if model.displayItems.isEmpty {
+                } else if items.isEmpty {
                     EmptyState(
                         title: "No cards yet.",
-                        detail: "Deck changes are managed on drawtwo.com.",
+                        detail: isEditingCards ? "No collectible cards are available for this hero." : "Use Edit Cards to add cards to this deck.",
                         systemImage: "rectangle.stack.badge.plus"
                     )
                     .padding(.horizontal, 16)
                 } else {
                     VStack(spacing: 8) {
-                        ForEach(model.displayItems) { item in
+                        ForEach(items) { item in
                             DeckCardListRow(
                                 item: item,
-                                onOpen: { model.selectedCard = item }
+                                isEditing: isEditingCards,
+                                canAdd: model.canAddCard(item),
+                                canIncrement: model.canIncrementCard(item),
+                                isMutating: model.isMutating,
+                                onOpen: { model.selectedCard = item },
+                                onAdd: {
+                                    Task {
+                                        await model.addCard(item, using: authStore)
+                                    }
+                                },
+                                onIncrement: {
+                                    Task {
+                                        await model.incrementCard(item, using: authStore)
+                                    }
+                                },
+                                onDecrement: {
+                                    if (item.count ?? 0) <= 1 {
+                                        pendingRemoval = item
+                                    } else {
+                                        Task {
+                                            await model.decrementCard(item, using: authStore)
+                                        }
+                                    }
+                                },
+                                onRemove: {
+                                    pendingRemoval = item
+                                }
                             )
                         }
                     }
@@ -422,60 +720,139 @@ private struct DeckMetric: View {
 
 private struct DeckCardListRow: View {
     let item: DeckCardListItem
+    let isEditing: Bool
+    let canAdd: Bool
+    let canIncrement: Bool
+    let isMutating: Bool
     let onOpen: () -> Void
+    let onAdd: () -> Void
+    let onIncrement: () -> Void
+    let onDecrement: () -> Void
+    let onRemove: () -> Void
 
     var body: some View {
-        Button(action: onOpen) {
-            HStack(spacing: 10) {
-                Text("\(item.cost)")
+        HStack(spacing: 10) {
+            Button(action: onOpen) {
+                HStack(spacing: 10) {
+                    Text("\(item.cost)")
+                        .font(.archetypeBody(13, weight: .black))
+                        .foregroundStyle(Color.white)
+                        .frame(width: 32, height: 32)
+                        .background(ArchetypeTheme.sky)
+                        .clipShape(Circle())
+
+                    HStack(spacing: 12) {
+                        Text(item.name)
+                            .font(.archetypeBody(15, weight: .semibold))
+                            .foregroundStyle(ArchetypeTheme.text)
+                            .lineLimit(1)
+                            .layoutPriority(1)
+
+                        if let heroSlugs = item.heroSlugs, !heroSlugs.isEmpty {
+                            Text(heroSlugs.joined(separator: ", "))
+                                .font(.archetypeBody(9, weight: .bold))
+                                .foregroundStyle(ArchetypeTheme.sky)
+                                .lineLimit(1)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(ArchetypeTheme.sky.opacity(0.16))
+                                .clipShape(Capsule())
+                        }
+
+                        Text(item.isSpell ? "Spell" : "\(item.attack)/\(item.health)")
+                            .font(.archetypeBody(12, weight: .medium))
+                            .foregroundStyle(ArchetypeTheme.muted)
+                            .lineLimit(1)
+                    }
+                    .padding(.leading, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if isEditing {
+                editControls
+            } else {
+                Text("\(item.count ?? 0)x")
                     .font(.archetypeBody(13, weight: .black))
-                    .foregroundStyle(Color.white)
-                    .frame(width: 32, height: 32)
-                    .background(ArchetypeTheme.sky)
-                    .clipShape(Circle())
+                    .foregroundStyle(ArchetypeTheme.text)
+                    .frame(width: 34)
+            }
+        }
+        .padding(.horizontal, 0)
+        .padding(.vertical, 0)
+        .background(ArchetypeTheme.ink2)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .contentShape(Rectangle())
+        .accessibilityElement(children: isEditing ? .contain : .combine)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    @ViewBuilder
+    private var editControls: some View {
+        if item.isInDeck {
+            HStack(spacing: 4) {
+                Button(action: onDecrement) {
+                    Image(systemName: "minus")
+                }
+                .buttonStyle(DeckIconControlStyle(tint: ArchetypeTheme.muted))
+                .disabled(isMutating)
 
                 Text("\(item.count ?? 0)x")
                     .font(.archetypeBody(13, weight: .black))
                     .foregroundStyle(ArchetypeTheme.text)
                     .frame(width: 34)
 
-                HStack(spacing: 12) {
-                    Text(item.name)
-                        .font(.archetypeBody(15, weight: .semibold))
-                        .foregroundStyle(ArchetypeTheme.text)
-                        .lineLimit(1)
-                        .layoutPriority(1)
-
-                    if let heroSlugs = item.heroSlugs, !heroSlugs.isEmpty {
-                        Text(heroSlugs.joined(separator: ", "))
-                            .font(.archetypeBody(9, weight: .bold))
-                            .foregroundStyle(ArchetypeTheme.sky)
-                            .lineLimit(1)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(ArchetypeTheme.sky.opacity(0.16))
-                            .clipShape(Capsule())
-                    }
-
-                    Text(item.isSpell ? "Spell" : "\(item.attack)/\(item.health)")
-                        .font(.archetypeBody(12, weight: .medium))
-                        .foregroundStyle(ArchetypeTheme.muted)
-                        .lineLimit(1)
+                Button(action: onIncrement) {
+                    Image(systemName: "plus")
                 }
-                .padding(.leading, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .buttonStyle(DeckIconControlStyle(tint: ArchetypeTheme.sky))
+                .disabled(isMutating || !canIncrement)
+                .opacity(canIncrement ? 1 : 0.38)
+
+                Button(action: onRemove) {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(DeckIconControlStyle(tint: ArchetypeTheme.red))
+                .disabled(isMutating)
             }
-            .padding(.horizontal, 0)
-            .padding(.vertical, 0)
-            .background(ArchetypeTheme.ink2)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .contentShape(Rectangle())
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(
-                "\(item.name), \(item.count ?? 0)x, cost \(item.cost), \(item.isSpell ? "spell" : "\(item.attack) attack, \(item.health) health")"
-            )
+            .padding(.trailing, 6)
+        } else {
+            Button(action: onAdd) {
+                Label("Add", systemImage: "plus")
+                    .labelStyle(.iconOnly)
+            }
+            .buttonStyle(DeckIconControlStyle(tint: ArchetypeTheme.gold2))
+            .disabled(isMutating || !canAdd)
+            .opacity(canAdd ? 1 : 0.38)
+            .padding(.trailing, 6)
+            .accessibilityLabel("Add \(item.name)")
         }
-        .buttonStyle(.plain)
+    }
+
+    private var accessibilityLabel: String {
+        let count = item.count.map { "\($0)x, " } ?? ""
+        let stats = item.isSpell ? "spell" : "\(item.attack) attack, \(item.health) health"
+        return "\(item.name), \(count)cost \(item.cost), \(stats)"
+    }
+}
+
+private struct DeckIconControlStyle: ButtonStyle {
+    let tint: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(tint)
+            .frame(width: 30, height: 30)
+            .background(configuration.isPressed ? ArchetypeTheme.pressedSurface : ArchetypeTheme.panel)
+            .overlay(
+                RoundedRectangle(cornerRadius: 7)
+                    .stroke(ArchetypeTheme.border, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 7))
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
     }
 }
 
