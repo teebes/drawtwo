@@ -41,7 +41,7 @@ archive decks, and manage the cards assigned to their decks.
 
 - Universal Links require the deployed `drawtwo.com` frontend to serve the
   Apple App Site Association file and the signing team to allow Associated
-  Domains for `com.drawtwo.archetype.dev`.
+  Domains for `com.morelsoft.drawtwo`.
 - There is no StoreKit subscription layer yet.
 - App Store metadata is not prepared yet.
 - Android is not implemented yet.
@@ -417,7 +417,7 @@ xcrun simctl install booted \
 
 SIMCTL_CHILD_ARCHETYPE_BACKEND_BASE_URL=http://127.0.0.1:8002 \
 SIMCTL_CHILD_ARCHETYPE_AUTO_LOGIN=1 \
-xcrun simctl launch --terminate-running-process booted com.drawtwo.archetype.dev
+xcrun simctl launch --terminate-running-process booted com.morelsoft.drawtwo.dev
 ```
 
 The seeded local player account is `ios@devdata.local` with password `password`.
@@ -449,9 +449,8 @@ local network permission the first time the app connects to your Mac.
 2. Open `ios/Archetype/Archetype.xcodeproj` in Xcode.
 3. In Xcode, select the `Archetype` target, open `Signing & Capabilities`, and
    choose your Apple developer team or personal team.
-4. If Xcode reports that the bundle identifier is taken, change
-   `com.drawtwo.archetype.dev` to something unique, such as
-   `com.yourname.archetype.dev`.
+4. Confirm the Debug bundle identifier is `com.morelsoft.drawtwo.dev` and the
+   Release bundle identifier is `com.morelsoft.drawtwo`.
 5. Connect your iPhone by USB, or pair it through Xcode's Devices and Simulators
    window for wireless debugging.
 6. Select your iPhone as the run destination.

@@ -73,7 +73,7 @@ LOCAL_UI_LOCK_DIR="${ARCHETYPE_LOCAL_UI_LOCK_DIR:-${TMPDIR:-/tmp}/archetype-run-
 DISABLE_LOCAL_UI_LOCK="${ARCHETYPE_DISABLE_LOCAL_UI_LOCK:-0}"
 PROJECT_PATH="ios/Archetype/Archetype.xcodeproj"
 SCHEME="Archetype"
-BUNDLE_ID="com.drawtwo.archetype.dev"
+BUNDLE_ID="com.morelsoft.drawtwo.dev"
 DERIVED_DATA_PATH="build/ios-simulator"
 APP_PATH="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/Archetype.app"
 

@@ -3,11 +3,7 @@
     "apps": [],
     "details": [
       {
-        "appID": "4P7Z23L3F7.com.drawtwo.archetype.dev",
-        "paths": ["/app/login/*"]
-      },
-      {
-        "appID": "4P7Z23L3F7.com.drawtwo.archetype",
+        "appID": "X84Q7QHUZJ.com.morelsoft.drawtwo",
         "paths": ["/app/login/*"]
       }
     ]
