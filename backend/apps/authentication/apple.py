@@ -39,6 +39,22 @@ def verify_apple_identity_token(identity_token):
     except jwt.PyJWTError as exc:
         raise ValueError("Invalid Apple login token.") from exc
 
+    if header.get("alg") != "RS256":
+        raise ValueError("Invalid Apple login token algorithm.")
+
+    key = _apple_public_key(header.get("kid"))
+
+    try:
+        return jwt.decode(
+            identity_token,
+            key=key,
+            algorithms=["RS256"],
+            audience=client_ids,
+            issuer=APPLE_ISSUER,
+        )
+    except jwt.PyJWTError as exc:
+        raise ValueError("Invalid Apple login token.") from exc
+
 
 def exchange_apple_authorization_code(client_id, authorization_code, redirect_uri=None):
     """Exchange a one-time Apple authorization code for tokens."""
@@ -99,22 +115,6 @@ def make_apple_client_secret(client_id):
     }
     private_key = Path(private_key_path).read_text()
     return jwt.encode(payload, private_key, algorithm="ES256", headers={"kid": key_id})
-
-    if header.get("alg") != "RS256":
-        raise ValueError("Invalid Apple login token algorithm.")
-
-    key = _apple_public_key(header.get("kid"))
-
-    try:
-        return jwt.decode(
-            identity_token,
-            key=key,
-            algorithms=["RS256"],
-            audience=client_ids,
-            issuer=APPLE_ISSUER,
-        )
-    except jwt.PyJWTError as exc:
-        raise ValueError("Invalid Apple login token.") from exc
 
 
 def _apple_public_key(kid):

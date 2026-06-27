@@ -22,9 +22,43 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.authentication.apple import APPLE_ISSUER, verify_apple_identity_token
 from apps.control.models import SiteSettings
 
 User = get_user_model()
+
+
+class AppleIdentityTokenTestCase(TestCase):
+    """Test cases for Sign in with Apple token verification."""
+
+    @override_settings(
+        APPLE_SIGN_IN_WEB_CLIENT_ID="com.morelsoft.drawtwo.web",
+        APPLE_SIGN_IN_IOS_CLIENT_ID="com.morelsoft.drawtwo",
+    )
+    @patch("apps.authentication.apple.jwt.decode")
+    @patch("apps.authentication.apple._apple_public_key")
+    @patch("apps.authentication.apple.jwt.get_unverified_header")
+    def test_verify_apple_identity_token_returns_claims(
+        self, mock_header, mock_public_key, mock_decode
+    ):
+        mock_header.return_value = {"alg": "RS256", "kid": "apple-key-id"}
+        mock_public_key.return_value = "apple-public-key"
+        mock_decode.return_value = {
+            "sub": "apple-user-123",
+            "aud": "com.morelsoft.drawtwo",
+        }
+
+        claims = verify_apple_identity_token("apple-id-token")
+
+        self.assertEqual(claims["sub"], "apple-user-123")
+        mock_public_key.assert_called_once_with("apple-key-id")
+        mock_decode.assert_called_once_with(
+            "apple-id-token",
+            key="apple-public-key",
+            algorithms=["RS256"],
+            audience=("com.morelsoft.drawtwo", "com.morelsoft.drawtwo.web"),
+            issuer=APPLE_ISSUER,
+        )
 
 
 class UserModelTestCase(TestCase):
