@@ -276,11 +276,28 @@ final class PushNotificationManager: NSObject, ObservableObject, UNUserNotificat
     }
 
     private var apnsEnvironment: String {
-        #if DEBUG
-        return "sandbox"
-        #else
+        Self.currentAPNsEnvironment()
+    }
+
+    private static func currentAPNsEnvironment() -> String {
+        guard
+            let profileURL = Bundle.main.url(
+                forResource: "embedded",
+                withExtension: "mobileprovision"
+            ),
+            let profileData = try? Data(contentsOf: profileURL),
+            let profileText = String(data: profileData, encoding: .isoLatin1)
+                ?? String(data: profileData, encoding: .utf8)
+        else {
+            return "production"
+        }
+
+        if profileText.contains("<key>aps-environment</key>"),
+           profileText.contains("<string>development</string>") {
+            return "sandbox"
+        }
+
         return "production"
-        #endif
     }
 }
 
