@@ -22,7 +22,11 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.authentication.apple import APPLE_ISSUER, verify_apple_identity_token
+from apps.authentication.apple import (
+    APPLE_ISSUER,
+    make_apple_client_secret,
+    verify_apple_identity_token,
+)
 from apps.control.models import SiteSettings
 
 User = get_user_model()
@@ -59,6 +63,15 @@ class AppleIdentityTokenTestCase(TestCase):
             audience=("com.morelsoft.drawtwo", "com.morelsoft.drawtwo.web"),
             issuer=APPLE_ISSUER,
         )
+
+    @override_settings(
+        APPLE_SIGN_IN_TEAM_ID="X84Q7QHUZJ",
+        APPLE_SIGN_IN_KEY_ID="3JN4DRDFS4",
+        APPLE_SIGN_IN_PRIVATE_KEY_PATH="/does/not/exist/AuthKey.p8",
+    )
+    def test_make_apple_client_secret_requires_readable_private_key(self):
+        with self.assertRaises(ValueError):
+            make_apple_client_secret("com.morelsoft.drawtwo")
 
 
 class UserModelTestCase(TestCase):
@@ -483,6 +496,42 @@ class AuthenticationAPITestCase(APITestCase):
             authorization_code="apple-authorization-code",
             redirect_uri=None,
         )
+
+    @override_settings(
+        APPLE_SIGN_IN_WEB_CLIENT_ID="com.morelsoft.drawtwo.dev.web",
+        APPLE_SIGN_IN_IOS_CLIENT_ID="com.morelsoft.drawtwo.dev",
+    )
+    @patch("apps.authentication.views.exchange_apple_authorization_code")
+    @patch("apps.authentication.views.verify_apple_identity_token")
+    def test_apple_login_succeeds_when_refresh_token_exchange_fails(
+        self, mock_verify_token, mock_exchange_code
+    ):
+        """Apple login should not fail if optional refresh-token storage fails."""
+        mock_verify_token.return_value = {
+            "sub": "apple-user-token-failure",
+            "aud": "com.morelsoft.drawtwo.dev",
+            "email": "apple-token-failure@example.com",
+            "email_verified": "true",
+        }
+        mock_exchange_code.side_effect = ValueError("Missing Apple private key.")
+
+        response = self.client.post(
+            self.apple_login_url,
+            {
+                "identity_token": "valid-apple-identity-token",
+                "authorization_code": "apple-authorization-code",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data["user"]["email"],
+            "apple-token-failure@example.com",
+        )
+
+        social_account = SocialAccount.objects.get(provider="apple")
+        self.assertNotIn("apple_refresh_token", social_account.extra_data)
 
     @override_settings(
         APPLE_SIGN_IN_WEB_CLIENT_ID="com.morelsoft.drawtwo.dev.web",

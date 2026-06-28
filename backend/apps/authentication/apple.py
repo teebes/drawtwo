@@ -61,16 +61,16 @@ def exchange_apple_authorization_code(client_id, authorization_code, redirect_ur
     if not authorization_code:
         return {}
 
-    data = {
-        "client_id": client_id,
-        "client_secret": make_apple_client_secret(client_id),
-        "code": authorization_code,
-        "grant_type": "authorization_code",
-    }
-    if redirect_uri:
-        data["redirect_uri"] = redirect_uri
-
     try:
+        data = {
+            "client_id": client_id,
+            "client_secret": make_apple_client_secret(client_id),
+            "code": authorization_code,
+            "grant_type": "authorization_code",
+        }
+        if redirect_uri:
+            data["redirect_uri"] = redirect_uri
+
         response = requests.post(APPLE_TOKEN_URL, data=data, timeout=10)
         response.raise_for_status()
         return response.json()
@@ -83,17 +83,16 @@ def revoke_apple_token(client_id, token, token_type_hint="refresh_token"):
     if not token:
         return
 
-    data = {
-        "client_id": client_id,
-        "client_secret": make_apple_client_secret(client_id),
-        "token": token,
-        "token_type_hint": token_type_hint,
-    }
-
     try:
+        data = {
+            "client_id": client_id,
+            "client_secret": make_apple_client_secret(client_id),
+            "token": token,
+            "token_type_hint": token_type_hint,
+        }
         response = requests.post(APPLE_REVOKE_URL, data=data, timeout=10)
         response.raise_for_status()
-    except requests.RequestException as exc:
+    except (requests.RequestException, ValueError) as exc:
         raise ValueError("Could not revoke Apple token.") from exc
 
 
@@ -113,7 +112,11 @@ def make_apple_client_secret(client_id):
         "aud": APPLE_ISSUER,
         "sub": client_id,
     }
-    private_key = Path(private_key_path).read_text()
+    try:
+        private_key = Path(private_key_path).read_text()
+    except OSError as exc:
+        raise ValueError("Apple token API private key could not be read.") from exc
+
     return jwt.encode(payload, private_key, algorithm="ES256", headers={"kid": key_id})
 
 
