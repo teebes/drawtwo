@@ -1575,7 +1575,6 @@ private struct DashboardLinkButton: View {
             Text(title)
                 .font(.archetypeBody(18, weight: .bold))
                 .foregroundStyle(ArchetypeTheme.text)
-                .underline(pattern: .dot, color: ArchetypeTheme.muted)
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
                 .frame(maxWidth: .infinity)
