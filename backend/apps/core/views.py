@@ -565,7 +565,8 @@ def title_games_history(request, slug):
         .prefetch_related("elo_change")
     )
 
-    # Paginate games (ordered by creation timestamp, newest first)
+    # Paginate games by recent activity so newly completed long-running games
+    # surface at the top of history.
     page_number = request.query_params.get("page", 1)
     page_size = request.query_params.get("page_size", 20)
     try:
@@ -575,7 +576,7 @@ def title_games_history(request, slug):
         page_number = 1
         page_size = 20
 
-    all_games_ordered = all_games.order_by("-created_at")
+    all_games_ordered = all_games.order_by("-updated_at", "-created_at")
     paginator = Paginator(all_games_ordered, page_size)
     page = paginator.get_page(page_number)
 
@@ -652,6 +653,7 @@ def title_games_history(request, slug):
                 "is_user_turn": is_user_turn,
                 "elo_change": elo_change,
                 "created_at": game.created_at.isoformat(),
+                "updated_at": game.updated_at.isoformat(),
             }
         )
 

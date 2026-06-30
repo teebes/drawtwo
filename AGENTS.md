@@ -33,6 +33,9 @@ Run commands inside Docker containers (preferred workflow uses `make` targets).
 
 ## Agent-Specific Notes
 - Commands are expected to run inside Docker containers; avoid host-only workflows.
+- For production data inspection, SSH to `ssh.drawtwo.com` and run commands from `/home/teebes` using the server-side `production.env`, for example:
+  `ssh ssh.drawtwo.com 'cd /home/teebes && docker compose -f docker-compose.production.yml --env-file production.env exec -T backend python manage.py shell -c "..."'`.
+  Do not use the local repo's `production.env` as proof of prod DB access; it may be stale and local `localhost:5432` may point at an unrelated database.
 - Refer to `frontend/src/views/DesignReference.vue` for frontend styling guidance.
 - For frontend changes or new frontend screens, review `frontend/src/views/Styleguide.vue` first and use centralized UI classes from `frontend/src/style.css` where possible.
 - When fixing a web frontend issue, check whether the iOS app has the same issue and address it if present; when fixing an iOS issue, check whether the web frontend has the same issue and address it if present.

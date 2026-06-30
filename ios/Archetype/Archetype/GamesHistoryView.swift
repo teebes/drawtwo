@@ -325,7 +325,7 @@ private struct GameHistoryRow: View {
                         .foregroundStyle(eloChange >= 0 ? Color(hex: 0x4ADE80) : Color(hex: 0xF87171))
                 }
 
-                Text(Self.relativeDate(game.createdAt))
+                Text(Self.relativeDate(game.updatedAt ?? game.createdAt))
                     .font(.archetypeBody(11, weight: .medium))
                     .foregroundStyle(ArchetypeTheme.muted)
             }

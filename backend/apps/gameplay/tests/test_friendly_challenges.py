@@ -175,6 +175,53 @@ class FriendlyChallengesAPITests(TestCase):
         # Ensure no ELO change record exists for friendly match
         self.assertFalse(ELORatingChange.objects.filter(game=game).exists())
 
+    def test_accept_rematch_creates_distinct_game_when_swapped_matchup_is_active(self):
+        previous_game = GameService.create_game(
+            self.deck_a,
+            self.deck_b,
+            randomize_starting_player=False,
+        )
+        previous_game.type = Game.GAME_TYPE_FRIENDLY
+        previous_game.status = Game.GAME_STATUS_ENDED
+        previous_game.winner = self.deck_a
+        previous_game.save(update_fields=["type", "status", "winner"])
+
+        active_swapped_game = GameService.create_game(
+            self.deck_b,
+            self.deck_a,
+            randomize_starting_player=False,
+        )
+        active_swapped_game.type = Game.GAME_TYPE_FRIENDLY
+        active_swapped_game.status = Game.GAME_STATUS_IN_PROGRESS
+        active_swapped_game.save(update_fields=["type", "status"])
+
+        challenge = FriendlyChallenge.objects.create(
+            challenger=self.user_a,
+            challengee=self.user_b,
+            title=self.title,
+            challenger_deck=self.deck_a,
+            status=FriendlyChallenge.STATUS_PENDING,
+            rematch_of=previous_game,
+        )
+
+        self.client.force_authenticate(self.user_b)
+        accept_resp = self.client.post(
+            reverse("friendly-challenge-accept", kwargs={"challenge_id": challenge.id}),
+            {"challengee_deck_id": self.deck_b.id},
+            format="json",
+        )
+
+        self.assertEqual(accept_resp.status_code, 200, accept_resp.content)
+        new_game_id = accept_resp.json()["game_id"]
+        self.assertNotEqual(new_game_id, active_swapped_game.id)
+        challenge.refresh_from_db()
+        self.assertEqual(challenge.game_id, new_game_id)
+
+        new_game = Game.objects.get(id=new_game_id)
+        self.assertEqual(new_game.side_a_id, self.deck_b.id)
+        self.assertEqual(new_game.side_b_id, self.deck_a.id)
+        self.assertEqual(new_game.type, Game.GAME_TYPE_FRIENDLY)
+
     def test_create_challenge_rejects_undersized_deck(self):
         self.title.config = {"min_cards_in_deck": 10}
         self.title.save(update_fields=["config"])

@@ -1189,6 +1189,7 @@ def accept_friendly_challenge(request, challenge_id):
                     challengee_deck,
                     challenge.challenger_deck,
                     randomize_starting_player=False,
+                    reuse_active_game=False,
                 )
             else:
                 # Challenger was side_b last game -> becomes side_a now
@@ -1196,12 +1197,14 @@ def accept_friendly_challenge(request, challenge_id):
                     challenge.challenger_deck,
                     challengee_deck,
                     randomize_starting_player=False,
+                    reuse_active_game=False,
                 )
         else:
             game = GameService.create_game(
                 challenge.challenger_deck,
                 challengee_deck,
                 randomize_starting_player=True,
+                reuse_active_game=False,
             )
     except DeckValidationError as e:
         challenge.status = FriendlyChallenge.STATUS_CANCELLED

@@ -370,6 +370,91 @@ class TitleEndedGameNotificationsTestCase(TestCase):
         )
 
 
+class TitleGamesHistoryTestCase(TestCase):
+    """Test cases for title game history."""
+
+    def setUp(self):
+        self.user_a = User.objects.create_user(
+            email="history-a@example.com",
+            username="history_a",
+        )
+        self.user_b = User.objects.create_user(
+            email="history-b@example.com",
+            username="history_b",
+        )
+        self.title = Title.objects.create(
+            slug="history-order",
+            name="History Order",
+            author=self.user_a,
+            status=Title.STATUS_PUBLISHED,
+            is_latest=True,
+        )
+        self.hero_a = HeroTemplate.objects.create(
+            title=self.title,
+            slug="history-hero-a",
+            name="History Hero A",
+            health=20,
+            is_latest=True,
+        )
+        self.hero_b = HeroTemplate.objects.create(
+            title=self.title,
+            slug="history-hero-b",
+            name="History Hero B",
+            health=20,
+            is_latest=True,
+        )
+        self.deck_a = Deck.objects.create(
+            title=self.title,
+            user=self.user_a,
+            name="History Deck A",
+            hero=self.hero_a,
+        )
+        self.deck_b = Deck.objects.create(
+            title=self.title,
+            user=self.user_b,
+            name="History Deck B",
+            hero=self.hero_b,
+        )
+
+    def _create_finished_friendly(self, winner):
+        return Game.objects.create(
+            title=self.title,
+            side_a=self.deck_a,
+            side_b=self.deck_b,
+            type=Game.GAME_TYPE_FRIENDLY,
+            status=Game.GAME_STATUS_ENDED,
+            winner=winner,
+            state={"winner": "side_a" if winner == self.deck_a else "side_b"},
+        )
+
+    def test_history_orders_by_recent_activity_not_creation_time(self):
+        recent_completion = self._create_finished_friendly(self.deck_a)
+        newer_created_stale_game = self._create_finished_friendly(self.deck_b)
+        now = timezone.now()
+        recent_activity_at = now - timedelta(minutes=5)
+        stale_activity_at = now - timedelta(hours=3)
+
+        Game.objects.filter(id=recent_completion.id).update(
+            created_at=now - timedelta(days=3),
+            updated_at=recent_activity_at,
+        )
+        Game.objects.filter(id=newer_created_stale_game.id).update(
+            created_at=now - timedelta(hours=1),
+            updated_at=stale_activity_at,
+        )
+
+        self.client.force_login(self.user_a)
+        response = self.client.get(f"/api/titles/{self.title.slug}/games/history/")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        games = response.json()["games"]
+        self.assertEqual(
+            [game["id"] for game in games],
+            [recent_completion.id, newer_created_stale_game.id],
+        )
+        self.assertIn("updated_at", games[0])
+
+
 class BasicDjangoTestCase(TestCase):
     """Basic Django functionality tests."""
 

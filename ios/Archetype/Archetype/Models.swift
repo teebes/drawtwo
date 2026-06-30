@@ -503,6 +503,7 @@ struct GameHistoryItem: Codable, Identifiable, Equatable {
     let isUserTurn: Bool?
     let eloChange: Int?
     let createdAt: String
+    let updatedAt: String?
 }
 
 struct GameHistoryPagination: Decodable, Equatable {

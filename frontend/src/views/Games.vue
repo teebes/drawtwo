@@ -175,7 +175,7 @@
 
               <!-- Date -->
               <div class="flex-shrink-0 text-xs text-gray-500 dark:text-gray-400 ml-4">
-                {{ formatDate(game.created_at) }}
+                {{ formatDate(game.updated_at || game.created_at) }}
               </div>
             </div>
           </div>
@@ -257,6 +257,7 @@ interface GameHistoryItem {
   is_user_turn: boolean | null
   elo_change: number | null
   created_at: string
+  updated_at?: string
 }
 
 interface Pagination {

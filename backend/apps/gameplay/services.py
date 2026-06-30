@@ -126,25 +126,31 @@ class GameService:
 
     @staticmethod
     @transaction.atomic
-    def create_game(deck_a, deck_b, randomize_starting_player: bool = False) -> Game:
+    def create_game(
+        deck_a,
+        deck_b,
+        randomize_starting_player: bool = False,
+        reuse_active_game: bool = True,
+    ) -> Game:
         if deck_a.title_id != deck_b.title_id:
             raise DeckValidationError("Both decks must be from the same title")
 
         validate_deck_for_play_or_raise(deck_a, "Side A deck")
         validate_deck_for_play_or_raise(deck_b, "Side B deck")
 
-        existing_game = (
-            Game.objects.filter(
-                side_a=deck_a,
-                side_b=deck_b,
+        if reuse_active_game:
+            existing_game = (
+                Game.objects.filter(
+                    side_a=deck_a,
+                    side_b=deck_b,
+                )
+                .exclude(
+                    status=Game.GAME_STATUS_ENDED,
+                )
+                .first()
             )
-            .exclude(
-                status=Game.GAME_STATUS_ENDED,
-            )
-            .first()
-        )
-        if existing_game:
-            return existing_game
+            if existing_game:
+                return existing_game
 
         # Load world config
         config = TitleConfig.model_validate(deck_a.title.config)
