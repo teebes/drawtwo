@@ -1,8 +1,6 @@
 from django.core.paginator import Paginator
-from django.db.models import Case, Count, IntegerField, Q, Value, When
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
-from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -13,7 +11,6 @@ from apps.builder.models import CardTemplate, HeroTemplate, Title
 from apps.builder.serializers import TitleSerializer
 from apps.collection.models import Deck
 from apps.gameplay.models import (
-    ELORatingChange,
     FriendlyChallenge,
     Game,
     MatchmakingQueue,
@@ -86,7 +83,6 @@ def health_check(request):
     import os
 
     import redis
-    from django.core.cache import cache
     from django.db import connection
 
     checks = {}
@@ -314,15 +310,29 @@ def title_notifications(request, slug):
     except Title.DoesNotExist:
         return Response({"error": "Title not found"}, status=404)
 
-    notifications = []
+    queued_notifications = []
+    pending_notification_entries = []
+    user_turn_game_notifications = []
+    ended_game_notifications = []
+    waiting_game_notifications = []
+
+    def _notifications_newest_first(notification_entries):
+        return [
+            notification
+            for _, notification in sorted(
+                notification_entries,
+                key=lambda entry: entry[0],
+                reverse=True,
+            )
+        ]
 
     # Queued for Ranked Match
     queued_for_ranked_matches = MatchmakingQueue.objects.filter(
         user=request.user, deck__title=title, status=MatchmakingQueue.STATUS_QUEUED
-    )
+    ).order_by("-created_at")
     for queued_entry in queued_for_ranked_matches:
         ladder_label = queued_entry.get_ladder_type_display()
-        notifications.append(
+        queued_notifications.append(
             Notification(
                 ref_id=queued_entry.id,
                 type="game_ranked_queued",
@@ -332,71 +342,98 @@ def title_notifications(request, slug):
 
     games = Game.objects.where_user_is_side(title, request.user)
 
-    # Ranked games in progress
-    ranked_games = games.filter(
-        type=Game.GAME_TYPE_RANKED, status=Game.GAME_STATUS_IN_PROGRESS
-    ).order_by("-created_at")
-    for ranked_game in ranked_games:
-        opponent_deck = ranked_game.opponent_deck_for_user(request.user)
-        game_state = ranked_game.game_state
-        is_player_turn = _is_user_action_required(game_state, ranked_game.user_side)
-        ladder_label = ranked_game.get_ladder_type_display()
-        if is_player_turn:
-            message = f"Your turn in {ladder_label} ranked against {opponent_deck.owner_name}."
-        else:
-            message = (
-                f"Waiting for {opponent_deck.owner_name} in {ladder_label} ranked."
-            )
-        notifications.append(
-            Notification(
-                ref_id=ranked_game.id,
-                type="game_ranked",
-                message=message,
-                is_user_turn=is_player_turn,
+    # Pending friendly challenges
+    pending_challenges = (
+        FriendlyChallenge.objects.filter(
+            challengee=request.user,
+            title=title,
+            status=FriendlyChallenge.STATUS_PENDING,
+        )
+        .select_related("challenger")
+        .order_by("-created_at")
+    )
+    for challenge in pending_challenges:
+        challenger = challenge.challenger.display_name
+        pending_notification_entries.append(
+            (
+                challenge.created_at,
+                Notification(
+                    ref_id=challenge.id,
+                    type="game_challenge",
+                    message=f"You have a pending friendly challenge from {challenger}",
+                ),
             )
         )
 
-    # Friendly games where it is the player's turn
-    friendly_games = games.filter(
-        type=Game.GAME_TYPE_FRIENDLY, status=Game.GAME_STATUS_IN_PROGRESS
-    ).order_by("-created_at")
-    for friendly_game in friendly_games:
-        opponent_deck = friendly_game.opponent_deck_for_user(request.user)
-        game_state = friendly_game.game_state
-        is_player_turn = _is_user_action_required(game_state, friendly_game.user_side)
-        if is_player_turn:
-            message = f"Your turn against {opponent_deck.owner_name}."
-        else:
-            message = f"Waiting for {opponent_deck.owner_name} to take their turn."
-        notifications.append(
-            Notification(
-                ref_id=friendly_game.id,
-                type="game_friendly",
-                message=message,
-                is_user_turn=is_player_turn,
+    # Incoming friend requests (only show requests sent TO the user, not FROM the user)
+    incoming_friend_requests = (
+        Friendship.objects.filter(friend=request.user, status=Friendship.STATUS_PENDING)
+        .exclude(initiated_by=request.user)
+        .select_related("user")
+        .order_by("-created_at")
+    )
+    for friend_request in incoming_friend_requests:
+        requester_name = friend_request.user.display_name
+        pending_notification_entries.append(
+            (
+                friend_request.created_at,
+                Notification(
+                    ref_id=friend_request.id,
+                    type="friend_request",
+                    message=f"You have a pending friend request from {requester_name}",
+                ),
             )
         )
 
-    # PvE Games
-    pve_games = games.filter(
-        type=Game.GAME_TYPE_PVE, status=Game.GAME_STATUS_IN_PROGRESS
+    # Active games in progress
+    active_games = games.filter(
+        type__in=[
+            Game.GAME_TYPE_RANKED,
+            Game.GAME_TYPE_FRIENDLY,
+            Game.GAME_TYPE_PVE,
+        ],
+        status=Game.GAME_STATUS_IN_PROGRESS,
     ).order_by("-created_at")
-    for pve_game in pve_games:
-        opponent_deck = pve_game.opponent_deck_for_user(request.user)
-        game_state = pve_game.game_state
-        is_player_turn = _is_user_action_required(game_state, pve_game.user_side)
-        if is_player_turn:
-            message = f"Your turn against {opponent_deck.owner_name}."
+    for game in active_games:
+        opponent_deck = game.opponent_deck_for_user(request.user)
+        game_state = game.game_state
+        is_player_turn = _is_user_action_required(game_state, game.user_side)
+        if game.type == Game.GAME_TYPE_RANKED:
+            ladder_label = game.get_ladder_type_display()
+            if is_player_turn:
+                message = (
+                    f"Your turn in {ladder_label} ranked against "
+                    f"{opponent_deck.owner_name}."
+                )
+            else:
+                message = (
+                    f"Waiting for {opponent_deck.owner_name} in "
+                    f"{ladder_label} ranked."
+                )
+            notification_type = "game_ranked"
+        elif game.type == Game.GAME_TYPE_FRIENDLY:
+            if is_player_turn:
+                message = f"Your turn against {opponent_deck.owner_name}."
+            else:
+                message = f"Waiting for {opponent_deck.owner_name} to take their turn."
+            notification_type = "game_friendly"
         else:
-            message = f"Waiting for {opponent_deck.owner_name} to take their turn."
-        notifications.append(
-            Notification(
-                ref_id=pve_game.id,
-                type="game_pve",
-                message=message,
-                is_user_turn=is_player_turn,
-            )
+            if is_player_turn:
+                message = f"Your turn against {opponent_deck.owner_name}."
+            else:
+                message = f"Waiting for {opponent_deck.owner_name} to take their turn."
+            notification_type = "game_pve"
+
+        notification = Notification(
+            ref_id=game.id,
+            type=notification_type,
+            message=message,
+            is_user_turn=is_player_turn,
         )
+        if is_player_turn:
+            user_turn_game_notifications.append(notification)
+        else:
+            waiting_game_notifications.append(notification)
 
     # Recently ended games stay visible until this user opens the game once.
     ended_notifications = (
@@ -421,7 +458,7 @@ def title_notifications(request, slug):
         is_side_a = game.player_a_user_id == request.user.id
         user_side = "side_a" if is_side_a else "side_b"
         message = _game_ended_notification_message(game, request.user, user_side)
-        notifications.append(
+        ended_game_notifications.append(
             Notification(
                 ref_id=game.id,
                 type="game_ended",
@@ -430,32 +467,13 @@ def title_notifications(request, slug):
             )
         )
 
-    # Pending friendly challenges
-    pending_challenges = FriendlyChallenge.objects.filter(
-        challengee=request.user, title=title, status=FriendlyChallenge.STATUS_PENDING
+    notifications = (
+        queued_notifications
+        + _notifications_newest_first(pending_notification_entries)
+        + user_turn_game_notifications
+        + ended_game_notifications
+        + waiting_game_notifications
     )
-    for challenge in pending_challenges:
-        challenger = challenge.challenger.display_name
-        notifications.append(
-            Notification(
-                ref_id=challenge.id,
-                type="game_challenge",
-                message=f"You have a pending friendly challenge from {challenger}",
-            )
-        )
-
-    # Incoming friend requests (only show requests sent TO the user, not FROM the user)
-    incoming_friend_requests = Friendship.objects.filter(
-        friend=request.user, status=Friendship.STATUS_PENDING
-    ).exclude(initiated_by=request.user)
-    for friend_request in incoming_friend_requests:
-        notifications.append(
-            Notification(
-                ref_id=friend_request.id,
-                type="friend_request",
-                message=f"You have a pending friend request from {friend_request.user.display_name}",
-            )
-        )
 
     return Response([n.model_dump() for n in notifications])
 
@@ -466,8 +484,10 @@ def title_games_history(request, slug):
     """
     Get paginated game history for a title with stats.
     Returns:
-    - stats: ranked game stats (total, wins, losses) and friendly game stats (total only)
-    - games: paginated list of games (ended and in-progress) with opponent, outcome, status, and turn indicator
+    - stats: ranked game stats (total, wins, losses) and friendly game stats
+      (total only)
+    - games: paginated list of games (ended and in-progress) with opponent,
+      outcome, status, and turn indicator
     """
     title = get_title_or_403(slug, request.user)
     user = request.user
@@ -527,7 +547,8 @@ def title_games_history(request, slug):
         current_rating = 1200  # Default rating if user hasn't played ranked games yet
 
     # Get all games (ended and in-progress) for the games list
-    # Show ALL games regardless of ladder type (stats are filtered by ladder_type, but list shows everything)
+    # Show ALL games regardless of ladder type.
+    # Stats are filtered by ladder_type, but the list shows everything.
     # Use where_user_is_side to annotate user_side
     all_games = (
         Game.objects.where_user_is_side(title, user)

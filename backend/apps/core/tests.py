@@ -1,14 +1,19 @@
 from datetime import datetime, timedelta
-import uuid
 
 from django.contrib.auth import get_user_model
 from django.db import models
 from django.test import TestCase
 from django.utils import timezone
 
+from apps.authentication.models import Friendship
 from apps.builder.models import AIPlayer, HeroTemplate, Title
 from apps.collection.models import Deck
-from apps.gameplay.models import Game, PlayerNotification
+from apps.gameplay.models import (
+    FriendlyChallenge,
+    Game,
+    MatchmakingQueue,
+    PlayerNotification,
+)
 
 from .models import BaseModel, SoftDeleteModel, TimestampedModel
 
@@ -18,16 +23,19 @@ User = get_user_model()
 # Test models for testing our base models
 class TestTimestampedModel(TimestampedModel):
     """Test model inheriting from TimestampedModel."""
+
     name = models.CharField(max_length=100)
 
 
 class TestBaseModel(BaseModel):
     """Test model inheriting from BaseModel."""
+
     name = models.CharField(max_length=100)
 
 
 class TestSoftDeleteModel(SoftDeleteModel):
     """Test model inheriting from SoftDeleteModel."""
+
     name = models.CharField(max_length=100)
 
 
@@ -104,6 +112,126 @@ class TitlePveEndpointTestCase(TestCase):
             [deck["name"] for deck in response.json()],
             ["Practice", "Vanilla", "Control"],
         )
+
+
+class TitleNotificationsOrderingTestCase(TestCase):
+    """Test cases for lobby notification priority ordering."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="notifications-user@example.com",
+            username="notifications_user",
+        )
+        self.opponent = User.objects.create_user(
+            email="notifications-opponent@example.com",
+            username="notifications_opponent",
+        )
+        self.challenger = User.objects.create_user(
+            email="notifications-challenger@example.com",
+            username="notifications_challenger",
+        )
+        self.friend_requester = User.objects.create_user(
+            email="notifications-friend@example.com",
+            username="notifications_friend",
+        )
+        self.title = Title.objects.create(
+            slug="notification-order",
+            name="Notification Order",
+            author=self.user,
+            status=Title.STATUS_PUBLISHED,
+            is_latest=True,
+        )
+        self.hero = HeroTemplate.objects.create(
+            title=self.title,
+            slug="order-hero",
+            name="Order Hero",
+            health=20,
+            is_latest=True,
+        )
+        self.deck = self._create_deck(self.user, "Player Deck")
+        self.opponent_deck = self._create_deck(self.opponent, "Opponent Deck")
+        self.challenger_deck = self._create_deck(self.challenger, "Challenger Deck")
+
+    def _create_deck(self, user, name):
+        return Deck.objects.create(
+            title=self.title,
+            user=user,
+            name=name,
+            hero=self.hero,
+        )
+
+    def _game_state(self, active_side):
+        return {
+            "phase": "main",
+            "active": active_side,
+            "heroes": {
+                "side_a": {
+                    "hero_id": "side_a_hero",
+                    "template_slug": self.hero.slug,
+                    "health": 20,
+                    "name": self.hero.name,
+                    "hero_power": {},
+                },
+                "side_b": {
+                    "hero_id": "side_b_hero",
+                    "template_slug": self.hero.slug,
+                    "health": 20,
+                    "name": self.hero.name,
+                    "hero_power": {},
+                },
+            },
+        }
+
+    def test_lobby_notifications_are_returned_in_priority_order(self):
+        MatchmakingQueue.objects.create(
+            user=self.user,
+            deck=self.deck,
+            ladder_type=Game.LADDER_TYPE_DAILY,
+            status=MatchmakingQueue.STATUS_QUEUED,
+            elo_rating=1000,
+        )
+        FriendlyChallenge.objects.create(
+            challenger=self.challenger,
+            challengee=self.user,
+            title=self.title,
+            challenger_deck=self.challenger_deck,
+            status=FriendlyChallenge.STATUS_PENDING,
+        )
+        Friendship.objects.create(
+            user=self.friend_requester,
+            friend=self.user,
+            initiated_by=self.friend_requester,
+            status=Friendship.STATUS_PENDING,
+        )
+        Game.objects.create(
+            title=self.title,
+            side_a=self.deck,
+            side_b=self.opponent_deck,
+            type=Game.GAME_TYPE_RANKED,
+            ladder_type=Game.LADDER_TYPE_DAILY,
+            status=Game.GAME_STATUS_IN_PROGRESS,
+            state=self._game_state("side_b"),
+        )
+        Game.objects.create(
+            title=self.title,
+            side_a=self.deck,
+            side_b=self.opponent_deck,
+            type=Game.GAME_TYPE_FRIENDLY,
+            status=Game.GAME_STATUS_IN_PROGRESS,
+            state=self._game_state("side_a"),
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(f"/api/titles/{self.title.slug}/notifications/")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        notification_types = [notification["type"] for notification in response.json()]
+        self.assertEqual(notification_types[0], "game_ranked_queued")
+        self.assertCountEqual(
+            notification_types[1:3],
+            ["game_challenge", "friend_request"],
+        )
+        self.assertEqual(notification_types[3:], ["game_friendly", "game_ranked"])
 
 
 class TitleEndedGameNotificationsTestCase(TestCase):
@@ -277,7 +405,8 @@ class BaseModelTestCase(TestCase):
 
     def test_timestamped_model_auto_timestamps(self):
         """Test that TimestampedModel automatically sets timestamps."""
-        # Test with a real model that uses timestamps (User model inherits from TimestampedModel)
+        # Test with a real model that uses timestamps.
+        # User model inherits from TimestampedModel.
         user = User.objects.create_user(email="timestamp@example.com")
 
         # Check that timestamps are set
@@ -290,7 +419,7 @@ class BaseModelTestCase(TestCase):
         self.assertAlmostEqual(
             user.created_at.timestamp(),
             user.updated_at.timestamp(),
-            delta=1  # Within 1 second
+            delta=1,  # Within 1 second
         )
 
     def test_timestamped_model_update_timestamp(self):
@@ -300,6 +429,7 @@ class BaseModelTestCase(TestCase):
 
         # Small delay to ensure timestamp difference
         import time
+
         time.sleep(0.01)
 
         # Update the user
@@ -318,16 +448,16 @@ class BaseModelTestCase(TestCase):
 
         # Check the id field exists and has expected properties
         self.assertIsNotNone(user.id)
-        # The User model uses auto-increment ID, but let's test UUID behavior conceptually
-        self.assertTrue(hasattr(user, 'id'))
-        self.assertTrue(hasattr(user, 'created_at'))
-        self.assertTrue(hasattr(user, 'updated_at'))
+        # The User model uses auto-increment ID, but test UUID behavior
+        # conceptually.
+        self.assertTrue(hasattr(user, "id"))
+        self.assertTrue(hasattr(user, "created_at"))
+        self.assertTrue(hasattr(user, "updated_at"))
 
     def test_soft_delete_functionality(self):
         """Test that soft delete models work correctly."""
         # We'll create a simple test using User model and is_active pattern
         user = User.objects.create_user(email="softdelete@example.com")
-        user_id = user.id
 
         # User should be active by default
         self.assertTrue(user.is_active)
@@ -352,13 +482,13 @@ class BaseModelTestCase(TestCase):
         user = User.objects.create_user(email="inheritance@example.com")
 
         # Test that User has timestamp fields
-        self.assertTrue(hasattr(user, 'created_at'))
-        self.assertTrue(hasattr(user, 'updated_at'))
+        self.assertTrue(hasattr(user, "created_at"))
+        self.assertTrue(hasattr(user, "updated_at"))
 
         # Test that the fields are properly typed
         self.assertIsInstance(user.created_at, datetime)
         self.assertIsInstance(user.updated_at, datetime)
 
         # Test that user has is_active field (inherited pattern)
-        self.assertTrue(hasattr(user, 'is_active'))
+        self.assertTrue(hasattr(user, "is_active"))
         self.assertIsInstance(user.is_active, bool)
