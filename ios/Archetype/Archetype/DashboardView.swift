@@ -2210,65 +2210,84 @@ private struct NotificationRow: View {
     let decline: () -> Void
 
     var body: some View {
-        VStack(spacing: 12) {
-            if notification.type == "game_challenge" {
-                HStack(alignment: .center, spacing: 12) {
-                    Text(notification.message)
-                        .font(.archetypeBody(16))
-                        .foregroundStyle(Color(hex: 0xD1D5DB))
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    VStack(spacing: 8) {
-                        Button {
-                            accept()
-                        } label: {
-                            Text(isActionLoading ? "Accepting..." : "Accept")
-                                .frame(width: 94)
-                        }
-                        .buttonStyle(NotificationActionButtonStyle(kind: .primary))
-                        .disabled(isActionLoading)
-                        .opacity(isActionLoading ? 0.55 : 1)
-
-                        Button {
-                            decline()
-                        } label: {
-                            Text(isActionLoading ? "Declining..." : "Decline")
-                                .frame(width: 94)
-                        }
-                        .buttonStyle(NotificationActionButtonStyle(kind: .secondary))
-                        .disabled(isActionLoading)
-                        .opacity(isActionLoading ? 0.55 : 1)
-                    }
+        if notification.type == "game_challenge" {
+            rowChrome {
+                challengeContent
+            }
+        } else {
+            Button {
+                handleTap()
+            } label: {
+                rowChrome {
+                    graphicalContent
                 }
-            } else {
+                .contentShape(RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius))
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var challengeContent: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text(notification.message)
+                .font(.archetypeBody(16))
+                .foregroundStyle(Color(hex: 0xD1D5DB))
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(spacing: 8) {
                 Button {
-                    handleTap()
+                    accept()
                 } label: {
-                    HStack(spacing: 12) {
-                        Text(notification.emoji)
-                            .font(.system(size: 24))
-                            .frame(width: 40, height: 40)
-                            .background(Color(hex: 0xE0F2FE))
-                            .clipShape(RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius))
-
-                        Text(notification.message)
-                            .font(.archetypeBody(16))
-                            .foregroundStyle(notification.isUserTurn == true ? ArchetypeTheme.text : Color(hex: 0xD1D5DB))
-                            .multilineTextAlignment(.leading)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                    Text(isActionLoading ? "Accepting..." : "Accept")
+                        .frame(width: 94)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(NotificationActionButtonStyle(kind: .primary))
+                .disabled(isActionLoading)
+                .opacity(isActionLoading ? 0.55 : 1)
+
+                Button {
+                    decline()
+                } label: {
+                    Text(isActionLoading ? "Declining..." : "Decline")
+                        .frame(width: 94)
+                }
+                .buttonStyle(NotificationActionButtonStyle(kind: .secondary))
+                .disabled(isActionLoading)
+                .opacity(isActionLoading ? 0.55 : 1)
             }
         }
-        .padding(14)
-        .background(rowBackground)
-        .overlay(
-            RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius)
-                .stroke(rowBorder, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius))
+    }
+
+    private var graphicalContent: some View {
+        HStack(spacing: 12) {
+            Text(notification.emoji)
+                .font(.system(size: 24))
+                .frame(width: 40, height: 40)
+                .background(Color(hex: 0xE0F2FE))
+                .clipShape(RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius))
+
+            Text(notification.message)
+                .font(.archetypeBody(16))
+                .foregroundStyle(notification.isUserTurn == true ? ArchetypeTheme.text : Color(hex: 0xD1D5DB))
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func rowChrome<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(rowBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius)
+                    .stroke(rowBorder, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius))
     }
 
     private var rowBorder: Color {
