@@ -1080,7 +1080,7 @@ final class GameDetailViewModel: ObservableObject {
 
             if context.allowed.allowsCreature {
                 options += board.map { card in
-                    let blockedByStealth = card.hasTrait("stealth")
+                    let blockedByStealth = isEnemy && card.hasTrait("stealth")
                     let blockedByTaunt = restrictForTaunt && !card.hasTrait("taunt")
                     return GameTargetOption(
                         id: "creature-\(card.id)",
