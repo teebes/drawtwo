@@ -423,6 +423,102 @@ class TestIngestion(TestCase):
         self.assertEqual(card_trait.data["actions"][0]["action"], "draw")
         self.assertEqual(card_trait.data["actions"][0]["amount"], 1)
 
+    def test_ingest_triggered_trait_with_event_amount(self):
+        card_yaml = """
+        - type: card
+          card_type: creature
+          slug: blood-conduit
+          name: Blood Conduit
+          description: Heal your hero when damaged.
+          cost: 2
+          attack: 1
+          health: 3
+          traits:
+          - type: triggered
+            when:
+              event: damage
+              target:
+                self: true
+            actions:
+            - action: heal
+              target: hero
+              amount:
+                event: damage_taken
+        """
+
+        ingestion_service = IngestionService(self.title)
+        ingestion_service.ingest_yaml(card_yaml)
+
+        card_template = CardTemplate.objects.get(slug="blood-conduit")
+        card_trait = CardTrait.objects.get(card=card_template, trait_slug="triggered")
+        self.assertEqual(card_trait.data["when"]["event"], "damage")
+        self.assertTrue(card_trait.data["when"]["target"]["self"])
+        self.assertEqual(card_trait.data["actions"][0]["action"], "heal")
+        self.assertEqual(
+            card_trait.data["actions"][0]["amount"],
+            {"event": "damage_taken"},
+        )
+
+        snapshot_yaml = ingestion_service.export_snapshot_yaml()
+        manifest = yaml.safe_load(snapshot_yaml)
+        card_resource = next(
+            resource
+            for resource in manifest
+            if resource["type"] == "card" and resource["slug"] == "blood-conduit"
+        )
+        triggered_trait = card_resource["traits"][0]
+        self.assertEqual(triggered_trait["type"], "triggered")
+        self.assertEqual(triggered_trait["when"]["event"], "damage")
+        self.assertEqual(
+            triggered_trait["actions"][0]["amount"]["event"], "damage_taken"
+        )
+
+    def test_ingest_triggered_trait_with_event_amount_multiplier(self):
+        card_yaml = """
+        - type: card
+          card_type: creature
+          slug: pain-cultivator
+          name: Pain Cultivator
+          description: Grows as friendly creatures deal damage.
+          cost: 3
+          attack: 2
+          health: 4
+          traits:
+          - type: triggered
+            when:
+              event: damage
+              source:
+                kind: creature
+                controller: self
+            actions:
+            - action: buff
+              target: self
+              attribute: health
+              amount:
+                event: damage
+                multiplier: 0.5
+        """
+
+        ingestion_service = IngestionService(self.title)
+        ingestion_service.ingest_yaml(card_yaml)
+
+        card_template = CardTemplate.objects.get(slug="pain-cultivator")
+        card_trait = CardTrait.objects.get(card=card_template, trait_slug="triggered")
+        amount = card_trait.data["actions"][0]["amount"]
+        self.assertEqual(amount["event"], "damage")
+        self.assertEqual(amount["multiplier"], 0.5)
+
+        snapshot_yaml = ingestion_service.export_snapshot_yaml()
+        manifest = yaml.safe_load(snapshot_yaml)
+        card_resource = next(
+            resource
+            for resource in manifest
+            if resource["type"] == "card" and resource["slug"] == "pain-cultivator"
+        )
+        exported_amount = card_resource["traits"][0]["actions"][0]["amount"]
+        self.assertEqual(exported_amount["event"], "damage")
+        self.assertEqual(exported_amount["multiplier"], 0.5)
+
     def test_title_config_defaults_min_cards(self):
         config = TitleConfig()
         self.assertEqual(config.min_cards_in_deck, 10)

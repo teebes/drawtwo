@@ -16,53 +16,58 @@ TRAIT_LIFESTEAL = "lifesteal"
 TRAIT_RANGED = "ranged"
 TRAIT_STEALTH = "stealth"
 TRAIT_TAUNT = "taunt"
+TRAIT_TRIGGERED = "triggered"
 TRAIT_UNIQUE = "unique"
 
 # Default trait definitions
 TRAIT_DEFINITIONS = {
     TRAIT_ARMOR: {
-        'name': 'Armor',
-        'description': 'Reduces incoming damage by a specified amount.',
+        "name": "Armor",
+        "description": "Reduces incoming damage by a specified amount.",
     },
     TRAIT_BATTLECRY: {
-        'name': 'Battlecry',
-        'description': 'Triggers an effect when the card is played.',
+        "name": "Battlecry",
+        "description": "Triggers an effect when the card is played.",
     },
     TRAIT_CHARGE: {
-        'name': 'Charge',
-        'description': 'Can attack immediately when played.',
+        "name": "Charge",
+        "description": "Can attack immediately when played.",
     },
     TRAIT_CLEAVE: {
-        'name': 'Cleave',
-        'description': 'Attacks hit multiple targets.',
+        "name": "Cleave",
+        "description": "Attacks hit multiple targets.",
     },
     TRAIT_DEATHRATTLE: {
-        'name': 'Deathrattle',
-        'description': 'Triggers an effect when the creature dies.',
+        "name": "Deathrattle",
+        "description": "Triggers an effect when the creature dies.",
     },
     TRAIT_INSPIRE: {
-        'name': 'Inspire',
-        'description': 'Triggers an effect when you use your hero power.',
+        "name": "Inspire",
+        "description": "Triggers an effect when you use your hero power.",
     },
     TRAIT_LIFESTEAL: {
-        'name': 'Lifesteal',
-        'description': 'Restores health equal to damage dealt.',
+        "name": "Lifesteal",
+        "description": "Restores health equal to damage dealt.",
     },
     TRAIT_RANGED: {
-        'name': 'Ranged',
-        'description': 'Can attack without taking retaliation damage.',
+        "name": "Ranged",
+        "description": "Can attack without taking retaliation damage.",
     },
     TRAIT_STEALTH: {
-        'name': 'Stealth',
-        'description': 'Cannot be targeted by attacks until this creature attacks.',
+        "name": "Stealth",
+        "description": "Cannot be targeted by attacks until this creature attacks.",
     },
     TRAIT_TAUNT: {
-        'name': 'Taunt',
-        'description': 'Must be attacked before other targets.',
+        "name": "Taunt",
+        "description": "Must be attacked before other targets.",
+    },
+    TRAIT_TRIGGERED: {
+        "name": "Triggered",
+        "description": "Triggers an effect when a matching game event occurs.",
     },
     TRAIT_UNIQUE: {
-        'name': 'Unique',
-        'description': 'Only one copy can exist in your deck.',
+        "name": "Unique",
+        "description": "Only one copy can exist in your deck.",
     },
 }
 
@@ -96,17 +101,17 @@ def get_trait_info(title, slug: str) -> dict:
     try:
         override = TraitOverride.objects.get(title=title, slug=slug)
         return {
-            'slug': slug,
-            'name': override.name,
-            'description': override.description,
+            "slug": slug,
+            "name": override.name,
+            "description": override.description,
         }
     except TraitOverride.DoesNotExist:
         # Use default
         default = TRAIT_DEFINITIONS[slug]
         return {
-            'slug': slug,
-            'name': default['name'],
-            'description': default['description'],
+            "slug": slug,
+            "name": default["name"],
+            "description": default["description"],
         }
 
 

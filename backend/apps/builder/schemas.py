@@ -1,6 +1,6 @@
 from typing import Annotated, List, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Discriminator, Field
+from pydantic import BaseModel, ConfigDict, Discriminator, Field, model_serializer
 
 
 class Encounter(BaseModel):
@@ -17,14 +17,29 @@ class ActionBase(BaseModel):
     action: str
 
 
+class EventValue(BaseModel):
+    event: Literal["amount", "damage", "damage_taken", "healing_done"]
+    multiplier: float = 1
+
+    @model_serializer(mode="wrap")
+    def serialize_model(self, handler):
+        data = handler(self)
+        if self.multiplier == 1:
+            data.pop("multiplier", None)
+        return data
+
+
+AmountValue = Union[int, EventValue]
+
+
 class DrawAction(ActionBase):
     action: Literal["draw"] = "draw"
-    amount: int = 1
+    amount: AmountValue = 1
 
 
 class DamageAction(ActionBase):
     action: Literal["damage"] = "damage"
-    amount: int
+    amount: AmountValue
     target: Literal["hero", "creature", "enemy", "self", "friendly"] = "creature"
     scope: Literal["single", "cleave", "all"] = "single"
     damage_type: Literal["physical", "spell"] = "spell"
@@ -32,8 +47,8 @@ class DamageAction(ActionBase):
 
 class HealAction(ActionBase):
     action: Literal["heal"] = "heal"
-    amount: int
-    target: Literal["hero", "creature", "friendly"] = "creature"
+    amount: AmountValue
+    target: Literal["hero", "creature", "friendly", "self"] = "creature"
     scope: Literal["single", "cleave", "all"] = "single"
 
 
@@ -45,7 +60,7 @@ class RemoveAction(ActionBase):
 
 class TempManaBoostAction(ActionBase):
     action: Literal["temp_mana_boost"] = "temp_mana_boost"
-    amount: int
+    amount: AmountValue
     target: Literal["hero", "creature", "friendly"] = "hero"
 
 
@@ -62,8 +77,8 @@ class ClearAction(ActionBase):
 class BuffAction(ActionBase):
     action: Literal["buff"] = "buff"
     attribute: Literal["attack", "health"] = "attack"
-    amount: int
-    target: Literal["hero", "creature", "friendly"] = "creature"
+    amount: AmountValue
+    target: Literal["hero", "creature", "friendly", "self"] = "creature"
     scope: Literal["single", "cleave", "all"] = "single"
 
 
@@ -136,6 +151,34 @@ class Unique(TraitBase):
     type: Literal["unique"] = "unique"
 
 
+class TriggerEntityFilter(BaseModel):
+    kind: Optional[Literal["card", "creature", "hero", "board"]] = None
+    controller: Literal["self", "opponent", "any"] = "any"
+    self: bool = False
+    exclude_self: bool = False
+    card_type: Optional[Literal["creature", "spell"]] = None
+    template_slug: Optional[str] = None
+
+
+class TriggerCondition(BaseModel):
+    event: Literal[
+        "card_played",
+        "creature_played",
+        "spell_used",
+        "damage",
+        "heal",
+        "creature_death",
+        "hero_power_used",
+    ]
+    source: TriggerEntityFilter = Field(default_factory=TriggerEntityFilter)
+    target: TriggerEntityFilter = Field(default_factory=TriggerEntityFilter)
+
+
+class Triggered(TraitBase):
+    type: Literal["triggered"] = "triggered"
+    when: TriggerCondition
+
+
 Trait = Annotated[
     Union[
         Armor,
@@ -148,6 +191,7 @@ Trait = Annotated[
         Ranged,
         Stealth,
         Taunt,
+        Triggered,
         Unique,
     ],
     Discriminator("type"),

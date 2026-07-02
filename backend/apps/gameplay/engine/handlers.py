@@ -111,14 +111,16 @@ def has_stealth(creature: Creature) -> bool:
     return any(trait.type == "stealth" for trait in creature.traits)
 
 
-def _iter_validated_actions(card: CardInPlay) -> list[Action]:
+def _iter_validated_play_actions(card: CardInPlay) -> list[Action]:
     """
-    Extract and validate all actions attached to a card's traits.
+    Extract and validate actions that can fire when a card is played.
     Cards can arrive with actions already parsed, or as raw dicts depending on
     serialization boundaries, so we validate defensively.
     """
     actions: list[Action] = []
     for trait in card.traits or []:
+        if getattr(trait, "type", None) != "battlecry":
+            continue
         for raw_action in getattr(trait, "actions", None) or []:
             try:
                 actions.append(TypeAdapter(Action).validate_python(raw_action))
@@ -135,7 +137,7 @@ def _card_play_requires_target(card: CardInPlay) -> bool:
     - 'all' scoped actions do not require a target
     - actions that always resolve to a fixed hero target do not require a target
     """
-    for action in _iter_validated_actions(card):
+    for action in _iter_validated_play_actions(card):
         if isinstance(action, (DamageAction, HealAction, RemoveAction, BuffAction)):
             if getattr(action, "scope", "single") == "all":
                 continue
@@ -145,7 +147,11 @@ def _card_play_requires_target(card: CardInPlay) -> bool:
                 continue
             if isinstance(action, HealAction) and action.target == "hero":
                 continue
+            if isinstance(action, HealAction) and action.target == "self":
+                continue
             if isinstance(action, BuffAction) and action.target == "hero":
+                continue
+            if isinstance(action, BuffAction) and action.target == "self":
                 continue
             return True
     return False
@@ -156,12 +162,14 @@ def _card_play_allowed_target_types(card: CardInPlay) -> set[str]:
     Allowed target types for this card play: subset of {'creature', 'hero'}.
     """
     allowed: set[str] = set()
-    for action in _iter_validated_actions(card):
+    for action in _iter_validated_play_actions(card):
         if not isinstance(action, (DamageAction, HealAction, RemoveAction, BuffAction)):
             continue
         if getattr(action, "scope", "single") == "all":
             continue
         if isinstance(action, DamageAction) and action.target == "self":
+            continue
+        if isinstance(action, (BuffAction, HealAction)) and action.target == "self":
             continue
 
         if isinstance(action, BuffAction):
@@ -309,6 +317,7 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
     if target_type == "hero":
 
         hero = target
+        damage_taken = min(effect.damage, max(hero.health, 0))
         hero.health -= effect.damage
 
         events.append(
@@ -316,9 +325,12 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
                 side=effect.side,
                 source_type=effect.source_type,
                 source_id=effect.source_id,
+                source_side=effect.side,
                 target_type=effect.target_type,
                 target_id=effect.target_id,
+                target_side=hero_side,
                 damage=effect.damage,
+                damage_taken=damage_taken,
                 is_retaliation=effect.is_retaliation,
             )
         )
@@ -344,20 +356,28 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
                     new_state=state, events=events, child_effects=child_effects
                 )
 
+        # Target is a creature on the board (we already fetched it above)
+        damage_taken = min(effect.damage, max(target.health, 0))
+        target.health -= effect.damage
+        target_creature = (
+            target.model_copy(deep=True) if isinstance(target, Creature) else None
+        )
+
         events.append(
             DamageEvent(
                 side=effect.side,
                 source_type=effect.source_type,
                 source_id=effect.source_id,
+                source_side=effect.side,
                 target_type=effect.target_type,
                 target_id=effect.target_id,
+                target_side=target_side,
                 damage=effect.damage,
+                damage_taken=damage_taken,
+                target_creature=target_creature,
                 is_retaliation=effect.is_retaliation,
             )
         )
-
-        # Target is a creature on the board (we already fetched it above)
-        target.health -= effect.damage
 
         # Creature death
         if target.health <= 0:
@@ -371,6 +391,7 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
                         side=target_side,
                         source_type=effect.source_type,
                         source_id=effect.source_id,
+                        source_side=effect.side,
                         creature=target,
                         target_type=effect.target_type,
                         target_id=effect.target_id,
@@ -451,19 +472,24 @@ def heal(effect: HealEffect, state: GameState) -> Result:
         raise NotImplementedError(f"Unknown target type: {effect.target_type}")
 
     # Apply healing
+    before_health = target.health
     target.health += effect.amount
 
     if target.health > target.health_max:
         target.health = target.health_max
+    healing_done = max(target.health - before_health, 0)
 
     events = [
         HealEvent(
             side=effect.side,
             source_type=effect.source_type,
             source_id=effect.source_id,
+            source_side=effect.side,
             target_type=effect.target_type,
             target_id=effect.target_id,
+            target_side=target_side,
             amount=effect.amount,
+            healing_done=healing_done,
         )
     ]
 

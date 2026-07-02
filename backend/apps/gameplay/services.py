@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import math
 import random
 import traceback
 import uuid
@@ -20,6 +21,7 @@ from apps.builder.schemas import (
     ClearAction,
     DamageAction,
     DrawAction,
+    EventValue,
     HealAction,
     HeroPower,
     RemoveAction,
@@ -69,6 +71,7 @@ from apps.gameplay.schemas.events import (
     ActionableEvent,
     CreatureDeathEvent,
     EndTurnEvent,
+    Event,
     GameOverEvent,
     NewPhaseEvent,
 )
@@ -1167,8 +1170,29 @@ class GameService:
         return True
 
     @staticmethod
+    def resolve_action_amount(
+        amount: int | EventValue,
+        trigger_event: Event | None = None,
+    ) -> int:
+        if isinstance(amount, int):
+            return amount
+
+        if trigger_event is None:
+            raise ValueError("Event-derived action amounts require a trigger event")
+
+        value = getattr(trigger_event, amount.event, None)
+        if value is None:
+            raise ValueError(
+                f"Trigger event {trigger_event.type} does not provide {amount.event}"
+            )
+        return math.ceil(value * amount.multiplier)
+
+    @staticmethod
     def compile_action(
-        state: GameState, event: ActionableEvent, action: Action
+        state: GameState,
+        event: ActionableEvent,
+        action: Action,
+        trigger_event: Event | None = None,
     ) -> list[Effect]:
         """
         Compile an action into one or more effects.
@@ -1192,14 +1216,16 @@ class GameService:
             is_deathrattle = False
 
         if isinstance(action, DrawAction):
+            amount = GameService.resolve_action_amount(action.amount, trigger_event)
             return [
                 DrawEffect(
                     side=event.side,
-                    amount=action.amount,
+                    amount=amount,
                 )
             ]
 
         if isinstance(action, DamageAction):
+            amount = GameService.resolve_action_amount(action.amount, trigger_event)
             opposing_side = "side_b" if event.side == "side_a" else "side_a"
             same_side = event.side
             target_side = opposing_side
@@ -1284,19 +1310,27 @@ class GameService:
                         source_id=source_id,
                         target_type=target_type,
                         target_id=target_id,
-                        damage=action.amount,
+                        damage=amount,
                         retaliate=not is_deathrattle,
                     )
                 )
             return effects
 
         if isinstance(action, HealAction):
+            amount = GameService.resolve_action_amount(action.amount, trigger_event)
             same_side = event.side
 
             # Determine base target for heal
             if action.target == "hero":
                 base_target_type = "hero"
                 base_target_id = state.heroes[same_side].hero_id
+            elif action.target == "self":
+                if source_type in ("hero", "creature") and source_id:
+                    base_target_type = source_type
+                    base_target_id = source_id
+                else:
+                    base_target_type = event.target_type
+                    base_target_id = event.target_id
             elif action.target == "creature":
                 base_target_type = "creature"
                 base_target_id = event.target_id or (
@@ -1356,7 +1390,7 @@ class GameService:
                         source_id=source_id,
                         target_type=target_type,
                         target_id=target_id,
-                        amount=action.amount,
+                        amount=amount,
                     )
                 )
             return effects
@@ -1430,12 +1464,13 @@ class GameService:
             return effects
 
         if isinstance(action, TempManaBoostAction):
+            amount = GameService.resolve_action_amount(action.amount, trigger_event)
             return [
                 TempManaBoostEffect(
                     side=event.side,
                     source_type=source_type,
                     source_id=source_id,
-                    amount=action.amount,
+                    amount=amount,
                 )
             ]
 
@@ -1460,12 +1495,20 @@ class GameService:
             ]
 
         if isinstance(action, BuffAction):
+            amount = GameService.resolve_action_amount(action.amount, trigger_event)
             same_side = event.side
 
             # Determine base target for buff (buffs target friendly units)
             if action.target == "hero":
                 base_target_type = "hero"
                 base_target_id = state.heroes[same_side].hero_id
+            elif action.target == "self":
+                if source_type in ("hero", "creature") and source_id:
+                    base_target_type = source_type
+                    base_target_id = source_id
+                else:
+                    base_target_type = event.target_type
+                    base_target_id = event.target_id
             elif action.target == "creature":
                 base_target_type = "creature"
                 base_target_id = event.target_id
@@ -1532,7 +1575,7 @@ class GameService:
                         target_type=target_type,
                         target_id=target_id,
                         attribute=action.attribute,
-                        amount=action.amount,
+                        amount=amount,
                     )
                 )
             return effects

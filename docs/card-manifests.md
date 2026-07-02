@@ -60,8 +60,222 @@ traits:
 ```
 
 Common valid trait types include `charge`, `ranged`, `taunt`, `battlecry`,
-`deathrattle`, `stealth`, and `unique`. Common action types include `draw`,
-`damage`, `heal`, `remove`, `buff`, `summon`, `clear`, and `temp_mana_boost`.
+`deathrattle`, `triggered`, `stealth`, and `unique`. Common action types
+include `draw`, `damage`, `heal`, `remove`, `buff`, `summon`, `clear`, and
+`temp_mana_boost`.
+
+## Triggered Traits
+
+Use `type: triggered` for abilities that fire while a creature is in play when
+another game event happens. Triggered traits use a `when` condition and normal
+`actions`.
+
+Triggered abilities are stored on the creature while it is on the board. A
+future silence/purge effect can disable them by removing the `triggered` trait
+from that creature, the same way it would remove `deathrattle` or `taunt`.
+
+Supported trigger events:
+
+- `card_played`: any creature card played or spell card used
+- `creature_played`: a creature card played, but not a spell card used
+- `spell_used`: a spell card used, but not a creature card played
+- `damage`
+- `heal`
+- `creature_death`
+- `hero_power_used`
+
+`source` and `target` filters are optional. Filters can include:
+
+- `kind`: `card`, `creature`, `hero`, or `board`
+- `controller`: `self`, `opponent`, or `any`
+- `self: true`: the event entity must be this creature
+- `exclude_self: true`: the event entity must not be this creature/card
+- `card_type`: `creature` or `spell`
+- `template_slug`: a specific card template slug
+
+For triggered actions, `target: self` can be used with `buff` and `heal`.
+Action amounts are usually numbers, but triggered actions can also read event
+values:
+
+```yaml
+amount:
+  event: damage_taken
+```
+
+Supported event amount names are `damage`, `damage_taken`, `amount`, and
+`healing_done`.
+
+Event amounts can also include `multiplier`. The resolved amount is rounded up
+to the nearest integer after multiplying:
+
+```yaml
+amount:
+  event: damage
+  multiplier: 0.5
+```
+
+For example, `damage: 3` with `multiplier: 0.5` resolves to `2`.
+
+### Trigger Examples
+
+Gain +1/+1 whenever another card is played:
+
+```yaml
+traits:
+  - type: triggered
+    when:
+      event: card_played
+      source:
+        controller: any
+        exclude_self: true
+    actions:
+      - action: buff
+        target: self
+        attribute: attack
+        amount: 1
+      - action: buff
+        target: self
+        attribute: health
+        amount: 1
+```
+
+Draw whenever another card is played:
+
+```yaml
+traits:
+  - type: triggered
+    when:
+      event: card_played
+      source:
+        controller: any
+        exclude_self: true
+    actions:
+      - action: draw
+        amount: 1
+```
+
+Gain attack whenever a creature is played, but not when a spell is used:
+
+```yaml
+traits:
+  - type: triggered
+    when:
+      event: creature_played
+      source:
+        controller: any
+        exclude_self: true
+    actions:
+      - action: buff
+        target: self
+        attribute: attack
+        amount: 1
+```
+
+Draw whenever a spell is used, but not when a creature is played:
+
+```yaml
+traits:
+  - type: triggered
+    when:
+      event: spell_used
+      source:
+        controller: any
+    actions:
+      - action: draw
+        amount: 1
+```
+
+Gain attack when your hero deals damage, including a hero power like:
+
+```yaml
+hero_power:
+  name: Bloodletting
+  actions:
+    - action: damage
+      amount: 1
+      target: friendly
+      scope: single
+```
+
+```yaml
+traits:
+  - type: triggered
+    when:
+      event: damage
+      source:
+        kind: hero
+        controller: self
+    actions:
+      - action: buff
+        target: self
+        attribute: attack
+        amount: 1
+```
+
+Heal your hero for the actual damage this creature took:
+
+```yaml
+traits:
+  - type: triggered
+    when:
+      event: damage
+      target:
+        self: true
+    actions:
+      - action: heal
+        target: hero
+        amount:
+          event: damage_taken
+```
+
+React when your hero or one of your creatures kills a creature:
+
+```yaml
+traits:
+  - type: triggered
+    when:
+      event: creature_death
+      source:
+        kind: hero
+        controller: self
+    actions:
+      - action: draw
+        amount: 1
+
+  - type: triggered
+    when:
+      event: creature_death
+      source:
+        kind: creature
+        controller: self
+    actions:
+      - action: buff
+        target: self
+        attribute: health
+        amount: 1
+```
+
+Gain health equal to half the damage dealt by any friendly creature, rounded up:
+
+```yaml
+traits:
+  - type: triggered
+    when:
+      event: damage
+      source:
+        kind: creature
+        controller: self
+    actions:
+      - action: buff
+        target: self
+        attribute: health
+        amount:
+          event: damage
+          multiplier: 0.5
+```
+
+Use `event: damage_taken` instead of `event: damage` if overkill should only
+count the actual health removed from the target.
 
 ## Hero Powers
 
