@@ -15,6 +15,7 @@ from apps.gameplay.models import (
     PlayerNotification,
 )
 
+from .lobby_notifications import get_title_lobby_badge_count
 from .models import BaseModel, SoftDeleteModel, TimestampedModel
 
 User = get_user_model()
@@ -232,6 +233,62 @@ class TitleNotificationsOrderingTestCase(TestCase):
             ["game_challenge", "friend_request"],
         )
         self.assertEqual(notification_types[3:], ["game_friendly", "game_ranked"])
+
+    def test_lobby_badge_count_includes_only_actionable_game_notifications(self):
+        MatchmakingQueue.objects.create(
+            user=self.user,
+            deck=self.deck,
+            ladder_type=Game.LADDER_TYPE_DAILY,
+            status=MatchmakingQueue.STATUS_QUEUED,
+            elo_rating=1000,
+        )
+        FriendlyChallenge.objects.create(
+            challenger=self.challenger,
+            challengee=self.user,
+            title=self.title,
+            challenger_deck=self.challenger_deck,
+            status=FriendlyChallenge.STATUS_PENDING,
+        )
+        Game.objects.create(
+            title=self.title,
+            side_a=self.deck,
+            side_b=self.opponent_deck,
+            type=Game.GAME_TYPE_FRIENDLY,
+            status=Game.GAME_STATUS_IN_PROGRESS,
+            state=self._game_state("side_a"),
+        )
+        Game.objects.create(
+            title=self.title,
+            side_a=self.deck,
+            side_b=self.opponent_deck,
+            type=Game.GAME_TYPE_RANKED,
+            ladder_type=Game.LADDER_TYPE_DAILY,
+            status=Game.GAME_STATUS_IN_PROGRESS,
+            state=self._game_state("side_a"),
+        )
+        Game.objects.create(
+            title=self.title,
+            side_a=self.deck,
+            side_b=self.opponent_deck,
+            type=Game.GAME_TYPE_FRIENDLY,
+            status=Game.GAME_STATUS_IN_PROGRESS,
+            state=self._game_state("side_b"),
+        )
+        ended_game = Game.objects.create(
+            title=self.title,
+            side_a=self.deck,
+            side_b=self.opponent_deck,
+            type=Game.GAME_TYPE_FRIENDLY,
+            status=Game.GAME_STATUS_ENDED,
+            state=self._game_state("side_a"),
+        )
+        PlayerNotification.objects.create(
+            user=self.user,
+            game=ended_game,
+            message="Game over.",
+        )
+
+        self.assertEqual(get_title_lobby_badge_count(self.title, self.user), 3)
 
 
 class TitleEndedGameNotificationsTestCase(TestCase):

@@ -155,6 +155,39 @@ final class PushNotificationManager: NSObject, ObservableObject, UNUserNotificat
     }
 
     @MainActor
+    func updateBadgeCount(_ count: Int) {
+        let badgeCount = max(0, count)
+
+        if #available(iOS 16.0, *) {
+            UNUserNotificationCenter.current().setBadgeCount(badgeCount) { error in
+                #if DEBUG
+                if let error {
+                    print("Failed to update app badge: \(error.localizedDescription)")
+                }
+                #endif
+            }
+        } else {
+            UIApplication.shared.applicationIconBadgeNumber = badgeCount
+        }
+    }
+
+    @MainActor
+    func updateBadgeCount(from notifications: [TitleNotification]) {
+        updateBadgeCount(notifications.filter(\.countsTowardAppBadge).count)
+    }
+
+    func refreshBadgeCount(using authStore: AuthStore) async {
+        do {
+            let notifications: [TitleNotification] = try await authStore.authenticatedGet(
+                "/titles/\(AppConfig.titleSlug)/notifications/"
+            )
+            await updateBadgeCount(from: notifications)
+        } catch {
+            return
+        }
+    }
+
+    @MainActor
     func completeRouteRequest(id: UUID) {
         guard pendingRouteRequest?.id == id else {
             return

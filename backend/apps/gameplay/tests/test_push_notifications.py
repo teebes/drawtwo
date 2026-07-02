@@ -1,3 +1,6 @@
+from types import SimpleNamespace
+from unittest.mock import MagicMock, Mock, patch
+
 from django.test import TestCase
 from rest_framework.test import APIClient
 
@@ -11,7 +14,7 @@ from apps.gameplay.models import (
     PushDevice,
     PushNotificationEvent,
 )
-from apps.gameplay.push import enqueue_friend_challenge_notification
+from apps.gameplay.push import APNsClient, enqueue_friend_challenge_notification
 from apps.gameplay.services import GameService
 
 
@@ -62,6 +65,37 @@ class PushDeviceRegistrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["deactivated"], 1)
         self.assertFalse(PushDevice.objects.get().is_active)
+
+
+class APNsClientTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email="apns@example.com", username="apns")
+        self.device = PushDevice.objects.create(
+            user=self.user,
+            token="aabb",
+            bundle_id="com.example.app",
+            environment=PushDevice.ENVIRONMENT_SANDBOX,
+        )
+
+    @patch("apps.gameplay.push._apns_auth_token", return_value="token")
+    def test_send_alert_includes_badge_count(self, _auth_token):
+        http_client_cls = MagicMock()
+        http_client = http_client_cls.return_value.__enter__.return_value
+        http_client.post.return_value = Mock(status_code=200)
+
+        with patch.dict(
+            "sys.modules", {"httpx": SimpleNamespace(Client=http_client_cls)}
+        ):
+            APNsClient().send_alert(
+                device=self.device,
+                title="Your turn",
+                body="Your turn against Opponent.",
+                data={"notification_type": PushNotificationEvent.TYPE_TURN_READY},
+                badge_count=3,
+            )
+
+        payload = http_client.post.call_args.kwargs["json"]
+        self.assertEqual(payload["aps"]["badge"], 3)
 
 
 class PushNotificationTriggerTests(TestCase):

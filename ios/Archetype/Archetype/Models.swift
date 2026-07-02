@@ -324,6 +324,17 @@ struct TitleNotification: Codable, Identifiable, Equatable {
         }
     }
 
+    var countsTowardAppBadge: Bool {
+        switch type {
+        case "game_challenge", "friend_request":
+            return true
+        case "game_ranked", "game_friendly", "game_pve":
+            return isUserTurn == true
+        default:
+            return false
+        }
+    }
+
     var emoji: String {
         switch type {
         case "game_ranked", "game_ranked_queued":

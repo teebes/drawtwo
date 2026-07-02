@@ -168,6 +168,7 @@ final class DashboardViewModel: ObservableObject {
                 "/titles/\(AppConfig.titleSlug)/notifications/"
             )
             notifications = response
+            PushNotificationManager.shared.updateBadgeCount(from: notifications)
         } catch {
             if Self.isCancellation(error) || Task.isCancelled {
                 return
@@ -310,6 +311,7 @@ final class DashboardViewModel: ObservableObject {
                 body: ChallengeAcceptRequest(challengeeDeckId: deckId)
             )
             notifications.removeAll { $0.id == notification.id }
+            PushNotificationManager.shared.updateBadgeCount(from: notifications)
             statusMessage = "Challenge accepted."
             isNotificationActionLoading = false
             return response.gameId
@@ -332,6 +334,7 @@ final class DashboardViewModel: ObservableObject {
                 body: EmptyBody()
             )
             notifications.removeAll { $0.id == notification.id }
+            PushNotificationManager.shared.updateBadgeCount(from: notifications)
             statusMessage = "Challenge declined."
         } catch {
             notificationErrorMessage = error.localizedDescription
@@ -355,6 +358,7 @@ final class DashboardViewModel: ObservableObject {
                 body: EmptyBody()
             )
             notifications.removeAll { $0.id == notification.id }
+            PushNotificationManager.shared.updateBadgeCount(from: notifications)
         } catch {
             notificationErrorMessage = error.localizedDescription
         }

@@ -205,6 +205,7 @@ def send_push_event(event_id: int) -> dict:
                     "notification_type": event.notification_type,
                     **(event.data or {}),
                 },
+                badge_count=_badge_count_for_event(event),
             )
             sent += 1
             if device.last_error:
@@ -246,19 +247,31 @@ class APNsClient:
             and (settings.APNS_AUTH_KEY or settings.APNS_AUTH_KEY_PATH)
         )
 
-    def send_alert(self, *, device: PushDevice, title: str, body: str, data: dict):
+    def send_alert(
+        self,
+        *,
+        device: PushDevice,
+        title: str,
+        body: str,
+        data: dict,
+        badge_count: int | None = None,
+    ):
         topic = device.bundle_id or settings.APNS_TOPIC
         if not topic:
             raise APNsError("APNs topic/bundle id is not configured.")
 
-        payload = {
-            "aps": {
-                "alert": {
-                    "title": title,
-                    "body": body,
-                },
-                "sound": "default",
+        aps = {
+            "alert": {
+                "title": title,
+                "body": body,
             },
+            "sound": "default",
+        }
+        if badge_count is not None:
+            aps["badge"] = badge_count
+
+        payload = {
+            "aps": aps,
             **_json_safe_data(data),
         }
         headers = {
@@ -347,6 +360,16 @@ def _json_safe_data(data: dict) -> dict:
         else:
             safe[key] = str(value)
     return safe
+
+
+def _badge_count_for_event(event: PushNotificationEvent) -> int | None:
+    title_slug = (event.data or {}).get("title_slug")
+    if not title_slug:
+        return None
+
+    from apps.core.lobby_notifications import get_title_lobby_badge_count_by_slug
+
+    return get_title_lobby_badge_count_by_slug(event.user_id, title_slug)
 
 
 def _user_id_for_side(game, side: str) -> int | None:

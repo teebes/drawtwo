@@ -473,6 +473,16 @@ final class GameDetailViewModel: ObservableObject {
         activeSide == viewerSide && phase == "main"
     }
 
+    var isPlayerActionRequired: Bool {
+        guard winner == "none" else {
+            return false
+        }
+        if phase == "mulligan" {
+            return !ownMulliganDone
+        }
+        return isPlayerTurn
+    }
+
     var turn: String {
         if let value = gameJSON?["turn"]?.intValue {
             return String(value)
@@ -1705,7 +1715,15 @@ struct GameDetailView: View {
         model.resetForGameLoad()
         socket.disconnect()
         socket.onTextMessage = { text in
+            let wasActionRequired = model.isPlayerActionRequired
             model.applySocketText(text)
+            let isActionRequired = model.isPlayerActionRequired
+            guard guestAccessToken == nil, wasActionRequired != isActionRequired else {
+                return
+            }
+            Task {
+                await PushNotificationManager.shared.refreshBadgeCount(using: authStore)
+            }
         }
         #if DEBUG
         didApplyInitialGameCommand = false

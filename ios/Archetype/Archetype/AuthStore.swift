@@ -300,6 +300,7 @@ final class AuthStore: ObservableObject {
             )
             let _: EmptyResponse = try await authenticatedDelete("/auth/account/")
             GIDSignIn.sharedInstance.signOut()
+            PushNotificationManager.shared.updateBadgeCount(0)
             clearSession()
             statusMessage = "Account deleted."
             return true
@@ -493,6 +494,7 @@ final class AuthStore: ObservableObject {
         }
 
         GIDSignIn.sharedInstance.signOut()
+        PushNotificationManager.shared.updateBadgeCount(0)
         clearSession()
         statusMessage = "Signed out."
         isLoading = false
