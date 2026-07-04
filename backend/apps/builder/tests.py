@@ -378,6 +378,87 @@ class TestTitleAPIPermissions(APITestCase):
         deck.refresh_from_db()
         self.assertIsNotNone(deck.archived_at)
 
+    def test_author_can_manage_ordered_ai_deck_draw_setup(self):
+        self.draft_title.config = {
+            "deck_size_limit": 10,
+            "min_cards_in_deck": 2,
+            "deck_card_max_count": 3,
+            "hand_start_size": 3,
+        }
+        self.draft_title.save(update_fields=["config"])
+        hero = HeroTemplate.objects.create(
+            title=self.draft_title,
+            slug="warrior",
+            name="Warrior",
+            description="Front line hero",
+            health=30,
+            hero_power={"name": "Strike", "cost": 2, "actions": []},
+        )
+        strike = CardTemplate.objects.create(
+            title=self.draft_title,
+            slug="strike",
+            name="Strike",
+            card_type=CardTemplate.CARD_TYPE_SPELL,
+            cost=1,
+        )
+        guard = CardTemplate.objects.create(
+            title=self.draft_title,
+            slug="guard",
+            name="Guard",
+            card_type=CardTemplate.CARD_TYPE_CREATURE,
+            cost=2,
+            attack=1,
+            health=3,
+        )
+
+        self.client.force_authenticate(user=self.author)
+        list_url = reverse(
+            "title-ai-decks", kwargs={"title_slug": self.draft_title.slug}
+        )
+        response = self.client.post(
+            list_url,
+            {
+                "name": "Ordered Bot",
+                "hero_id": hero.id,
+                "strategy": "control",
+                "draw_mode": "ordered",
+                "starting_hand_size": 2,
+                "draw_order": [guard.id, strike.id, guard.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["draw_mode"], "ordered")
+        self.assertEqual(response.data["starting_hand_size"], 2)
+        self.assertEqual(response.data["draw_order"], [guard.id, strike.id, guard.id])
+        self.assertEqual(response.data["card_count"], 3)
+
+        deck = Deck.objects.get(id=response.data["id"])
+        self.assertEqual(deck.script["draw_order"], [guard.id, strike.id, guard.id])
+        self.assertEqual(deck.deckcard_set.get(card=guard).count, 2)
+        self.assertEqual(deck.deckcard_set.get(card=strike).count, 1)
+
+        detail_url = reverse(
+            "title-ai-deck-detail",
+            kwargs={"title_slug": self.draft_title.slug, "deck_id": deck.id},
+        )
+        response = self.client.patch(
+            detail_url,
+            {
+                "starting_hand_size": 1,
+                "draw_order": [strike.id, strike.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["starting_hand_size"], 1)
+        self.assertEqual(response.data["draw_order"], [strike.id, strike.id])
+        deck.refresh_from_db()
+        self.assertFalse(deck.deckcard_set.filter(card=guard).exists())
+        self.assertEqual(deck.deckcard_set.get(card=strike).count, 2)
+
     def test_ai_deck_can_ignore_player_deck_rule_limits(self):
         self.draft_title.config = {
             "deck_size_limit": 3,

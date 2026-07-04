@@ -20,6 +20,7 @@ from .services import TitleService
 User = get_user_model()
 
 AI_DECK_STRATEGIES = {"rush", "control", "combo", "aggressive", "defensive"}
+AI_DECK_DRAW_MODES = {"shuffle", "ordered"}
 
 
 def _title_config_from_data(config_data) -> TitleConfig:
@@ -72,7 +73,12 @@ def _deck_config_payload(title):
         "deck_size_limit": config.deck_size_limit,
         "min_cards_in_deck": config.min_cards_in_deck,
         "deck_card_max_count": config.deck_card_max_count,
+        "hand_start_size": config.hand_start_size,
     }
+
+
+def _default_ai_starting_hand_size(title) -> int:
+    return get_title_config(title).hand_start_size
 
 
 def _card_hero_slugs(card) -> list[str]:
@@ -104,12 +110,24 @@ def _serialize_ai_deck(deck):
         .order_by("card__cost", "card__name", "card__id")
     )
     script = deck.script or {}
+    draw_mode = script.get("draw_mode", "shuffle")
+    if draw_mode not in AI_DECK_DRAW_MODES:
+        draw_mode = "shuffle"
     return {
         "id": deck.id,
         "name": deck.name,
         "description": deck.description,
         "is_pve_opponent": deck.is_pve_opponent,
         "strategy": script.get("strategy", "rush"),
+        "draw_mode": draw_mode,
+        "starting_hand_size": script.get(
+            "starting_hand_size", _default_ai_starting_hand_size(deck.title)
+        ),
+        "draw_order": (
+            _normalize_draw_order(script.get("draw_order", []))
+            if draw_mode == "ordered"
+            else []
+        ),
         "ai_player": {
             "id": deck.ai_player.id,
             "name": deck.ai_player.name,
@@ -142,6 +160,49 @@ def _strategy_from_payload(payload, current: str = "rush") -> str:
     if strategy not in AI_DECK_STRATEGIES:
         raise ValueError(f'Unknown AI strategy "{strategy}".')
     return strategy
+
+
+def _draw_mode_from_payload(payload, current: str = "shuffle") -> str:
+    draw_mode = payload.get("draw_mode", current) or "shuffle"
+    if draw_mode not in AI_DECK_DRAW_MODES:
+        raise ValueError(f'Unknown AI deck draw mode "{draw_mode}".')
+    return draw_mode
+
+
+def _starting_hand_size_from_payload(title, payload, current=None) -> int:
+    default = _default_ai_starting_hand_size(title) if current is None else current
+    raw_value = payload.get("starting_hand_size", default)
+    try:
+        size = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("starting_hand_size must be a number.") from exc
+    if size < 0:
+        raise ValueError("starting_hand_size cannot be negative.")
+    return size
+
+
+def _normalize_draw_order(raw_order) -> list[int]:
+    if raw_order in (None, ""):
+        return []
+    if not isinstance(raw_order, list):
+        raise ValueError("draw_order must be a list.")
+
+    draw_order = []
+    for item in raw_order:
+        raw_card_id = item.get("card_id") if isinstance(item, dict) else item
+        try:
+            card_id = int(raw_card_id)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Each draw_order entry needs a card_id.") from exc
+        draw_order.append(card_id)
+    return draw_order
+
+
+def _expanded_card_ids_from_counts(card_counts) -> list[int]:
+    draw_order = []
+    for card, count in card_counts:
+        draw_order.extend([card.id] * count)
+    return draw_order
 
 
 def _hero_from_payload(title, payload, current=None):
@@ -217,6 +278,86 @@ def _validated_ai_deck_cards(deck, cards_payload):
             raise ValueError(card_error)
 
     return card_counts
+
+
+def _validated_ai_deck_draw_order(deck, draw_order):
+    if not draw_order:
+        return []
+
+    cards_by_id = {
+        card.id: card
+        for card in CardTemplate.objects.filter(
+            title=deck.title,
+            id__in=set(draw_order),
+            is_latest=True,
+        ).prefetch_related("allowed_heroes", "cardtrait_set")
+    }
+    missing_ids = sorted(set(draw_order) - set(cards_by_id))
+    if missing_ids:
+        raise ValueError(f"Card(s) not found: {', '.join(map(str, missing_ids))}")
+
+    counts_by_card_id = {}
+    for card_id in draw_order:
+        card = cards_by_id[card_id]
+        card_error = validate_card_for_deck(deck, card)
+        if card_error:
+            raise ValueError(card_error)
+        counts_by_card_id[card_id] = counts_by_card_id.get(card_id, 0) + 1
+
+    return [
+        (cards_by_id[card_id], count) for card_id, count in counts_by_card_id.items()
+    ]
+
+
+def _ai_deck_script_and_cards_from_payload(
+    title,
+    deck,
+    payload,
+    current_script=None,
+    current_cards_payload=None,
+):
+    current_script = dict(current_script or {})
+    strategy = _strategy_from_payload(
+        payload, current=current_script.get("strategy", "rush")
+    )
+    draw_mode = _draw_mode_from_payload(
+        payload, current=current_script.get("draw_mode", "shuffle")
+    )
+    starting_hand_size = _starting_hand_size_from_payload(
+        title,
+        payload,
+        current=current_script.get(
+            "starting_hand_size", _default_ai_starting_hand_size(title)
+        ),
+    )
+
+    script = {
+        "strategy": strategy,
+        "draw_mode": draw_mode,
+        "starting_hand_size": starting_hand_size,
+    }
+
+    if draw_mode == "ordered":
+        if "draw_order" in payload:
+            draw_order = _normalize_draw_order(payload.get("draw_order"))
+            card_counts = _validated_ai_deck_draw_order(deck, draw_order)
+        elif (
+            current_cards_payload is None
+            and current_script.get("draw_order") is not None
+        ):
+            draw_order = _normalize_draw_order(current_script.get("draw_order"))
+            card_counts = _validated_ai_deck_draw_order(deck, draw_order)
+        else:
+            card_counts = _validated_ai_deck_cards(deck, current_cards_payload)
+            draw_order = _expanded_card_ids_from_counts(card_counts)
+
+        if starting_hand_size > len(draw_order):
+            raise ValueError("starting_hand_size cannot exceed the ordered deck size.")
+        script["draw_order"] = draw_order
+        return script, card_counts
+
+    card_counts = _validated_ai_deck_cards(deck, current_cards_payload)
+    return script, card_counts
 
 
 def _replace_ai_deck_cards(deck, card_counts):
@@ -761,7 +902,6 @@ def title_ai_decks(request, title_slug):
             _assert_ai_deck_name_available(ai_player, name)
             hero = _hero_from_payload(title, request.data)
 
-            script = {"strategy": _strategy_from_payload(request.data)}
             deck = Deck(
                 ai_player=ai_player,
                 title=title,
@@ -771,11 +911,14 @@ def title_ai_decks(request, title_slug):
                 is_pve_opponent=_parse_bool(
                     request.data.get("is_pve_opponent"), default=False
                 ),
-                script=script,
             )
-            card_counts = _validated_ai_deck_cards(
-                deck, _cards_payload_from_request(request.data) or []
+            script, card_counts = _ai_deck_script_and_cards_from_payload(
+                title,
+                deck,
+                request.data,
+                current_cards_payload=_cards_payload_from_request(request.data) or [],
             )
+            deck.script = script
             deck.save()
             _replace_ai_deck_cards(deck, card_counts)
 
@@ -824,15 +967,15 @@ def title_ai_deck_detail(request, title_slug, deck_id):
             if "is_pve_opponent" in request.data:
                 deck.is_pve_opponent = _parse_bool(request.data.get("is_pve_opponent"))
 
-            script = deck.script or {}
-            if "strategy" in request.data:
-                script["strategy"] = _strategy_from_payload(
-                    request.data, current=script.get("strategy", "rush")
-                )
-            deck.script = script
-
             cards_payload = _cards_payload_from_request(request.data)
-            card_counts = _validated_ai_deck_cards(deck, cards_payload)
+            script, card_counts = _ai_deck_script_and_cards_from_payload(
+                title,
+                deck,
+                request.data,
+                current_script=deck.script or {},
+                current_cards_payload=cards_payload,
+            )
+            deck.script = script
 
             deck.save(
                 update_fields=[
@@ -844,7 +987,11 @@ def title_ai_deck_detail(request, title_slug, deck_id):
                     "updated_at",
                 ]
             )
-            if cards_payload is not None:
+            if (
+                cards_payload is not None
+                or "draw_order" in request.data
+                or "draw_mode" in request.data
+            ):
                 _replace_ai_deck_cards(deck, card_counts)
 
             return Response(_serialize_ai_deck(deck), status=status.HTTP_200_OK)

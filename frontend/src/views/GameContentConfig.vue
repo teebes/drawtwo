@@ -111,6 +111,28 @@
                 :disabled="aiDeckSaving"
               />
             </label>
+            <label class="block">
+              <span class="ui-label">Draw mode</span>
+              <select
+                v-model="aiDeckDraft.draw_mode"
+                class="ui-select mt-2"
+                :disabled="aiDeckSaving"
+                @change="handleAiDeckDrawModeChange"
+              >
+                <option value="shuffle">Shuffle</option>
+                <option value="ordered">Ordered</option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="ui-label">Starting hand</span>
+              <input
+                v-model.number="aiDeckDraft.starting_hand_size"
+                type="number"
+                min="0"
+                class="ui-input mt-2"
+                :disabled="aiDeckSaving"
+              />
+            </label>
             <label class="mt-7 flex items-center gap-3">
               <input
                 v-model="aiDeckDraft.is_pve_opponent"
@@ -165,7 +187,95 @@
             </button>
           </div>
 
-          <div v-if="aiDeckDraft.cards.length === 0" class="ui-panel-muted text-sm text-gray-500 dark:text-gray-400">
+          <div
+            v-if="aiDeckDraft.draw_mode === 'ordered' && aiDeckDraft.draw_order.length === 0"
+            class="ui-panel-muted text-sm text-gray-500 dark:text-gray-400"
+          >
+            No cards in this AI deck.
+          </div>
+
+          <div v-else-if="aiDeckDraft.draw_mode === 'ordered'" class="ui-table-wrap">
+            <table class="ui-table">
+              <thead class="bg-gray-50 dark:bg-gray-800/70">
+                <tr>
+                  <th class="ui-table-head w-20 text-right">#</th>
+                  <th class="ui-table-head">Zone</th>
+                  <th class="ui-table-head">Card</th>
+                  <th class="ui-table-head">Type</th>
+                  <th class="ui-table-head text-right">Cost</th>
+                  <th class="ui-table-head text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-800 dark:bg-gray-900/40">
+                <tr v-for="(cardId, index) in aiDeckDraft.draw_order" :key="`${cardId}-${index}`">
+                  <td class="ui-table-cell text-right font-semibold text-gray-900 dark:text-white">
+                    {{ index + 1 }}
+                  </td>
+                  <td class="ui-table-cell">
+                    <span
+                      :class="[
+                        'ui-status-badge',
+                        index < normalizedDraftCount(aiDeckDraft.starting_hand_size)
+                          ? 'ui-status-info'
+                          : 'ui-status-neutral'
+                      ]"
+                    >
+                      {{ index < normalizedDraftCount(aiDeckDraft.starting_hand_size) ? 'Opening hand' : 'Draw pile' }}
+                    </span>
+                  </td>
+                  <td class="ui-table-cell">
+                    <div class="font-medium text-gray-900 dark:text-white">
+                      {{ orderedDraftCardName(cardId) }}
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                      {{ orderedDraftCardSlug(cardId) }}
+                    </div>
+                  </td>
+                  <td class="ui-table-cell">
+                    <span class="ui-status-badge ui-status-neutral capitalize">
+                      {{ orderedDraftCardType(cardId) }}
+                    </span>
+                  </td>
+                  <td class="ui-table-cell text-right font-semibold text-gray-900 dark:text-white">
+                    {{ orderedDraftCardCost(cardId) }}
+                  </td>
+                  <td class="ui-table-cell text-right">
+                    <div class="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        class="ui-btn ui-btn-xs ui-btn-secondary"
+                        :disabled="aiDeckSaving || index === 0"
+                        title="Move up"
+                        @click="moveOrderedAiDeckCard(index, -1)"
+                      >
+                        <ArrowUp class="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        class="ui-btn ui-btn-xs ui-btn-secondary"
+                        :disabled="aiDeckSaving || index === aiDeckDraft.draw_order.length - 1"
+                        title="Move down"
+                        @click="moveOrderedAiDeckCard(index, 1)"
+                      >
+                        <ArrowDown class="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        class="ui-btn ui-btn-xs ui-btn-danger"
+                        :disabled="aiDeckSaving"
+                        title="Remove"
+                        @click="removeOrderedAiDeckCard(index)"
+                      >
+                        <Trash2 class="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div v-else-if="aiDeckDraft.cards.length === 0" class="ui-panel-muted text-sm text-gray-500 dark:text-gray-400">
             No cards in this AI deck.
           </div>
 
@@ -564,6 +674,7 @@
                     <th class="ui-table-head">Hero</th>
                     <th class="ui-table-head text-right">Cards</th>
                     <th class="ui-table-head">Strategy</th>
+                    <th class="ui-table-head">Setup</th>
                     <th class="ui-table-head">PvE</th>
                     <th class="ui-table-head text-right">Actions</th>
                   </tr>
@@ -588,6 +699,21 @@
                       <span class="ui-status-badge ui-status-neutral capitalize">
                         {{ deck.strategy }}
                       </span>
+                    </td>
+                    <td class="ui-table-cell">
+                      <div class="flex flex-wrap gap-2">
+                        <span
+                          :class="[
+                            'ui-status-badge capitalize',
+                            deck.draw_mode === 'ordered' ? 'ui-status-info' : 'ui-status-neutral'
+                          ]"
+                        >
+                          {{ deck.draw_mode }}
+                        </span>
+                        <span class="ui-status-badge ui-status-neutral">
+                          Hand {{ deck.starting_hand_size }}
+                        </span>
+                      </div>
                     </td>
                     <td class="ui-table-cell">
                       <span
@@ -636,6 +762,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   ArrowLeft,
+  ArrowDown,
+  ArrowUp,
   Bot,
   Check,
   Copy,
@@ -706,6 +834,7 @@ interface AIDeckConfig {
   deck_size_limit: number
   min_cards_in_deck: number
   deck_card_max_count: number
+  hand_start_size: number
 }
 
 interface AIDeckCard {
@@ -728,6 +857,9 @@ interface AIDeck {
   description: string
   is_pve_opponent: boolean
   strategy: AIStrategy
+  draw_mode: AIDeckDrawMode
+  starting_hand_size: number
+  draw_order: number[]
   ai_player: {
     id: number
     name: string
@@ -749,6 +881,7 @@ interface AIDeckListResponse {
 }
 
 type AIStrategy = 'rush' | 'control' | 'combo' | 'aggressive' | 'defensive'
+type AIDeckDrawMode = 'shuffle' | 'ordered'
 
 interface AIDeckDraftCard {
   card_id: number
@@ -762,6 +895,9 @@ interface AIDeckDraft {
   hero_id: number | null
   is_pve_opponent: boolean
   strategy: AIStrategy
+  draw_mode: AIDeckDrawMode
+  starting_hand_size: number
+  draw_order: number[]
   cards: AIDeckDraftCard[]
 }
 
@@ -796,6 +932,12 @@ const searchQuery = ref('')
 const cardTypeFilter = ref<'all' | 'creature' | 'spell'>('all')
 const scopeFilter = ref<'all' | 'global' | 'hero'>('all')
 const aiDecks = ref<AIDeck[]>([])
+const aiDeckConfig = ref<AIDeckConfig>({
+  deck_size_limit: 30,
+  min_cards_in_deck: 10,
+  deck_card_max_count: 9,
+  hand_start_size: 3
+})
 const selectedAiDeckId = ref<number | null>(null)
 const aiDeckDraft = ref<AIDeckDraft | null>(null)
 const aiDeckSaving = ref(false)
@@ -857,7 +999,9 @@ const filteredCards = computed(() => {
 })
 
 const aiDeckDraftTotal = computed(() => (
-  aiDeckDraft.value?.cards.reduce((total, card) => total + normalizedDraftCount(card.count), 0) || 0
+  aiDeckDraft.value?.draw_mode === 'ordered'
+    ? aiDeckDraft.value.draw_order.length
+    : aiDeckDraft.value?.cards.reduce((total, card) => total + normalizedDraftCount(card.count), 0) || 0
 ))
 
 const selectedDraftHero = computed(() => (
@@ -872,7 +1016,7 @@ const availableAiDeckCards = computed(() => {
   const query = aiCardSearch.value.toLowerCase()
 
   return cards.value
-    .filter(card => !selectedDraftCardIds.value.has(card.id))
+    .filter(card => aiDeckDraft.value?.draw_mode === 'ordered' || !selectedDraftCardIds.value.has(card.id))
     .filter(card => isCardAvailableForAiDraftHero(card))
     .filter(card => {
       if (!query) return true
@@ -889,12 +1033,26 @@ const aiDeckDraftError = computed(() => {
   if (!draft) return ''
   if (!draft.name.trim()) return 'Name is required.'
   if (!draft.hero_id) return 'Hero is required.'
+  const startingHandSize = normalizedDraftCount(draft.starting_hand_size)
+  if (startingHandSize !== Number(draft.starting_hand_size)) {
+    return 'Starting hand must be a whole number.'
+  }
+  if (draft.draw_mode === 'ordered' && startingHandSize > draft.draw_order.length) {
+    return 'Starting hand cannot exceed the ordered deck size.'
+  }
 
   for (const draftCard of draft.cards) {
     const card = cardById.value.get(draftCard.card_id)
     if (!card) return 'One or more cards no longer exist.'
     const count = normalizedDraftCount(draftCard.count)
     if (count < 1) return 'Card counts must be at least 1.'
+    if (!isCardAvailableForAiDraftHero(card)) {
+      return `${card.name} is not available to ${selectedDraftHero.value?.name || 'this hero'}.`
+    }
+  }
+  for (const cardId of draft.draw_order) {
+    const card = cardById.value.get(cardId)
+    if (!card) return 'One or more cards no longer exist.'
     if (!isCardAvailableForAiDraftHero(card)) {
       return `${card.name} is not available to ${selectedDraftHero.value?.name || 'this hero'}.`
     }
@@ -995,6 +1153,47 @@ const draftCardStats = (draftCard: AIDeckDraftCard): string => {
   return `${attack} / ${health}`
 }
 
+const orderedDraftSourceCard = (cardId: number): CardConfig | undefined => (
+  cardById.value.get(cardId)
+)
+
+const orderedDraftSourceDeckCard = (cardId: number): AIDeckCard | undefined => (
+  selectedAiDeck.value?.cards.find(card => card.card_id === cardId)
+)
+
+const orderedDraftCardName = (cardId: number): string => (
+  orderedDraftSourceCard(cardId)?.name || orderedDraftSourceDeckCard(cardId)?.name || 'Unknown card'
+)
+
+const orderedDraftCardSlug = (cardId: number): string => (
+  orderedDraftSourceCard(cardId)?.slug || orderedDraftSourceDeckCard(cardId)?.card_slug || ''
+)
+
+const orderedDraftCardType = (cardId: number): string => (
+  orderedDraftSourceCard(cardId)?.card_type || orderedDraftSourceDeckCard(cardId)?.card_type || 'card'
+)
+
+const orderedDraftCardCost = (cardId: number): number | string => (
+  orderedDraftSourceCard(cardId)?.cost ?? orderedDraftSourceDeckCard(cardId)?.cost ?? '-'
+)
+
+const expandedDrawOrderFromCards = (draftCards: AIDeckDraftCard[]): number[] => (
+  draftCards.flatMap(card => Array(normalizedDraftCount(card.count)).fill(card.card_id))
+)
+
+const cardsFromDrawOrder = (drawOrder: number[]): AIDeckDraftCard[] => {
+  const counts = new Map<number, number>()
+  for (const cardId of drawOrder) {
+    counts.set(cardId, (counts.get(cardId) || 0) + 1)
+  }
+  return Array.from(counts, ([card_id, count]) => ({ card_id, count }))
+}
+
+const syncCardsFromDrawOrder = (): void => {
+  if (!aiDeckDraft.value) return
+  aiDeckDraft.value.cards = cardsFromDrawOrder(aiDeckDraft.value.draw_order)
+}
+
 const aiDeckToDraft = (deck: AIDeck): AIDeckDraft => ({
   id: deck.id,
   name: deck.name,
@@ -1002,6 +1201,11 @@ const aiDeckToDraft = (deck: AIDeck): AIDeckDraft => ({
   hero_id: deck.hero.id,
   is_pve_opponent: deck.is_pve_opponent,
   strategy: deck.strategy || 'rush',
+  draw_mode: deck.draw_mode || 'shuffle',
+  starting_hand_size: Number.isFinite(Number(deck.starting_hand_size))
+    ? Math.max(0, Math.trunc(Number(deck.starting_hand_size)))
+    : 0,
+  draw_order: Array.isArray(deck.draw_order) ? deck.draw_order.map(Number).filter(Number.isFinite) : [],
   cards: deck.cards.map(card => ({
     card_id: card.card_id,
     count: card.count
@@ -1009,6 +1213,7 @@ const aiDeckToDraft = (deck: AIDeck): AIDeckDraft => ({
 })
 
 const applyAiDeckResponse = (response: AIDeckListResponse): void => {
+  aiDeckConfig.value = response.config
   aiDecks.value = response.decks || []
 
   if (
@@ -1047,6 +1252,9 @@ const startNewAiDeck = (): void => {
     hero_id: heroes.value[0]?.id || null,
     is_pve_opponent: false,
     strategy: 'rush',
+    draw_mode: 'shuffle',
+    starting_hand_size: aiDeckConfig.value.hand_start_size,
+    draw_order: [],
     cards: []
   }
 }
@@ -1067,6 +1275,14 @@ const addCardToAiDeckDraft = (): void => {
   if (!aiDeckDraft.value || !selectedAddCardId.value) return
   const cardId = Number(selectedAddCardId.value)
   if (!Number.isFinite(cardId)) return
+
+  if (aiDeckDraft.value.draw_mode === 'ordered') {
+    aiDeckDraft.value.draw_order.push(cardId)
+    syncCardsFromDrawOrder()
+    selectedAddCardId.value = ''
+    return
+  }
+
   if (aiDeckDraft.value.cards.some(card => card.card_id === cardId)) return
 
   aiDeckDraft.value.cards.push({
@@ -1079,6 +1295,30 @@ const addCardToAiDeckDraft = (): void => {
 const removeCardFromAiDeckDraft = (cardId: number): void => {
   if (!aiDeckDraft.value) return
   aiDeckDraft.value.cards = aiDeckDraft.value.cards.filter(card => card.card_id !== cardId)
+  aiDeckDraft.value.draw_order = aiDeckDraft.value.draw_order.filter(orderedCardId => orderedCardId !== cardId)
+}
+
+const removeOrderedAiDeckCard = (index: number): void => {
+  if (!aiDeckDraft.value) return
+  aiDeckDraft.value.draw_order.splice(index, 1)
+  syncCardsFromDrawOrder()
+}
+
+const moveOrderedAiDeckCard = (index: number, direction: -1 | 1): void => {
+  if (!aiDeckDraft.value) return
+  const nextIndex = index + direction
+  if (nextIndex < 0 || nextIndex >= aiDeckDraft.value.draw_order.length) return
+  const [cardId] = aiDeckDraft.value.draw_order.splice(index, 1)
+  aiDeckDraft.value.draw_order.splice(nextIndex, 0, cardId)
+  syncCardsFromDrawOrder()
+}
+
+const handleAiDeckDrawModeChange = (): void => {
+  if (!aiDeckDraft.value) return
+  if (aiDeckDraft.value.draw_mode === 'ordered') {
+    aiDeckDraft.value.draw_order = expandedDrawOrderFromCards(aiDeckDraft.value.cards)
+    syncCardsFromDrawOrder()
+  }
 }
 
 const aiDeckPayload = (draft: AIDeckDraft) => ({
@@ -1087,6 +1327,9 @@ const aiDeckPayload = (draft: AIDeckDraft) => ({
   hero_id: draft.hero_id,
   is_pve_opponent: draft.is_pve_opponent,
   strategy: draft.strategy,
+  draw_mode: draft.draw_mode,
+  starting_hand_size: normalizedDraftCount(draft.starting_hand_size),
+  draw_order: draft.draw_mode === 'ordered' ? draft.draw_order : [],
   cards: draft.cards.map(card => ({
     card_id: card.card_id,
     count: normalizedDraftCount(card.count)

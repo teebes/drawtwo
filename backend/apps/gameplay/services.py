@@ -125,6 +125,44 @@ class GameService:
         )
 
     @staticmethod
+    def _ordered_ai_deck_card_ids(deck) -> list[int] | None:
+        if not deck.is_ai_deck:
+            return None
+
+        script = deck.script or {}
+        if script.get("draw_mode") != "ordered":
+            return None
+
+        draw_order = script.get("draw_order") or []
+        ordered_card_ids = []
+        for raw_card_id in draw_order:
+            raw_card_id = (
+                raw_card_id.get("card_id")
+                if isinstance(raw_card_id, dict)
+                else raw_card_id
+            )
+            try:
+                ordered_card_ids.append(int(raw_card_id))
+            except (TypeError, ValueError) as exc:
+                raise DeckValidationError(
+                    f'AI deck "{deck.name}" has an invalid draw order.'
+                ) from exc
+        return ordered_card_ids
+
+    @staticmethod
+    def _ai_opening_hand_size(deck, default_size: int) -> int:
+        if not deck.is_ai_deck:
+            return default_size
+
+        try:
+            size = int((deck.script or {}).get("starting_hand_size", default_size))
+        except (TypeError, ValueError) as exc:
+            raise DeckValidationError(
+                f'AI deck "{deck.name}" has an invalid starting hand size.'
+            ) from exc
+        return max(size, 0)
+
+    @staticmethod
     @transaction.atomic
     def create_game(
         deck_a,
@@ -171,41 +209,64 @@ class GameService:
             # Swap the decks so deck_b starts
             deck_a, deck_b = deck_b, deck_a
 
-        deck_a_card_copies = {
-            card_copy.card.id: card_copy.count
-            for card_copy in deck_a.deckcard_set.all()
-        }
-        deck_b_card_copies = {
-            card_copy.card.id: card_copy.count
-            for card_copy in deck_b.deckcard_set.all()
-        }
-
-        cards_a = serialize_cards_with_traits(deck_a.cards.all())
-        cards_b = serialize_cards_with_traits(deck_b.cards.all())
-
         card_id = 0
         cards_in_play = {}
         decks = {"side_a": [], "side_b": []}
 
-        for card in cards_a:
-            for _ in range(deck_a_card_copies[card.id]):
-                card_id += 1
-                cards_in_play[str(card_id)] = GameService.get_card_in_play(
-                    card, card_id
-                )
-                decks["side_a"].append(str(card_id))
+        def add_card_to_side(card: Card, side: str):
+            nonlocal card_id
+            card_id += 1
+            cards_in_play[str(card_id)] = GameService.get_card_in_play(card, card_id)
+            decks[side].append(str(card_id))
 
-        for card in cards_b:
-            for _ in range(deck_b_card_copies[card.id]):
-                card_id += 1
-                cards_in_play[str(card_id)] = GameService.get_card_in_play(
-                    card, card_id
-                )
-                decks["side_b"].append(str(card_id))
+        def build_deck_cards(deck, side: str) -> bool:
+            ordered_card_ids = GameService._ordered_ai_deck_card_ids(deck)
+            if ordered_card_ids is not None:
+                if not ordered_card_ids:
+                    return False
 
-        # Get the side b compensation card if it exists
+                cards_by_id = {
+                    card.id: to_card_schema(card)
+                    for card in CardTemplate.objects.filter(
+                        id__in=set(ordered_card_ids),
+                        title=deck.title,
+                        is_latest=True,
+                    )
+                    .select_related("title", "faction")
+                    .prefetch_related("cardtrait_set", "allowed_heroes")
+                }
+                missing_ids = sorted(set(ordered_card_ids) - set(cards_by_id))
+                if missing_ids:
+                    raise DeckValidationError(
+                        f'AI deck "{deck.name}" references missing cards in its '
+                        f"draw order: {', '.join(map(str, missing_ids))}"
+                    )
+
+                for ordered_card_id in ordered_card_ids:
+                    add_card_to_side(cards_by_id[ordered_card_id], side)
+                return False
+
+            deck_card_copies = {
+                card_copy.card.id: card_copy.count
+                for card_copy in deck.deckcard_set.all()
+            }
+            cards = serialize_cards_with_traits(deck.cards.all())
+            for card in cards:
+                for _ in range(deck_card_copies[card.id]):
+                    add_card_to_side(card, side)
+            return True
+
+        should_shuffle_a = build_deck_cards(deck_a, "side_a")
+        should_shuffle_b = build_deck_cards(deck_b, "side_b")
+
+        if should_shuffle_a:
+            creation_rng("shuffle_side_a_deck").shuffle(decks["side_a"])
+        if should_shuffle_b:
+            creation_rng("shuffle_side_b_deck").shuffle(decks["side_b"])
+
+        # Get the side b compensation card if it exists and side B is human.
         comp_card = None
-        if config.side_b_compensation:
+        if config.side_b_compensation and not deck_b.is_ai_deck:
             card = CardTemplate.objects.get(
                 slug=config.side_b_compensation, is_latest=True
             )
@@ -214,9 +275,16 @@ class GameService:
             comp_card_in_play = GameService.get_card_in_play(comp_card, card_id)
             cards_in_play[str(card_id)] = comp_card_in_play
 
-        # shuffle both decks
-        creation_rng("shuffle_side_a_deck").shuffle(decks["side_a"])
-        creation_rng("shuffle_side_b_deck").shuffle(decks["side_b"])
+        opening_hand_sizes = {
+            "side_a": GameService._ai_opening_hand_size(
+                deck_a,
+                config.hand_start_size,
+            ),
+            "side_b": GameService._ai_opening_hand_size(
+                deck_b,
+                config.hand_start_size,
+            ),
+        }
 
         # Collect all summonable card slugs from cards and heroes
         summonable_slugs = set()
@@ -307,6 +375,7 @@ class GameService:
             hands=hands,
             decks=decks,
             ai_sides=ai_sides,
+            opening_hand_sizes=opening_hand_sizes,
             config=config,
             summonable_cards=summonable_cards,
             rng_seed=rng_seed,

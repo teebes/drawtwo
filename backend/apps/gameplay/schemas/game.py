@@ -93,6 +93,9 @@ class GameState(BaseModel):
     heroes: Dict[str, HeroInPlay]
 
     ai_sides: List[Literal["side_a", "side_b"]] = Field(default_factory=list)
+    opening_hand_sizes: Dict[Literal["side_a", "side_b"], int] = Field(
+        default_factory=dict
+    )
 
     # Card templates that can be summoned by slug (for summon effects)
     summonable_cards: Dict[str, CardInPlay] = Field(default_factory=dict)

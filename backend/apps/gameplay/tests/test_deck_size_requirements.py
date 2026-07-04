@@ -6,6 +6,7 @@ from rest_framework.test import APIClient
 from apps.builder.models import AIPlayer, CardTemplate, CardTrait, HeroTemplate, Title
 from apps.collection.models import Deck, DeckCard
 from apps.gameplay.models import Game, MatchmakingQueue
+from apps.gameplay.services import GameService
 
 User = get_user_model()
 
@@ -253,6 +254,52 @@ class DeckMinimumCardsAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, 201, response.content)
+
+    def test_game_create_uses_ordered_ai_deck_and_custom_starting_hand(self):
+        self.title.config = {
+            "min_cards_in_deck": 4,
+            "deck_size_limit": 30,
+            "deck_card_max_count": 9,
+            "hand_start_size": 1,
+        }
+        self.title.save(update_fields=["config"])
+        ordered_cards = [
+            CardTemplate.objects.get(title=self.title, slug="min-card-2"),
+            CardTemplate.objects.get(title=self.title, slug="min-card-0"),
+            CardTemplate.objects.get(title=self.title, slug="min-card-1"),
+        ]
+        self.ai_deck.script = {
+            "strategy": "control",
+            "draw_mode": "ordered",
+            "starting_hand_size": 2,
+            "draw_order": [card.id for card in ordered_cards],
+        }
+        self.ai_deck.save(update_fields=["script"])
+        self.ai_deck.deckcard_set.all().delete()
+        for card in ordered_cards:
+            DeckCard.objects.update_or_create(
+                deck=self.ai_deck,
+                card=card,
+                defaults={
+                    "count": self.ai_deck.script["draw_order"].count(card.id),
+                },
+            )
+
+        game = GameService.create_game(
+            self.player_deck,
+            self.ai_deck,
+            randomize_starting_player=False,
+        )
+        GameService.step(game.id)
+        game.refresh_from_db()
+        state = game.game_state
+
+        def slugs(card_ids):
+            return [state.cards[card_id].template_slug for card_id in card_ids]
+
+        self.assertEqual(state.opening_hand_sizes["side_b"], 2)
+        self.assertEqual(slugs(state.hands["side_b"]), ["min-card-2", "min-card-0"])
+        self.assertEqual(slugs(state.decks["side_b"]), ["min-card-1"])
 
     def test_queue_status_cancels_entry_when_deck_becomes_invalid(self):
         queue_entry = MatchmakingQueue.objects.create(

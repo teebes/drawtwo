@@ -863,7 +863,6 @@ def new_phase(effect: NewPhaseEffect, state: GameState) -> Result:
 
 @register("effect_start_game")
 def start_game(effect: StartGameEffect, state: GameState) -> Result:
-    hand_size = max(state.config.hand_start_size, 0)
     child_effects = []
     events = []
     opposite_side = "side_b" if effect.side == "side_a" else "side_a"
@@ -877,6 +876,10 @@ def start_game(effect: StartGameEffect, state: GameState) -> Result:
     }
 
     for side in (effect.side, opposite_side):
+        hand_size = max(
+            state.opening_hand_sizes.get(side, state.config.hand_start_size),
+            0,
+        )
         for _ in range(hand_size):
             card_id, event = draw_card_for_side(state, side)
             events.append(event)
