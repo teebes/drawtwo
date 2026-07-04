@@ -2,6 +2,8 @@
 Development settings for drawtwo project.
 """
 
+import os
+
 from .base import *  # noqa: F401,F403
 from .base import INSTALLED_APPS  # noqa: F401
 
@@ -48,8 +50,11 @@ LOGGING = {
 CORS_ALLOW_ALL_ORIGINS = True
 
 # Redis host configuration for Docker
-import os
 REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
+GAMEPLAY_PRESENCE_REDIS_URL = os.environ.get(
+    "GAMEPLAY_PRESENCE_REDIS_URL",
+    f"redis://{REDIS_HOST}:6379/0",
+)
 
 # Update CHANNEL_LAYERS for development
 CHANNEL_LAYERS = {

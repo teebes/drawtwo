@@ -7,6 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.gameplay.models import PushDevice, PushNotificationEvent
+from apps.gameplay.presence import is_user_live_in_game
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,13 @@ def enqueue_turn_ready_notification(*, game, side: str, game_state):
 
     user_id = _user_id_for_side(game, side)
     if not user_id:
+        return None
+    if is_user_live_in_game(game_id=game.id, user_id=user_id, side=side):
+        logger.info(
+            "Skipping turn-ready push for user %s in game %s because they are live",
+            user_id,
+            game.id,
+        )
         return None
 
     opponent_name = _opponent_name_for_side(game, side)

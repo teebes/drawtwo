@@ -3,6 +3,7 @@ Test settings for drawtwo project.
 """
 
 import os
+
 from .base import *  # noqa: F401,F403
 
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -16,6 +17,8 @@ CHANNEL_LAYERS = {
         "BACKEND": "channels.layers.InMemoryChannelLayer"
     },
 }
+
+GAMEPLAY_PRESENCE_REDIS_URL = ""
 
 # Celery settings for tests - run tasks synchronously
 CELERY_TASK_ALWAYS_EAGER = True

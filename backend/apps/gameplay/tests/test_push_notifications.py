@@ -169,6 +169,38 @@ class PushNotificationTriggerTests(TestCase):
         self.assertEqual(event.user, self.user_a)
         self.assertEqual(event.data["game_id"], game.id)
 
+    @patch("apps.gameplay.push.is_user_live_in_game", return_value=True)
+    def test_turn_ready_push_event_skipped_when_player_is_live_in_game(
+        self, is_user_live_in_game
+    ):
+        game = GameService.create_game(
+            self.deck_a,
+            self.deck_b,
+            randomize_starting_player=False,
+        )
+        game.type = Game.GAME_TYPE_FRIENDLY
+        game.save(update_fields=["type"])
+
+        GameService.step(game.id)
+        GameService.process_command(
+            game.id, {"type": "cmd_mulligan", "card_ids": []}, "side_a"
+        )
+        GameService.process_command(
+            game.id, {"type": "cmd_mulligan", "card_ids": []}, "side_b"
+        )
+        GameService.step(game.id)
+
+        self.assertFalse(
+            PushNotificationEvent.objects.filter(
+                notification_type=PushNotificationEvent.TYPE_TURN_READY
+            ).exists()
+        )
+        is_user_live_in_game.assert_called_once_with(
+            game_id=game.id,
+            user_id=self.user_a.id,
+            side="side_a",
+        )
+
     def test_friend_challenge_push_event_created(self):
         challenge = FriendlyChallenge.objects.create(
             challenger=self.user_a,

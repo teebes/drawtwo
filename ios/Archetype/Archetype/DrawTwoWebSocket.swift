@@ -108,6 +108,16 @@ final class DrawTwoWebSocket: ObservableObject {
         }
     }
 
+    func sendPresence(active: Bool) {
+        guard task != nil else {
+            return
+        }
+        send(json: [
+            "type": "client_presence",
+            "active": active,
+        ])
+    }
+
     func send(text: String) {
         guard let task else {
             queuedMessages.append(text)

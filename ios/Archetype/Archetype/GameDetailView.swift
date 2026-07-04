@@ -1692,11 +1692,13 @@ struct GameDetailView: View {
         }
         .onDisappear {
             autoSwitchTask?.cancel()
+            socket.sendPresence(active: false)
             socket.disconnect()
             socket.onTextMessage = nil
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else {
+                socket.sendPresence(active: false)
                 return
             }
             Task {
@@ -1877,6 +1879,7 @@ struct GameDetailView: View {
     private func connectSocketIfPossible() {
         if let guestAccessToken {
             socket.connect(path: "/ws/game/\(gameId)/", guestToken: guestAccessToken)
+            socket.sendPresence(active: scenePhase == .active)
             return
         }
 
@@ -1884,6 +1887,7 @@ struct GameDetailView: View {
             return
         }
         socket.connect(path: "/ws/game/\(gameId)/", accessToken: accessToken)
+        socket.sendPresence(active: scenePhase == .active)
     }
 
     @ViewBuilder

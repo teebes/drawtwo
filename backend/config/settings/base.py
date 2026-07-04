@@ -93,6 +93,8 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
+REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+
 # Django Channels configuration
 # Includes connection pool limits and socket timeout to prevent deadlocks
 CHANNEL_LAYERS = {
@@ -101,7 +103,7 @@ CHANNEL_LAYERS = {
         "CONFIG": {
             "hosts": [
                 {
-                    "address": f"redis://{os.environ.get('REDIS_HOST', 'localhost')}:6379",
+                    "address": f"redis://{REDIS_HOST}:6379",
                     "socket_timeout": 30,  # Timeout for socket operations
                     "socket_connect_timeout": 30,  # Timeout for initial connection
                 }
@@ -112,6 +114,20 @@ CHANNEL_LAYERS = {
         },
     },
 }
+
+# Live game presence is used to suppress redundant turn-ready push notifications
+# while the target player is actively viewing the game.
+GAMEPLAY_PRESENCE_REDIS_URL = os.environ.get(
+    "GAMEPLAY_PRESENCE_REDIS_URL",
+    f"redis://{REDIS_HOST}:6379/0",
+)
+GAMEPLAY_PRESENCE_KEY_PREFIX = os.environ.get(
+    "GAMEPLAY_PRESENCE_KEY_PREFIX",
+    "drawtwo:presence",
+)
+GAMEPLAY_PRESENCE_TTL_SECONDS = int(
+    os.environ.get("GAMEPLAY_PRESENCE_TTL_SECONDS", "75")
+)
 
 # Database
 DATABASES = {

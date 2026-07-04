@@ -463,6 +463,7 @@ export const useGameStore = defineStore('game', {
 
         // Start heartbeat to keep connection alive
         this.startHeartbeat()
+        this.sendClientPresence(document.visibilityState === 'visible')
 
         // Flush any queued messages
         this.flushMessageQueue()
@@ -513,6 +514,7 @@ export const useGameStore = defineStore('game', {
       }
 
       if (this.socket) {
+        this.sendClientPresence(false)
         this.socket.close(1000, 'User navigated away')
         this.socket = null
       }
@@ -526,8 +528,11 @@ export const useGameStore = defineStore('game', {
       if (this.visibilityHandler) return
 
       this.visibilityHandler = () => {
-        if (document.visibilityState !== 'visible') return
         if (!this.currentGameId || this.intentionalDisconnect) return
+
+        const isVisible = document.visibilityState === 'visible'
+        this.sendClientPresence(isVisible)
+        if (!isVisible) return
 
         const socket = this.socket
         if (!socket) return
@@ -624,6 +629,16 @@ export const useGameStore = defineStore('game', {
           socket.close()
         }
       }, 5000) // 5s pong deadline
+    },
+
+    sendClientPresence(active: boolean): void {
+      const socket = this.socket
+      if (!socket || socket.readyState !== WebSocket.OPEN) return
+
+      socket.send(JSON.stringify({
+        type: 'client_presence',
+        active,
+      }))
     },
 
     stopHeartbeat(): void {
@@ -735,7 +750,8 @@ export const useGameStore = defineStore('game', {
         // Check for turn change to current player
         if (oldActive !== this.gameState.active &&
             this.gameState.active === this.viewer &&
-            !this.gameOver.isGameOver) {
+            !this.gameOver.isGameOver &&
+            document.visibilityState !== 'visible') {
            const notificationStore = this.getNotificationStore()
            notificationStore.sendBrowserNotification("It's your turn!")
         }

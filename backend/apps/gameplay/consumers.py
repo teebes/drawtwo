@@ -3,6 +3,7 @@ import json
 import logging
 from urllib.parse import parse_qs
 
+from asgiref.sync import sync_to_async
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from pydantic import TypeAdapter
@@ -11,6 +12,11 @@ from apps.gameplay.schemas.game import GameState
 from apps.gameplay.schemas.updates import GameUpdate as PydGameUpdate
 
 from .models import Game, GameUpdate
+from .presence import (
+    clear_game_connection_presence,
+    mark_game_connection_active,
+    refresh_game_connection_presence,
+)
 from .services import GameService
 
 logger = logging.getLogger(__name__)
@@ -35,6 +41,10 @@ class GameConsumer(AsyncWebsocketConsumer):
             return
 
         game, self.side = access_context
+        self.presence_user_id = None
+        self.presence_active = False
+        if self.side != "spectator" and self.scope["user"].is_authenticated:
+            self.presence_user_id = self.scope["user"].id
 
         # Join the general game group
         # Use timeout to prevent deadlock if Redis is unresponsive
@@ -58,6 +68,7 @@ class GameConsumer(AsyncWebsocketConsumer):
             return
 
         await self.accept()
+        await self.set_client_presence(True)
 
         # Send current game state using already-fetched game object
         from apps.gameplay.notifications import (
@@ -93,6 +104,9 @@ class GameConsumer(AsyncWebsocketConsumer):
         return
 
     async def disconnect(self, close_code):
+        if getattr(self, "presence_user_id", None):
+            await self.set_client_presence(False)
+
         # Leave both groups with timeout to prevent blocking on Redis issues
         try:
             await asyncio.wait_for(
@@ -124,14 +138,22 @@ class GameConsumer(AsyncWebsocketConsumer):
 
         # Handle heartbeat ping messages (no-op, connection keepalive)
         if message_type == "ping":
+            if getattr(self, "presence_active", False):
+                await self.refresh_client_presence()
             logger.debug("Received heartbeat ping, responding with pong")
             await self.send(text_data=json.dumps({"type": "pong"}))
+            return
+
+        if message_type == "client_presence":
+            await self.set_client_presence(_parse_presence_active(data))
             return
 
         # Spectators cannot send game commands
         if self.side == "spectator":
             logger.warning(
-                f"Spectator {self.scope['user']} attempted to send command to game {self.game_id}"
+                "Spectator %s attempted to send command to game %s",
+                self.scope["user"],
+                self.game_id,
             )
             await self.send(
                 text_data=json.dumps(
@@ -170,13 +192,49 @@ class GameConsumer(AsyncWebsocketConsumer):
                         "errors": [
                             {
                                 "type": "command_validation_error",
-                                "reason": error_message,  # Frontend expects 'reason' field
+                                # Frontend expects 'reason' field
+                                "reason": error_message,
                                 "details": {},
                             }
                         ],
                     }
                 )
             )
+
+    async def set_client_presence(self, active: bool):
+        user_id = getattr(self, "presence_user_id", None)
+        if not user_id:
+            return
+
+        if active:
+            await sync_to_async(mark_game_connection_active, thread_sensitive=False)(
+                game_id=self.game_id,
+                user_id=user_id,
+                side=self.side,
+                channel_name=self.channel_name,
+            )
+            self.presence_active = True
+            return
+
+        await sync_to_async(clear_game_connection_presence, thread_sensitive=False)(
+            game_id=self.game_id,
+            user_id=user_id,
+            side=self.side,
+            channel_name=self.channel_name,
+        )
+        self.presence_active = False
+
+    async def refresh_client_presence(self):
+        user_id = getattr(self, "presence_user_id", None)
+        if not user_id:
+            return
+
+        await sync_to_async(refresh_game_connection_presence, thread_sensitive=False)(
+            game_id=self.game_id,
+            user_id=user_id,
+            side=self.side,
+            channel_name=self.channel_name,
+        )
 
     async def game_updates(self, event):
         # Send game updates to WebSocket
@@ -199,7 +257,8 @@ class GameConsumer(AsyncWebsocketConsumer):
             game = Game.objects.get(id=self.game_id)
             user = self.scope["user"]
             # Check if user is a participant in the game (either side)
-            # Works for both PvE (one side is user, other is AI) and PvP (both sides are users)
+            # Works for both PvE (one side is user, other is AI)
+            # and PvP (both sides are users)
             if user.is_authenticated:
                 if game.player_a_user == user:
                     return game, "side_a"
@@ -273,9 +332,18 @@ class GameConsumer(AsyncWebsocketConsumer):
         )
 
 
+def _parse_presence_active(data: dict) -> bool:
+    active = data.get("active", True)
+    if isinstance(active, str):
+        return active.lower() in {"1", "true", "yes", "active", "visible"}
+    return bool(active)
+
+
 class UserConsumer(AsyncWebsocketConsumer):
     """
-    WebSocket consumer for user-level notifications (matchmaking, friend requests, etc.).
+    WebSocket consumer for user-level notifications.
+
+    Handles matchmaking, friend requests, and similar real-time updates.
     Each authenticated user connects to their own channel for real-time updates.
     """
 
@@ -334,5 +402,7 @@ class UserConsumer(AsyncWebsocketConsumer):
             )
         )
         logger.info(
-            f"Sent matchmaking success to user {self.user_id} for game {event['game_id']}"
+            "Sent matchmaking success to user %s for game %s",
+            self.user_id,
+            event["game_id"],
         )
