@@ -114,6 +114,47 @@ class TitlePveEndpointTestCase(TestCase):
             ["Practice", "Vanilla", "Control"],
         )
 
+    def test_pve_decks_exclude_hidden_ai_decks(self):
+        """System AI decks should not appear in normal PvE opponent selection."""
+        author = User.objects.create_user(
+            email="hidden-author@example.com",
+            username="hidden-author",
+        )
+        title = Title.objects.create(
+            slug="pve-hidden",
+            name="PvE Hidden",
+            author=author,
+            status=Title.STATUS_PUBLISHED,
+            is_latest=True,
+        )
+        hero = HeroTemplate.objects.create(
+            title=title,
+            slug="balanced",
+            name="Balanced",
+            health=20,
+            is_latest=True,
+        )
+        ai_player = AIPlayer.objects.create(name="Hidden Test AI")
+
+        visible = Deck.objects.create(
+            title=title,
+            ai_player=ai_player,
+            name="Visible",
+            hero=hero,
+        )
+        Deck.objects.create(
+            title=title,
+            ai_player=ai_player,
+            name="Intro intro-archetype-v1 side_a",
+            hero=hero,
+            is_pve_opponent=False,
+        )
+
+        response = self.client.get(f"/api/titles/{title.slug}/pve/")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual([deck["id"] for deck in response.json()], [visible.id])
+
 
 class TitleNotificationsOrderingTestCase(TestCase):
     """Test cases for lobby notification priority ordering."""

@@ -65,6 +65,10 @@ class Deck(TimestampedModel):
     hero = models.ForeignKey(HeroTemplate, on_delete=models.PROTECT)
 
     script = models.JSONField(default=dict, blank=True)
+    is_pve_opponent = models.BooleanField(
+        default=True,
+        help_text="Whether this AI deck appears in normal PvE opponent selection.",
+    )
     archived_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     objects = DeckQuerySet.as_manager()

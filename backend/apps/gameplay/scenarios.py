@@ -216,9 +216,11 @@ class ScenarioGameService:
                 name=deck_name,
                 hero=hero,
                 description="System deck for the intro scenario.",
+                is_pve_opponent=False,
             )
         deck.hero = hero
         deck.description = "System deck for the intro scenario."
+        deck.is_pve_opponent = False
         side_config = scenario.sides[side]
         if side_config.controller == "ai":
             ai_config = side_config.ai or ScenarioAI()
@@ -228,7 +230,7 @@ class ScenarioGameService:
             }
         else:
             deck.script = {}
-        deck.save(update_fields=["hero", "description", "script"])
+        deck.save(update_fields=["hero", "description", "is_pve_opponent", "script"])
         return deck
 
     @staticmethod

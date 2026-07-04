@@ -270,12 +270,13 @@ def title_decks(request, slug):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def title_pve(request, slug):
-    """Get all PvE / Scenario decks for a title."""
+    """Get normal PvE opponent decks for a title."""
     title = get_title_or_403(slug, request.user)
 
     decks = Deck.objects.filter(
         ai_player__isnull=False,
         title=title,
+        is_pve_opponent=True,
         archived_at__isnull=True,
     ).order_by("created_at", "id")
     return Response(

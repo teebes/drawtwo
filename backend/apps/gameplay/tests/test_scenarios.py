@@ -403,6 +403,8 @@ class IntroScenarioTests(TestCase):
         state = GameState.model_validate(game.state)
 
         self.assertEqual(game.type, Game.GAME_TYPE_INTRO)
+        self.assertFalse(game.side_a.is_pve_opponent)
+        self.assertFalse(game.side_b.is_pve_opponent)
         self.assertTrue(game.allows_guest_access(token))
         self.assertFalse(game.allows_guest_access("wrong-token"))
         self.assertEqual(game.guest_access_side, "side_b")

@@ -53,10 +53,18 @@ class DeckAdmin(admin.ModelAdmin):
         "owner_name",
         "hero",
         "get_card_count",
+        "is_pve_opponent",
         "is_archived",
         "created_at",
     ]
-    list_filter = ["archived_at", "hero", "created_at", "user", "ai_player"]
+    list_filter = [
+        "is_pve_opponent",
+        "archived_at",
+        "hero",
+        "created_at",
+        "user",
+        "ai_player",
+    ]
     search_fields = ["name", "user__email", "ai_player__name", "hero__name"]
     readonly_fields = ["created_at", "updated_at", "owner_name", "is_ai_deck"]
     inlines = [DeckCardInline]
@@ -72,7 +80,16 @@ class DeckAdmin(admin.ModelAdmin):
         ),
         (
             "Deck Info",
-            {"fields": ("name", "description", "hero", "title", "archived_at")},
+            {
+                "fields": (
+                    "name",
+                    "description",
+                    "hero",
+                    "title",
+                    "is_pve_opponent",
+                    "archived_at",
+                )
+            },
         ),
         (
             "Info",
