@@ -19,6 +19,16 @@ urlpatterns = [
         name="title-content-config",
     ),
     path(
+        "titles/<slug:title_slug>/ai-decks/",
+        views.title_ai_decks,
+        name="title-ai-decks",
+    ),
+    path(
+        "titles/<slug:title_slug>/ai-decks/<int:deck_id>/",
+        views.title_ai_deck_detail,
+        name="title-ai-deck-detail",
+    ),
+    path(
         "titles/<slug:title_slug>/config/yaml/",
         views.title_config_yaml,
         name="title-config-yaml",

@@ -8,6 +8,7 @@ from rest_framework.test import APITestCase
 from apps.collection.models import Deck, DeckCard
 
 from .models import (
+    AIPlayer,
     Builder,
     CardTemplate,
     CardTrait,
@@ -282,6 +283,201 @@ class TestTitleAPIPermissions(APITestCase):
         self.assertEqual(len(response.data["cards"]), 1)
         self.assertEqual(response.data["cards"][0]["slug"], "shield-slam")
         self.assertEqual(response.data["cards"][0]["hero_slugs"], ["warrior"])
+
+    def test_author_can_manage_title_ai_decks(self):
+        self.draft_title.config = {
+            "deck_size_limit": 10,
+            "min_cards_in_deck": 2,
+            "deck_card_max_count": 3,
+        }
+        self.draft_title.save(update_fields=["config"])
+        hero = HeroTemplate.objects.create(
+            title=self.draft_title,
+            slug="warrior",
+            name="Warrior",
+            description="Front line hero",
+            health=30,
+            hero_power={"name": "Strike", "cost": 2, "actions": []},
+        )
+        strike = CardTemplate.objects.create(
+            title=self.draft_title,
+            slug="strike",
+            name="Strike",
+            card_type=CardTemplate.CARD_TYPE_SPELL,
+            cost=1,
+        )
+        guard = CardTemplate.objects.create(
+            title=self.draft_title,
+            slug="guard",
+            name="Guard",
+            card_type=CardTemplate.CARD_TYPE_CREATURE,
+            cost=2,
+            attack=1,
+            health=3,
+        )
+
+        self.client.force_authenticate(user=self.author)
+        list_url = reverse(
+            "title-ai-decks", kwargs={"title_slug": self.draft_title.slug}
+        )
+        response = self.client.post(
+            list_url,
+            {
+                "name": "Practice Bot",
+                "description": "Editable AI deck",
+                "hero_id": hero.id,
+                "strategy": "control",
+                "is_pve_opponent": True,
+                "cards": [
+                    {"card_id": strike.id, "count": 1},
+                    {"card_id": guard.id, "count": 1},
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        deck_id = response.data["id"]
+        deck = Deck.objects.get(id=deck_id)
+        self.assertIsNone(deck.user_id)
+        self.assertIsNotNone(deck.ai_player_id)
+        self.assertTrue(deck.is_pve_opponent)
+        self.assertEqual(deck.deck_size, 2)
+        self.assertEqual(deck.script["strategy"], "control")
+
+        detail_url = reverse(
+            "title-ai-deck-detail",
+            kwargs={"title_slug": self.draft_title.slug, "deck_id": deck_id},
+        )
+        response = self.client.patch(
+            detail_url,
+            {
+                "name": "Practice Bot 2",
+                "cards": [
+                    {"card_id": strike.id, "count": 2},
+                    {"card_id": guard.id, "count": 1},
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["name"], "Practice Bot 2")
+        self.assertEqual(response.data["card_count"], 3)
+
+        response = self.client.get(list_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(
+            [deck["name"] for deck in response.data["decks"]], ["Practice Bot 2"]
+        )
+
+        response = self.client.delete(detail_url)
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        deck.refresh_from_db()
+        self.assertIsNotNone(deck.archived_at)
+
+    def test_ai_deck_visible_rejects_under_minimum_cards(self):
+        self.draft_title.config = {
+            "deck_size_limit": 10,
+            "min_cards_in_deck": 2,
+            "deck_card_max_count": 3,
+        }
+        self.draft_title.save(update_fields=["config"])
+        hero = HeroTemplate.objects.create(
+            title=self.draft_title,
+            slug="warrior",
+            name="Warrior",
+            description="Front line hero",
+            health=30,
+            hero_power={"name": "Strike", "cost": 2, "actions": []},
+        )
+        strike = CardTemplate.objects.create(
+            title=self.draft_title,
+            slug="strike",
+            name="Strike",
+            card_type=CardTemplate.CARD_TYPE_SPELL,
+            cost=1,
+        )
+
+        self.client.force_authenticate(user=self.author)
+        list_url = reverse(
+            "title-ai-decks", kwargs={"title_slug": self.draft_title.slug}
+        )
+        response = self.client.post(
+            list_url,
+            {
+                "name": "Draft Bot",
+                "hero_id": hero.id,
+                "is_pve_opponent": False,
+                "cards": [{"card_id": strike.id, "count": 1}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        detail_url = reverse(
+            "title-ai-deck-detail",
+            kwargs={
+                "title_slug": self.draft_title.slug,
+                "deck_id": response.data["id"],
+            },
+        )
+        response = self.client.patch(
+            detail_url,
+            {"is_pve_opponent": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("at least 2 cards", response.data["error"])
+
+    def test_title_ai_decks_exclude_intro_scenario_decks(self):
+        hero = HeroTemplate.objects.create(
+            title=self.draft_title,
+            slug="warrior",
+            name="Warrior",
+            description="Front line hero",
+            health=30,
+            hero_power={"name": "Strike", "cost": 2, "actions": []},
+        )
+        default_ai = AIPlayer.objects.create(name="Default")
+        intro_ai = AIPlayer.objects.create(
+            name="Intro Scenario",
+            difficulty=AIPlayer.AI_DIFFICULTY_EASY,
+        )
+        Deck.objects.create(
+            ai_player=default_ai,
+            title=self.draft_title,
+            name="Practice",
+            hero=hero,
+        )
+        Deck.objects.create(
+            ai_player=intro_ai,
+            title=self.draft_title,
+            name="Intro intro-archetype-v1 side_a",
+            hero=hero,
+            is_pve_opponent=False,
+        )
+
+        self.client.force_authenticate(user=self.author)
+        url = reverse("title-ai-decks", kwargs={"title_slug": self.draft_title.slug})
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(
+            [deck["name"] for deck in response.data["decks"]], ["Practice"]
+        )
+
+    def test_other_user_cannot_read_title_ai_decks(self):
+        self.client.force_authenticate(user=self.other_user)
+        url = reverse("title-ai-decks", kwargs={"title_slug": self.draft_title.slug})
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_author_can_export_title_snapshot_without_ids(self):
         HeroTemplate.objects.create(

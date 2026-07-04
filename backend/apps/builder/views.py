@@ -9,12 +9,17 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from apps.collection.models import Deck, DeckCard
+from apps.collection.validation import get_title_config, validate_card_for_deck
+
 from .models import CardTemplate, CardTrait, HeroTemplate, Title
 from .schemas import Card, Hero, TitleConfig
 from .serializers import CardTemplateSerializer, HeroTemplateSerializer, TitleSerializer
 from .services import TitleService
 
 User = get_user_model()
+
+AI_DECK_STRATEGIES = {"rush", "control", "combo", "aggressive", "defensive"}
 
 
 def _title_config_from_data(config_data) -> TitleConfig:
@@ -46,6 +51,225 @@ def _validate_title_config(config: TitleConfig) -> str | None:
     if config.ranked_time_per_turn < 0:
         return "Ranked time per turn cannot be negative."
     return None
+
+
+def _ai_deck_queryset(title):
+    return (
+        Deck.objects.filter(
+            title=title,
+            ai_player__isnull=False,
+            archived_at__isnull=True,
+        )
+        .exclude(ai_player__name="Intro Scenario", name__startswith="Intro ")
+        .select_related("ai_player", "hero")
+        .order_by("created_at", "id")
+    )
+
+
+def _deck_config_payload(title):
+    config = get_title_config(title)
+    return {
+        "deck_size_limit": config.deck_size_limit,
+        "min_cards_in_deck": config.min_cards_in_deck,
+        "deck_card_max_count": config.deck_card_max_count,
+    }
+
+
+def _card_has_trait(card, trait_slug: str) -> bool:
+    prefetched = getattr(card, "_prefetched_objects_cache", {})
+    if "cardtrait_set" in prefetched:
+        return any(
+            trait.trait_slug == trait_slug for trait in prefetched["cardtrait_set"]
+        )
+    return card.cardtrait_set.filter(trait_slug=trait_slug).exists()
+
+
+def _card_hero_slugs(card) -> list[str]:
+    heroes = sorted(card.allowed_heroes.all(), key=lambda hero: hero.name)
+    return [hero.slug for hero in heroes]
+
+
+def _ai_deck_card_payload(deck_card):
+    card = deck_card.card
+    return {
+        "deck_card_id": deck_card.id,
+        "card_id": card.id,
+        "card_slug": card.slug,
+        "name": card.name,
+        "card_type": card.card_type,
+        "cost": card.cost,
+        "attack": card.attack,
+        "health": card.health,
+        "count": deck_card.count,
+        "is_collectible": card.is_collectible,
+        "hero_slugs": _card_hero_slugs(card),
+    }
+
+
+def _serialize_ai_deck(deck):
+    deck_cards = (
+        deck.deckcard_set.select_related("card", "card__faction")
+        .prefetch_related("card__allowed_heroes", "card__cardtrait_set")
+        .order_by("card__cost", "card__name", "card__id")
+    )
+    script = deck.script or {}
+    return {
+        "id": deck.id,
+        "name": deck.name,
+        "description": deck.description,
+        "is_pve_opponent": deck.is_pve_opponent,
+        "strategy": script.get("strategy", "rush"),
+        "ai_player": {
+            "id": deck.ai_player.id,
+            "name": deck.ai_player.name,
+        },
+        "hero": {
+            "id": deck.hero.id,
+            "slug": deck.hero.slug,
+            "name": deck.hero.name,
+            "health": deck.hero.health,
+        },
+        "card_count": deck.deck_size,
+        "cards": [_ai_deck_card_payload(deck_card) for deck_card in deck_cards],
+        "created_at": deck.created_at,
+        "updated_at": deck.updated_at,
+    }
+
+
+def _parse_bool(value, default=False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _strategy_from_payload(payload, current: str = "rush") -> str:
+    strategy = payload.get("strategy", current) or "rush"
+    if strategy not in AI_DECK_STRATEGIES:
+        raise ValueError(f'Unknown AI strategy "{strategy}".')
+    return strategy
+
+
+def _hero_from_payload(title, payload, current=None):
+    hero_id = payload.get("hero_id")
+    if hero_id in (None, ""):
+        if current is not None:
+            return current
+        raise ValueError("Hero is required.")
+    return HeroTemplate.objects.get(id=hero_id, title=title, is_latest=True)
+
+
+def _cards_payload_from_request(payload):
+    if "cards" not in payload:
+        return None
+    cards = payload.get("cards")
+    if not isinstance(cards, list):
+        raise ValueError("cards must be a list.")
+    return cards
+
+
+def _validated_ai_deck_cards(deck, cards_payload):
+    if cards_payload is None:
+        deck_cards = (
+            DeckCard.objects.filter(deck=deck)
+            .select_related("card")
+            .prefetch_related("card__allowed_heroes", "card__cardtrait_set")
+        )
+        card_counts = [(deck_card.card, deck_card.count) for deck_card in deck_cards]
+    else:
+        seen_card_ids = set()
+        card_counts = []
+        requested_ids = []
+        normalized_items = []
+
+        for item in cards_payload:
+            if not isinstance(item, dict):
+                raise ValueError("Each card entry must be an object.")
+            card_id = item.get("card_id")
+            count = item.get("count")
+            try:
+                card_id = int(card_id)
+                count = int(count)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Each card entry needs card_id and count.") from exc
+            if card_id in seen_card_ids:
+                raise ValueError("Duplicate card entries are not allowed.")
+            seen_card_ids.add(card_id)
+            requested_ids.append(card_id)
+            normalized_items.append((card_id, count))
+
+        cards_by_id = {
+            card.id: card
+            for card in CardTemplate.objects.filter(
+                title=deck.title,
+                id__in=requested_ids,
+                is_latest=True,
+            ).prefetch_related("allowed_heroes", "cardtrait_set")
+        }
+        missing_ids = sorted(set(requested_ids) - set(cards_by_id))
+        if missing_ids:
+            raise ValueError(f"Card(s) not found: {', '.join(map(str, missing_ids))}")
+
+        card_counts = [
+            (cards_by_id[card_id], count) for card_id, count in normalized_items
+        ]
+
+    config = get_title_config(deck.title)
+    total_cards = 0
+    for card, count in card_counts:
+        if count < 1:
+            raise ValueError("Card counts must be at least 1.")
+        if count > config.deck_card_max_count:
+            raise ValueError(
+                f"Cannot have more than {config.deck_card_max_count} copies "
+                f'of "{card.name}".'
+            )
+        if _card_has_trait(card, "unique") and count > 1:
+            raise ValueError(f'"{card.name}" is Unique and can only have 1 copy.')
+
+        card_error = validate_card_for_deck(deck, card)
+        if card_error:
+            raise ValueError(card_error)
+        total_cards += count
+
+    if total_cards > config.deck_size_limit:
+        raise ValueError(
+            f"Deck size would exceed the limit of {config.deck_size_limit} cards."
+        )
+    if deck.is_pve_opponent and total_cards < config.min_cards_in_deck:
+        raise ValueError(
+            "Visible PvE decks must have at least " f"{config.min_cards_in_deck} cards."
+        )
+
+    return card_counts
+
+
+def _replace_ai_deck_cards(deck, card_counts):
+    seen_card_ids = set()
+    for card, count in card_counts:
+        DeckCard.objects.update_or_create(
+            deck=deck,
+            card=card,
+            defaults={"count": count},
+        )
+        seen_card_ids.add(card.id)
+
+    DeckCard.objects.filter(deck=deck).exclude(card_id__in=seen_card_ids).delete()
+
+
+def _assert_ai_deck_name_available(ai_player, name: str, deck_id=None) -> None:
+    existing = Deck.objects.filter(
+        ai_player=ai_player,
+        name=name,
+        archived_at__isnull=True,
+    )
+    if deck_id is not None:
+        existing = existing.exclude(id=deck_id)
+    if existing.exists():
+        raise ValueError("An active AI deck with this name already exists.")
 
 
 def get_title_or_403(slug, user):
@@ -530,6 +754,130 @@ def title_content_config(request, title_slug):
         },
         status=status.HTTP_200_OK,
     )
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def title_ai_decks(request, title_slug):
+    """List or create editable AI decks for a title."""
+    title = get_object_or_404(Title, slug=title_slug, is_latest=True)
+
+    if not title.can_be_edited_by(request.user):
+        return Response(
+            {"error": "You do not have permission to edit this title"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    if request.method == "GET":
+        decks = _ai_deck_queryset(title)
+        return Response(
+            {
+                "title": {"slug": title.slug, "name": title.name},
+                "config": _deck_config_payload(title),
+                "decks": [_serialize_ai_deck(deck) for deck in decks],
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    try:
+        with transaction.atomic():
+            name = (request.data.get("name") or "").strip()
+            if not name:
+                raise ValueError("Name is required.")
+
+            ai_player = TitleService(title).get_default_ai_player()
+            _assert_ai_deck_name_available(ai_player, name)
+            hero = _hero_from_payload(title, request.data)
+
+            script = {"strategy": _strategy_from_payload(request.data)}
+            deck = Deck(
+                ai_player=ai_player,
+                title=title,
+                name=name,
+                description=(request.data.get("description") or "").strip(),
+                hero=hero,
+                is_pve_opponent=_parse_bool(
+                    request.data.get("is_pve_opponent"), default=False
+                ),
+                script=script,
+            )
+            card_counts = _validated_ai_deck_cards(
+                deck, _cards_payload_from_request(request.data) or []
+            )
+            deck.save()
+            _replace_ai_deck_cards(deck, card_counts)
+
+            return Response(_serialize_ai_deck(deck), status=status.HTTP_201_CREATED)
+    except Exception as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def title_ai_deck_detail(request, title_slug, deck_id):
+    """Read, update, or archive an editable AI deck for a title."""
+    title = get_object_or_404(Title, slug=title_slug, is_latest=True)
+
+    if not title.can_be_edited_by(request.user):
+        return Response(
+            {"error": "You do not have permission to edit this title"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    deck = get_object_or_404(_ai_deck_queryset(title), id=deck_id)
+
+    if request.method == "GET":
+        return Response(_serialize_ai_deck(deck), status=status.HTTP_200_OK)
+
+    if request.method == "DELETE":
+        deck.archive()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    try:
+        with transaction.atomic():
+            if "name" in request.data:
+                deck.name = (request.data.get("name") or "").strip()
+                if not deck.name:
+                    raise ValueError("Name is required.")
+                _assert_ai_deck_name_available(
+                    deck.ai_player, deck.name, deck_id=deck.id
+                )
+
+            if "description" in request.data:
+                deck.description = (request.data.get("description") or "").strip()
+
+            if "hero_id" in request.data:
+                deck.hero = _hero_from_payload(title, request.data, current=deck.hero)
+
+            if "is_pve_opponent" in request.data:
+                deck.is_pve_opponent = _parse_bool(request.data.get("is_pve_opponent"))
+
+            script = deck.script or {}
+            if "strategy" in request.data:
+                script["strategy"] = _strategy_from_payload(
+                    request.data, current=script.get("strategy", "rush")
+                )
+            deck.script = script
+
+            cards_payload = _cards_payload_from_request(request.data)
+            card_counts = _validated_ai_deck_cards(deck, cards_payload)
+
+            deck.save(
+                update_fields=[
+                    "name",
+                    "description",
+                    "hero",
+                    "is_pve_opponent",
+                    "script",
+                    "updated_at",
+                ]
+            )
+            if cards_payload is not None:
+                _replace_ai_deck_cards(deck, card_counts)
+
+            return Response(_serialize_ai_deck(deck), status=status.HTTP_200_OK)
+    except Exception as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(["GET", "POST"])
