@@ -378,11 +378,11 @@ class TestTitleAPIPermissions(APITestCase):
         deck.refresh_from_db()
         self.assertIsNotNone(deck.archived_at)
 
-    def test_ai_deck_visible_rejects_under_minimum_cards(self):
+    def test_ai_deck_can_ignore_player_deck_rule_limits(self):
         self.draft_title.config = {
-            "deck_size_limit": 10,
-            "min_cards_in_deck": 2,
-            "deck_card_max_count": 3,
+            "deck_size_limit": 3,
+            "min_cards_in_deck": 10,
+            "deck_card_max_count": 1,
         }
         self.draft_title.save(update_fields=["config"])
         hero = HeroTemplate.objects.create(
@@ -400,6 +400,7 @@ class TestTitleAPIPermissions(APITestCase):
             card_type=CardTemplate.CARD_TYPE_SPELL,
             cost=1,
         )
+        CardTrait.objects.create(card=strike, trait_slug="unique")
 
         self.client.force_authenticate(user=self.author)
         list_url = reverse(
@@ -410,13 +411,15 @@ class TestTitleAPIPermissions(APITestCase):
             {
                 "name": "Draft Bot",
                 "hero_id": hero.id,
-                "is_pve_opponent": False,
-                "cards": [{"card_id": strike.id, "count": 1}],
+                "is_pve_opponent": True,
+                "cards": [{"card_id": strike.id, "count": 5}],
             },
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["card_count"], 5)
+
         detail_url = reverse(
             "title-ai-deck-detail",
             kwargs={
@@ -426,12 +429,12 @@ class TestTitleAPIPermissions(APITestCase):
         )
         response = self.client.patch(
             detail_url,
-            {"is_pve_opponent": True},
+            {"cards": [{"card_id": strike.id, "count": 6}]},
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("at least 2 cards", response.data["error"])
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["card_count"], 6)
 
     def test_title_ai_decks_exclude_intro_scenario_decks(self):
         hero = HeroTemplate.objects.create(

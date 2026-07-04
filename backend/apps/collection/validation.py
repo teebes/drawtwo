@@ -89,17 +89,18 @@ def validate_deck_for_play(deck, deck_label: str = "Deck") -> str | None:
 
     config = get_title_config(deck.title)
     deck_size = deck.deck_size
+    enforce_deck_rules = not deck.is_ai_deck
 
     if deck.hero.title_id != deck.title_id:
         return f"{deck_label} has a hero from a different title"
 
-    if deck_size < config.min_cards_in_deck:
+    if enforce_deck_rules and deck_size < config.min_cards_in_deck:
         return (
             f"{deck_label} must have at least {config.min_cards_in_deck} cards "
             f"({deck_size} currently)"
         )
 
-    if deck_size > config.deck_size_limit:
+    if enforce_deck_rules and deck_size > config.deck_size_limit:
         return (
             f"{deck_label} cannot have more than {config.deck_size_limit} cards "
             f"({deck_size} currently)"
@@ -121,14 +122,18 @@ def validate_deck_for_play(deck, deck_label: str = "Deck") -> str | None:
         if card_error:
             return f"{deck_label} contains an invalid card: {card_error}"
 
-        if deck_card.count > config.deck_card_max_count:
+        if enforce_deck_rules and deck_card.count > config.deck_card_max_count:
             return (
                 f"{deck_label} cannot have more than "
                 f"{config.deck_card_max_count} "
                 f"{_copy_word(config.deck_card_max_count)} of {card.name}"
             )
 
-        if _card_has_trait(card, "unique") and deck_card.count > 1:
+        if (
+            enforce_deck_rules
+            and _card_has_trait(card, "unique")
+            and deck_card.count > 1
+        ):
             return (
                 f'{deck_label} contains too many copies of "{card.name}"; '
                 "Unique cards can only have 1 copy"

@@ -223,6 +223,37 @@ class DeckMinimumCardsAPITests(TestCase):
         self.assertEqual(response.status_code, 400, response.content)
         self.assertIn("Unique", response.json()["error"])
 
+    def test_game_create_allows_ai_deck_outside_player_rule_limits(self):
+        self.title.config = {
+            "min_cards_in_deck": 6,
+            "deck_size_limit": 6,
+            "deck_card_max_count": 1,
+        }
+        self.title.save(update_fields=["config"])
+
+        extra_cards = CardTemplate.objects.filter(
+            title=self.title,
+            slug__in=["min-card-4", "min-card-5"],
+        )
+        for card in extra_cards:
+            DeckCard.objects.create(deck=self.player_deck, card=card, count=1)
+
+        ai_card = CardTemplate.objects.get(title=self.title, slug="min-card-0")
+        CardTrait.objects.create(card=ai_card, trait_slug="unique")
+        self.ai_deck.deckcard_set.all().delete()
+        DeckCard.objects.create(deck=self.ai_deck, card=ai_card, count=5)
+
+        response = self.client.post(
+            reverse("game-create"),
+            {
+                "player_deck_id": self.player_deck.id,
+                "ai_deck_id": self.ai_deck.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+
     def test_queue_status_cancels_entry_when_deck_becomes_invalid(self):
         queue_entry = MatchmakingQueue.objects.create(
             user=self.user,

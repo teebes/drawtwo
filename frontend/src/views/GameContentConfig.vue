@@ -55,7 +55,7 @@
             {{ aiDeckDraft.id ? 'Edit AI Deck' : 'New AI Deck' }}
           </h2>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {{ aiDeckDraftTotal }} / {{ aiDeckConfig.deck_size_limit }} cards
+            {{ aiDeckDraftTotal }} cards
           </p>
         </div>
 
@@ -207,7 +207,6 @@
                       v-model.number="draftCard.count"
                       type="number"
                       min="1"
-                      :max="maxCountForAiDraftCard(draftCard)"
                       class="ui-input ml-auto w-20 text-right"
                       :disabled="aiDeckSaving"
                     />
@@ -797,11 +796,6 @@ const searchQuery = ref('')
 const cardTypeFilter = ref<'all' | 'creature' | 'spell'>('all')
 const scopeFilter = ref<'all' | 'global' | 'hero'>('all')
 const aiDecks = ref<AIDeck[]>([])
-const aiDeckConfig = ref<AIDeckConfig>({
-  deck_size_limit: 30,
-  min_cards_in_deck: 10,
-  deck_card_max_count: 9
-})
 const selectedAiDeckId = ref<number | null>(null)
 const aiDeckDraft = ref<AIDeckDraft | null>(null)
 const aiDeckSaving = ref(false)
@@ -901,22 +895,9 @@ const aiDeckDraftError = computed(() => {
     if (!card) return 'One or more cards no longer exist.'
     const count = normalizedDraftCount(draftCard.count)
     if (count < 1) return 'Card counts must be at least 1.'
-    if (count > maxCountForAiDraftCard(draftCard)) {
-      return `${card.name} exceeds the allowed copy limit.`
-    }
     if (!isCardAvailableForAiDraftHero(card)) {
       return `${card.name} is not available to ${selectedDraftHero.value?.name || 'this hero'}.`
     }
-  }
-
-  if (aiDeckDraftTotal.value > aiDeckConfig.value.deck_size_limit) {
-    return `Deck cannot exceed ${aiDeckConfig.value.deck_size_limit} cards.`
-  }
-  if (
-    draft.is_pve_opponent &&
-    aiDeckDraftTotal.value < aiDeckConfig.value.min_cards_in_deck
-  ) {
-    return `Visible PvE decks need at least ${aiDeckConfig.value.min_cards_in_deck} cards.`
   }
 
   return ''
@@ -973,21 +954,11 @@ const normalizedDraftCount = (count: number): number => {
   return Math.max(0, Math.trunc(numericCount))
 }
 
-const isUniqueCard = (card: CardConfig): boolean => (
-  (card.traits_with_data || []).some(trait => trait.slug === 'unique')
-)
-
 const isCardAvailableForAiDraftHero = (card: CardConfig): boolean => {
   const hero = selectedDraftHero.value
   if (!hero) return true
   const heroSlugs = cardHeroSlugs(card)
   return heroSlugs.length === 0 || heroSlugs.includes(hero.slug)
-}
-
-const maxCountForAiDraftCard = (draftCard: AIDeckDraftCard): number => {
-  const card = cardById.value.get(draftCard.card_id)
-  if (card && isUniqueCard(card)) return 1
-  return aiDeckConfig.value.deck_card_max_count
 }
 
 const draftSourceCard = (draftCard: AIDeckDraftCard): CardConfig | undefined => (
@@ -1038,7 +1009,6 @@ const aiDeckToDraft = (deck: AIDeck): AIDeckDraft => ({
 })
 
 const applyAiDeckResponse = (response: AIDeckListResponse): void => {
-  aiDeckConfig.value = response.config
   aiDecks.value = response.decks || []
 
   if (

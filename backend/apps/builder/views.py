@@ -75,15 +75,6 @@ def _deck_config_payload(title):
     }
 
 
-def _card_has_trait(card, trait_slug: str) -> bool:
-    prefetched = getattr(card, "_prefetched_objects_cache", {})
-    if "cardtrait_set" in prefetched:
-        return any(
-            trait.trait_slug == trait_slug for trait in prefetched["cardtrait_set"]
-        )
-    return card.cardtrait_set.filter(trait_slug=trait_slug).exists()
-
-
 def _card_hero_slugs(card) -> list[str]:
     heroes = sorted(card.allowed_heroes.all(), key=lambda hero: hero.name)
     return [hero.slug for hero in heroes]
@@ -217,32 +208,13 @@ def _validated_ai_deck_cards(deck, cards_payload):
             (cards_by_id[card_id], count) for card_id, count in normalized_items
         ]
 
-    config = get_title_config(deck.title)
-    total_cards = 0
     for card, count in card_counts:
         if count < 1:
             raise ValueError("Card counts must be at least 1.")
-        if count > config.deck_card_max_count:
-            raise ValueError(
-                f"Cannot have more than {config.deck_card_max_count} copies "
-                f'of "{card.name}".'
-            )
-        if _card_has_trait(card, "unique") and count > 1:
-            raise ValueError(f'"{card.name}" is Unique and can only have 1 copy.')
 
         card_error = validate_card_for_deck(deck, card)
         if card_error:
             raise ValueError(card_error)
-        total_cards += count
-
-    if total_cards > config.deck_size_limit:
-        raise ValueError(
-            f"Deck size would exceed the limit of {config.deck_size_limit} cards."
-        )
-    if deck.is_pve_opponent and total_cards < config.min_cards_in_deck:
-        raise ValueError(
-            "Visible PvE decks must have at least " f"{config.min_cards_in_deck} cards."
-        )
 
     return card_counts
 
