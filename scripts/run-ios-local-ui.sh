@@ -184,6 +184,7 @@ else
   xcodebuild \
     -project "$PROJECT_PATH" \
     -scheme "$SCHEME" \
+    -configuration Debug \
     -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
     -derivedDataPath "$DERIVED_DATA_PATH" \
     CODE_SIGNING_ALLOWED=NO \

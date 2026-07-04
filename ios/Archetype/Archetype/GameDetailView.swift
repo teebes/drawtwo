@@ -137,6 +137,38 @@ enum BoardCombatRole {
     }
 }
 
+struct BoardCombatMotion: Equatable {
+    enum Kind {
+        case lunge
+        case hit
+        case healSource
+        case healTarget
+        case spellTarget
+    }
+
+    let kind: Kind
+    let unit: CGVector
+
+    var offset: CGVector {
+        CGVector(dx: unit.dx * magnitude, dy: unit.dy * magnitude)
+    }
+
+    private var magnitude: CGFloat {
+        switch kind {
+        case .lunge:
+            return 14
+        case .hit:
+            return 10
+        case .healSource:
+            return 6
+        case .healTarget:
+            return 0
+        case .spellTarget:
+            return 8
+        }
+    }
+}
+
 struct BoardCombatMarker {
     let sourceType: String?
     let sourceId: String?
@@ -145,6 +177,11 @@ struct BoardCombatMarker {
     let kind: BoardCombatKind
     let sourceColor: Color
     let valueText: String?
+    var animationToken = UUID()
+    var sourcePoint: CGPoint?
+    var targetPoint: CGPoint?
+    var isSpellSource = false
+    var casterIsViewer = false
 
     init?(update: GameUpdateSnapshot, viewerSide: String) {
         sourceType = update.value["source_type"]?.stringValue
@@ -197,6 +234,77 @@ struct BoardCombatMarker {
         return nil
     }
 
+    func motion(forCardId id: String) -> BoardCombatMotion? {
+        if isBoardSource(sourceType), sourceId == id {
+            return sourceMotion
+        }
+        if isBoardTarget(targetType), targetId == id {
+            return targetMotion
+        }
+        return nil
+    }
+
+    func motion(forHeroId id: String?) -> BoardCombatMotion? {
+        guard let id else {
+            return nil
+        }
+        if sourceType == "hero", sourceId == id {
+            return sourceMotion
+        }
+        if targetType == "hero", targetId == id {
+            return targetMotion
+        }
+        return nil
+    }
+
+    private var sourceMotion: BoardCombatMotion? {
+        guard sourceId != targetId else {
+            return nil
+        }
+
+        switch kind {
+        case .damage:
+            return BoardCombatMotion(kind: .lunge, unit: unitVector(pointingAtTarget: true))
+        case .heal:
+            return BoardCombatMotion(kind: .healSource, unit: unitVector(pointingAtTarget: true))
+        default:
+            return nil
+        }
+    }
+
+    private var targetMotion: BoardCombatMotion? {
+        switch kind {
+        case .damage:
+            return BoardCombatMotion(
+                kind: isSpellSource ? .spellTarget : .hit,
+                unit: unitVector(pointingAtTarget: false)
+            )
+        case .heal:
+            return BoardCombatMotion(kind: .healTarget, unit: .zero)
+        default:
+            return nil
+        }
+    }
+
+    private func unitVector(pointingAtTarget: Bool) -> CGVector {
+        guard let sourcePoint, let targetPoint else {
+            // Spell sources sit near the caster's hand, so push along the
+            // vertical axis toward or away from the caster's side.
+            let towardCaster: CGFloat = casterIsViewer ? 1 : -1
+            return CGVector(dx: 0, dy: pointingAtTarget ? -towardCaster : towardCaster)
+        }
+
+        let dx = targetPoint.x - sourcePoint.x
+        let dy = targetPoint.y - sourcePoint.y
+        let distance = hypot(dx, dy)
+        guard distance >= 1 else {
+            return .zero
+        }
+
+        let direction: CGFloat = pointingAtTarget ? 1 : -1
+        return CGVector(dx: (dx / distance) * direction, dy: (dy / distance) * direction)
+    }
+
     private func isBoardSource(_ type: String?) -> Bool {
         type == "creature" || type == "board"
     }
@@ -247,7 +355,26 @@ struct BoardTransientCombat {
     let source: CGPoint
     let target: CGPoint
     let value: Int
-    let playedSpellCard: BoardCardSnapshot?
+    let isRetaliation: Bool
+
+    var accent: Color {
+        isRetaliation ? ArchetypeTheme.red : kind.accent
+    }
+
+    var trailTip: Color {
+        isRetaliation ? ArchetypeTheme.gold2 : kind.impact
+    }
+}
+
+struct BoardValueBurst: Identifiable, Equatable {
+    let id: String
+    let kind: BoardCombatAnimationKind
+    let value: Int
+    let point: CGPoint
+
+    var text: String {
+        "\(kind.valuePrefix)\(value)"
+    }
 }
 
 struct BoardPlayedSpellCard: Identifiable, Equatable {
@@ -2510,8 +2637,11 @@ private struct NativeBoardSurface: View {
     @State private var playedSpellHideWorkItems: [String: DispatchWorkItem] = [:]
     @State private var playedSpellRemoveWorkItems: [String: DispatchWorkItem] = [:]
     @State private var entityPointCache: [String: CGPoint] = [:]
+    @State private var valueBursts: [BoardValueBurst] = []
+    @State private var valueBurstRemoveWorkItems: [String: DispatchWorkItem] = [:]
 
     private static let combatAnimationDuration: TimeInterval = 0.62
+    private static let valueBurstDuration: TimeInterval = 2.2
     private static let playedSpellCardDuration: TimeInterval = 1.7
     private static let playedSpellCardExitDuration: TimeInterval = 0.26
     private static let playedSpellCardAfterAnimationDuration: TimeInterval = 0.4
@@ -2525,10 +2655,22 @@ private struct NativeBoardSurface: View {
     }
 
     private var combatMarker: BoardCombatMarker? {
-        guard let update = transientUpdate else {
+        guard let update = transientUpdate,
+              var marker = BoardCombatMarker(update: update, viewerSide: model.viewerSide)
+        else {
             return nil
         }
-        return BoardCombatMarker(update: update, viewerSide: model.viewerSide)
+
+        marker.animationToken = transientAnimationId
+        marker.sourcePoint = marker.sourceId.flatMap { entityPointCache[$0] }
+        marker.targetPoint = marker.targetId.flatMap { entityPointCache[$0] }
+        marker.isSpellSource = spellCard(
+            sourceType: marker.sourceType,
+            sourceId: marker.sourceId,
+            side: update.side
+        ) != nil
+        marker.casterIsViewer = update.side == model.viewerSide
+        return marker
     }
 
     var body: some View {
@@ -2536,7 +2678,7 @@ private struct NativeBoardSurface: View {
             BoardSideHeader(
                 snapshot: opponent,
                 isActive: model.activeSide == opponent.side,
-                combatRole: combatMarker?.role(forHeroId: opponent.heroId),
+                combatMarker: combatMarker,
                 socketStatus: socketStatus,
                 isTop: true,
                 latestUpdate: model.displayUpdates.last,
@@ -2593,7 +2735,7 @@ private struct NativeBoardSurface: View {
                 snapshot: player,
                 isActive: model.activeSide == player.side,
                 isHeroDimmed: model.heroPowerUnavailableReason(for: player.side) != nil,
-                combatRole: combatMarker?.role(forHeroId: player.heroId),
+                combatMarker: combatMarker,
                 handCards: model.handCards(for: player.side),
                 isPlayable: model.isHandCardPlayable,
                 onHeroTap: { onOwnHeroTap(player) },
@@ -2608,6 +2750,7 @@ private struct NativeBoardSurface: View {
                 ZStack {
                     transientCombatOverlay(in: proxy.size, anchors: anchors, proxy: proxy)
                     playedSpellCardOverlay(in: proxy.size)
+                    valueBurstOverlay
                 }
                 .onAppear {
                     cacheEntityPoints(anchors: anchors, proxy: proxy)
@@ -2703,9 +2846,53 @@ private struct NativeBoardSurface: View {
     ) -> some View {
         if let update = transientUpdate,
            let combat = transientCombat(for: update, in: size, anchors: anchors, proxy: proxy) {
-            BoardCombatAnimationLayer(combat: combat)
+            BoardCombatAnimationLayer(combat: combat, onBegin: handleCombatBegan)
                 .id(transientAnimationId)
         }
+    }
+
+    @ViewBuilder
+    private var valueBurstOverlay: some View {
+        ForEach(valueBursts) { burst in
+            BoardValueBurstView(burst: burst)
+        }
+    }
+
+    private func handleCombatBegan(_ combat: BoardTransientCombat) {
+        spawnValueBurst(for: combat)
+
+        let haptic = UIImpactFeedbackGenerator(style: combat.kind == .heal ? .soft : .medium)
+        haptic.prepare()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            haptic.impactOccurred()
+        }
+    }
+
+    private func spawnValueBurst(for combat: BoardTransientCombat) {
+        guard combat.value > 0, !valueBursts.contains(where: { $0.id == combat.id }) else {
+            return
+        }
+
+        valueBursts.append(
+            BoardValueBurst(
+                id: combat.id,
+                kind: combat.kind,
+                value: combat.value,
+                point: combat.target
+            )
+        )
+
+        let burstId = combat.id
+        valueBurstRemoveWorkItems[burstId]?.cancel()
+        let workItem = DispatchWorkItem {
+            valueBursts.removeAll { $0.id == burstId }
+            valueBurstRemoveWorkItems[burstId] = nil
+        }
+        valueBurstRemoveWorkItems[burstId] = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.valueBurstDuration,
+            execute: workItem
+        )
     }
 
     @ViewBuilder
@@ -2923,6 +3110,12 @@ private struct NativeBoardSurface: View {
         playedSpellHideWorkItems = [:]
         playedSpellRemoveWorkItems = [:]
         playedSpellCards = []
+
+        for workItem in valueBurstRemoveWorkItems.values {
+            workItem.cancel()
+        }
+        valueBurstRemoveWorkItems = [:]
+        valueBursts = []
         entityPointCache = [:]
     }
 
@@ -2994,7 +3187,7 @@ private struct NativeBoardSurface: View {
             source: source ?? target,
             target: target,
             value: value,
-            playedSpellCard: nil
+            isRetaliation: update.value["is_retaliation"]?.boolValue ?? false
         )
     }
 
@@ -3100,7 +3293,7 @@ private struct NativeBoardSurface: View {
 private struct BoardSideHeader: View {
     let snapshot: GameSideSnapshot
     let isActive: Bool
-    let combatRole: BoardCombatRole?
+    let combatMarker: BoardCombatMarker?
     let socketStatus: SocketStatus
     let isTop: Bool
     let latestUpdate: GameUpdateSnapshot?
@@ -3119,7 +3312,13 @@ private struct BoardSideHeader: View {
     var body: some View {
         HStack(spacing: 0) {
             Button(action: onHeroTap) {
-                HeroTile(snapshot: snapshot, isActive: isActive, combatRole: combatRole)
+                HeroTile(
+                    snapshot: snapshot,
+                    isActive: isActive,
+                    combatRole: combatMarker?.role(forHeroId: snapshot.heroId),
+                    combatMotion: combatMarker?.motion(forHeroId: snapshot.heroId),
+                    animationToken: combatMarker?.animationToken
+                )
             }
             .buttonStyle(.plain)
             .frame(width: 96, height: 96)
@@ -3185,7 +3384,7 @@ private struct PlayerFooter: View {
     let snapshot: GameSideSnapshot
     let isActive: Bool
     let isHeroDimmed: Bool
-    let combatRole: BoardCombatRole?
+    let combatMarker: BoardCombatMarker?
     let handCards: [BoardCardSnapshot]
     let isPlayable: (BoardCardSnapshot) -> Bool
     let onHeroTap: () -> Void
@@ -3198,7 +3397,9 @@ private struct PlayerFooter: View {
                     snapshot: snapshot,
                     isActive: isActive,
                     isDimmed: isHeroDimmed,
-                    combatRole: combatRole
+                    combatRole: combatMarker?.role(forHeroId: snapshot.heroId),
+                    combatMotion: combatMarker?.motion(forHeroId: snapshot.heroId),
+                    animationToken: combatMarker?.animationToken
                 )
             }
             .buttonStyle(.plain)
@@ -3452,6 +3653,8 @@ private struct HeroTile: View {
     let isActive: Bool
     var isDimmed = false
     var combatRole: BoardCombatRole? = nil
+    var combatMotion: BoardCombatMotion? = nil
+    var animationToken: UUID? = nil
 
     private var outlineColor: Color? {
         if let combatRole {
@@ -3498,21 +3701,8 @@ private struct HeroTile: View {
             }
         }
         .opacity(isDimmed ? 0.35 : 1)
-        .overlay(alignment: .top) {
-            if let value = combatRole?.valueText {
-                Text(value)
-                    .font(.archetypeBody(12, weight: .black))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 8)
-                    .frame(height: 24)
-                    .background(combatRole?.borderColor ?? ArchetypeTheme.red)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.black.opacity(0.78), lineWidth: 1))
-                    .shadow(color: Color.black.opacity(0.38), radius: 5, x: 0, y: 2)
-                    .offset(y: -16)
-            }
-        }
         .animation(.spring(response: 0.28, dampingFraction: 0.72), value: combatRole != nil)
+        .modifier(BoardCombatMotionModifier(motion: combatMotion, token: animationToken))
     }
 
     private var heroFallback: some View {
@@ -3663,7 +3853,9 @@ private struct BoardLane: View {
                                     card: card,
                                     active: false,
                                     inLane: true,
-                                    combatRole: combatMarker?.role(forCardId: card.id)
+                                    combatRole: combatMarker?.role(forCardId: card.id),
+                                    combatMotion: combatMarker?.motion(forCardId: card.id),
+                                    animationToken: combatMarker?.animationToken
                                 )
                             }
                             .buttonStyle(.plain)
@@ -3760,6 +3952,8 @@ private struct MiniGameCard: View {
     let inLane: Bool
     var isLarge = false
     var combatRole: BoardCombatRole? = nil
+    var combatMotion: BoardCombatMotion? = nil
+    var animationToken: UUID? = nil
 
     private var badgeOffset: CGFloat {
         isLarge ? 12 : 4
@@ -3807,7 +4001,14 @@ private struct MiniGameCard: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(borderColor, lineWidth: 2)
         )
-        .modifier(BoardCombatModifier(role: combatRole, cornerRadius: 12))
+        .modifier(
+            BoardCombatModifier(
+                role: combatRole,
+                motion: combatMotion,
+                token: animationToken,
+                cornerRadius: 12
+            )
+        )
         .overlay(alignment: .topLeading) {
             if let traitIcon = card.traitIcon {
                 BadgeIcon(glyph: traitIcon, isLarge: isLarge)
@@ -3874,6 +4075,8 @@ private struct BadgeIcon: View {
 
 private struct BoardCombatModifier: ViewModifier {
     let role: BoardCombatRole?
+    let motion: BoardCombatMotion?
+    let token: UUID?
     let cornerRadius: CGFloat
 
     func body(content: Content) -> some View {
@@ -3885,22 +4088,139 @@ private struct BoardCombatModifier: ViewModifier {
                         .shadow(color: role.borderColor.opacity(0.72), radius: 8, x: 0, y: 0)
                 }
             }
-            .overlay(alignment: .top) {
-                if let value = role?.valueText {
-                    Text(value)
-                        .font(.archetypeBody(12, weight: .black))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 8)
-                        .frame(height: 24)
-                        .background(role?.borderColor ?? ArchetypeTheme.red)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(Color.black.opacity(0.78), lineWidth: 1))
-                        .shadow(color: Color.black.opacity(0.38), radius: 5, x: 0, y: 2)
-                        .offset(y: -16)
-                }
-            }
-            .scaleEffect(role == nil ? 1 : 1.035)
             .animation(.spring(response: 0.28, dampingFraction: 0.72), value: role != nil)
+            .modifier(BoardCombatMotionModifier(motion: motion, token: token))
+    }
+}
+
+private struct BoardCombatMotionModifier: ViewModifier {
+    enum Phase: CaseIterable {
+        case idle
+        case approach
+        case peak
+        case settle
+    }
+
+    struct Step {
+        var offset: CGSize = .zero
+        var scale: CGFloat = 1
+        var brightness: Double = 0
+    }
+
+    let motion: BoardCombatMotion?
+    let token: UUID?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let idleToken = UUID()
+
+    func body(content: Content) -> some View {
+        content.phaseAnimator(
+            Phase.allCases,
+            trigger: token ?? Self.idleToken
+        ) { view, phase in
+            let step = step(for: phase)
+            view
+                .offset(x: step.offset.width, y: step.offset.height)
+                .scaleEffect(step.scale)
+                .brightness(step.brightness)
+        } animation: { phase in
+            .easeOut(duration: duration(entering: phase))
+        }
+    }
+
+    private func step(for phase: Phase) -> Step {
+        guard let motion, phase != .idle else {
+            return Step()
+        }
+
+        let offset = reduceMotion
+            ? CGVector.zero
+            : motion.offset
+
+        switch motion.kind {
+        case .lunge:
+            switch phase {
+            case .approach:
+                return Step(offset: scaled(offset, 0.4), scale: 1.03, brightness: 0.1)
+            case .peak:
+                return Step(offset: scaled(offset, 1), scale: 1.05, brightness: 0.18)
+            case .settle:
+                return Step(offset: scaled(offset, 0.3), scale: 1.02, brightness: 0.06)
+            case .idle:
+                return Step()
+            }
+        case .hit:
+            switch phase {
+            case .approach:
+                return Step()
+            case .peak:
+                return Step(offset: scaled(offset, 1), scale: 0.97, brightness: 0.24)
+            case .settle:
+                return Step(offset: scaled(offset, -0.28), scale: 1.01, brightness: 0.08)
+            case .idle:
+                return Step()
+            }
+        case .healSource:
+            switch phase {
+            case .approach:
+                return Step(offset: scaled(offset, 0.5), scale: 1.02, brightness: 0.08)
+            case .peak:
+                return Step(offset: scaled(offset, 1), scale: 1.03, brightness: 0.14)
+            case .settle:
+                return Step(offset: scaled(offset, 0.4), scale: 1.01, brightness: 0.05)
+            case .idle:
+                return Step()
+            }
+        case .healTarget:
+            switch phase {
+            case .approach:
+                return Step(offset: CGSize(width: 0, height: reduceMotion ? 0 : -2), scale: 1.02, brightness: 0.08)
+            case .peak:
+                return Step(offset: CGSize(width: 0, height: reduceMotion ? 0 : -5), scale: 1.05, brightness: 0.18)
+            case .settle:
+                return Step(offset: CGSize(width: 0, height: reduceMotion ? 0 : -2), scale: 1.02, brightness: 0.06)
+            case .idle:
+                return Step()
+            }
+        case .spellTarget:
+            switch phase {
+            case .approach:
+                return Step(offset: scaled(offset, 0.32), scale: 0.985, brightness: 0.12)
+            case .peak:
+                return Step(scale: 1.04, brightness: 0.22)
+            case .settle:
+                return Step(scale: 1.015, brightness: 0.08)
+            case .idle:
+                return Step()
+            }
+        }
+    }
+
+    private func duration(entering phase: Phase) -> TimeInterval {
+        let kind = motion?.kind ?? .lunge
+
+        switch phase {
+        case .approach:
+            switch kind {
+            case .hit:
+                return 0.22
+            case .spellTarget:
+                return 0.26
+            default:
+                return 0.18
+            }
+        case .peak:
+            return kind == .spellTarget ? 0.12 : 0.15
+        case .settle:
+            return kind == .hit ? 0.1 : 0.13
+        case .idle:
+            return 0.15
+        }
+    }
+
+    private func scaled(_ offset: CGVector, _ factor: CGFloat) -> CGSize {
+        CGSize(width: offset.dx * factor, height: offset.dy * factor)
     }
 }
 
@@ -3910,6 +4230,7 @@ private struct BoardPlayedSpellCardView: View {
     let point: CGPoint
 
     @State private var isVisible = false
+    @State private var isHovering = false
 
     var body: some View {
         MiniGameCard(
@@ -3922,14 +4243,23 @@ private struct BoardPlayedSpellCardView: View {
         .shadow(color: Color.black.opacity(0.42), radius: 18, x: 0, y: 12)
         .shadow(color: ArchetypeTheme.sky.opacity(0.26), radius: 18, x: 0, y: 0)
         .rotationEffect(.degrees(rotation))
+        .rotationEffect(.degrees(isHovering ? 1 : -1))
         .scaleEffect(scale)
         .opacity(opacity)
         .offset(y: yOffset)
+        .offset(y: isHovering ? -5 : 0)
         .position(point)
         .animation(.timingCurve(0.16, 0.84, 0.24, 1, duration: 0.28), value: isVisible)
         .animation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.26), value: playedSpell.isLeaving)
         .onAppear {
             isVisible = true
+            withAnimation(
+                .easeInOut(duration: 1.3)
+                    .repeatForever(autoreverses: true)
+                    .delay(0.28)
+            ) {
+                isHovering = true
+            }
         }
         .accessibilityHidden(true)
     }
@@ -3968,17 +4298,19 @@ private struct BoardPlayedSpellCardView: View {
 
 private struct BoardCombatAnimationLayer: View {
     let combat: BoardTransientCombat
+    let onBegin: (BoardTransientCombat) -> Void
 
     @State private var travelProgress: CGFloat = 0
-    @State private var burstProgress: CGFloat = 0
-    @State private var spellVisible = false
+    @State private var originExpanded = false
+    @State private var originFaded = false
+    @State private var trailFaded = false
+    @State private var boltFaded = false
+    @State private var impactVisible = false
+    @State private var impactExpanded = false
+    @State private var impactFaded = false
 
     private var distance: CGFloat {
         hypot(combat.target.x - combat.source.x, combat.target.y - combat.source.y)
-    }
-
-    private var valueText: String {
-        "\(combat.kind.valuePrefix)\(combat.value)"
     }
 
     private var isTraveling: Bool {
@@ -3987,87 +4319,95 @@ private struct BoardCombatAnimationLayer: View {
 
     var body: some View {
         ZStack {
-            if let playedSpellCard = combat.playedSpellCard {
-                MiniGameCard(
-                    card: playedSpellCard,
-                    active: true,
-                    inLane: false,
-                    isLarge: true
-                )
-                .frame(width: 76, height: 106)
-                .shadow(color: Color.black.opacity(0.42), radius: 18, x: 0, y: 12)
-                .shadow(color: combat.kind.accent.opacity(0.28), radius: 18, x: 0, y: 0)
-                .rotationEffect(.degrees(spellVisible ? 0 : (combat.source.y > combat.target.y ? -4 : 4)))
-                .scaleEffect(spellVisible ? 1 : 0.78)
-                .opacity(spellVisible ? 1 : 0)
-                .position(
-                    x: combat.source.x,
-                    y: combat.source.y + (spellVisible ? (combat.source.y > combat.target.y ? -12 : 12) : 14)
-                )
-            }
+            CombatOriginFlash(kind: combat.kind, accent: combat.accent)
+                .scaleEffect(originExpanded ? 1.35 : 0.3)
+                .opacity(originFaded ? 0 : 0.96)
+                .position(combat.source)
 
             if isTraveling {
                 CombatTravelPath(
                     source: combat.source,
                     target: combat.target,
                     kind: combat.kind,
-                    progress: travelProgress
+                    accent: combat.accent,
+                    tip: combat.trailTip,
+                    progress: travelProgress,
+                    boltOpacity: boltFaded ? 0 : 1
                 )
-                .opacity(travelOpacity)
+                .opacity(trailFaded ? 0 : 1)
             }
 
-            CombatImpact(kind: combat.kind, progress: travelProgress)
+            CombatImpact(kind: combat.kind)
+                .scaleEffect(impactExpanded ? 1.22 : 0.18)
+                .opacity(impactVisible ? 1 : 0)
+                .opacity(impactFaded ? 0 : 1)
                 .position(combat.target)
-
-            Text(valueText)
-                .font(.archetypeBody(12, weight: .black))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 10)
-                .frame(height: 26)
-                .background(combat.kind == .heal ? ArchetypeTheme.green.opacity(0.86) : Color(hex: 0x111827).opacity(0.9))
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(combat.kind.accent.opacity(0.55), lineWidth: 1)
-                )
-                .shadow(color: Color.black.opacity(0.38), radius: 8, x: 0, y: 4)
-                .shadow(color: combat.kind.accent.opacity(0.18), radius: 12, x: 0, y: 0)
-                .opacity(burstOpacity)
-                .scaleEffect(0.72 + (0.32 * min(burstProgress, 1)))
-                .position(x: combat.target.x, y: combat.target.y - 18 - (22 * burstProgress))
         }
         .onAppear {
-            spellVisible = true
+            onBegin(combat)
+
+            withAnimation(.easeOut(duration: 0.62)) {
+                originExpanded = true
+            }
+            withAnimation(.easeIn(duration: 0.44).delay(0.14)) {
+                originFaded = true
+            }
+
             withAnimation(.timingCurve(0.2, 0.82, 0.32, 1, duration: 0.62)) {
                 travelProgress = 1
             }
-            withAnimation(.timingCurve(0.16, 0.84, 0.24, 1, duration: 2.05)) {
-                burstProgress = 1
+            withAnimation(.easeIn(duration: 0.16).delay(0.44)) {
+                boltFaded = true
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-                withAnimation(.easeInOut(duration: 0.22)) {
-                    spellVisible = false
-                }
+            withAnimation(.easeIn(duration: 0.24).delay(0.38)) {
+                trailFaded = true
+            }
+
+            withAnimation(.easeOut(duration: 0.1).delay(0.26)) {
+                impactVisible = true
+            }
+            withAnimation(.easeOut(duration: 0.36).delay(0.26)) {
+                impactExpanded = true
+            }
+            withAnimation(.easeIn(duration: 0.22).delay(0.4)) {
+                impactFaded = true
             }
         }
         .accessibilityHidden(true)
     }
+}
 
-    private var burstOpacity: Double {
-        if burstProgress < 0.08 {
-            return Double(burstProgress / 0.08)
-        }
-        if burstProgress > 0.78 {
-            return Double(max(0, (1 - burstProgress) / 0.22))
-        }
-        return 1
+private struct CombatOriginFlash: View {
+    let kind: BoardCombatAnimationKind
+    let accent: Color
+
+    var body: some View {
+        Circle()
+            .fill(
+                RadialGradient(
+                    colors: [
+                        Color.white.opacity(0.96),
+                        accent.opacity(0.62),
+                        accent.opacity(0),
+                    ],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: size / 2
+                )
+            )
+            .frame(width: size, height: size)
+            .blur(radius: 1)
     }
 
-    private var travelOpacity: Double {
-        if burstProgress < 0.52 {
-            return 1
+    private var size: CGFloat {
+        switch kind {
+        case .damage:
+            return 28
+        case .heal:
+            return 30
+        case .spellDamage:
+            return 34
         }
-        return Double(max(0, (1 - burstProgress) / 0.48))
     }
 }
 
@@ -4075,7 +4415,10 @@ private struct CombatTravelPath: View {
     let source: CGPoint
     let target: CGPoint
     let kind: BoardCombatAnimationKind
+    let accent: Color
+    let tip: Color
     let progress: CGFloat
+    let boltOpacity: Double
 
     private var currentPoint: CGPoint {
         CGPoint(
@@ -4094,24 +4437,24 @@ private struct CombatTravelPath: View {
             .stroke(
                 LinearGradient(
                     colors: [
-                        kind.accent.opacity(0),
+                        accent.opacity(0),
                         Color.white.opacity(0.9),
-                        kind.impact.opacity(0.72),
+                        tip.opacity(0.72),
                     ],
                     startPoint: .leading,
                     endPoint: .trailing
                 ),
                 style: StrokeStyle(lineWidth: kind == .heal ? 4 : 3, lineCap: .round)
             )
-            .shadow(color: kind.accent.opacity(0.35), radius: 9, x: 0, y: 0)
+            .shadow(color: accent.opacity(0.35), radius: 9, x: 0, y: 0)
 
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
                             Color.white.opacity(0.96),
-                            kind.accent.opacity(0.88),
-                            kind.impact.opacity(0),
+                            accent.opacity(0.88),
+                            tip.opacity(0),
                         ],
                         center: .center,
                         startRadius: 1,
@@ -4119,7 +4462,7 @@ private struct CombatTravelPath: View {
                     )
                 )
                 .frame(width: kind == .heal ? 20 : 24, height: kind == .heal ? 20 : 24)
-                .opacity(progress < 1 ? 1 : 0)
+                .opacity(boltOpacity)
                 .position(currentPoint)
         }
     }
@@ -4127,14 +4470,12 @@ private struct CombatTravelPath: View {
 
 private struct CombatImpact: View {
     let kind: BoardCombatAnimationKind
-    let progress: CGFloat
 
     var body: some View {
         ZStack {
             Circle()
                 .stroke(Color.white.opacity(0.68), lineWidth: 2)
                 .frame(width: impactSize, height: impactSize)
-                .opacity(impactOpacity)
 
             Circle()
                 .fill(
@@ -4146,25 +4487,70 @@ private struct CombatImpact: View {
                         ],
                         center: .center,
                         startRadius: 0,
-                        endRadius: 34
+                        endRadius: (impactSize + 18) / 2
                     )
                 )
                 .frame(width: impactSize + 18, height: impactSize + 18)
-                .opacity(impactOpacity)
         }
-        .scaleEffect(0.72 + (progress * 0.5))
     }
 
     private var impactSize: CGFloat {
-        kind == .heal ? 66 : 56
-    }
-
-    private var impactOpacity: Double {
-        guard progress > 0.36 else {
-            return 0
+        switch kind {
+        case .damage:
+            return 56
+        case .heal:
+            return 66
+        case .spellDamage:
+            return 72
         }
-        let normalized = min(max((progress - 0.36) / 0.64, 0), 1)
-        return Double(max(0, 1 - normalized))
+    }
+}
+
+private struct BoardValueBurstView: View {
+    let burst: BoardValueBurst
+
+    @State private var entered = false
+    @State private var drifted = false
+    @State private var faded = false
+
+    var body: some View {
+        Text(burst.text)
+            .font(.archetypeBody(12, weight: .black))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .frame(height: 26)
+            .background(
+                burst.kind == .heal
+                    ? ArchetypeTheme.green.opacity(0.86)
+                    : Color(hex: 0x111827).opacity(0.9)
+            )
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(burst.kind.accent.opacity(0.55), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.38), radius: 8, x: 0, y: 4)
+            .shadow(color: burst.kind.accent.opacity(0.18), radius: 12, x: 0, y: 0)
+            .scaleEffect(entered ? 1 : 0.72)
+            .scaleEffect(faded ? 1.04 : 1)
+            .opacity(entered ? 1 : 0)
+            .opacity(faded ? 0 : 1)
+            .offset(y: entered ? -10 : 0)
+            .offset(y: drifted ? -14 : 0)
+            .offset(y: faded ? -10 : 0)
+            .position(x: burst.point.x, y: burst.point.y - 18)
+            .onAppear {
+                withAnimation(.easeOut(duration: 0.22)) {
+                    entered = true
+                }
+                withAnimation(.easeOut(duration: 1.41).delay(0.22)) {
+                    drifted = true
+                }
+                withAnimation(.easeIn(duration: 0.55).delay(1.63)) {
+                    faded = true
+                }
+            }
+            .accessibilityHidden(true)
     }
 }
 
@@ -5732,15 +6118,6 @@ private extension ISO8601DateFormatter {
     static func drawTwoDate(from string: String) -> Date? {
         drawTwoWithFractionalSeconds.date(from: string)
             ?? drawTwoWithoutFractionalSeconds.date(from: string)
-    }
-}
-
-private extension JSONValue {
-    var boolValue: Bool? {
-        if case .bool(let value) = self {
-            return value
-        }
-        return nil
     }
 }
 
