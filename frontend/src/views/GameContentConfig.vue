@@ -44,6 +44,213 @@
       </div>
     </BaseModal>
 
+    <BaseModal
+      :show="Boolean(aiDeckDraft)"
+      panel-class="w-full sm:max-w-6xl"
+      @close="closeAiDeckModal"
+    >
+      <form v-if="aiDeckDraft" class="min-h-[70vh]" @submit.prevent="saveAiDeck">
+        <div class="border-b border-gray-200 p-6 pr-12 dark:border-gray-800">
+          <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+            {{ aiDeckDraft.id ? 'Edit AI Deck' : 'New AI Deck' }}
+          </h2>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {{ aiDeckDraftTotal }} / {{ aiDeckConfig.deck_size_limit }} cards
+          </p>
+        </div>
+
+        <div class="space-y-6 p-6">
+          <div class="grid gap-5 lg:grid-cols-4">
+            <label class="block lg:col-span-2">
+              <span class="ui-label">Name</span>
+              <input
+                v-model.trim="aiDeckDraft.name"
+                type="text"
+                class="ui-input mt-2"
+                :disabled="aiDeckSaving"
+              />
+            </label>
+            <label class="block">
+              <span class="ui-label">Hero</span>
+              <select
+                v-model.number="aiDeckDraft.hero_id"
+                class="ui-select mt-2"
+                :disabled="aiDeckSaving"
+              >
+                <option
+                  v-for="hero in heroes"
+                  :key="hero.id"
+                  :value="hero.id"
+                >
+                  {{ hero.name }}
+                </option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="ui-label">Strategy</span>
+              <select
+                v-model="aiDeckDraft.strategy"
+                class="ui-select mt-2"
+                :disabled="aiDeckSaving"
+              >
+                <option
+                  v-for="strategy in aiStrategies"
+                  :key="strategy"
+                  :value="strategy"
+                >
+                  {{ strategy }}
+                </option>
+              </select>
+            </label>
+            <label class="block lg:col-span-3">
+              <span class="ui-label">Description</span>
+              <textarea
+                v-model.trim="aiDeckDraft.description"
+                rows="2"
+                class="ui-input mt-2"
+                :disabled="aiDeckSaving"
+              />
+            </label>
+            <label class="mt-7 flex items-center gap-3">
+              <input
+                v-model="aiDeckDraft.is_pve_opponent"
+                type="checkbox"
+                class="ui-checkbox"
+                :disabled="aiDeckSaving"
+              />
+              <span class="ui-label">Visible in PvE</span>
+            </label>
+          </div>
+
+          <div v-if="aiDeckDraftError" class="ui-alert ui-alert-warning">
+            {{ aiDeckDraftError }}
+          </div>
+
+          <div class="grid gap-4 lg:grid-cols-[minmax(12rem,1fr)_minmax(14rem,1.4fr)_auto]">
+            <label>
+              <span class="ui-label">Search cards</span>
+              <input
+                v-model.trim="aiCardSearch"
+                type="search"
+                class="ui-input mt-2"
+                placeholder="Name or slug"
+                :disabled="aiDeckSaving"
+              />
+            </label>
+            <label>
+              <span class="ui-label">Add card</span>
+              <select
+                v-model="selectedAddCardId"
+                class="ui-select mt-2"
+                :disabled="aiDeckSaving || availableAiDeckCards.length === 0"
+              >
+                <option value="">Choose card</option>
+                <option
+                  v-for="card in availableAiDeckCards"
+                  :key="card.id"
+                  :value="String(card.id)"
+                >
+                  {{ card.name }} · {{ card.cost }} energy
+                </option>
+              </select>
+            </label>
+            <button
+              type="button"
+              class="ui-btn ui-btn-md ui-btn-secondary mt-7"
+              :disabled="aiDeckSaving || !selectedAddCardId"
+              @click="addCardToAiDeckDraft"
+            >
+              <Plus class="h-4 w-4" aria-hidden="true" />
+              Add
+            </button>
+          </div>
+
+          <div v-if="aiDeckDraft.cards.length === 0" class="ui-panel-muted text-sm text-gray-500 dark:text-gray-400">
+            No cards in this AI deck.
+          </div>
+
+          <div v-else class="ui-table-wrap">
+            <table class="ui-table">
+              <thead class="bg-gray-50 dark:bg-gray-800/70">
+                <tr>
+                  <th class="ui-table-head">Card</th>
+                  <th class="ui-table-head">Type</th>
+                  <th class="ui-table-head text-right">Cost</th>
+                  <th class="ui-table-head">Stats</th>
+                  <th class="ui-table-head w-28 text-right">Count</th>
+                  <th class="ui-table-head text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-800 dark:bg-gray-900/40">
+                <tr v-for="draftCard in aiDeckDraft.cards" :key="draftCard.card_id">
+                  <td class="ui-table-cell">
+                    <div class="font-medium text-gray-900 dark:text-white">
+                      {{ draftCardName(draftCard) }}
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                      {{ draftCardSlug(draftCard) }}
+                    </div>
+                  </td>
+                  <td class="ui-table-cell">
+                    <span class="ui-status-badge ui-status-neutral capitalize">
+                      {{ draftCardType(draftCard) }}
+                    </span>
+                  </td>
+                  <td class="ui-table-cell text-right font-semibold text-gray-900 dark:text-white">
+                    {{ draftCardCost(draftCard) }}
+                  </td>
+                  <td class="ui-table-cell text-gray-700 dark:text-gray-300">
+                    {{ draftCardStats(draftCard) }}
+                  </td>
+                  <td class="ui-table-cell text-right">
+                    <input
+                      v-model.number="draftCard.count"
+                      type="number"
+                      min="1"
+                      :max="maxCountForAiDraftCard(draftCard)"
+                      class="ui-input ml-auto w-20 text-right"
+                      :disabled="aiDeckSaving"
+                    />
+                  </td>
+                  <td class="ui-table-cell text-right">
+                    <button
+                      type="button"
+                      class="ui-btn ui-btn-xs ui-btn-danger"
+                      :disabled="aiDeckSaving"
+                      @click="removeCardFromAiDeckDraft(draftCard.card_id)"
+                    >
+                      <Trash2 class="h-3.5 w-3.5" aria-hidden="true" />
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="sticky bottom-0 flex flex-col-reverse gap-3 border-t border-gray-200 bg-white p-4 shadow-[0_-8px_20px_rgba(15,23,42,0.06)] sm:flex-row sm:justify-end sm:px-6 dark:border-gray-800 dark:bg-gray-900 dark:shadow-[0_-8px_20px_rgba(0,0,0,0.24)]">
+          <button
+            type="button"
+            class="ui-btn ui-btn-md ui-btn-secondary"
+            :disabled="aiDeckSaving"
+            @click="closeAiDeckModal"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            class="ui-btn ui-btn-md ui-btn-primary"
+            :disabled="aiDeckSaving || Boolean(aiDeckDraftError)"
+          >
+            <Loader2 v-if="aiDeckSaving" class="h-4 w-4 animate-spin" aria-hidden="true" />
+            <Save v-else class="h-4 w-4" aria-hidden="true" />
+            {{ aiDeckSaving ? 'Saving' : 'Save AI Deck' }}
+          </button>
+        </div>
+      </form>
+    </BaseModal>
+
     <main class="ui-page-container">
       <header class="ui-page-header-row">
         <div>
@@ -85,7 +292,7 @@
       </div>
 
       <div v-else class="space-y-8">
-        <section class="grid gap-4 md:grid-cols-4">
+        <section class="grid gap-4 md:grid-cols-5">
           <div class="ui-panel-muted">
             <p class="text-sm text-gray-500 dark:text-gray-400">Heroes</p>
             <p class="ui-stat-value">{{ heroes.length }}</p>
@@ -101,6 +308,10 @@
           <div class="ui-panel-muted">
             <p class="text-sm text-gray-500 dark:text-gray-400">Hero scoped</p>
             <p class="ui-stat-value">{{ heroScopedCardCount }}</p>
+          </div>
+          <div class="ui-panel-muted">
+            <p class="text-sm text-gray-500 dark:text-gray-400">AI Decks</p>
+            <p class="ui-stat-value">{{ aiDecks.length }}</p>
           </div>
         </section>
 
@@ -202,7 +413,7 @@
           </div>
         </section>
 
-        <section v-else class="ui-panel">
+        <section v-else-if="activeTab === 'cards'" class="ui-panel">
           <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 class="ui-panel-title">Cards</h2>
@@ -324,6 +535,98 @@
             </table>
           </div>
         </section>
+
+        <section v-else class="space-y-6">
+          <div class="ui-panel">
+            <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div class="ui-panel-heading">
+                <Bot class="ui-panel-icon" aria-hidden="true" />
+                <h2 class="ui-panel-title">AI Decks</h2>
+              </div>
+              <button
+                type="button"
+                class="ui-btn ui-btn-sm ui-btn-primary self-start sm:self-auto"
+                @click="startNewAiDeck"
+              >
+                <Plus class="h-4 w-4" aria-hidden="true" />
+                New AI Deck
+              </button>
+            </div>
+
+            <div v-if="aiDecks.length === 0" class="ui-panel-muted text-sm text-gray-500 dark:text-gray-400">
+              No AI decks have been created for this title.
+            </div>
+
+            <div v-else class="ui-table-wrap">
+              <table class="ui-table">
+                <thead class="bg-gray-50 dark:bg-gray-800/70">
+                  <tr>
+                    <th class="ui-table-head">Deck</th>
+                    <th class="ui-table-head">Hero</th>
+                    <th class="ui-table-head text-right">Cards</th>
+                    <th class="ui-table-head">Strategy</th>
+                    <th class="ui-table-head">PvE</th>
+                    <th class="ui-table-head text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-800 dark:bg-gray-900/40">
+                  <tr
+                    v-for="deck in aiDecks"
+                    :key="deck.id"
+                    :class="selectedAiDeckId === deck.id ? 'bg-primary-50/60 dark:bg-primary-950/20' : ''"
+                  >
+                    <td class="ui-table-cell">
+                      <div class="font-medium text-gray-900 dark:text-white">{{ deck.name }}</div>
+                      <div class="text-xs text-gray-500 dark:text-gray-400">{{ deck.ai_player.name }}</div>
+                    </td>
+                    <td class="ui-table-cell text-gray-700 dark:text-gray-300">
+                      {{ deck.hero.name }}
+                    </td>
+                    <td class="ui-table-cell text-right font-semibold text-gray-900 dark:text-white">
+                      {{ deck.card_count }}
+                    </td>
+                    <td class="ui-table-cell">
+                      <span class="ui-status-badge ui-status-neutral capitalize">
+                        {{ deck.strategy }}
+                      </span>
+                    </td>
+                    <td class="ui-table-cell">
+                      <span
+                        :class="[
+                          'ui-status-badge',
+                          deck.is_pve_opponent ? 'ui-status-success' : 'ui-status-neutral'
+                        ]"
+                      >
+                        {{ deck.is_pve_opponent ? 'Visible' : 'Hidden' }}
+                      </span>
+                    </td>
+                    <td class="ui-table-cell text-right">
+                      <div class="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          class="ui-btn ui-btn-xs ui-btn-secondary"
+                          @click="editAiDeck(deck)"
+                        >
+                          <Pencil class="h-3.5 w-3.5" aria-hidden="true" />
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          class="ui-btn ui-btn-xs ui-btn-danger"
+                          :disabled="aiDeckSaving"
+                          @click="archiveAiDeck(deck)"
+                        >
+                          <Trash2 class="h-3.5 w-3.5" aria-hidden="true" />
+                          Archive
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
       </div>
     </main>
   </div>
@@ -332,7 +635,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ArrowLeft, Check, Copy, FileCode2, Loader2, Plus } from 'lucide-vue-next'
+import {
+  ArrowLeft,
+  Bot,
+  Check,
+  Copy,
+  FileCode2,
+  Loader2,
+  Pencil,
+  Plus,
+  Save,
+  Trash2
+} from 'lucide-vue-next'
 import axios from '../config/api'
 import BaseModal from '../components/modals/BaseModal.vue'
 import { useNotificationStore } from '../stores/notifications'
@@ -376,12 +690,80 @@ interface CardConfig {
   faction_slug: string | null
   art_url: string | null
   hero_slugs?: string[]
+  traits_with_data?: Array<{
+    slug: string
+    name: string
+    data: Record<string, unknown>
+  }>
 }
 
 interface ContentConfigResponse {
   title: TitleSummary
   heroes: HeroConfig[]
   cards: CardConfig[]
+}
+
+interface AIDeckConfig {
+  deck_size_limit: number
+  min_cards_in_deck: number
+  deck_card_max_count: number
+}
+
+interface AIDeckCard {
+  deck_card_id: number
+  card_id: number
+  card_slug: string
+  name: string
+  card_type: 'creature' | 'spell'
+  cost: number
+  attack: number | null
+  health: number | null
+  count: number
+  is_collectible: boolean
+  hero_slugs: string[]
+}
+
+interface AIDeck {
+  id: number
+  name: string
+  description: string
+  is_pve_opponent: boolean
+  strategy: AIStrategy
+  ai_player: {
+    id: number
+    name: string
+  }
+  hero: {
+    id: number
+    slug: string
+    name: string
+    health: number
+  }
+  card_count: number
+  cards: AIDeckCard[]
+}
+
+interface AIDeckListResponse {
+  title: TitleSummary
+  config: AIDeckConfig
+  decks: AIDeck[]
+}
+
+type AIStrategy = 'rush' | 'control' | 'combo' | 'aggressive' | 'defensive'
+
+interface AIDeckDraftCard {
+  card_id: number
+  count: number
+}
+
+interface AIDeckDraft {
+  id: number | null
+  name: string
+  description: string
+  hero_id: number | null
+  is_pve_opponent: boolean
+  strategy: AIStrategy
+  cards: AIDeckDraftCard[]
 }
 
 type YamlResourceType = 'hero' | 'card'
@@ -394,7 +776,8 @@ interface YamlResourceSummary {
 
 const tabs = [
   { id: 'heroes', name: 'Heroes' },
-  { id: 'cards', name: 'Cards' }
+  { id: 'cards', name: 'Cards' },
+  { id: 'ai-decks', name: 'AI Decks' }
 ] as const
 
 type TabId = typeof tabs[number]['id']
@@ -402,6 +785,8 @@ type TabId = typeof tabs[number]['id']
 const route = useRoute()
 const titleStore = useTitleStore()
 const notificationStore = useNotificationStore()
+
+const aiStrategies: AIStrategy[] = ['rush', 'control', 'combo', 'aggressive', 'defensive']
 
 const slug = computed(() => route.params.slug as string)
 const loading = ref(true)
@@ -411,6 +796,17 @@ const activeTab = ref<TabId>('heroes')
 const searchQuery = ref('')
 const cardTypeFilter = ref<'all' | 'creature' | 'spell'>('all')
 const scopeFilter = ref<'all' | 'global' | 'hero'>('all')
+const aiDecks = ref<AIDeck[]>([])
+const aiDeckConfig = ref<AIDeckConfig>({
+  deck_size_limit: 30,
+  min_cards_in_deck: 10,
+  deck_card_max_count: 9
+})
+const selectedAiDeckId = ref<number | null>(null)
+const aiDeckDraft = ref<AIDeckDraft | null>(null)
+const aiDeckSaving = ref(false)
+const aiCardSearch = ref('')
+const selectedAddCardId = ref('')
 const yamlModalOpen = ref(false)
 const selectedYamlResource = ref<YamlResourceSummary | null>(null)
 const yamlContent = ref('')
@@ -422,6 +818,13 @@ const pageTitle = computed(() => content.value?.title.name || titleStore.current
 const heroes = computed(() => content.value?.heroes || [])
 const cards = computed(() => content.value?.cards || [])
 const heroLookup = computed(() => new Map(heroes.value.map(hero => [hero.slug, hero])))
+const heroById = computed(() => new Map(heroes.value.map(hero => [hero.id, hero])))
+const cardById = computed(() => new Map(cards.value.map(card => [card.id, card])))
+const selectedAiDeck = computed(() => (
+  selectedAiDeckId.value == null
+    ? null
+    : aiDecks.value.find(deck => deck.id === selectedAiDeckId.value) || null
+))
 const yamlModalTitle = computed(() => (
   selectedYamlResource.value ? `${selectedYamlResource.value.name} YAML` : 'YAML Definition'
 ))
@@ -457,6 +860,66 @@ const filteredCards = computed(() => {
       card.slug.toLowerCase().includes(query)
     )
   })
+})
+
+const aiDeckDraftTotal = computed(() => (
+  aiDeckDraft.value?.cards.reduce((total, card) => total + normalizedDraftCount(card.count), 0) || 0
+))
+
+const selectedDraftHero = computed(() => (
+  aiDeckDraft.value?.hero_id ? heroById.value.get(aiDeckDraft.value.hero_id) || null : null
+))
+
+const selectedDraftCardIds = computed(() => new Set(
+  aiDeckDraft.value?.cards.map(card => card.card_id) || []
+))
+
+const availableAiDeckCards = computed(() => {
+  const query = aiCardSearch.value.toLowerCase()
+
+  return cards.value
+    .filter(card => !selectedDraftCardIds.value.has(card.id))
+    .filter(card => isCardAvailableForAiDraftHero(card))
+    .filter(card => {
+      if (!query) return true
+      return (
+        card.name.toLowerCase().includes(query) ||
+        card.slug.toLowerCase().includes(query)
+      )
+    })
+    .slice(0, 80)
+})
+
+const aiDeckDraftError = computed(() => {
+  const draft = aiDeckDraft.value
+  if (!draft) return ''
+  if (!draft.name.trim()) return 'Name is required.'
+  if (!draft.hero_id) return 'Hero is required.'
+
+  for (const draftCard of draft.cards) {
+    const card = cardById.value.get(draftCard.card_id)
+    if (!card) return 'One or more cards no longer exist.'
+    const count = normalizedDraftCount(draftCard.count)
+    if (count < 1) return 'Card counts must be at least 1.'
+    if (count > maxCountForAiDraftCard(draftCard)) {
+      return `${card.name} exceeds the allowed copy limit.`
+    }
+    if (!isCardAvailableForAiDraftHero(card)) {
+      return `${card.name} is not available to ${selectedDraftHero.value?.name || 'this hero'}.`
+    }
+  }
+
+  if (aiDeckDraftTotal.value > aiDeckConfig.value.deck_size_limit) {
+    return `Deck cannot exceed ${aiDeckConfig.value.deck_size_limit} cards.`
+  }
+  if (
+    draft.is_pve_opponent &&
+    aiDeckDraftTotal.value < aiDeckConfig.value.min_cards_in_deck
+  ) {
+    return `Visible PvE decks need at least ${aiDeckConfig.value.min_cards_in_deck} cards.`
+  }
+
+  return ''
 })
 
 const readStringArray = (value: unknown): string[] => {
@@ -504,6 +967,162 @@ const scopedCardsForHero = (hero: HeroConfig): CardConfig[] => (
   cards.value.filter(card => cardHeroSlugs(card).includes(hero.slug))
 )
 
+const normalizedDraftCount = (count: number): number => {
+  const numericCount = Number(count)
+  if (!Number.isFinite(numericCount)) return 0
+  return Math.max(0, Math.trunc(numericCount))
+}
+
+const isUniqueCard = (card: CardConfig): boolean => (
+  (card.traits_with_data || []).some(trait => trait.slug === 'unique')
+)
+
+const isCardAvailableForAiDraftHero = (card: CardConfig): boolean => {
+  const hero = selectedDraftHero.value
+  if (!hero) return true
+  const heroSlugs = cardHeroSlugs(card)
+  return heroSlugs.length === 0 || heroSlugs.includes(hero.slug)
+}
+
+const maxCountForAiDraftCard = (draftCard: AIDeckDraftCard): number => {
+  const card = cardById.value.get(draftCard.card_id)
+  if (card && isUniqueCard(card)) return 1
+  return aiDeckConfig.value.deck_card_max_count
+}
+
+const draftSourceCard = (draftCard: AIDeckDraftCard): CardConfig | undefined => (
+  cardById.value.get(draftCard.card_id)
+)
+
+const draftSourceDeckCard = (draftCard: AIDeckDraftCard): AIDeckCard | undefined => (
+  selectedAiDeck.value?.cards.find(card => card.card_id === draftCard.card_id)
+)
+
+const draftCardName = (draftCard: AIDeckDraftCard): string => (
+  draftSourceCard(draftCard)?.name || draftSourceDeckCard(draftCard)?.name || 'Unknown card'
+)
+
+const draftCardSlug = (draftCard: AIDeckDraftCard): string => (
+  draftSourceCard(draftCard)?.slug || draftSourceDeckCard(draftCard)?.card_slug || ''
+)
+
+const draftCardType = (draftCard: AIDeckDraftCard): string => (
+  draftSourceCard(draftCard)?.card_type || draftSourceDeckCard(draftCard)?.card_type || 'card'
+)
+
+const draftCardCost = (draftCard: AIDeckDraftCard): number | string => (
+  draftSourceCard(draftCard)?.cost ?? draftSourceDeckCard(draftCard)?.cost ?? '-'
+)
+
+const draftCardStats = (draftCard: AIDeckDraftCard): string => {
+  const card = draftSourceCard(draftCard)
+  const deckCard = draftSourceDeckCard(draftCard)
+  const cardType = card?.card_type || deckCard?.card_type
+  if (cardType !== 'creature') return '-'
+  const attack = card?.attack ?? deckCard?.attack ?? 0
+  const health = card?.health ?? deckCard?.health ?? 0
+  return `${attack} / ${health}`
+}
+
+const aiDeckToDraft = (deck: AIDeck): AIDeckDraft => ({
+  id: deck.id,
+  name: deck.name,
+  description: deck.description || '',
+  hero_id: deck.hero.id,
+  is_pve_opponent: deck.is_pve_opponent,
+  strategy: deck.strategy || 'rush',
+  cards: deck.cards.map(card => ({
+    card_id: card.card_id,
+    count: card.count
+  }))
+})
+
+const applyAiDeckResponse = (response: AIDeckListResponse): void => {
+  aiDeckConfig.value = response.config
+  aiDecks.value = response.decks || []
+
+  if (
+    selectedAiDeckId.value != null &&
+    !aiDecks.value.some(deck => deck.id === selectedAiDeckId.value)
+  ) {
+    selectedAiDeckId.value = null
+    aiDeckDraft.value = null
+  }
+}
+
+const upsertAiDeck = (deck: AIDeck): void => {
+  const index = aiDecks.value.findIndex(existingDeck => existingDeck.id === deck.id)
+  if (index >= 0) {
+    aiDecks.value.splice(index, 1, deck)
+  } else {
+    aiDecks.value.push(deck)
+  }
+}
+
+const editAiDeck = (deck: AIDeck): void => {
+  selectedAiDeckId.value = deck.id
+  aiDeckDraft.value = aiDeckToDraft(deck)
+  selectedAddCardId.value = ''
+  aiCardSearch.value = ''
+}
+
+const startNewAiDeck = (): void => {
+  selectedAiDeckId.value = null
+  selectedAddCardId.value = ''
+  aiCardSearch.value = ''
+  aiDeckDraft.value = {
+    id: null,
+    name: '',
+    description: '',
+    hero_id: heroes.value[0]?.id || null,
+    is_pve_opponent: false,
+    strategy: 'rush',
+    cards: []
+  }
+}
+
+const cancelAiDeckEdit = (): void => {
+  aiDeckDraft.value = null
+  selectedAiDeckId.value = null
+  selectedAddCardId.value = ''
+  aiCardSearch.value = ''
+}
+
+const closeAiDeckModal = (): void => {
+  if (aiDeckSaving.value) return
+  cancelAiDeckEdit()
+}
+
+const addCardToAiDeckDraft = (): void => {
+  if (!aiDeckDraft.value || !selectedAddCardId.value) return
+  const cardId = Number(selectedAddCardId.value)
+  if (!Number.isFinite(cardId)) return
+  if (aiDeckDraft.value.cards.some(card => card.card_id === cardId)) return
+
+  aiDeckDraft.value.cards.push({
+    card_id: cardId,
+    count: 1
+  })
+  selectedAddCardId.value = ''
+}
+
+const removeCardFromAiDeckDraft = (cardId: number): void => {
+  if (!aiDeckDraft.value) return
+  aiDeckDraft.value.cards = aiDeckDraft.value.cards.filter(card => card.card_id !== cardId)
+}
+
+const aiDeckPayload = (draft: AIDeckDraft) => ({
+  name: draft.name.trim(),
+  description: draft.description.trim(),
+  hero_id: draft.hero_id,
+  is_pve_opponent: draft.is_pve_opponent,
+  strategy: draft.strategy,
+  cards: draft.cards.map(card => ({
+    card_id: card.card_id,
+    count: normalizedDraftCount(card.count)
+  }))
+})
+
 const heroPowerName = (hero: HeroConfig): string => {
   return hero.hero_power?.name || 'Power'
 }
@@ -522,14 +1141,65 @@ const fetchContent = async (): Promise<void> => {
   try {
     loading.value = true
     error.value = null
-    const response = await axios.get<ContentConfigResponse>(`/builder/titles/${slug.value}/content/`)
-    content.value = response.data
+    const [contentResponse, aiDeckResponse] = await Promise.all([
+      axios.get<ContentConfigResponse>(`/builder/titles/${slug.value}/content/`),
+      axios.get<AIDeckListResponse>(`/builder/titles/${slug.value}/ai-decks/`)
+    ])
+    content.value = contentResponse.data
+    applyAiDeckResponse(aiDeckResponse.data)
   } catch (err) {
-    console.error('Error loading heroes and cards:', err)
-    error.value = 'Failed to load heroes and cards.'
+    console.error('Error loading content configuration:', err)
+    error.value = 'Failed to load content configuration.'
     notificationStore.handleApiError(err as Error)
   } finally {
     loading.value = false
+  }
+}
+
+const saveAiDeck = async (): Promise<void> => {
+  if (!aiDeckDraft.value || aiDeckDraftError.value) return
+
+  try {
+    aiDeckSaving.value = true
+    const payload = aiDeckPayload(aiDeckDraft.value)
+    const response = aiDeckDraft.value.id
+      ? await axios.patch<AIDeck>(
+        `/builder/titles/${slug.value}/ai-decks/${aiDeckDraft.value.id}/`,
+        payload
+      )
+      : await axios.post<AIDeck>(
+        `/builder/titles/${slug.value}/ai-decks/`,
+        payload
+      )
+
+    upsertAiDeck(response.data)
+    selectedAiDeckId.value = response.data.id
+    aiDeckDraft.value = aiDeckToDraft(response.data)
+    notificationStore.success('AI deck saved')
+  } catch (err) {
+    console.error('Error saving AI deck:', err)
+    notificationStore.handleApiError(err as Error)
+  } finally {
+    aiDeckSaving.value = false
+  }
+}
+
+const archiveAiDeck = async (deck: AIDeck): Promise<void> => {
+  if (!window.confirm(`Archive "${deck.name}"?`)) return
+
+  try {
+    aiDeckSaving.value = true
+    await axios.delete(`/builder/titles/${slug.value}/ai-decks/${deck.id}/`)
+    aiDecks.value = aiDecks.value.filter(existingDeck => existingDeck.id !== deck.id)
+    if (selectedAiDeckId.value === deck.id) {
+      cancelAiDeckEdit()
+    }
+    notificationStore.success('AI deck archived')
+  } catch (err) {
+    console.error('Error archiving AI deck:', err)
+    notificationStore.handleApiError(err as Error)
+  } finally {
+    aiDeckSaving.value = false
   }
 }
 
@@ -619,6 +1289,7 @@ onMounted(fetchContent)
 
 watch(slug, () => {
   closeYamlModal()
+  cancelAiDeckEdit()
   void fetchContent()
 })
 </script>

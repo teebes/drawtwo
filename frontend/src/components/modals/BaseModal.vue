@@ -15,7 +15,10 @@
 
         <!-- Modal Panel -->
         <div
-          class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:w-full sm:max-w-2xl dark:bg-gray-900 max-h-[90vh] flex flex-col"
+          :class="[
+            'relative flex max-h-[90vh] transform flex-col overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all dark:bg-gray-900 sm:w-full',
+            panelClass || 'sm:max-w-2xl'
+          ]"
         >
             <button
                 @click="close"
@@ -62,6 +65,7 @@
  *
  * Props:
  * - show (boolean, required): Controls the visibility of the modal
+ * - panelClass (string, optional): Additional sizing/layout classes for the modal panel
  *
  * Events:
  * - close: Emitted when the modal should be closed (clicking backdrop or close button)
@@ -79,6 +83,7 @@
  */
 defineProps<{
   show: boolean
+  panelClass?: string
 }>()
 
 const emit = defineEmits(['close'])
