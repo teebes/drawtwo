@@ -272,73 +272,100 @@ class MatchmakingManualRunView(APIView):
 
     permission_classes = [IsStaffPermission]
 
+    def _queued_scopes(self, title_id=None, ladder_type=None):
+        queryset = MatchmakingQueue.objects.filter(
+            status=MatchmakingQueue.STATUS_QUEUED
+        )
+        if title_id:
+            queryset = queryset.filter(deck__title_id=title_id)
+        if ladder_type:
+            queryset = queryset.filter(ladder_type=ladder_type)
+
+        return list(queryset.values_list('deck__title_id', 'ladder_type').distinct())
+
     def post(self, request):
         title_id = request.data.get('title_id')
         ladder_type = request.data.get('ladder_type')
 
         try:
+            if ladder_type and ladder_type not in dict(Game.LADDER_TYPE_CHOICES):
+                return Response(
+                    {'error': 'Invalid ladder type'}, status=status.HTTP_400_BAD_REQUEST
+                )
+
             if title_id:
                 try:
                     title = Title.objects.get(id=title_id)
                 except Title.DoesNotExist:
-                    return Response({'error': 'Title not found'}, status=status.HTTP_404_NOT_FOUND)
+                    return Response(
+                        {'error': 'Title not found'}, status=status.HTTP_404_NOT_FOUND
+                    )
 
-                if ladder_type and ladder_type not in dict(Game.LADDER_TYPE_CHOICES):
-                    return Response({'error': 'Invalid ladder type'}, status=status.HTTP_400_BAD_REQUEST)
+                scopes = self._queued_scopes(title_id=title.id, ladder_type=ladder_type)
+                if not scopes and ladder_type:
+                    scopes = [(title.id, ladder_type)]
 
-                matches_created = GameService.process_matchmaking(
-                    title.id,
-                    ladder_type=ladder_type,
-                )
+                matches_created = 0
+                for scope_title_id, scope_ladder_type in scopes:
+                    matches_created += GameService.process_matchmaking(
+                        scope_title_id,
+                        ladder_type=scope_ladder_type,
+                    )
                 logger.info(
-                    "Manual matchmaking run for title %s (%s) created %s matches",
+                    "Manual matchmaking run for title %s (%s) across %s queue "
+                    "scopes created %s matches",
                     title.id,
                     title.name,
+                    len(scopes),
                     matches_created,
                 )
-                return Response({
-                    'message': f'Processed matchmaking queue for {title.name}',
-                    'processed_titles': 1,
-                    'matches_created': matches_created,
-                })
-
-            title_queryset = MatchmakingQueue.objects.filter(status=MatchmakingQueue.STATUS_QUEUED)
-            if ladder_type:
-                if ladder_type not in dict(Game.LADDER_TYPE_CHOICES):
-                    return Response({'error': 'Invalid ladder type'}, status=status.HTTP_400_BAD_REQUEST)
-                title_queryset = title_queryset.filter(ladder_type=ladder_type)
-
-            title_ids = list(
-                title_queryset
-                .values_list('deck__title_id', flat=True)
-                .distinct()
-            )
-
-            if not title_ids:
-                return Response({
-                    'message': 'No queued players to process',
-                    'processed_titles': 0,
-                    'matches_created': 0,
-                })
-
-            total_matches = 0
-            for tid in title_ids:
-                total_matches += GameService.process_matchmaking(
-                    tid,
-                    ladder_type=ladder_type,
+                return Response(
+                    {
+                        'message': f'Processed matchmaking queue for {title.name}',
+                        'processed_titles': 1,
+                        'processed_ladders': len(scopes),
+                        'matches_created': matches_created,
+                    }
                 )
 
+            scopes = self._queued_scopes(ladder_type=ladder_type)
+
+            if not scopes:
+                return Response(
+                    {
+                        'message': 'No queued players to process',
+                        'processed_titles': 0,
+                        'processed_ladders': 0,
+                        'matches_created': 0,
+                    }
+                )
+
+            total_matches = 0
+            for tid, scope_ladder_type in scopes:
+                total_matches += GameService.process_matchmaking(
+                    tid,
+                    ladder_type=scope_ladder_type,
+                )
+
+            processed_title_count = len({tid for tid, _ in scopes})
             logger.info(
-                "Manual matchmaking run for %s titles created %s matches",
-                len(title_ids),
+                "Manual matchmaking run for %s titles across %s queue scopes "
+                "created %s matches",
+                processed_title_count,
+                len(scopes),
                 total_matches,
             )
 
-            return Response({
-                'message': f'Processed matchmaking for {len(title_ids)} title(s)',
-                'processed_titles': len(title_ids),
-                'matches_created': total_matches,
-            })
+            return Response(
+                {
+                    'message': (
+                        f'Processed matchmaking for {processed_title_count} title(s)'
+                    ),
+                    'processed_titles': processed_title_count,
+                    'processed_ladders': len(scopes),
+                    'matches_created': total_matches,
+                }
+            )
 
         except Exception as exc:
             logger.exception("Manual matchmaking run failed: %s", exc)

@@ -125,6 +125,24 @@ class GameService:
         )
 
     @staticmethod
+    def _schedule_matchmaking_after_ranked_game_finalized(game: Game) -> None:
+        if game.type != Game.GAME_TYPE_RANKED or not game.ladder_type or game.is_vs_ai:
+            return
+
+        if game.ladder_type not in dict(Game.LADDER_TYPE_CHOICES):
+            return
+
+        title_id = game.title_id
+        ladder_type = game.ladder_type
+
+        def enqueue_matchmaking():
+            from apps.gameplay.tasks import process_matchmaking
+
+            process_matchmaking.delay(title_id, ladder_type)
+
+        transaction.on_commit(enqueue_matchmaking)
+
+    @staticmethod
     def _ordered_ai_deck_card_ids(deck) -> list[int] | None:
         if not deck.is_ai_deck:
             return None
@@ -447,6 +465,7 @@ class GameService:
                     game.queue = []
                     game.turn_expires = None
                     game.save(update_fields=["status", "queue", "turn_expires"])
+                    GameService._schedule_matchmaking_after_ranked_game_finalized(game)
 
                     # Notify clients
                     abort_update = GameAbortedUpdate(
@@ -515,6 +534,9 @@ class GameService:
                                     f"Failed to update ELO ratings for game {game.id}: {e}"
                                 )
                                 # Continue - game has ended, ELO update is secondary
+                            GameService._schedule_matchmaking_after_ranked_game_finalized(
+                                game
+                            )
                             # Break out of the effect processing loop - game is over
                             break
 
@@ -789,6 +811,7 @@ class GameService:
                     game.queue = []
                     game.turn_expires = None
                     game.save(update_fields=["status", "queue", "turn_expires"])
+                    GameService._schedule_matchmaking_after_ranked_game_finalized(game)
 
                     # Notify clients
                     abort_update = GameAbortedUpdate(

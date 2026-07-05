@@ -295,6 +295,50 @@ class MatchmakingTests(TestCase):
             PlayerNotification.objects.filter(user=self.user_b, game=game).exists()
         )
 
+    def test_ranked_game_end_schedules_matchmaking_retry(self):
+        game = GameService.create_game(
+            self.deck_a,
+            self.deck_b,
+            randomize_starting_player=False,
+        )
+        game.type = Game.GAME_TYPE_RANKED
+        game.ladder_type = Game.LADDER_TYPE_DAILY
+        game.save(update_fields=["type", "ladder_type"])
+
+        GameService.step(game.id)
+
+        with patch.object(
+            GameService, "_schedule_matchmaking_after_ranked_game_finalized"
+        ) as schedule_matchmaking:
+            GameService.process_command(game.id, {"type": "cmd_concede"}, "side_a")
+            GameService.step(game.id)
+
+        game.refresh_from_db()
+        self.assertEqual(game.status, Game.GAME_STATUS_ENDED)
+        schedule_matchmaking.assert_called_once()
+        self.assertEqual(schedule_matchmaking.call_args.args[0].id, game.id)
+
+    def test_matchmaking_retry_hook_enqueues_title_ladder_after_commit(self):
+        game = GameService.create_game(
+            self.deck_a,
+            self.deck_b,
+            randomize_starting_player=False,
+        )
+        game.type = Game.GAME_TYPE_RANKED
+        game.ladder_type = Game.LADDER_TYPE_DAILY
+        game.save(update_fields=["type", "ladder_type"])
+
+        with patch("apps.gameplay.services.transaction.on_commit") as on_commit:
+            GameService._schedule_matchmaking_after_ranked_game_finalized(game)
+
+        on_commit.assert_called_once()
+        callback = on_commit.call_args.args[0]
+
+        with patch("apps.gameplay.tasks.process_matchmaking.delay") as delay:
+            callback()
+
+        delay.assert_called_once_with(self.title.id, Game.LADDER_TYPE_DAILY)
+
     def test_create_game_rejects_deck_with_too_many_copies(self):
         deck_card = self.deck_a.deckcard_set.first()
         deck_card.count = 10
