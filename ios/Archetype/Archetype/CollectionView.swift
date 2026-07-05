@@ -544,6 +544,7 @@ struct DeckEditorView: View {
     @EnvironmentObject private var authStore: AuthStore
     @StateObject private var model: DeckEditorViewModel
     @State private var hasLoaded = false
+    @State private var detailHero: Hero?
 
     let onSaved: (Int) -> Void
     let onCancel: () -> Void
@@ -598,6 +599,19 @@ struct DeckEditorView: View {
         .task {
             await loadInitialData()
         }
+        .sheet(item: $detailHero) { hero in
+            DeckHeroDetailSheet(
+                hero: hero,
+                isSelected: model.selectedHeroId == hero.id,
+                onSelect: {
+                    model.selectHero(hero)
+                    detailHero = nil
+                },
+                onDismiss: {
+                    detailHero = nil
+                }
+            )
+        }
     }
 
     private var topBar: some View {
@@ -641,16 +655,17 @@ struct DeckEditorView: View {
                 } else {
                     VStack(spacing: 10) {
                         ForEach(model.heroes) { hero in
-                            Button {
-                                model.selectHero(hero)
-                            } label: {
-                                DeckHeroChoiceRow(
-                                    hero: hero,
-                                    isSelected: model.selectedHeroId == hero.id
-                                )
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(model.isSaving)
+                            DeckHeroChoiceRow(
+                                hero: hero,
+                                isSelected: model.selectedHeroId == hero.id,
+                                isSelectionDisabled: model.isSaving,
+                                onSelect: {
+                                    model.selectHero(hero)
+                                },
+                                onShowDetails: {
+                                    detailHero = hero
+                                }
+                            )
                         }
                     }
                 }
@@ -752,9 +767,52 @@ private struct DeckFormField<Content: View>: View {
 private struct DeckHeroChoiceRow: View {
     let hero: Hero
     let isSelected: Bool
+    let isSelectionDisabled: Bool
+    let onSelect: () -> Void
+    let onShowDetails: () -> Void
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 10) {
+            Button(action: onSelect) {
+                heroSummary
+            }
+            .buttonStyle(.plain)
+            .disabled(isSelectionDisabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityValue(isSelected ? "Selected" : "Not selected")
+
+            VStack(spacing: 8) {
+                Button(action: onSelect) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 21, weight: .semibold))
+                        .foregroundStyle(isSelected ? ArchetypeTheme.gold2 : ArchetypeTheme.muted)
+                        .frame(width: 32, height: 24)
+                }
+                .buttonStyle(.plain)
+                .disabled(isSelectionDisabled)
+                .accessibilityLabel(isSelected ? "\(hero.name) selected" : "Select \(hero.name)")
+
+                Button(action: onShowDetails) {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                .buttonStyle(DeckHeroInfoButtonStyle(isSelected: isSelected))
+                .accessibilityLabel("View \(hero.name) details")
+            }
+            .frame(width: 32)
+        }
+        .padding(12)
+        .background(isSelected ? ArchetypeTheme.gold.opacity(0.09) : ArchetypeTheme.subtleSurface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isSelected ? ArchetypeTheme.gold2.opacity(0.65) : ArchetypeTheme.border, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var heroSummary: some View {
+        HStack(spacing: 12) {
             heroArt
                 .frame(width: 46, height: 64)
                 .clipShape(RoundedRectangle(cornerRadius: 7))
@@ -769,7 +827,7 @@ private struct DeckHeroChoiceRow: View {
                     .foregroundStyle(ArchetypeTheme.text)
                     .lineLimit(1)
 
-                if let detail = heroDetail {
+                if let detail = hero.deckEditorHeroDetail {
                     Text(detail)
                         .font(.archetypeBody(12))
                         .foregroundStyle(ArchetypeTheme.muted)
@@ -778,47 +836,15 @@ private struct DeckHeroChoiceRow: View {
                 }
             }
 
-            Spacer(minLength: 8)
-
-            if let health = hero.health {
-                VStack(spacing: 2) {
-                    Text("Health")
-                        .font(.archetypeBody(9, weight: .bold))
-                        .foregroundStyle(ArchetypeTheme.muted)
-                    Text("\(health)")
-                        .font(.archetypeBody(17, weight: .black))
-                        .foregroundStyle(ArchetypeTheme.text)
-                }
-                .padding(.horizontal, 11)
-                .padding(.vertical, 8)
-                .background(ArchetypeTheme.subtleSurface)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-
-            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(isSelected ? ArchetypeTheme.gold2 : ArchetypeTheme.muted)
+            Spacer(minLength: 4)
         }
-        .padding(12)
-        .background(isSelected ? ArchetypeTheme.gold.opacity(0.09) : ArchetypeTheme.subtleSurface)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? ArchetypeTheme.gold2.opacity(0.65) : ArchetypeTheme.border, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
 
-    private var heroDetail: String? {
-        if let description = hero.heroPower?["description"]?.stringValue, !description.isEmpty {
-            return description
-        }
-
-        if let name = hero.heroPower?["name"]?.stringValue, !name.isEmpty {
-            return name
-        }
-
-        return hero.faction
+    private var accessibilityLabel: String {
+        let detail = hero.deckEditorHeroDetail.map { ", \($0)" } ?? ""
+        return "\(hero.name)\(detail)"
     }
 
     @ViewBuilder
@@ -843,6 +869,211 @@ private struct DeckHeroChoiceRow: View {
                 .font(.archetypeBody(18, weight: .black))
                 .foregroundStyle(ArchetypeTheme.sky)
         }
+    }
+}
+
+private struct DeckHeroHealthBadge: View {
+    let health: Int
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text("Health")
+                .font(.archetypeBody(9, weight: .bold))
+                .foregroundStyle(ArchetypeTheme.muted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+
+            Text("\(health)")
+                .font(.archetypeBody(17, weight: .black))
+                .foregroundStyle(ArchetypeTheme.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(width: 50, height: 58)
+        .background(ArchetypeTheme.subtleSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct DeckHeroInfoButtonStyle: ButtonStyle {
+    let isSelected: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(isSelected ? ArchetypeTheme.gold2 : ArchetypeTheme.muted)
+            .frame(width: 32, height: 32)
+            .background(configuration.isPressed ? ArchetypeTheme.pressedSurface : ArchetypeTheme.panel)
+            .overlay(
+                RoundedRectangle(cornerRadius: 7)
+                    .stroke(isSelected ? ArchetypeTheme.gold2.opacity(0.48) : ArchetypeTheme.border, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 7))
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+    }
+}
+
+private struct DeckHeroDetailSheet: View {
+    let hero: Hero
+    let isSelected: Bool
+    let onSelect: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        ArchetypeScreen {
+            VStack(spacing: 0) {
+                header
+                    .padding(.horizontal, 18)
+                    .padding(.top, 20)
+                    .padding(.bottom, 16)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        heroOverview
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 20)
+                }
+
+                actionBar
+                    .padding(18)
+                    .background(ArchetypeTheme.panel)
+                    .overlay(alignment: .top) {
+                        Rectangle()
+                            .fill(ArchetypeTheme.border)
+                            .frame(height: 1)
+                    }
+            }
+            .frame(maxWidth: 520)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Hero Details")
+                    .font(.archetypeBody(22, weight: .bold))
+                    .foregroundStyle(ArchetypeTheme.text)
+
+                Text(hero.name)
+                    .font(.archetypeBody(14))
+                    .foregroundStyle(ArchetypeTheme.muted)
+            }
+
+            Spacer(minLength: 12)
+
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .bold))
+            }
+            .buttonStyle(IconGameButtonStyle())
+            .accessibilityLabel("Close")
+        }
+    }
+
+    private var heroOverview: some View {
+        HStack(alignment: .top, spacing: 16) {
+            heroArt
+                .frame(width: 108, height: 144)
+                .clipShape(RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius))
+                .overlay(
+                    RoundedRectangle(cornerRadius: ArchetypeTheme.controlRadius)
+                        .stroke(ArchetypeTheme.border, lineWidth: 1)
+                )
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
+                    Text(hero.name)
+                        .font(.archetypeDisplay(24, weight: .bold))
+                        .foregroundStyle(ArchetypeTheme.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    if let health = hero.health {
+                        DeckHeroHealthBadge(health: health)
+                    }
+                }
+
+                Text(hero.deckEditorHeroPowerDescription ?? "No hero power description available.")
+                    .font(.archetypeBody(16))
+                    .foregroundStyle(ArchetypeTheme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(14)
+        .background(ArchetypeTheme.subtleSurface)
+        .overlay(
+            RoundedRectangle(cornerRadius: ArchetypeTheme.surfaceRadius)
+                .stroke(ArchetypeTheme.border, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: ArchetypeTheme.surfaceRadius))
+    }
+
+    private var actionBar: some View {
+        HStack(spacing: 12) {
+            Button(action: onDismiss) {
+                Text("Close")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(SecondaryGameButtonStyle())
+
+            Button(action: onSelect) {
+                Text(isSelected ? "Selected" : "Select Hero")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(PrimaryGameButtonStyle())
+            .disabled(isSelected)
+            .opacity(isSelected ? 0.58 : 1)
+        }
+    }
+
+    @ViewBuilder
+    private var heroArt: some View {
+        if let artUrl = hero.resolvedArtUrl, let url = URL(string: artUrl) {
+            CachedRemoteImage(url: url) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+            } placeholder: {
+                fallbackHero
+            }
+        } else {
+            fallbackHero
+        }
+    }
+
+    private var fallbackHero: some View {
+        ZStack {
+            ArchetypeTheme.sky.opacity(0.16)
+            Text(hero.name.prefix(1).uppercased())
+                .font(.archetypeBody(30, weight: .black))
+                .foregroundStyle(ArchetypeTheme.sky)
+        }
+    }
+}
+
+private extension Hero {
+    var deckEditorHeroDetail: String? {
+        deckEditorHeroPowerDescription ?? deckEditorHeroPowerName ?? deckEditorFaction
+    }
+
+    var deckEditorHeroPowerName: String? {
+        nonEmpty(heroPower?["name"]?.stringValue)
+    }
+
+    var deckEditorHeroPowerDescription: String? {
+        nonEmpty(heroPower?["description"]?.stringValue)
+    }
+
+    var deckEditorFaction: String? {
+        nonEmpty(faction)
+    }
+
+    private func nonEmpty(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 
