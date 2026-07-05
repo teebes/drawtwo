@@ -15,8 +15,6 @@
 		8A0000092C9B410100000001 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A00000A2C9B410100000001 /* KeychainStore.swift */; };
 		8A00000B2C9B410100000001 /* AuthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A00000C2C9B410100000001 /* AuthStore.swift */; };
 		8A00000D2C9B410100000001 /* DrawTwoWebSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A00000E2C9B410100000001 /* DrawTwoWebSocket.swift */; };
-		8A0000492C9B410100000001 /* PushNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A00004A2C9B410100000001 /* PushNotificationManager.swift */; };
-		8A00004B2C9B410100000001 /* CachedRemoteImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A00004C2C9B410100000001 /* CachedRemoteImage.swift */; };
 		8A00000F2C9B410100000001 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0000102C9B410100000001 /* RootView.swift */; };
 		8A0000112C9B410100000001 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0000122C9B410100000001 /* LoginView.swift */; };
 		8A0000132C9B410100000001 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0000142C9B410100000001 /* DashboardView.swift */; };
@@ -35,6 +33,8 @@
 		8A00003F2C9B410100000001 /* Inter.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8A0000402C9B410100000001 /* Inter.ttf */; };
 		8A0000432C9B410100000001 /* drawtwo_logo.png in Resources */ = {isa = PBXBuildFile; fileRef = 8A0000442C9B410100000001 /* drawtwo_logo.png */; };
 		8A0000452C9B410100000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8A0000462C9B410100000001 /* Assets.xcassets */; };
+		8A0000492C9B410100000001 /* PushNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A00004A2C9B410100000001 /* PushNotificationManager.swift */; };
+		8A00004B2C9B410100000001 /* CachedRemoteImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A00004C2C9B410100000001 /* CachedRemoteImage.swift */; };
 		8A00004D2C9B410100000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 8A00004E2C9B410100000001 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
@@ -46,8 +46,6 @@
 		8A00000A2C9B410100000001 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		8A00000C2C9B410100000001 /* AuthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthStore.swift; sourceTree = "<group>"; };
 		8A00000E2C9B410100000001 /* DrawTwoWebSocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawTwoWebSocket.swift; sourceTree = "<group>"; };
-		8A00004A2C9B410100000001 /* PushNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationManager.swift; sourceTree = "<group>"; };
-		8A00004C2C9B410100000001 /* CachedRemoteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedRemoteImage.swift; sourceTree = "<group>"; };
 		8A0000102C9B410100000001 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		8A0000122C9B410100000001 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		8A0000142C9B410100000001 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
@@ -69,6 +67,8 @@
 		8A0000442C9B410100000001 /* drawtwo_logo.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = drawtwo_logo.png; sourceTree = "<group>"; };
 		8A0000462C9B410100000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		8A0000472C9B410100000001 /* Archetype.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Archetype.entitlements; sourceTree = "<group>"; };
+		8A00004A2C9B410100000001 /* PushNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationManager.swift; sourceTree = "<group>"; };
+		8A00004C2C9B410100000001 /* CachedRemoteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedRemoteImage.swift; sourceTree = "<group>"; };
 		8A00004E2C9B410100000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -367,11 +367,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APP_DISPLAY_NAME = "Archetype Dev";
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				APS_ENVIRONMENT = development;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Archetype/Archetype.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = X84Q7QHUZJ;
 				GENERATE_INFOPLIST_FILE = NO;
 				GOOGLE_IOS_CLIENT_ID = "291299812498-b4pjfjce5uoiv4i9p5vpmt629o75qacj.apps.googleusercontent.com";
@@ -396,11 +396,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APP_DISPLAY_NAME = Archetype;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				APS_ENVIRONMENT = production;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Archetype/Archetype.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = X84Q7QHUZJ;
 				GENERATE_INFOPLIST_FILE = NO;
 				GOOGLE_IOS_CLIENT_ID = "291299812498-q4kg9bs8a9mivm6ne0cejohtt273c2a4.apps.googleusercontent.com";
@@ -410,7 +410,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.morelsoft.drawtwo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
