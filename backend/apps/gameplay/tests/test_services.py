@@ -216,6 +216,44 @@ class MatchmakingTests(TestCase):
         ).count()
         self.assertEqual(game_count, 2)
 
+    def test_matchmaking_initial_step_runs_after_commit(self):
+        queue_a = MatchmakingQueue.objects.create(
+            user=self.user_a,
+            deck=self.deck_a,
+            elo_rating=1500,
+            status=MatchmakingQueue.STATUS_QUEUED,
+            ladder_type=Game.LADDER_TYPE_RAPID,
+        )
+        MatchmakingQueue.objects.create(
+            user=self.user_b,
+            deck=self.deck_b,
+            elo_rating=1500,
+            status=MatchmakingQueue.STATUS_QUEUED,
+            ladder_type=Game.LADDER_TYPE_RAPID,
+        )
+
+        with patch("apps.gameplay.services.transaction.on_commit") as on_commit:
+            with patch("apps.gameplay.tasks.step.delay") as step_delay:
+                with patch(
+                    "apps.gameplay.tasks.send_push_notification_event.delay"
+                ) as push_delay:
+                    matches_created = GameService.process_matchmaking(
+                        self.title.id,
+                        ladder_type=Game.LADDER_TYPE_RAPID,
+                    )
+
+                    self.assertEqual(matches_created, 1)
+                    step_delay.assert_not_called()
+                    push_delay.assert_not_called()
+                    self.assertEqual(on_commit.call_count, 3)
+
+                    queue_a.refresh_from_db()
+                    for call in on_commit.call_args_list:
+                        call.args[0]()
+
+                    step_delay.assert_called_once_with(queue_a.game_id)
+                    self.assertEqual(push_delay.call_count, 2)
+
     def test_allow_new_daily_game_after_previous_completes(self):
         """Test that players can be matched again after their previous daily game completes."""
         # Create a COMPLETED daily ranked game between user_a and user_b

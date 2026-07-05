@@ -2017,7 +2017,7 @@ class GameService:
                 # Kick off first step to initialize the game
                 from apps.gameplay.tasks import step
 
-                step.delay(game.id)
+                transaction.on_commit(lambda game_id=game.id: step.delay(game_id))
 
                 # Notify both players via websocket
                 from apps.gameplay.notifications import send_matchmaking_success
