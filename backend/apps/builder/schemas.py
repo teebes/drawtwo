@@ -158,7 +158,9 @@ Trait = Annotated[
 
 
 class DeckScript(BaseModel):
-    strategy: Literal["rush", "control", "combo", "aggressive", "defensive"] = "rush"
+    strategy: Literal[
+        "rush", "control", "combo", "aggressive", "defensive", "smart"
+    ] = "rush"
     opening: List[dict] = Field(default_factory=list)
 
 

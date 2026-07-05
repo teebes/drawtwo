@@ -19,7 +19,7 @@ from .services import TitleService
 
 User = get_user_model()
 
-AI_DECK_STRATEGIES = {"rush", "control", "combo", "aggressive", "defensive"}
+AI_DECK_STRATEGIES = {"rush", "control", "combo", "aggressive", "defensive", "smart"}
 AI_DECK_DRAW_MODES = {"shuffle", "ordered"}
 
 

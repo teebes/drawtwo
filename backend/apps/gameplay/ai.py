@@ -4,7 +4,7 @@ from typing import Any
 
 from apps.builder.schemas import DeckScript
 from apps.gameplay.agents.legal import list_legal_commands
-from apps.gameplay.agents.policies.scripted import ScriptedPolicy
+from apps.gameplay.agents.policies import policy_for_script
 from apps.gameplay.schemas.commands import Command, EndTurnCommand
 from apps.gameplay.schemas.effects import Effect
 from apps.gameplay.schemas.game import GameState
@@ -52,7 +52,7 @@ class AIMoveChooser:
     @staticmethod
     def choose_command(state: GameState, script: DeckScript) -> Command | None:
         legal_commands = list_legal_commands(state, state.active)
-        return ScriptedPolicy(script).select_command(state, legal_commands)
+        return policy_for_script(script).select_command(state, legal_commands)
 
     @staticmethod
     def _scripted_decision(
@@ -60,15 +60,15 @@ class AIMoveChooser:
         deck,
         legal_commands: list[Command],
         *,
-        policy: str = "scripted",
+        policy: str = "",
         error: str = "",
     ) -> AIDecision:
         script = DeckScript.model_validate(deck.script or {})
-        command = ScriptedPolicy(script).select_command(state, legal_commands)
+        command = policy_for_script(script).select_command(state, legal_commands)
         return AIDecision(
             command=command,
             actor_kind="scripted_ai",
-            policy=policy,
+            policy=policy or ("smart" if script.strategy == "smart" else "scripted"),
             error=error,
         )
 

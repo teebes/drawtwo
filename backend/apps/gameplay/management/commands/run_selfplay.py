@@ -3,7 +3,7 @@ from django.core.management.base import BaseCommand, CommandError
 from apps.builder.schemas import DeckScript
 from apps.collection.models import Deck
 from apps.gameplay.agents.legal import list_legal_commands
-from apps.gameplay.agents.policies.scripted import ScriptedPolicy
+from apps.gameplay.agents.policies import policy_for_script
 from apps.gameplay.agents.simulator import apply_command, apply_effects
 from apps.gameplay.models import Game
 from apps.gameplay.schemas.effects import StartGameEffect
@@ -65,10 +65,10 @@ class Command(BaseCommand):
                 state = start_result.state
 
                 policies = {
-                    "side_a": ScriptedPolicy(
+                    "side_a": policy_for_script(
                         DeckScript.model_validate(deck_a.script or {})
                     ),
-                    "side_b": ScriptedPolicy(
+                    "side_b": policy_for_script(
                         DeckScript.model_validate(deck_b.script or {})
                     ),
                 }

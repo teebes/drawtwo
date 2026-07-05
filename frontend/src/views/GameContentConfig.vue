@@ -880,7 +880,7 @@ interface AIDeckListResponse {
   decks: AIDeck[]
 }
 
-type AIStrategy = 'rush' | 'control' | 'combo' | 'aggressive' | 'defensive'
+type AIStrategy = 'rush' | 'control' | 'combo' | 'aggressive' | 'defensive' | 'smart'
 type AIDeckDrawMode = 'shuffle' | 'ordered'
 
 interface AIDeckDraftCard {
@@ -921,7 +921,7 @@ const route = useRoute()
 const titleStore = useTitleStore()
 const notificationStore = useNotificationStore()
 
-const aiStrategies: AIStrategy[] = ['rush', 'control', 'combo', 'aggressive', 'defensive']
+const aiStrategies: AIStrategy[] = ['rush', 'control', 'combo', 'aggressive', 'defensive', 'smart']
 
 const slug = computed(() => route.params.slug as string)
 const loading = ref(true)
