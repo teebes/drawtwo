@@ -733,6 +733,11 @@ final class GameDetailViewModel: ObservableObject {
         isRematchLoading = false
     }
 
+    func prepareForSocketSnapshotSync() {
+        hasReceivedInitialSocketSnapshot = false
+        liveUpdateBatch = []
+    }
+
     func load(gameId: Int, using authStore: AuthStore, guestAccessToken: String? = nil) async {
         isLoading = true
         errorMessage = nil
@@ -829,12 +834,16 @@ final class GameDetailViewModel: ObservableObject {
 
         do {
             let payload = try JSONDecoder().decode(JSONValue.self, from: data)
+            let state = payload["state"]
+            let hasStatePayload = state?.objectValue != nil
             let shouldPublishLiveBatch = hasReceivedInitialSocketSnapshot
-            hasReceivedInitialSocketSnapshot = true
+            if hasStatePayload {
+                hasReceivedInitialSocketSnapshot = true
+            }
             let previousWinner = winner
 
             guard
-                let state = payload["state"],
+                let state,
                 state.objectValue != nil
             else {
                 appendErrors(from: payload)
@@ -1699,6 +1708,8 @@ struct GameDetailView: View {
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else {
                 socket.sendPresence(active: false)
+                socket.disconnect()
+                model.prepareForSocketSnapshotSync()
                 return
             }
             Task {
@@ -1878,6 +1889,7 @@ struct GameDetailView: View {
 
     private func connectSocketIfPossible() {
         if let guestAccessToken {
+            model.prepareForSocketSnapshotSync()
             socket.connect(path: "/ws/game/\(gameId)/", guestToken: guestAccessToken)
             socket.sendPresence(active: scenePhase == .active)
             return
@@ -1886,6 +1898,7 @@ struct GameDetailView: View {
         guard let accessToken = authStore.currentAccessToken else {
             return
         }
+        model.prepareForSocketSnapshotSync()
         socket.connect(path: "/ws/game/\(gameId)/", accessToken: accessToken)
         socket.sendPresence(active: scenePhase == .active)
     }

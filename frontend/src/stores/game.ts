@@ -409,7 +409,10 @@ export const useGameStore = defineStore('game', {
       // Store game ID for reconnection attempts
       this.currentGameId = gameId
       this.intentionalDisconnect = false
-      this.awaitingInitialUpdateSnapshot = !isReconnecting
+      // The server sends a full state + historical update snapshot immediately
+      // after every socket open. Keep it in the log, but never replay it as
+      // live animation after reconnecting from background or network loss.
+      this.awaitingInitialUpdateSnapshot = true
 
       const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
       const baseUrl = getBaseUrl().replace(/^https?:/, protocol + ':')
@@ -699,8 +702,11 @@ export const useGameStore = defineStore('game', {
         return
       }
 
-      const isInitialSnapshot = this.awaitingInitialUpdateSnapshot
-      this.awaitingInitialUpdateSnapshot = false
+      const hasStatePayload = Boolean(data.state)
+      const isInitialSnapshot = this.awaitingInitialUpdateSnapshot && hasStatePayload
+      if (hasStatePayload) {
+        this.awaitingInitialUpdateSnapshot = false
+      }
       let sawGameOver = false
 
       // Handle errors first
