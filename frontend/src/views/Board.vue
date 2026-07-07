@@ -398,7 +398,7 @@
 <script setup lang="ts">
 import { watch, computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { CardInPlay, Creature, Side } from '../types/game'
+import type { CardInPlay, Creature, LadderType, Side } from '../types/game'
 import { useAuthStore } from '../stores/auth'
 import { useTitleStore } from '../stores/title'
 import { useGameStore } from '../stores/game'
@@ -458,7 +458,8 @@ const {
   liveUpdateBatchId,
   canUseHero,
   wsStatus,
-  currentGameType
+  currentGameType,
+  currentLadderType
 } = storeToRefs(gameStore)
 
 const isIntroGame = computed(() => {
@@ -496,6 +497,7 @@ interface ActiveGameSummary {
     id: number
     name: string
     type: 'pve' | 'ranked' | 'friendly' | 'intro'
+    ladder_type: LadderType | null
     is_user_turn: boolean
 }
 
@@ -709,9 +711,32 @@ const isAutoSwitchingGame = computed(() => autoSwitchLookupInFlight.value || aut
 
 function getNextGame(games: ActiveGameSummary[]): ActiveGameSummary | null {
     const currentGameId = Number(gameId.value)
-    return games.find(game =>
+    const availableGames = games.filter(game =>
         game.is_user_turn && game.id !== currentGameId
-    ) ?? null
+    )
+
+    if (currentGameType.value === 'ranked' && currentLadderType.value === 'rapid') {
+        return null
+    }
+
+    if (currentGameType.value === 'pve') {
+        return availableGames.find(isRapidRankedGame) ?? null
+    }
+
+    return (
+        availableGames.find(isRapidRankedGame) ??
+        availableGames.find(isPvpGame) ??
+        availableGames.find(game => game.type === 'pve') ??
+        null
+    )
+}
+
+function isRapidRankedGame(game: ActiveGameSummary): boolean {
+    return game.type === 'ranked' && game.ladder_type === 'rapid'
+}
+
+function isPvpGame(game: ActiveGameSummary): boolean {
+    return game.type === 'ranked' || game.type === 'friendly'
 }
 
 // Time control countdown

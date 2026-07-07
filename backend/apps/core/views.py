@@ -246,6 +246,7 @@ def title_games(request, slug):
                 id=game.id,
                 name=opposing_name,
                 type=game.type,
+                ladder_type=game.ladder_type,
                 is_user_turn=is_user_turn,
             )
         )

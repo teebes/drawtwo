@@ -5,7 +5,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from apps.authentication.models import User
-from apps.builder.models import CardTemplate, HeroTemplate, Title
+from apps.builder.models import AIPlayer, CardTemplate, HeroTemplate, Title
 from apps.collection.models import Deck, DeckCard
 from apps.gameplay.models import (
     FriendlyChallenge,
@@ -14,7 +14,11 @@ from apps.gameplay.models import (
     PushDevice,
     PushNotificationEvent,
 )
-from apps.gameplay.push import APNsClient, enqueue_friend_challenge_notification
+from apps.gameplay.push import (
+    APNsClient,
+    enqueue_friend_challenge_notification,
+    enqueue_turn_ready_notification,
+)
 from apps.gameplay.services import GameService
 
 
@@ -135,6 +139,16 @@ class PushNotificationTriggerTests(TestCase):
             name="Deck B",
             hero=self.hero_b,
         )
+        self.ai_player = AIPlayer.objects.create(
+            name="Push AI",
+            difficulty=AIPlayer.AI_DIFFICULTY_EASY,
+        )
+        self.ai_deck = Deck.objects.create(
+            title=self.title,
+            ai_player=self.ai_player,
+            name="AI Deck",
+            hero=self.hero_b,
+        )
         for index in range(4):
             card = CardTemplate.objects.create(
                 title=self.title,
@@ -144,6 +158,7 @@ class PushNotificationTriggerTests(TestCase):
             )
             DeckCard.objects.create(deck=self.deck_a, card=card)
             DeckCard.objects.create(deck=self.deck_b, card=card)
+            DeckCard.objects.create(deck=self.ai_deck, card=card)
 
     def test_turn_ready_push_event_created_when_main_turn_starts(self):
         game = GameService.create_game(
@@ -168,6 +183,49 @@ class PushNotificationTriggerTests(TestCase):
         )
         self.assertEqual(event.user, self.user_a)
         self.assertEqual(event.data["game_id"], game.id)
+
+    def test_turn_ready_push_event_skipped_for_pve_game(self):
+        game = Game.objects.create(
+            title=self.title,
+            side_a=self.deck_a,
+            side_b=self.ai_deck,
+            type=Game.GAME_TYPE_PVE,
+            status=Game.GAME_STATUS_IN_PROGRESS,
+            state={
+                "phase": "main",
+                "active": "side_a",
+                "ai_sides": ["side_b"],
+                "heroes": {
+                    "side_a": {
+                        "hero_id": "side_a_hero",
+                        "template_slug": self.hero_a.slug,
+                        "health": 30,
+                        "name": self.hero_a.name,
+                        "hero_power": {},
+                    },
+                    "side_b": {
+                        "hero_id": "side_b_hero",
+                        "template_slug": self.hero_b.slug,
+                        "health": 30,
+                        "name": self.hero_b.name,
+                        "hero_power": {},
+                    },
+                },
+            },
+        )
+
+        event = enqueue_turn_ready_notification(
+            game=game,
+            side="side_a",
+            game_state=game.game_state,
+        )
+
+        self.assertIsNone(event)
+        self.assertFalse(
+            PushNotificationEvent.objects.filter(
+                notification_type=PushNotificationEvent.TYPE_TURN_READY
+            ).exists()
+        )
 
     @patch("apps.gameplay.push.is_user_live_in_game", return_value=True)
     def test_turn_ready_push_event_skipped_when_player_is_live_in_game(

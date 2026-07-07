@@ -102,6 +102,8 @@ def is_turn_ready_for_side(game_state, side: str) -> bool:
 def enqueue_turn_ready_notification(*, game, side: str, game_state):
     if game.status in (game.GAME_STATUS_ENDED, game.GAME_STATUS_ABORTED):
         return None
+    if game.type == game.GAME_TYPE_PVE:
+        return None
     if side in game_state.ai_sides:
         return None
     if not is_turn_ready_for_side(game_state, side):

@@ -644,6 +644,13 @@ final class GameDetailViewModel: ObservableObject {
         gameJSON?["game_type"]?.stringValue ?? ""
     }
 
+    var ladderType: LadderType? {
+        guard let rawValue = gameJSON?["ladder_type"]?.stringValue else {
+            return nil
+        }
+        return LadderType(rawValue: rawValue)
+    }
+
     var canRequestRematch: Bool {
         winner != "none" && gameType == "friendly"
     }
@@ -717,7 +724,27 @@ final class GameDetailViewModel: ObservableObject {
     }
 
     func nextGame(currentGameId: Int) -> GameSummary? {
-        activeGames.first { $0.isUserTurn && $0.id != currentGameId }
+        let availableGames = activeGames.filter { $0.isUserTurn && $0.id != currentGameId }
+
+        if gameType == "ranked", ladderType == .rapid {
+            return nil
+        }
+
+        if gameType == "pve" {
+            return availableGames.first(where: Self.isRapidRankedGame)
+        }
+
+        return availableGames.first(where: Self.isRapidRankedGame)
+            ?? availableGames.first(where: Self.isPvpGame)
+            ?? availableGames.first { $0.type == "pve" }
+    }
+
+    private static func isRapidRankedGame(_ game: GameSummary) -> Bool {
+        game.type == "ranked" && game.ladderType == .rapid
+    }
+
+    private static func isPvpGame(_ game: GameSummary) -> Bool {
+        game.type == "ranked" || game.type == "friendly"
     }
 
     func resetForGameLoad() {

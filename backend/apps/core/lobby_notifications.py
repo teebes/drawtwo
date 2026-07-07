@@ -30,7 +30,6 @@ def get_title_lobby_badge_count(title: Title, user) -> int:
         type__in=[
             Game.GAME_TYPE_RANKED,
             Game.GAME_TYPE_FRIENDLY,
-            Game.GAME_TYPE_PVE,
         ],
         status=Game.GAME_STATUS_IN_PROGRESS,
     )

@@ -757,6 +757,7 @@ export const useGameStore = defineStore('game', {
         if (oldActive !== this.gameState.active &&
             this.gameState.active === this.viewer &&
             !this.gameOver.isGameOver &&
+            this.currentGameType !== 'pve' &&
             document.visibilityState !== 'visible') {
            const notificationStore = this.getNotificationStore()
            notificationStore.sendBrowserNotification("It's your turn!")

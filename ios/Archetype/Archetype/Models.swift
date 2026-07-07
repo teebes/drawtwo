@@ -159,6 +159,7 @@ struct GameSummary: Codable, Identifiable, Equatable {
     let id: Int
     let name: String
     let type: String
+    let ladderType: LadderType?
     let isUserTurn: Bool
 }
 
@@ -328,7 +329,7 @@ struct TitleNotification: Codable, Identifiable, Equatable {
         switch type {
         case "game_challenge", "friend_request":
             return true
-        case "game_ranked", "game_friendly", "game_pve":
+        case "game_ranked", "game_friendly":
             return isUserTurn == true
         default:
             return false

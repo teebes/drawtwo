@@ -193,6 +193,16 @@ class TitleNotificationsOrderingTestCase(TestCase):
         self.deck = self._create_deck(self.user, "Player Deck")
         self.opponent_deck = self._create_deck(self.opponent, "Opponent Deck")
         self.challenger_deck = self._create_deck(self.challenger, "Challenger Deck")
+        self.ai_player = AIPlayer.objects.create(
+            name="Notification AI",
+            difficulty=AIPlayer.AI_DIFFICULTY_EASY,
+        )
+        self.ai_deck = Deck.objects.create(
+            title=self.title,
+            ai_player=self.ai_player,
+            name="AI Deck",
+            hero=self.hero,
+        )
 
     def _create_deck(self, user, name):
         return Deck.objects.create(
@@ -310,6 +320,14 @@ class TitleNotificationsOrderingTestCase(TestCase):
         Game.objects.create(
             title=self.title,
             side_a=self.deck,
+            side_b=self.ai_deck,
+            type=Game.GAME_TYPE_PVE,
+            status=Game.GAME_STATUS_IN_PROGRESS,
+            state=self._game_state("side_a"),
+        )
+        Game.objects.create(
+            title=self.title,
+            side_a=self.deck,
             side_b=self.opponent_deck,
             type=Game.GAME_TYPE_FRIENDLY,
             status=Game.GAME_STATUS_IN_PROGRESS,
@@ -330,6 +348,25 @@ class TitleNotificationsOrderingTestCase(TestCase):
         )
 
         self.assertEqual(get_title_lobby_badge_count(self.title, self.user), 3)
+
+    def test_title_games_include_ranked_ladder_type(self):
+        game = Game.objects.create(
+            title=self.title,
+            side_a=self.deck,
+            side_b=self.opponent_deck,
+            type=Game.GAME_TYPE_RANKED,
+            ladder_type=Game.LADDER_TYPE_DAILY,
+            status=Game.GAME_STATUS_IN_PROGRESS,
+            state=self._game_state("side_a"),
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(f"/api/titles/{self.title.slug}/games/")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        game_summary = response.json()["games"][0]
+        self.assertEqual(game_summary["id"], game.id)
+        self.assertEqual(game_summary["ladder_type"], Game.LADDER_TYPE_DAILY)
 
 
 class TitleEndedGameNotificationsTestCase(TestCase):
