@@ -115,9 +115,14 @@ def _targets_for_action(action: Action, state: GameState, side: str) -> list[Tar
 
     if isinstance(action, DamageAction):
         if action.target == "enemy":
-            return _enemy_creature_targets(state, side) + _enemy_hero_target(
-                state, side
-            )
+            hero_targets = _enemy_hero_target(state, side)
+            # Taunt blocks selecting the enemy hero for physical damage;
+            # spell damage bypasses it
+            if action.damage_type == "physical" and get_taunt_creatures(
+                state, _opposing_side(side)
+            ):
+                hero_targets = []
+            return _enemy_creature_targets(state, side) + hero_targets
         if action.target == "friendly":
             return _friendly_creature_targets(state, side) + _friendly_hero_target(
                 state, side

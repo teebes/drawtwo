@@ -1581,6 +1581,148 @@ class SpellTargetingWithTauntTests(AttackValidationTestBase):
         self.assertIsInstance(result, Success)
 
 
+class TauntPhysicalDamageTests(AttackValidationTestBase):
+    """Taunt blocks choosing the enemy hero for physical hero-power and
+    battlecry damage; spell damage bypasses it."""
+
+    def setUp(self):
+        super().setUp()
+        self.taunt_creature = Creature(
+            creature_id="taunt_b_1",
+            card_id="card_taunt_b_1",
+            name="Taunt Creature",
+            description="Has Taunt",
+            attack=1,
+            attack_max=1,
+            health=3,
+            health_max=3,
+            traits=[Taunt()],
+            exhausted=False,
+        )
+        self.game_state.creatures["taunt_b_1"] = self.taunt_creature
+        self.game_state.board["side_b"].append("taunt_b_1")
+
+        self.game_state.heroes["side_a"].exhausted = False
+        self.game_state.mana_pool["side_a"] = 10
+        self.game_state.mana_used["side_a"] = 0
+        self.hero_a_id = self.game_state.heroes["side_a"].hero_id
+        self.hero_b_id = self.game_state.heroes["side_b"].hero_id
+
+    def _set_hero_power_damage_type(self, damage_type):
+        self.game_state.heroes["side_a"].hero_power = HeroPower(
+            name="Strike",
+            cost=1,
+            actions=[DamageAction(amount=2, target="enemy", damage_type=damage_type)],
+        )
+
+    def _use_hero_power_on_enemy_hero(self):
+        effect = UseHeroEffect(
+            side="side_a",
+            source_id=self.hero_a_id,
+            target_type="hero",
+            target_id=self.hero_b_id,
+        )
+        return resolve(effect, self.game_state)
+
+    def test_physical_hero_power_cannot_target_hero_through_taunt(self):
+        """Physical hero-power damage cannot go face while taunt is up."""
+        self._set_hero_power_damage_type("physical")
+
+        result = self._use_hero_power_on_enemy_hero()
+
+        self.assertEqual(result.type, "outcome_rejected")
+        self.assertIn("taunt", result.reason.lower())
+
+    def test_spell_hero_power_can_target_hero_through_taunt(self):
+        """Spell hero-power damage bypasses taunt."""
+        self._set_hero_power_damage_type("spell")
+
+        result = self._use_hero_power_on_enemy_hero()
+
+        self.assertEqual(result.type, "outcome_success")
+
+    def test_physical_hero_power_can_target_taunt_creature(self):
+        """Physical hero-power damage can still hit the taunt creature itself."""
+        self._set_hero_power_damage_type("physical")
+
+        effect = UseHeroEffect(
+            side="side_a",
+            source_id=self.hero_a_id,
+            target_type="creature",
+            target_id="taunt_b_1",
+        )
+        result = resolve(effect, self.game_state)
+
+        self.assertEqual(result.type, "outcome_success")
+
+    def test_physical_hero_power_can_target_hero_without_taunt(self):
+        """Physical hero-power damage can go face once the taunt is gone."""
+        self._set_hero_power_damage_type("physical")
+        self.game_state.board["side_b"].remove("taunt_b_1")
+        del self.game_state.creatures["taunt_b_1"]
+
+        result = self._use_hero_power_on_enemy_hero()
+
+        self.assertEqual(result.type, "outcome_success")
+
+    def _add_battlecry_creature_to_hand(self, damage_type):
+        from apps.builder.schemas import Battlecry
+
+        card = CardInPlay(
+            card_id="battlecry_a_1",
+            card_type="creature",
+            template_slug="battlecry-creature",
+            name="Battlecry Creature",
+            cost=1,
+            attack=2,
+            health=2,
+            traits=[
+                Battlecry(
+                    actions=[
+                        DamageAction(amount=1, target="enemy", damage_type=damage_type)
+                    ]
+                )
+            ],
+        )
+        self.game_state.cards["battlecry_a_1"] = card
+        self.game_state.hands["side_a"] = ["battlecry_a_1"]
+
+    def test_physical_battlecry_cannot_target_hero_through_taunt(self):
+        """Physical battlecry damage cannot go face while taunt is up."""
+        from apps.gameplay.schemas.effects import PlayEffect
+
+        self._add_battlecry_creature_to_hand("physical")
+        effect = PlayEffect(
+            side="side_a",
+            source_id="battlecry_a_1",
+            position=0,
+            target_type="hero",
+            target_id=self.hero_b_id,
+        )
+
+        result = resolve(effect, self.game_state)
+
+        self.assertEqual(result.type, "outcome_rejected")
+        self.assertIn("taunt", result.reason.lower())
+
+    def test_spell_battlecry_can_target_hero_through_taunt(self):
+        """Spell battlecry damage bypasses taunt."""
+        from apps.gameplay.schemas.effects import PlayEffect
+
+        self._add_battlecry_creature_to_hand("spell")
+        effect = PlayEffect(
+            side="side_a",
+            source_id="battlecry_a_1",
+            position=0,
+            target_type="hero",
+            target_id=self.hero_b_id,
+        )
+
+        result = resolve(effect, self.game_state)
+
+        self.assertEqual(result.type, "outcome_success")
+
+
 class AITauntTests(TestCase):
     """Test that AI respects taunt mechanics when choosing moves."""
 
@@ -1788,6 +1930,60 @@ class AITauntTests(TestCase):
         effect = AIMoveChooser.choose_move(self.game_state, self.script_rush)
 
         self.assertIsNone(effect)
+
+    def test_ai_never_hits_hero_with_physical_power_through_taunt(self):
+        """Play out full AI turns and verify a Berserker-style physical hero
+        power never damages the enemy hero while a taunt creature is up."""
+        from apps.builder.schemas import DeckScript
+        from apps.gameplay.agents.simulator import apply_command
+        from apps.gameplay.schemas.commands import EndTurnCommand, UseHeroCommand
+
+        for strategy in ("smart", "rush", "control"):
+            with self.subTest(strategy=strategy):
+                state = self.game_state.model_copy(deep=True)
+                state.heroes["side_a"].exhausted = False
+                state.heroes["side_a"].hero_power = HeroPower(
+                    name="Crush",
+                    cost=1,
+                    actions=[
+                        DamageAction(amount=2, target="enemy", damage_type="physical")
+                    ],
+                )
+                taunt_creature = Creature(
+                    creature_id="taunt_b_1",
+                    card_id="card_taunt_b_1",
+                    name="Taunt Creature",
+                    description="Has Taunt",
+                    attack=1,
+                    attack_max=1,
+                    health=9,
+                    health_max=9,
+                    traits=[Taunt()],
+                    exhausted=False,
+                )
+                state.creatures["taunt_b_1"] = taunt_creature
+                state.board["side_b"].append("taunt_b_1")
+
+                script = DeckScript(strategy=strategy)
+                for _ in range(20):
+                    command = AIMoveChooser.choose_command(state, script)
+                    if command is None or isinstance(command, EndTurnCommand):
+                        break
+                    if isinstance(command, UseHeroCommand):
+                        self.assertNotEqual(
+                            (command.target_type, command.target_id),
+                            ("hero", "hero_b"),
+                            f"{strategy} AI used physical hero power on the "
+                            "hero through taunt",
+                        )
+                    result = apply_command(state, "side_a", command)
+                    self.assertFalse(result.errors)
+                    state = result.state
+
+                # The taunt creature survived the whole turn, so the enemy
+                # hero must be untouched
+                self.assertIn("taunt_b_1", state.board["side_b"])
+                self.assertEqual(state.heroes["side_b"].health, 30)
 
 
 class StealthMechanicTests(AttackValidationTestBase):

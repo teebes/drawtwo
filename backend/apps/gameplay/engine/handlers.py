@@ -236,6 +236,20 @@ def play(effect: PlayEffect, state: GameState) -> Result:
             if effect.target_id in state.board[opposing_side]:
                 return Rejected(reason="Cannot target stealthed creatures")
 
+    # TAUNT VALIDATION: Physical damage cannot target the enemy hero while the
+    # enemy controls creatures with Taunt; spell damage bypasses Taunt
+    if taunt_blocks_hero_target(
+        state,
+        effect.side,
+        _iter_validated_actions(card),
+        effect.target_type,
+        effect.target_id,
+    ):
+        return Rejected(
+            reason="Cannot target hero with physical damage "
+            "while enemy has creatures with Taunt"
+        )
+
     state.hands[effect.side].remove(effect.source_id)
 
     creature_id = None
@@ -561,6 +575,36 @@ def get_taunt_creatures(state: GameState, side: str) -> list[str]:
     return taunt_creatures
 
 
+def taunt_blocks_hero_target(
+    state: GameState,
+    side: str,
+    actions: list[Action],
+    target_type: str | None,
+    target_id: str | None,
+) -> bool:
+    """
+    Whether Taunt prevents `side` from choosing the enemy hero as the selected
+    target of these actions. Taunt only blocks physical damage; spell damage
+    (and non-damage actions) bypasses it. Attack declarations have their own
+    check in attack().
+    """
+    if target_type != "hero":
+        return False
+    opposing_side = "side_b" if side == "side_a" else "side_a"
+    opposing_hero = state.heroes.get(opposing_side)
+    if not opposing_hero or opposing_hero.hero_id != target_id:
+        return False
+    if not get_taunt_creatures(state, opposing_side):
+        return False
+    return any(
+        isinstance(action, DamageAction)
+        and action.damage_type == "physical"
+        and action.scope != "all"
+        and action.target not in ("hero", "self")
+        for action in actions
+    )
+
+
 @register("effect_attack")
 def attack(effect: AttackEffect, state: GameState) -> Result:
     # effect.card_id is actually a creature_id (on the board)
@@ -690,6 +734,15 @@ def use_hero(effect: UseHeroEffect, state: GameState) -> Result:
                 opposing_hero = state.heroes.get(opposing_side)
                 if not opposing_hero or opposing_hero.hero_id != target_id:
                     return Rejected(reason=f"Target is not the opponent's hero")
+                # TAUNT VALIDATION: physical hero-power damage cannot target
+                # the enemy hero through Taunt; spell damage bypasses it
+                if taunt_blocks_hero_target(
+                    state, effect.side, actions, target_type, target_id
+                ):
+                    return Rejected(
+                        reason="Cannot target hero with physical damage "
+                        "while enemy has creatures with Taunt"
+                    )
 
     if hero.exhausted:
         return Rejected(reason="Hero is exhausted")

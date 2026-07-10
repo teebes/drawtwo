@@ -216,6 +216,46 @@ class LegalCommandTests(TestCase):
             {("creature", "creature_a_1"), ("hero", "hero_a")},
         )
 
+    def test_physical_hero_power_cannot_target_hero_through_taunt(self):
+        state = make_agent_test_state()
+        state.heroes["side_a"].exhausted = False
+        state.heroes["side_a"].hero_power = HeroPower(
+            name="Crush",
+            actions=[DamageAction(amount=2, target="enemy", damage_type="physical")],
+        )
+        state.creatures["creature_b_1"].traits = [Taunt()]
+
+        commands = [
+            command
+            for command in list_legal_commands(state, "side_a")
+            if isinstance(command, UseHeroCommand)
+        ]
+
+        self.assertEqual(
+            {(command.target_type, command.target_id) for command in commands},
+            {("creature", "creature_b_1")},
+        )
+
+    def test_spell_hero_power_can_target_hero_through_taunt(self):
+        state = make_agent_test_state()
+        state.heroes["side_a"].exhausted = False
+        state.heroes["side_a"].hero_power = HeroPower(
+            name="Snipe",
+            actions=[DamageAction(amount=1, target="enemy", damage_type="spell")],
+        )
+        state.creatures["creature_b_1"].traits = [Taunt()]
+
+        commands = [
+            command
+            for command in list_legal_commands(state, "side_a")
+            if isinstance(command, UseHeroCommand)
+        ]
+
+        self.assertIn(
+            ("hero", "hero_b"),
+            {(command.target_type, command.target_id) for command in commands},
+        )
+
 
 class ScriptedPolicyTests(TestCase):
     def make_recruit_selector_state(self) -> GameState:
