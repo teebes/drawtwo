@@ -249,7 +249,7 @@ def play(effect: PlayEffect, state: GameState) -> Result:
     if taunt_blocks_hero_target(
         state,
         effect.side,
-        _iter_validated_actions(card),
+        _iter_validated_play_actions(card),
         effect.target_type,
         effect.target_id,
     ):
