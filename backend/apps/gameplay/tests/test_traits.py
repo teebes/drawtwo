@@ -11,18 +11,25 @@ from apps.builder.schemas import (
     DamageAction,
     DeathRattle,
     DrawAction,
+    HealAction,
+    HeroPower,
     RemoveAction,
     SummonAction,
+    Triggered,
     Unique,
 )
 from apps.gameplay import traits
+from apps.gameplay.agents.simulator import apply_effects
 from apps.gameplay.engine.dispatcher import resolve
 from apps.gameplay.engine.handlers import spawn_creature
 from apps.gameplay.schemas.effects import (
+    DamageEffect,
     DrawEffect,
+    HealEffect,
     PlayEffect,
     RemoveEffect,
     SummonEffect,
+    UseHeroEffect,
 )
 from apps.gameplay.schemas.engine import Success
 from apps.gameplay.schemas.events import (
@@ -36,6 +43,505 @@ from apps.gameplay.schemas.game import CardInPlay, Creature
 from apps.gameplay.schemas.updates import GameUpdate
 from apps.gameplay.services import GameService
 from apps.gameplay.tests import GamePlayTestBase
+
+
+class TestTriggeredTraits(GamePlayTestBase):
+    def _spawn_card(
+        self,
+        *,
+        side: str,
+        card_id: str,
+        attack: int = 1,
+        health: int = 3,
+        traits=None,
+    ) -> Creature:
+        card = CardInPlay(
+            card_type="creature",
+            card_id=card_id,
+            template_slug=card_id,
+            name=card_id,
+            attack=attack,
+            health=health,
+            cost=1,
+            traits=traits or [],
+            exhausted=False,
+        )
+        self.game_state.cards[card_id] = card
+        return spawn_creature(card=card, state=self.game_state, side=side)
+
+    def test_triggered_trait_buffs_self_when_another_card_is_played(self):
+        observer = self._spawn_card(
+            side="side_a",
+            card_id="observer",
+            attack=1,
+            health=2,
+            traits=[
+                Triggered(
+                    when={
+                        "event": "card_played",
+                        "source": {"controller": "any", "exclude_self": True},
+                    },
+                    actions=[
+                        BuffAction(attribute="attack", amount=1, target="self"),
+                        BuffAction(attribute="health", amount=1, target="self"),
+                    ],
+                )
+            ],
+        )
+        played_card = CardInPlay(
+            card_type="creature",
+            card_id="played",
+            template_slug="played",
+            name="Played",
+            attack=1,
+            health=1,
+            cost=0,
+        )
+        self.game_state.cards["played"] = played_card
+        self.game_state.hands["side_a"] = ["played"]
+
+        play_result = resolve(
+            PlayEffect(side="side_a", source_id="played", position=0),
+            self.game_state,
+        )
+        trait_result = traits.apply(play_result.new_state, play_result.events[0])
+
+        self.assertEqual(
+            [effect.type for effect in trait_result.child_effects],
+            [
+                "effect_buff",
+                "effect_buff",
+            ],
+        )
+
+        new_state = play_result.new_state
+        for effect in trait_result.child_effects:
+            new_state = resolve(effect, new_state).new_state
+
+        buffed = new_state.creatures[observer.creature_id]
+        self.assertEqual(buffed.attack, 2)
+        self.assertEqual(buffed.health, 3)
+
+    def test_triggered_trait_draws_when_another_card_is_played(self):
+        self._spawn_card(
+            side="side_a",
+            card_id="observer",
+            traits=[
+                Triggered(
+                    when={
+                        "event": "card_played",
+                        "source": {"controller": "any", "exclude_self": True},
+                    },
+                    actions=[DrawAction(amount=1)],
+                )
+            ],
+        )
+        self.game_state.cards["played"] = CardInPlay(
+            card_type="spell",
+            card_id="played",
+            template_slug="played",
+            name="Played",
+            cost=0,
+        )
+        self.game_state.hands["side_a"] = ["played"]
+
+        play_result = resolve(
+            PlayEffect(side="side_a", source_id="played", position=0),
+            self.game_state,
+        )
+        trait_result = traits.apply(play_result.new_state, play_result.events[0])
+
+        self.assertEqual(len(trait_result.child_effects), 1)
+        self.assertIsInstance(trait_result.child_effects[0], DrawEffect)
+        self.assertEqual(trait_result.child_effects[0].side, "side_a")
+
+    def test_triggered_trait_distinguishes_card_creature_and_spell_played(self):
+        any_observer = self._spawn_card(
+            side="side_a",
+            card_id="any_observer",
+            traits=[
+                Triggered(
+                    when={"event": "card_played"},
+                    actions=[BuffAction(attribute="attack", amount=1, target="self")],
+                )
+            ],
+        )
+        creature_observer = self._spawn_card(
+            side="side_a",
+            card_id="creature_observer",
+            traits=[
+                Triggered(
+                    when={"event": "creature_played"},
+                    actions=[BuffAction(attribute="attack", amount=1, target="self")],
+                )
+            ],
+        )
+        spell_observer = self._spawn_card(
+            side="side_a",
+            card_id="spell_observer",
+            traits=[
+                Triggered(
+                    when={"event": "spell_used"},
+                    actions=[BuffAction(attribute="attack", amount=1, target="self")],
+                )
+            ],
+        )
+
+        self.game_state.cards["played_creature"] = CardInPlay(
+            card_type="creature",
+            card_id="played_creature",
+            template_slug="played-creature",
+            name="Played Creature",
+            attack=1,
+            health=1,
+            cost=0,
+        )
+        self.game_state.hands["side_a"] = ["played_creature"]
+
+        creature_play_result = resolve(
+            PlayEffect(side="side_a", source_id="played_creature", position=0),
+            self.game_state,
+        )
+        creature_trait_result = traits.apply(
+            creature_play_result.new_state,
+            creature_play_result.events[0],
+        )
+
+        self.assertEqual(
+            {effect.target_id for effect in creature_trait_result.child_effects},
+            {any_observer.creature_id, creature_observer.creature_id},
+        )
+
+        new_state = creature_play_result.new_state
+        for effect in creature_trait_result.child_effects:
+            new_state = resolve(effect, new_state).new_state
+
+        new_state.cards["played_spell"] = CardInPlay(
+            card_type="spell",
+            card_id="played_spell",
+            template_slug="played-spell",
+            name="Played Spell",
+            cost=0,
+        )
+        new_state.hands["side_a"] = ["played_spell"]
+
+        spell_play_result = resolve(
+            PlayEffect(side="side_a", source_id="played_spell", position=0),
+            new_state,
+        )
+        spell_trait_result = traits.apply(
+            spell_play_result.new_state,
+            spell_play_result.events[0],
+        )
+
+        self.assertEqual(
+            {effect.target_id for effect in spell_trait_result.child_effects},
+            {any_observer.creature_id, spell_observer.creature_id},
+        )
+
+        new_state = spell_play_result.new_state
+        for effect in spell_trait_result.child_effects:
+            new_state = resolve(effect, new_state).new_state
+
+        self.assertEqual(new_state.creatures[any_observer.creature_id].attack, 3)
+        self.assertEqual(new_state.creatures[creature_observer.creature_id].attack, 2)
+        self.assertEqual(new_state.creatures[spell_observer.creature_id].attack, 2)
+
+    def test_triggered_trait_observes_hero_and_creature_damage(self):
+        observer = self._spawn_card(
+            side="side_a",
+            card_id="observer",
+            traits=[
+                Triggered(
+                    when={
+                        "event": "damage",
+                        "source": {"kind": "hero", "controller": "self"},
+                    },
+                    actions=[BuffAction(attribute="attack", amount=1, target="self")],
+                ),
+                Triggered(
+                    when={
+                        "event": "damage",
+                        "source": {"kind": "creature", "controller": "self"},
+                    },
+                    actions=[BuffAction(attribute="health", amount=1, target="self")],
+                ),
+            ],
+        )
+        attacker = self._spawn_card(side="side_a", card_id="attacker")
+        target = self._spawn_card(side="side_b", card_id="target", health=5)
+
+        hero_damage = resolve(
+            DamageEffect(
+                side="side_a",
+                source_type="hero",
+                source_id="1",
+                target_type="creature",
+                target_id=target.creature_id,
+                damage=1,
+            ),
+            self.game_state,
+        )
+        hero_trait_result = traits.apply(hero_damage.new_state, hero_damage.events[0])
+        self.assertEqual(hero_trait_result.child_effects[0].attribute, "attack")
+
+        creature_damage = resolve(
+            DamageEffect(
+                side="side_a",
+                source_type="creature",
+                source_id=attacker.creature_id,
+                target_type="creature",
+                target_id=target.creature_id,
+                damage=1,
+            ),
+            hero_damage.new_state,
+        )
+        creature_trait_result = traits.apply(
+            creature_damage.new_state,
+            creature_damage.events[0],
+        )
+        self.assertEqual(creature_trait_result.child_effects[0].attribute, "health")
+
+        new_state = creature_damage.new_state
+        for effect in (
+            hero_trait_result.child_effects + creature_trait_result.child_effects
+        ):
+            new_state = resolve(effect, new_state).new_state
+
+        buffed = new_state.creatures[observer.creature_id]
+        self.assertEqual(buffed.attack, 2)
+        self.assertEqual(buffed.health, 4)
+
+    def test_triggered_trait_observes_hero_healing(self):
+        observer = self._spawn_card(
+            side="side_a",
+            card_id="observer",
+            traits=[
+                Triggered(
+                    when={
+                        "event": "heal",
+                        "source": {"kind": "hero", "controller": "self"},
+                        "target": {"kind": "hero", "controller": "self"},
+                    },
+                    actions=[DrawAction(amount=1)],
+                )
+            ],
+        )
+        self.game_state.heroes["side_a"].health = 5
+
+        heal_result = resolve(
+            HealEffect(
+                side="side_a",
+                source_type="hero",
+                source_id="1",
+                target_type="hero",
+                target_id="1",
+                amount=2,
+            ),
+            self.game_state,
+        )
+        trait_result = traits.apply(heal_result.new_state, heal_result.events[0])
+
+        self.assertEqual(len(trait_result.child_effects), 1)
+        self.assertIsInstance(trait_result.child_effects[0], DrawEffect)
+        self.assertEqual(observer.creature_id, "1")
+
+    def test_triggered_trait_observes_hero_and_creature_kills(self):
+        observer = self._spawn_card(
+            side="side_a",
+            card_id="observer",
+            traits=[
+                Triggered(
+                    when={
+                        "event": "creature_death",
+                        "source": {"kind": "hero", "controller": "self"},
+                    },
+                    actions=[BuffAction(attribute="attack", amount=1, target="self")],
+                ),
+                Triggered(
+                    when={
+                        "event": "creature_death",
+                        "source": {"kind": "creature", "controller": "self"},
+                    },
+                    actions=[BuffAction(attribute="health", amount=1, target="self")],
+                ),
+            ],
+        )
+        creature_attacker = self._spawn_card(side="side_a", card_id="attacker")
+        hero_target = self._spawn_card(side="side_b", card_id="hero_target", health=1)
+        creature_target = self._spawn_card(
+            side="side_b",
+            card_id="creature_target",
+            health=1,
+        )
+
+        hero_kill = resolve(
+            DamageEffect(
+                side="side_a",
+                source_type="hero",
+                source_id="1",
+                target_type="creature",
+                target_id=hero_target.creature_id,
+                damage=1,
+            ),
+            self.game_state,
+        )
+        hero_death_event = hero_kill.events[-1]
+        hero_trait_result = traits.apply(hero_kill.new_state, hero_death_event)
+        self.assertEqual(hero_trait_result.child_effects[0].attribute, "attack")
+
+        creature_kill = resolve(
+            DamageEffect(
+                side="side_a",
+                source_type="creature",
+                source_id=creature_attacker.creature_id,
+                target_type="creature",
+                target_id=creature_target.creature_id,
+                damage=1,
+            ),
+            hero_kill.new_state,
+        )
+        creature_death_event = creature_kill.events[-1]
+        creature_trait_result = traits.apply(
+            creature_kill.new_state,
+            creature_death_event,
+        )
+        self.assertEqual(creature_trait_result.child_effects[0].attribute, "health")
+
+        new_state = creature_kill.new_state
+        for effect in (
+            hero_trait_result.child_effects + creature_trait_result.child_effects
+        ):
+            new_state = resolve(effect, new_state).new_state
+
+        buffed = new_state.creatures[observer.creature_id]
+        self.assertEqual(buffed.attack, 2)
+        self.assertEqual(buffed.health, 4)
+
+    def test_triggered_trait_uses_damage_taken_amount_after_lethal_damage(self):
+        observer = self._spawn_card(
+            side="side_a",
+            card_id="observer",
+            health=2,
+            traits=[
+                Triggered(
+                    when={
+                        "event": "damage",
+                        "target": {"self": True},
+                    },
+                    actions=[
+                        HealAction(
+                            amount={"event": "damage_taken"},
+                            target="hero",
+                        )
+                    ],
+                )
+            ],
+        )
+        self.game_state.heroes["side_a"].health = 5
+
+        damage_result = resolve(
+            DamageEffect(
+                side="side_b",
+                source_type="hero",
+                source_id="2",
+                target_type="creature",
+                target_id=observer.creature_id,
+                damage=5,
+            ),
+            self.game_state,
+        )
+        trait_result = traits.apply(damage_result.new_state, damage_result.events[0])
+
+        self.assertEqual(len(trait_result.child_effects), 1)
+        heal_effect = trait_result.child_effects[0]
+        self.assertIsInstance(heal_effect, HealEffect)
+        self.assertEqual(heal_effect.amount, 2)
+
+        healed_state = resolve(heal_effect, damage_result.new_state).new_state
+        self.assertEqual(healed_state.heroes["side_a"].health, 7)
+
+    def test_triggered_trait_multiplies_event_amount_and_rounds_up(self):
+        observer = self._spawn_card(
+            side="side_a",
+            card_id="observer",
+            health=3,
+            traits=[
+                Triggered(
+                    when={
+                        "event": "damage",
+                        "source": {"kind": "creature", "controller": "self"},
+                    },
+                    actions=[
+                        BuffAction(
+                            attribute="health",
+                            amount={"event": "damage", "multiplier": 0.5},
+                            target="self",
+                        )
+                    ],
+                )
+            ],
+        )
+        attacker = self._spawn_card(side="side_a", card_id="attacker")
+        target = self._spawn_card(side="side_b", card_id="target", health=10)
+
+        damage_result = resolve(
+            DamageEffect(
+                side="side_a",
+                source_type="creature",
+                source_id=attacker.creature_id,
+                target_type="creature",
+                target_id=target.creature_id,
+                damage=3,
+            ),
+            self.game_state,
+        )
+        trait_result = traits.apply(damage_result.new_state, damage_result.events[0])
+
+        self.assertEqual(len(trait_result.child_effects), 1)
+        buff_effect = trait_result.child_effects[0]
+        self.assertEqual(buff_effect.amount, 2)
+
+        buffed_state = resolve(buff_effect, damage_result.new_state).new_state
+        self.assertEqual(buffed_state.creatures[observer.creature_id].health, 5)
+
+    def test_simulator_applies_triggered_traits_from_hero_power_damage(self):
+        observer = self._spawn_card(
+            side="side_a",
+            card_id="observer",
+            traits=[
+                Triggered(
+                    when={
+                        "event": "damage",
+                        "source": {"kind": "hero", "controller": "self"},
+                    },
+                    actions=[BuffAction(attribute="attack", amount=1, target="self")],
+                )
+            ],
+        )
+        target = self._spawn_card(side="side_a", card_id="target", health=3)
+        self.game_state.heroes["side_a"].hero_power = HeroPower(
+            name="Bloodmage",
+            cost=0,
+            actions=[DamageAction(amount=1, target="friendly")],
+        )
+        self.game_state.heroes["side_a"].exhausted = False
+        self.game_state.active = "side_a"
+        self.game_state.phase = "main"
+
+        result = apply_effects(
+            self.game_state,
+            [
+                UseHeroEffect(
+                    side="side_a",
+                    source_id="1",
+                    target_type="creature",
+                    target_id=target.creature_id,
+                )
+            ],
+        )
+
+        self.assertEqual(result.state.creatures[observer.creature_id].attack, 2)
 
 
 class TestTraits(GamePlayTestBase):

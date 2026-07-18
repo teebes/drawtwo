@@ -16,9 +16,13 @@ class DamageEvent(EventBase):
     damage_type: Literal["physical", "spell"] = "physical"
     source_type: Literal["card", "hero", "board", "creature"] = "card"
     source_id: str
+    source_side: Optional[Literal["side_a", "side_b"]] = None
     target_type: Literal["card", "hero", "creature"] = "card"
     target_id: str
+    target_side: Optional[Literal["side_a", "side_b"]] = None
     damage: int
+    damage_taken: Optional[int] = None
+    target_creature: Optional[Creature] = None
     # Whether the target should attempt to retaliate. Mostly used to disable
     # retaliation in the case of retaliation to avoid an infinite loop.
     retaliate: bool = True
@@ -36,9 +40,12 @@ class HealEvent(EventBase):
     type: Literal["event_heal"] = "event_heal"
     source_type: Literal["card", "hero", "board", "creature"] = "card"
     source_id: str
+    source_side: Optional[Literal["side_a", "side_b"]] = None
     target_type: Literal["card", "hero", "creature"] = "card"
     target_id: str
+    target_side: Optional[Literal["side_a", "side_b"]] = None
     amount: int
+    healing_done: Optional[int] = None
 
 
 class EndTurnEvent(EventBase):
@@ -93,6 +100,7 @@ class CreatureDeathEvent(ActionableEvent):
     """
 
     type: Literal["event_creature_death"] = "event_creature_death"
+    source_side: Optional[Literal["side_a", "side_b"]] = None
     creature: Creature
 
 

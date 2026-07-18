@@ -8,20 +8,39 @@ export interface Event {
   player: Side
 }
 
+export type EventAmount =
+  | number
+  | { event: 'amount' | 'damage' | 'damage_taken' | 'healing_done'; multiplier?: number }
+
 export type CardAction =
-  | { action: 'draw'; amount: number }
-  | { action: 'damage'; amount: number; target: 'hero' | 'creature' | 'enemy' | 'self' | 'friendly'; scope?: 'single' | 'cleave' | 'all'; damage_type?: 'physical' | 'spell' }
-  | { action: 'heal'; amount: number; target: 'hero' | 'creature' | 'friendly'; scope?: 'single' | 'cleave' | 'all' }
+  | { action: 'draw'; amount: EventAmount }
+  | { action: 'damage'; amount: EventAmount; target: 'hero' | 'creature' | 'enemy' | 'self' | 'friendly'; scope?: 'single' | 'cleave' | 'all'; damage_type?: 'physical' | 'spell' }
+  | { action: 'heal'; amount: EventAmount; target: 'hero' | 'creature' | 'friendly' | 'self'; scope?: 'single' | 'cleave' | 'all' }
   | { action: 'remove'; target: 'creature' | 'enemy'; scope?: 'single' | 'cleave' | 'all' }
-  | { action: 'temp_mana_boost'; amount: number; target?: 'hero' | 'creature' | 'friendly' }
+  | { action: 'temp_mana_boost'; amount: EventAmount; target?: 'hero' | 'creature' | 'friendly' }
   | { action: 'summon'; target: string }
   | { action: 'clear'; target?: 'both' | 'own' | 'opponent' }
-  | { action: 'buff'; attribute: 'attack' | 'health'; amount: number; target: 'hero' | 'creature' | 'friendly'; scope?: 'single' | 'cleave' | 'all' }
+  | { action: 'buff'; attribute: 'attack' | 'health'; amount: EventAmount; target: 'hero' | 'creature' | 'friendly' | 'self'; scope?: 'single' | 'cleave' | 'all' }
 
+export interface TriggerEntityFilter {
+  kind?: 'card' | 'creature' | 'hero' | 'board'
+  controller?: 'self' | 'opponent' | 'any'
+  self?: boolean
+  exclude_self?: boolean
+  card_type?: 'creature' | 'spell'
+  template_slug?: string
+}
+
+export interface TriggerCondition {
+  event: 'card_played' | 'creature_played' | 'spell_used' | 'damage' | 'heal' | 'creature_death' | 'hero_power_used'
+  source?: TriggerEntityFilter
+  target?: TriggerEntityFilter
+}
 
 export interface Trait {
   type: string
   actions: CardAction[]
+  when?: TriggerCondition
 }
 
 export interface CardInPlay {

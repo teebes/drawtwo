@@ -7,6 +7,11 @@
 export interface Trait {
   type: string
   actions: {}[]
+  when?: {
+    event: 'card_played' | 'creature_played' | 'spell_used' | 'damage' | 'heal' | 'creature_death' | 'hero_power_used'
+    source?: Record<string, any>
+    target?: Record<string, any>
+  }
 }
 
 export interface Card {
