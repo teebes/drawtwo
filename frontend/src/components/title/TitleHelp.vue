@@ -123,7 +123,7 @@
 
     <div>Using the Remove spell will bypass the On Death trait on the removed card.</div>
 
-    <div>Silence removes On Death and triggered abilities from an active enemy creature.</div>
+    <div>Silence removes all traits from an active enemy creature without changing its stats.</div>
 
     <div>When a player goes second, they start with an extra Power-Up card in their hand, which if used gives them 1 extra energy for the remainder of the turn.</div>
   </div>

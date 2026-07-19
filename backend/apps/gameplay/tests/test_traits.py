@@ -1082,7 +1082,7 @@ class TestRemoveAction(GamePlayTestBase):
 
 
 class TestSilenceAction(GamePlayTestBase):
-    def test_silence_removes_deathrattle_and_triggered_from_active_creature(self):
+    def test_silence_removes_all_traits_without_changing_live_stats(self):
         target_card = CardInPlay(
             card_type="creature",
             card_id="reactive_1",
@@ -1108,6 +1108,10 @@ class TestSilenceAction(GamePlayTestBase):
             state=self.game_state,
             side="side_b",
         )
+        target_creature.attack = 5
+        target_creature.attack_max = 5
+        target_creature.health = 6
+        target_creature.health_max = 6
 
         silence_card = CardInPlay(
             card_type="spell",
@@ -1139,13 +1143,14 @@ class TestSilenceAction(GamePlayTestBase):
 
         self.assertIsInstance(result, Success)
         silenced_creature = result.new_state.creatures[target_creature.creature_id]
-        self.assertEqual(
-            [trait.type for trait in silenced_creature.traits],
-            ["taunt", "unique", "battlecry"],
-        )
+        self.assertEqual(silenced_creature.traits, [])
+        self.assertEqual(silenced_creature.attack, 5)
+        self.assertEqual(silenced_creature.attack_max, 5)
+        self.assertEqual(silenced_creature.health, 6)
+        self.assertEqual(silenced_creature.health_max, 6)
         self.assertEqual(
             result.events[0].removed_traits,
-            ["deathrattle", "triggered"],
+            ["deathrattle", "triggered", "taunt", "unique", "battlecry"],
         )
         self.assertEqual(
             [
@@ -1162,7 +1167,7 @@ class TestSilenceAction(GamePlayTestBase):
         self.assertEqual(validated_updates[0].type, "update_silence")
         self.assertEqual(
             validated_updates[0].removed_traits,
-            ["deathrattle", "triggered"],
+            ["deathrattle", "triggered", "taunt", "unique", "battlecry"],
         )
 
         followup_card = CardInPlay(

@@ -133,9 +133,7 @@ class SilenceUpdate(UpdateBase):
     source_id: str
     target_type: Literal["creature"] = "creature"
     target_id: str
-    removed_traits: list[Literal["deathrattle", "triggered"]] = Field(
-        default_factory=list
-    )
+    removed_traits: list[str] = Field(default_factory=list)
 
 
 class ClearUpdate(UpdateBase):

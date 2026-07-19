@@ -1032,7 +1032,7 @@ def remove(effect: RemoveEffect, state: GameState) -> Result:
 
 @register("effect_silence")
 def silence(effect: SilenceEffect, state: GameState) -> Result:
-    """Remove reactive abilities from an active enemy creature."""
+    """Remove every trait from an active enemy creature."""
     opposing_side = "side_b" if effect.side == "side_a" else "side_a"
     if effect.target_id not in state.board[opposing_side]:
         return Rejected(
@@ -1043,17 +1043,8 @@ def silence(effect: SilenceEffect, state: GameState) -> Result:
     if not target_creature:
         return Rejected(reason=f"Target creature {effect.target_id} does not exist")
 
-    silenced_trait_types = {"deathrattle", "triggered"}
-    removed_traits = [
-        trait.type
-        for trait in target_creature.traits
-        if trait.type in silenced_trait_types
-    ]
-    target_creature.traits = [
-        trait
-        for trait in target_creature.traits
-        if trait.type not in silenced_trait_types
-    ]
+    removed_traits = [trait.type for trait in target_creature.traits]
+    target_creature.traits = []
 
     return Success(
         new_state=state,

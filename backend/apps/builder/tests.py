@@ -753,7 +753,7 @@ class TestCardYamlValidation(APITestCase):
         url = reverse("card-create", kwargs={"title_slug": self.title.slug})
         yaml_definition = """
         name: Silence
-        description: Remove reactive abilities from an enemy creature.
+        description: Remove all traits from an enemy creature.
         card_type: spell
         cost: 1
         traits:
