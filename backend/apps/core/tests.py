@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from apps.authentication.models import Friendship
-from apps.builder.models import AIPlayer, HeroTemplate, Title
+from apps.builder.models import AIPlayer, CardTemplate, CardTrait, HeroTemplate, Title
 from apps.collection.models import Deck
 from apps.gameplay.models import (
     FriendlyChallenge,
@@ -55,6 +55,55 @@ class HealthCheckTestCase(TestCase):
             response = self.client.get("/api/health/")
             self.assertEqual(response.status_code, 200)
             self.assertContains(response, "healthy")
+
+
+class TitleCardsResilienceTestCase(TestCase):
+    def test_title_cards_skips_malformed_legacy_card(self):
+        author = User.objects.create_user(
+            email="catalog-author@example.com",
+            username="catalog-author",
+        )
+        title = Title.objects.create(
+            slug="catalog-resilience",
+            name="Catalog Resilience",
+            author=author,
+            status=Title.STATUS_PUBLISHED,
+            is_latest=True,
+        )
+        valid_card = CardTemplate.objects.create(
+            title=title,
+            slug="valid-card",
+            name="Valid Card",
+            card_type=CardTemplate.CARD_TYPE_CREATURE,
+            cost=1,
+            attack=1,
+            health=1,
+            is_latest=True,
+        )
+        invalid_card = CardTemplate.objects.create(
+            title=title,
+            slug="invalid-card",
+            name="Invalid Card",
+            card_type=CardTemplate.CARD_TYPE_SPELL,
+            cost=1,
+            is_latest=True,
+        )
+        CardTrait.objects.create(
+            card=invalid_card,
+            trait_slug="battlecry",
+            data={
+                "actions": [{"action": "silence", "target": "enemy", "scope": "single"}]
+            },
+        )
+
+        with self.assertLogs("apps.core.serializers", level="ERROR"):
+            response = self.client.get(f"/api/titles/{title.slug}/cards/")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            [card["slug"] for card in response.json()],
+            [valid_card.slug],
+        )
 
 
 class TitlePveEndpointTestCase(TestCase):

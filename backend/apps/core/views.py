@@ -156,7 +156,7 @@ def title_cards(request, slug):
     )
 
     # Use the helper function to serialize with efficient prefetching
-    card_data = serialize_cards_with_traits(cards_queryset)
+    card_data = serialize_cards_with_traits(cards_queryset, skip_invalid=True)
 
     return Response([card.model_dump() for card in card_data])
 

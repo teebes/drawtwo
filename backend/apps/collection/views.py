@@ -247,7 +247,9 @@ def deck_detail(request, deck_id):
         all_cards_queryset = _eligible_cards_for_hero(
             deck.hero.title, deck.hero
         ).order_by("cost", "card_type", "attack", "health", "name")
-        all_cards_data = serialize_cards_with_traits(all_cards_queryset)
+        all_cards_data = serialize_cards_with_traits(
+            all_cards_queryset, skip_invalid=True
+        )
         all_cards = [card.model_dump() for card in all_cards_data]
 
         return Response(

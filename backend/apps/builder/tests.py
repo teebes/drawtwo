@@ -651,6 +651,103 @@ class TestTitleAPIPermissions(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
+class TestCardYamlValidation(APITestCase):
+    def setUp(self):
+        self.author = User.objects.create_user(
+            email="card-author@example.com", username="card-author"
+        )
+        self.title = Title.objects.create(
+            slug="card-validation",
+            name="Card Validation",
+            author=self.author,
+            status=Title.STATUS_DRAFT,
+            is_latest=True,
+        )
+        self.client.force_authenticate(user=self.author)
+
+    def _invalid_action_yaml(self, *, name="Silence"):
+        return f"""
+        name: {name}
+        description: Remove abilities from an enemy creature.
+        card_type: spell
+        cost: 1
+        traits:
+          - type: battlecry
+            actions:
+              - action: silence
+                target: enemy
+                scope: single
+        """
+
+    def test_create_card_rejects_invalid_nested_action(self):
+        url = reverse("card-create", kwargs={"title_slug": self.title.slug})
+
+        response = self.client.post(
+            url,
+            {
+                "slug": "silence",
+                "yaml_definition": self._invalid_action_yaml(),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Invalid trait #1", response.data["error"])
+        self.assertIn("silence", response.data["error"])
+        self.assertFalse(
+            CardTemplate.objects.filter(title=self.title, slug="silence").exists()
+        )
+
+    def test_update_card_rejects_invalid_nested_action_without_mutating_card(self):
+        card = CardTemplate.objects.create(
+            title=self.title,
+            slug="existing-spell",
+            name="Existing Spell",
+            description="Safe description.",
+            card_type=CardTemplate.CARD_TYPE_SPELL,
+            cost=2,
+        )
+        url = reverse(
+            "card-detail",
+            kwargs={"title_slug": self.title.slug, "card_slug": card.slug},
+        )
+
+        response = self.client.put(
+            url,
+            {
+                "yaml_definition": self._invalid_action_yaml(name="Changed Spell"),
+                "bump_version": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Invalid trait #1", response.data["error"])
+        card.refresh_from_db()
+        self.assertEqual(card.name, "Existing Spell")
+        self.assertEqual(card.description, "Safe description.")
+        self.assertEqual(card.cost, 2)
+        self.assertFalse(card.cardtrait_set.exists())
+
+    def test_create_card_rejects_bulk_list_yaml_with_clear_error(self):
+        url = reverse("card-create", kwargs={"title_slug": self.title.slug})
+        yaml_definition = """
+        - name: Silence
+          card_type: spell
+          cost: 1
+        """
+
+        response = self.client.post(
+            url,
+            {"slug": "silence", "yaml_definition": yaml_definition},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("single card object", response.data["error"])
+        self.assertNotIn("has no attribute", response.data["error"])
+
+
 class TestIngestion(TestCase):
 
     def setUp(self):

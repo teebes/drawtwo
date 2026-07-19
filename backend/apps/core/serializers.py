@@ -1,9 +1,15 @@
-from typing import List, Dict, Any
-#from .schemas import Card, Trait, Deck, Hero
-from .schemas import Deck, Hero
+import logging
+from typing import Any, Dict, List
+
+from pydantic import TypeAdapter, ValidationError
+
+# from .schemas import Card, Trait, Deck, Hero
 from apps.builder.schemas import Card, Trait
-from pydantic import TypeAdapter
+
 from .card_assets import get_card_art_url
+from .schemas import Deck, Hero
+
+logger = logging.getLogger(__name__)
 
 
 def to_card_schema(card) -> Card:
@@ -22,10 +28,7 @@ def to_card_schema(card) -> Card:
     traits = sorted(traits, key=lambda t: t.trait_slug)
 
     for card_trait in traits:
-        trait_data = {
-            'type': card_trait.trait_slug,
-            **card_trait.data
-        }
+        trait_data = {"type": card_trait.trait_slug, **card_trait.data}
 
         # Use TypeAdapter to properly validate and create the discriminated union
         trait_adapter = TypeAdapter(Trait)
@@ -50,7 +53,7 @@ def to_card_schema(card) -> Card:
     )
 
 
-def serialize_cards_with_traits(queryset) -> List[Card]:
+def serialize_cards_with_traits(queryset, *, skip_invalid=False) -> List[Card]:
     """
     Efficiently serialize a CardTemplate queryset to Card schema format.
 
@@ -61,18 +64,31 @@ def serialize_cards_with_traits(queryset) -> List[Card]:
         List of Card schema objects
     """
     # Apply efficient prefetching to the queryset
-    cards = queryset.select_related('title', 'faction').prefetch_related(
-        'cardtrait_set',  # Prefetch card traits
-        'allowed_heroes',
+    cards = queryset.select_related("title", "faction").prefetch_related(
+        "cardtrait_set",  # Prefetch card traits
+        "allowed_heroes",
     )
 
-    # Transform to Card schema format
-    return [to_card_schema(card) for card in cards]
+    card_schemas = []
+    for card in cards:
+        try:
+            card_schemas.append(to_card_schema(card))
+        except ValidationError:
+            if not skip_invalid:
+                raise
+            logger.exception(
+                "Skipping invalid card while serializing catalog: id=%s slug=%s",
+                card.id,
+                card.slug,
+            )
+
+    return card_schemas
+
 
 def serialize_decks(queryset) -> List[Dict[str, Any]]:
     queryset = queryset.select_related(
-        'hero', 'title', 'ai_player', 'user'
-    ).prefetch_related('deckcard_set')
+        "hero", "title", "ai_player", "user"
+    ).prefetch_related("deckcard_set")
     return [
         Deck(
             id=deck.id,

@@ -148,6 +148,19 @@
           <p class="text-gray-600 dark:text-gray-400">Loading cards...</p>
         </div>
 
+        <div v-else-if="cardsError" class="mx-auto max-w-xl py-12">
+          <div class="ui-alert ui-alert-error flex items-center justify-between gap-4">
+            <span>{{ cardsError }}</span>
+            <button
+              type="button"
+              class="ui-btn ui-btn-sm ui-btn-outline flex-none"
+              @click="fetchCards"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+
         <div v-else-if="cards.length === 0" class="text-center py-12">
           <p class="text-gray-600 dark:text-gray-400">No cards found for this title.</p>
         </div>
@@ -360,6 +373,7 @@ const error = computed(() => titleStore.error)
 
 const cards = ref<Card[]>([])
 const cardsLoading = ref<boolean>(false)
+const cardsError = ref<string | null>(null)
 
 // Deck management
 interface DeckApiData {
@@ -504,13 +518,14 @@ const fetchCards = async (): Promise<void> => {
 
   try {
     cardsLoading.value = true
+    cardsError.value = null
     const slug = route.params.slug as string
     const response = await axios.get(`/titles/${slug}/cards/`)
     cards.value = response.data || []
   } catch (err) {
     console.error('Error fetching cards:', err)
-    // Don't set error for cards if title loaded successfully
-    // Just log it and show empty state
+    cards.value = []
+    cardsError.value = 'Unable to load cards. Please try again.'
   } finally {
     cardsLoading.value = false
   }
