@@ -341,6 +341,7 @@ export const useGameStore = defineStore('game', {
           'update_buff',
           'update_summon',
           'update_remove',
+          'update_silence',
         ]
 
         if (display_types.includes(update.type)) {

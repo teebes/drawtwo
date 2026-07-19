@@ -1,11 +1,24 @@
 from django.test import TestCase
 
-from apps.builder.schemas import DamageAction, DeckScript, DrawAction, HeroPower, Taunt
+from apps.builder.schemas import (
+    Battlecry,
+    DamageAction,
+    DeathRattle,
+    DeckScript,
+    DrawAction,
+    HeroPower,
+    SilenceAction,
+    Taunt,
+)
 from apps.gameplay.agents.legal import list_legal_commands
 from apps.gameplay.agents.observation import filter_state_for_player, make_observation
 from apps.gameplay.agents.policies.scripted import ScriptedPolicy
 from apps.gameplay.agents.simulator import apply_command
-from apps.gameplay.schemas.commands import AttackCommand, UseHeroCommand
+from apps.gameplay.schemas.commands import (
+    AttackCommand,
+    PlayCardCommand,
+    UseHeroCommand,
+)
 from apps.gameplay.schemas.game import CardInPlay, Creature, GameState, HeroInPlay
 
 
@@ -119,6 +132,36 @@ class AgentObservationTests(TestCase):
 
 
 class LegalCommandTests(TestCase):
+    def test_silence_spell_lists_only_active_enemy_creatures(self):
+        state = make_agent_test_state()
+        state.cards["silence_1"] = CardInPlay(
+            card_id="silence_1",
+            card_type="spell",
+            template_slug="silence",
+            name="Silence",
+            cost=1,
+            traits=[Battlecry(actions=[SilenceAction(target="enemy")])],
+        )
+        state.hands["side_a"] = ["silence_1"]
+        state.creatures["creature_b_1"].traits = [
+            DeathRattle(actions=[DrawAction(amount=1)])
+        ]
+
+        commands = [
+            command
+            for command in list_legal_commands(state, "side_a")
+            if isinstance(command, PlayCardCommand)
+        ]
+
+        self.assertEqual(len(commands), 1)
+        self.assertEqual(commands[0].target_type, "creature")
+        self.assertEqual(commands[0].target_id, "creature_b_1")
+
+        result = apply_command(state, "side_a", commands[0])
+
+        self.assertFalse(result.errors)
+        self.assertEqual(result.state.creatures["creature_b_1"].traits, [])
+
     def test_attack_commands_respect_taunt(self):
         state = make_agent_test_state()
         taunt = Creature(

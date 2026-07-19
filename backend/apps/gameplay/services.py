@@ -25,6 +25,7 @@ from apps.builder.schemas import (
     HealAction,
     HeroPower,
     RemoveAction,
+    SilenceAction,
     SummonAction,
     TempManaBoostAction,
     TitleConfig,
@@ -61,6 +62,7 @@ from apps.gameplay.schemas.effects import (
     MulliganEffect,
     PlayEffect,
     RemoveEffect,
+    SilenceEffect,
     StartGameEffect,
     SummonEffect,
     TempManaBoostEffect,
@@ -968,7 +970,10 @@ class GameService:
             return False
         if isinstance(action, BuffAction) and action.target == "hero":
             return False
-        return isinstance(action, (DamageAction, HealAction, RemoveAction, BuffAction))
+        return isinstance(
+            action,
+            (DamageAction, HealAction, RemoveAction, SilenceAction, BuffAction),
+        )
 
     @staticmethod
     def actions_require_selected_target(actions: list[Action]) -> bool:
@@ -1555,6 +1560,23 @@ class GameService:
                 )
             return effects
 
+        if isinstance(action, SilenceAction):
+            opposing_side = "side_b" if event.side == "side_a" else "side_a"
+            target_id = event.target_id or (
+                state.board[opposing_side][0] if state.board[opposing_side] else None
+            )
+            if event.target_type not in (None, "creature") or not target_id:
+                return []
+            return [
+                SilenceEffect(
+                    side=event.side,
+                    source_type=source_type,
+                    source_id=source_id,
+                    target_type="creature",
+                    target_id=target_id,
+                )
+            ]
+
         if isinstance(action, TempManaBoostAction):
             amount = GameService.resolve_action_amount(action.amount, trigger_event)
             return [
@@ -1787,6 +1809,7 @@ class GameService:
             HealUpdate,
             PlayCardUpdate,
             RemoveUpdate,
+            SilenceUpdate,
             SummonUpdate,
             TempManaBoostUpdate,
         )
@@ -1858,6 +1881,17 @@ class GameService:
                         source_id=event.source_id,
                         target_type=event.target_type,
                         target_id=event.target_id,
+                    )
+                )
+            elif event.type == "event_silence":
+                updates.append(
+                    SilenceUpdate(
+                        side=event.side,
+                        source_type=event.source_type,
+                        source_id=event.source_id,
+                        target_type=event.target_type,
+                        target_id=event.target_id,
+                        removed_traits=event.removed_traits,
                     )
                 )
             elif event.type == "event_temp_mana_boost":

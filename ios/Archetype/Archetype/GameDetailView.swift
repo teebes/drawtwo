@@ -99,12 +99,15 @@ enum BoardCombatKind {
     case heal
     case buff
     case remove
+    case silence
     case summon
 
     var color: Color {
         switch self {
         case .damage, .remove:
             return ArchetypeTheme.red
+        case .silence:
+            return ArchetypeTheme.sky
         case .heal:
             return ArchetypeTheme.green
         case .buff, .summon:
@@ -202,6 +205,9 @@ struct BoardCombatMarker {
             valueText = "+\(update.value["amount"]?.intValue ?? 0)"
         case "update_remove":
             kind = .remove
+            valueText = nil
+        case "update_silence":
+            kind = .silence
             valueText = nil
         case "update_summon":
             kind = .summon
@@ -567,6 +573,7 @@ final class GameDetailViewModel: ObservableObject {
         "update_buff",
         "update_summon",
         "update_remove",
+        "update_silence",
     ]
     private static let socketPreservedKeys = [
         "viewer",
@@ -1137,6 +1144,13 @@ final class GameDetailViewModel: ObservableObject {
                 side: update.side
             ) ?? "a creature"
             return "\(sideName)Remove \(target)"
+        case "update_silence":
+            let target = entityName(
+                type: update.value["target_type"]?.stringValue,
+                id: update.value["target_id"]?.stringValue,
+                side: update.side
+            ) ?? "a creature"
+            return "\(sideName)Silence \(target)"
         default:
             return sideName + update.type.replacingOccurrences(of: "update_", with: "").displayNameFromSlug
         }
@@ -1471,6 +1485,9 @@ final class GameDetailViewModel: ObservableObject {
                 case "remove":
                     allowed.insert("creature")
                     scope = .enemy
+                case "silence":
+                    allowed.insert("creature")
+                    scope = .enemy
                 case "buff":
                     if target == "creature" || target == "friendly" {
                         allowed.insert("creature")
@@ -1483,7 +1500,7 @@ final class GameDetailViewModel: ObservableObject {
                     break
                 }
 
-                let targetingAction = ["damage", "heal", "remove", "buff"].contains(actionName)
+                let targetingAction = ["damage", "heal", "remove", "silence", "buff"].contains(actionName)
                 if targetingAction && actionScope != "all" && !(actionName == "buff" && target == "hero") {
                     requiresTarget = true
                 }
@@ -3538,6 +3555,15 @@ private struct LatestUpdateChip: View {
                     ),
                     targetBorderColor: targetBorderColor
                 )
+            case "update_silence":
+                compactEntityAction(
+                    badge: UpdateActionBadge(
+                        text: "Silence",
+                        glyph: "🤫",
+                        color: ArchetypeTheme.sky
+                    ),
+                    targetBorderColor: ArchetypeTheme.sky
+                )
             case "update_summon":
                 compactEntityAction(
                     badge: UpdateActionBadge(
@@ -5569,6 +5595,15 @@ private struct UpdateLogRow: View {
                     ),
                     targetBorderColor: targetBorderColor
                 )
+            case "update_silence":
+                entityActionRow(
+                    badge: UpdateActionBadge(
+                        text: "Silence",
+                        glyph: "🤫",
+                        color: ArchetypeTheme.sky
+                    ),
+                    targetBorderColor: ArchetypeTheme.sky
+                )
             case "update_summon":
                 entityActionRow(
                     badge: UpdateActionBadge(
@@ -5742,6 +5777,8 @@ private struct UpdateGlyph: View {
             return "sparkles"
         case "update_remove":
             return "xmark.octagon.fill"
+        case "update_silence":
+            return "speaker.slash.fill"
         case "update_end_turn":
             return "forward.end.fill"
         default:
@@ -5755,6 +5792,8 @@ private struct UpdateGlyph: View {
             return ArchetypeTheme.red
         case "update_heal":
             return ArchetypeTheme.green
+        case "update_silence":
+            return ArchetypeTheme.sky
         case "update_buff", "update_summon":
             return ArchetypeTheme.violet
         case "update_draw_card", "update_play_card":

@@ -131,6 +131,14 @@ class RemoveEffect(EffectBase):
     target_id: str
 
 
+class SilenceEffect(EffectBase):
+    type: Literal["effect_silence"] = "effect_silence"
+    source_type: Literal["card", "creature", "hero", "board"] = "card"
+    source_id: str
+    target_type: Literal["creature"] = "creature"
+    target_id: str
+
+
 class TempManaBoostEffect(EffectBase):
     type: Literal["effect_temp_mana_boost"] = "effect_temp_mana_boost"
     source_type: Literal["card"] = "card"
@@ -178,6 +186,7 @@ Effect = Annotated[
         NewPhaseEffect,
         PlayEffect,
         RemoveEffect,
+        SilenceEffect,
         StartGameEffect,
         SummonEffect,
         TempManaBoostEffect,

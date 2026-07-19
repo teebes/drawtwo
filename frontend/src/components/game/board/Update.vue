@@ -125,6 +125,28 @@
         />
     </div>
 
+    <!-- Silence -->
+    <div class="game-update flex items-center" v-else-if="props.update.type === 'update_silence'">
+        <UpdateEntity
+            v-if="source && gameStore.viewer"
+            :name="source.name"
+            :art_url="'art_url' in source ? source.art_url : null"
+            :class="isViewerTurn ? 'border-green-500' : 'border-red-500'"
+        />
+        <div class="flex items-center mx-2">
+            <div class="bg-slate-500 text-white font-bold px-3 py-1 rounded-lg shadow-md flex items-center gap-1.5">
+                <span class="text-sm">🤫</span>
+                <span class="text-xs">→</span>
+            </div>
+        </div>
+        <UpdateEntity
+            v-if="target && gameStore.viewer"
+            :name="target.name"
+            :art_url="'art_url' in target ? target.art_url : null"
+            :class="isViewerTurn ? 'border-red-500' : 'border-green-500'"
+        />
+    </div>
+
     <!-- Summon -->
     <div class="game-update flex items-center" v-else-if="props.update.type === 'update_summon'">
         <UpdateEntity
@@ -297,6 +319,11 @@ const updateText = (update: any) => {
 
         const attribute = update.attribute === 'attack' ? 'attack' : 'health';
         return `${side_name} ${source_name} > ${target_name} (+${update.amount} ${attribute})`;
+    }
+
+    if (update.type === "update_silence") {
+        const target = gameStore.getCreature(update.target_id);
+        return `${side_name}Silence ${target?.name || 'a creature'}`;
     }
 
     if (update.type === "update_summon") {

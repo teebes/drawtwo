@@ -139,7 +139,7 @@ function hasTargetingActions(traits: any[]): boolean {
         const actions = trait.actions || []
         for (const action of actions) {
             if (
-                (action.action === 'damage' || action.action === 'heal' || action.action === 'remove' || action.action === 'buff') &&
+                (action.action === 'damage' || action.action === 'heal' || action.action === 'remove' || action.action === 'silence' || action.action === 'buff') &&
                 action.scope !== 'all'
             ) {
                 if (action.action === 'buff' && action.target === 'hero') {
@@ -175,8 +175,8 @@ function getAllowedTargets(card: any): Array<'card' | 'hero' | 'any'> {
                 allowed.add('hero')
             }
         }
-        if (action.action === 'remove') {
-            // Remove targets enemy creatures only
+        if (action.action === 'remove' || action.action === 'silence') {
+            // Remove and silence target enemy creatures only
             allowed.add('card')
         }
         if (action.action === 'buff') {
@@ -214,7 +214,7 @@ function getTargetScope(card: any): 'enemy' | 'friendly' {
             return 'enemy'
         }
         // Remove actions target enemies
-        if (action.action === 'remove') {
+        if (action.action === 'remove' || action.action === 'silence') {
             return 'enemy'
         }
     }

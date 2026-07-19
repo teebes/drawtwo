@@ -116,6 +116,17 @@ class RemoveEvent(EventBase):
     target_id: str
 
 
+class SilenceEvent(EventBase):
+    type: Literal["event_silence"] = "event_silence"
+    source_type: Literal["card", "hero", "creature", "board"] = "card"
+    source_id: str
+    target_type: Literal["creature"] = "creature"
+    target_id: str
+    removed_traits: list[Literal["deathrattle", "triggered"]] = Field(
+        default_factory=list
+    )
+
+
 class TempManaBoostEvent(EventBase):
     type: Literal["event_temp_mana_boost"] = "event_temp_mana_boost"
     amount: int
@@ -160,6 +171,7 @@ Event = Annotated[
         NewPhaseEvent,
         PlayEvent,
         RemoveEvent,
+        SilenceEvent,
         SummonEvent,
         TempManaBoostEvent,
         UseHeroEvent,

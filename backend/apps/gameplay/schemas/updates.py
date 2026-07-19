@@ -127,6 +127,17 @@ class RemoveUpdate(UpdateBase):
     target_id: str
 
 
+class SilenceUpdate(UpdateBase):
+    type: Literal["update_silence"] = "update_silence"
+    source_type: Literal["card", "hero", "creature", "board"] = "card"
+    source_id: str
+    target_type: Literal["creature"] = "creature"
+    target_id: str
+    removed_traits: list[Literal["deathrattle", "triggered"]] = Field(
+        default_factory=list
+    )
+
+
 class ClearUpdate(UpdateBase):
     type: Literal["update_clear"] = "update_clear"
     source_type: Literal["card", "hero"] = "card"
@@ -153,6 +164,7 @@ GameUpdate = Annotated[
         PlayCardUpdate,
         RefreshPhaseUpdate,
         RemoveUpdate,
+        SilenceUpdate,
         SummonUpdate,
         TempManaBoostUpdate,
     ],

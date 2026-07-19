@@ -9,6 +9,7 @@ from apps.builder.schemas import (
     DamageAction,
     HealAction,
     RemoveAction,
+    SilenceAction,
 )
 from apps.gameplay.engine.handlers import get_taunt_creatures
 from apps.gameplay.schemas.commands import (
@@ -106,7 +107,10 @@ def _action_requires_selected_target(action: Action) -> bool:
         return False
     if isinstance(action, BuffAction) and action.target == "hero":
         return False
-    return isinstance(action, (DamageAction, HealAction, RemoveAction, BuffAction))
+    return isinstance(
+        action,
+        (DamageAction, HealAction, RemoveAction, SilenceAction, BuffAction),
+    )
 
 
 def _targets_for_action(action: Action, state: GameState, side: str) -> list[Target]:
@@ -131,6 +135,9 @@ def _targets_for_action(action: Action, state: GameState, side: str) -> list[Tar
             return _enemy_creature_targets(state, side)
 
     if isinstance(action, RemoveAction):
+        return _enemy_creature_targets(state, side)
+
+    if isinstance(action, SilenceAction):
         return _enemy_creature_targets(state, side)
 
     if isinstance(action, HealAction):

@@ -92,7 +92,13 @@ class TitleCardsResilienceTestCase(TestCase):
             card=invalid_card,
             trait_slug="battlecry",
             data={
-                "actions": [{"action": "silence", "target": "enemy", "scope": "single"}]
+                "actions": [
+                    {
+                        "action": "transmogrify",
+                        "target": "enemy",
+                        "scope": "single",
+                    }
+                ]
             },
         )
 

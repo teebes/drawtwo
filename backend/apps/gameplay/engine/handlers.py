@@ -10,6 +10,7 @@ from apps.builder.schemas import (
     DamageAction,
     HealAction,
     RemoveAction,
+    SilenceAction,
 )
 from apps.gameplay.engine.dispatcher import register
 from apps.gameplay.schemas.effects import (
@@ -26,6 +27,7 @@ from apps.gameplay.schemas.effects import (
     NewPhaseEffect,
     PlayEffect,
     RemoveEffect,
+    SilenceEffect,
     StartGameEffect,
     SummonEffect,
     TempManaBoostEffect,
@@ -45,6 +47,7 @@ from apps.gameplay.schemas.events import (
     NewPhaseEvent,
     PlayEvent,
     RemoveEvent,
+    SilenceEvent,
     SummonEvent,
     TempManaBoostEvent,
     UseHeroEvent,
@@ -138,7 +141,10 @@ def _card_play_requires_target(card: CardInPlay) -> bool:
     - actions that always resolve to a fixed hero target do not require a target
     """
     for action in _iter_validated_play_actions(card):
-        if isinstance(action, (DamageAction, HealAction, RemoveAction, BuffAction)):
+        if isinstance(
+            action,
+            (DamageAction, HealAction, RemoveAction, SilenceAction, BuffAction),
+        ):
             if getattr(action, "scope", "single") == "all":
                 continue
             if isinstance(action, DamageAction) and action.target == "hero":
@@ -163,7 +169,10 @@ def _card_play_allowed_target_types(card: CardInPlay) -> set[str]:
     """
     allowed: set[str] = set()
     for action in _iter_validated_play_actions(card):
-        if not isinstance(action, (DamageAction, HealAction, RemoveAction, BuffAction)):
+        if not isinstance(
+            action,
+            (DamageAction, HealAction, RemoveAction, SilenceAction, BuffAction),
+        ):
             continue
         if getattr(action, "scope", "single") == "all":
             continue
@@ -180,6 +189,10 @@ def _card_play_allowed_target_types(card: CardInPlay) -> set[str]:
             continue
 
         if isinstance(action, RemoveAction):
+            allowed.add("creature")
+            continue
+
+        if isinstance(action, SilenceAction):
             allowed.add("creature")
             continue
 
@@ -1015,6 +1028,46 @@ def remove(effect: RemoveEffect, state: GameState) -> Result:
     )
 
     return Success(new_state=state, events=events, child_effects=[])
+
+
+@register("effect_silence")
+def silence(effect: SilenceEffect, state: GameState) -> Result:
+    """Remove reactive abilities from an active enemy creature."""
+    opposing_side = "side_b" if effect.side == "side_a" else "side_a"
+    if effect.target_id not in state.board[opposing_side]:
+        return Rejected(
+            reason=f"Target creature {effect.target_id} is not an active enemy creature"
+        )
+
+    target_creature = state.creatures.get(effect.target_id)
+    if not target_creature:
+        return Rejected(reason=f"Target creature {effect.target_id} does not exist")
+
+    silenced_trait_types = {"deathrattle", "triggered"}
+    removed_traits = [
+        trait.type
+        for trait in target_creature.traits
+        if trait.type in silenced_trait_types
+    ]
+    target_creature.traits = [
+        trait
+        for trait in target_creature.traits
+        if trait.type not in silenced_trait_types
+    ]
+
+    return Success(
+        new_state=state,
+        events=[
+            SilenceEvent(
+                side=effect.side,
+                source_type=effect.source_type,
+                source_id=effect.source_id,
+                target_type="creature",
+                target_id=effect.target_id,
+                removed_traits=removed_traits,
+            )
+        ],
+    )
 
 
 @register("effect_temp_mana_boost")

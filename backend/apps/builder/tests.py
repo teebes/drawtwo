@@ -665,7 +665,7 @@ class TestCardYamlValidation(APITestCase):
         )
         self.client.force_authenticate(user=self.author)
 
-    def _invalid_action_yaml(self, *, name="Silence"):
+    def _invalid_action_yaml(self, *, name="Invalid Spell"):
         return f"""
         name: {name}
         description: Remove abilities from an enemy creature.
@@ -674,7 +674,7 @@ class TestCardYamlValidation(APITestCase):
         traits:
           - type: battlecry
             actions:
-              - action: silence
+              - action: transmogrify
                 target: enemy
                 scope: single
         """
@@ -685,7 +685,7 @@ class TestCardYamlValidation(APITestCase):
         response = self.client.post(
             url,
             {
-                "slug": "silence",
+                "slug": "invalid-action",
                 "yaml_definition": self._invalid_action_yaml(),
             },
             format="json",
@@ -693,9 +693,11 @@ class TestCardYamlValidation(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("Invalid trait #1", response.data["error"])
-        self.assertIn("silence", response.data["error"])
+        self.assertIn("transmogrify", response.data["error"])
         self.assertFalse(
-            CardTemplate.objects.filter(title=self.title, slug="silence").exists()
+            CardTemplate.objects.filter(
+                title=self.title, slug="invalid-action"
+            ).exists()
         )
 
     def test_update_card_rejects_invalid_nested_action_without_mutating_card(self):
@@ -746,6 +748,34 @@ class TestCardYamlValidation(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("single card object", response.data["error"])
         self.assertNotIn("has no attribute", response.data["error"])
+
+    def test_create_card_accepts_silence_action(self):
+        url = reverse("card-create", kwargs={"title_slug": self.title.slug})
+        yaml_definition = """
+        name: Silence
+        description: Remove reactive abilities from an enemy creature.
+        card_type: spell
+        cost: 1
+        traits:
+          - type: battlecry
+            actions:
+              - action: silence
+                target: enemy
+                scope: single
+        """
+
+        response = self.client.post(
+            url,
+            {"slug": "silence", "yaml_definition": yaml_definition},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        card = CardTemplate.objects.get(title=self.title, slug="silence")
+        self.assertEqual(
+            card.cardtrait_set.get().data,
+            {"actions": [{"action": "silence", "target": "enemy", "scope": "single"}]},
+        )
 
 
 class TestIngestion(TestCase):

@@ -326,7 +326,7 @@ function requiresTarget(card: CardInPlay): boolean {
             const actions = trait.actions || []
             for (const action of actions) {
                 if (
-                    (action.action === 'damage' || action.action === 'heal' || action.action === 'remove' || action.action === 'buff') &&
+                    (action.action === 'damage' || action.action === 'heal' || action.action === 'remove' || action.action === 'silence' || action.action === 'buff') &&
                     action.scope !== 'all'
                 ) {
                     if (action.action === 'buff' && action.target === 'hero') {

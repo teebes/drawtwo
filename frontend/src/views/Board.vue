@@ -1785,7 +1785,7 @@ function requiresBattlecryTarget(card: CardInPlay): boolean {
     for (const action of actions) {
         // Battlecry actions that require targeting (damage, heal)
         if (
-            (action.action === 'damage' || action.action === 'heal' || action.action === 'remove' || action.action === 'buff') &&
+            (action.action === 'damage' || action.action === 'heal' || action.action === 'remove' || action.action === 'silence' || action.action === 'buff') &&
             action.scope !== 'all'
         ) {
             if (action.action === 'buff' && action.target === 'hero') {
@@ -1821,8 +1821,8 @@ function getBattlecryAllowedTargets(card: CardInPlay): Array<'card' | 'hero' | '
                 allowed.add('hero')
             }
         }
-        if (action.action === 'remove') {
-            // Remove targets enemy creatures only
+        if (action.action === 'remove' || action.action === 'silence') {
+            // Remove and silence target enemy creatures only
             allowed.add('card')
         }
         if (action.action === 'buff') {
@@ -1861,7 +1861,7 @@ function getBattlecryTargetScope(card: CardInPlay): 'enemy' | 'friendly' {
             return 'enemy'
         }
         // Remove actions target enemies
-        if (action.action === 'remove') {
+        if (action.action === 'remove' || action.action === 'silence') {
             return 'enemy'
         }
     }
@@ -1904,7 +1904,7 @@ function requiresTarget(card: CardInPlay): boolean {
             const actions = trait.actions || []
             for (const action of actions) {
                 // Actions that require targeting (single and cleave need targets, AOE doesn't)
-                if ((action.action === 'damage' || action.action === 'heal' || action.action === 'remove' || action.action === 'buff') &&
+                if ((action.action === 'damage' || action.action === 'heal' || action.action === 'remove' || action.action === 'silence' || action.action === 'buff') &&
                     action.scope !== 'all') {
                     if (action.action === 'buff' && action.target === 'hero') {
                         continue
@@ -1943,8 +1943,8 @@ function getAllowedTargets(card: CardInPlay): Array<'card' | 'hero' | 'any'> {
                     allowed.add('hero')
                 }
             }
-            if (action.action === 'remove') {
-                // Remove targets enemy creatures only
+            if (action.action === 'remove' || action.action === 'silence') {
+                // Remove and silence target enemy creatures only
                 allowed.add('card')
             }
             if (action.action === 'buff') {
@@ -1983,7 +1983,7 @@ function getSpellTargetScope(card: CardInPlay): 'enemy' | 'friendly' {
                 return 'enemy'
             }
             // Remove actions target enemies
-            if (action.action === 'remove') {
+            if (action.action === 'remove' || action.action === 'silence') {
                 return 'enemy'
             }
         }
@@ -2028,7 +2028,7 @@ function heroPowerRequiresTarget(hero: any): boolean {
             return false
         }
         if (
-            (action.action === 'damage' || action.action === 'heal' || action.action === 'remove' || action.action === 'buff') &&
+            (action.action === 'damage' || action.action === 'heal' || action.action === 'remove' || action.action === 'silence' || action.action === 'buff') &&
             action.scope !== 'all' &&
             action.target !== 'self'
         ) {

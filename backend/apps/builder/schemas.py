@@ -58,6 +58,12 @@ class RemoveAction(ActionBase):
     scope: Literal["single", "cleave", "all"] = "single"
 
 
+class SilenceAction(ActionBase):
+    action: Literal["silence"] = "silence"
+    target: Literal["creature", "enemy"] = "creature"
+    scope: Literal["single"] = "single"
+
+
 class TempManaBoostAction(ActionBase):
     action: Literal["temp_mana_boost"] = "temp_mana_boost"
     amount: AmountValue
@@ -90,6 +96,7 @@ Action = Annotated[
         DamageAction,
         HealAction,
         RemoveAction,
+        SilenceAction,
         SummonAction,
         TempManaBoostAction,
     ],

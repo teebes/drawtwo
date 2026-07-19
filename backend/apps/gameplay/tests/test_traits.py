@@ -14,7 +14,9 @@ from apps.builder.schemas import (
     HealAction,
     HeroPower,
     RemoveAction,
+    SilenceAction,
     SummonAction,
+    Taunt,
     Triggered,
     Unique,
 )
@@ -28,10 +30,11 @@ from apps.gameplay.schemas.effects import (
     HealEffect,
     PlayEffect,
     RemoveEffect,
+    SilenceEffect,
     SummonEffect,
     UseHeroEffect,
 )
-from apps.gameplay.schemas.engine import Success
+from apps.gameplay.schemas.engine import Rejected, Success
 from apps.gameplay.schemas.events import (
     BuffEvent,
     CreatureDeathEvent,
@@ -1076,6 +1079,154 @@ class TestRemoveAction(GamePlayTestBase):
 
         # Verify all creatures were removed
         self.assertEqual(len(new_state.board["side_b"]), 0)
+
+
+class TestSilenceAction(GamePlayTestBase):
+    def test_silence_removes_deathrattle_and_triggered_from_active_creature(self):
+        target_card = CardInPlay(
+            card_type="creature",
+            card_id="reactive_1",
+            template_slug="reactive-card",
+            name="Reactive Card",
+            attack=2,
+            health=4,
+            cost=3,
+            traits=[
+                DeathRattle(actions=[DrawAction(amount=1)]),
+                Triggered(
+                    when={"event": "card_played"},
+                    actions=[BuffAction(attribute="attack", amount=1, target="self")],
+                ),
+                Taunt(),
+                Unique(),
+                Battlecry(actions=[DrawAction(amount=1)]),
+            ],
+        )
+        self.game_state.cards[target_card.card_id] = target_card
+        target_creature = spawn_creature(
+            card=target_card,
+            state=self.game_state,
+            side="side_b",
+        )
+
+        silence_card = CardInPlay(
+            card_type="spell",
+            card_id="silence_1",
+            template_slug="silence",
+            name="Silence",
+            cost=1,
+            traits=[Battlecry(actions=[SilenceAction(target="enemy")])],
+        )
+        self.game_state.cards[silence_card.card_id] = silence_card
+        play_event = PlayEvent(
+            side="side_a",
+            source_type="card",
+            source_id=silence_card.card_id,
+            position=0,
+            target_type="creature",
+            target_id=target_creature.creature_id,
+        )
+
+        trait_result = traits.apply(self.game_state, play_event)
+        silence_effects = [
+            effect
+            for effect in trait_result.child_effects
+            if isinstance(effect, SilenceEffect)
+        ]
+        self.assertEqual(len(silence_effects), 1)
+
+        result = resolve(silence_effects[0], self.game_state)
+
+        self.assertIsInstance(result, Success)
+        silenced_creature = result.new_state.creatures[target_creature.creature_id]
+        self.assertEqual(
+            [trait.type for trait in silenced_creature.traits],
+            ["taunt", "unique", "battlecry"],
+        )
+        self.assertEqual(
+            result.events[0].removed_traits,
+            ["deathrattle", "triggered"],
+        )
+        self.assertEqual(
+            [
+                trait.type
+                for trait in result.new_state.cards[target_card.card_id].traits
+            ],
+            ["deathrattle", "triggered", "taunt", "unique", "battlecry"],
+        )
+
+        updates = GameService._events_to_updates(result.events)
+        validated_updates = TypeAdapter(list[GameUpdate]).validate_python(
+            [update.model_dump(mode="json") for update in updates]
+        )
+        self.assertEqual(validated_updates[0].type, "update_silence")
+        self.assertEqual(
+            validated_updates[0].removed_traits,
+            ["deathrattle", "triggered"],
+        )
+
+        followup_card = CardInPlay(
+            card_type="spell",
+            card_id="followup_1",
+            template_slug="followup",
+            name="Followup",
+            cost=0,
+            traits=[],
+        )
+        result.new_state.cards[followup_card.card_id] = followup_card
+        triggered_result = traits.apply(
+            result.new_state,
+            PlayEvent(
+                side="side_a",
+                source_type="card",
+                source_id=followup_card.card_id,
+                position=0,
+            ),
+        )
+        self.assertEqual(triggered_result.child_effects, [])
+
+        deathrattle_result = traits.apply(
+            result.new_state,
+            CreatureDeathEvent(
+                side="side_b",
+                source_type="card",
+                source_id=followup_card.card_id,
+                source_side="side_a",
+                target_type="creature",
+                target_id=silenced_creature.creature_id,
+                creature=silenced_creature,
+            ),
+        )
+        self.assertEqual(deathrattle_result.child_effects, [])
+
+    def test_silence_rejects_creature_that_is_not_an_active_enemy(self):
+        friendly_card = CardInPlay(
+            card_type="creature",
+            card_id="friendly_1",
+            template_slug="friendly-card",
+            name="Friendly Card",
+            attack=1,
+            health=1,
+            cost=1,
+            traits=[DeathRattle(actions=[DrawAction(amount=1)])],
+        )
+        friendly_creature = spawn_creature(
+            card=friendly_card,
+            state=self.game_state,
+            side="side_a",
+        )
+        silence_effect = SilenceEffect(
+            side="side_a",
+            source_type="card",
+            source_id="silence_1",
+            target_type="creature",
+            target_id=friendly_creature.creature_id,
+        )
+
+        result = resolve(silence_effect, self.game_state)
+
+        self.assertIsInstance(result, Rejected)
+        self.assertIn("active enemy creature", result.reason)
 
 
 class TestBuffAction(GamePlayTestBase):

@@ -99,6 +99,7 @@ struct HowToGuideContent: View {
             GuideText("When creatures are first played, they are in exhausted state. The exhausted state is removed at the end of each turn. A creature that is exhausted cannot attack.")
             GuideText("Taunt only blocks physical damage. Spell damage will bypass it.")
             GuideText("Using the Remove spell will bypass the On Death trait on the removed card.")
+            GuideText("Silence removes On Death and triggered abilities from an active enemy creature.")
             GuideText("When a player goes second, they start with an extra Power-Up card in their hand, which if used gives them 1 extra energy for the remainder of the turn.")
         }
         .frame(maxWidth: 672)
