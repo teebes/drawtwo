@@ -77,7 +77,8 @@ from that creature, the same way it would remove `deathrattle` or `taunt`.
 Supported trigger events:
 
 - `card_played`: any creature card played or spell card used
-- `creature_played`: a creature card played, but not a spell card used
+- `creature_played`: a creature enters the board, whether played from hand or
+  summoned; the entering creature is the event source for filters
 - `spell_used`: a spell card used, but not a creature card played
 - `damage`
 - `heal`

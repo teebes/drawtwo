@@ -19,6 +19,7 @@ from apps.gameplay.schemas.events import (
     Event,
     HealEvent,
     PlayEvent,
+    SummonEvent,
 )
 from apps.gameplay.schemas.game import CardInPlay, Creature, GameState
 from apps.gameplay.services import GameService
@@ -33,13 +34,13 @@ EVENT_TRAIT_TRIGGERS = {
 }
 
 TRIGGER_EVENT_TYPES = {
-    "card_played": "event_play",
-    "creature_played": "event_play",
-    "spell_used": "event_play",
-    "damage": "event_damage",
-    "heal": "event_heal",
-    "creature_death": "event_creature_death",
-    "hero_power_used": "event_use_hero",
+    "card_played": {"event_play"},
+    "creature_played": {"event_play", "event_summon"},
+    "spell_used": {"event_play"},
+    "damage": {"event_damage"},
+    "heal": {"event_heal"},
+    "creature_death": {"event_creature_death"},
+    "hero_power_used": {"event_use_hero"},
 }
 
 
@@ -146,7 +147,7 @@ def _trigger_matches(
     if not when:
         return False
 
-    if TRIGGER_EVENT_TYPES.get(when.event) != event.type:
+    if event.type not in TRIGGER_EVENT_TYPES.get(when.event, set()):
         return False
 
     if not _trigger_play_event_matches(state, event, when.event):
@@ -160,6 +161,7 @@ def _trigger_matches(
         observer_side=observer_side,
         observer_id=observer_id,
         observer=observer,
+        trigger_event=when.event,
     ) and _entity_filter_matches(
         state=state,
         event=event,
@@ -168,21 +170,26 @@ def _trigger_matches(
         observer_side=observer_side,
         observer_id=observer_id,
         observer=observer,
+        trigger_event=when.event,
     )
 
 
 def _trigger_play_event_matches(state: GameState, event: Event, trigger_event: str):
     if trigger_event == "creature_played":
-        return _play_event_card_type(state, event) == "creature"
+        return _trigger_event_card_type(state, event) == "creature"
     if trigger_event == "spell_used":
-        return _play_event_card_type(state, event) == "spell"
+        return _trigger_event_card_type(state, event) == "spell"
     return True
 
 
-def _play_event_card_type(state: GameState, event: Event):
-    if not isinstance(event, PlayEvent):
+def _trigger_event_card_type(state: GameState, event: Event):
+    if isinstance(event, PlayEvent):
+        card_id = event.source_id
+    elif isinstance(event, SummonEvent):
+        card_id = event.target_id
+    else:
         return None
-    card = state.cards.get(event.source_id)
+    card = state.cards.get(card_id)
     return card.card_type if card else None
 
 
@@ -195,8 +202,9 @@ def _entity_filter_matches(
     observer_side: str,
     observer_id: str,
     observer: Creature,
+    trigger_event: str,
 ) -> bool:
-    entity = _event_entity(state, event, role)
+    entity = _event_entity(state, event, role, trigger_event)
     if not entity:
         return not _filter_has_constraints(entity_filter)
 
@@ -249,7 +257,23 @@ def _entity_is_observer(entity: dict, observer_id: str, observer: Creature) -> b
     )
 
 
-def _event_entity(state: GameState, event: Event, role: str) -> dict | None:
+def _event_entity(
+    state: GameState, event: Event, role: str, trigger_event: str
+) -> dict | None:
+    if trigger_event == "creature_played" and isinstance(event, SummonEvent):
+        # For creature-entry triggers, filters describe the creature that entered,
+        # just as they describe the played card for PlayEvent. Keep SummonEvent's
+        # raw source fields unchanged so logs still attribute the summon to its
+        # hero, spell, or creature.
+        if role == "source":
+            return _entity_details(
+                state=state,
+                kind="card",
+                entity_id=event.target_id,
+                side=event.side,
+            )
+        return None
+
     if role == "source":
         return _event_source_entity(state, event)
     return _event_target_entity(state, event)

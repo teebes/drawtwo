@@ -49,6 +49,19 @@ from apps.gameplay.tests import GamePlayTestBase
 
 
 class TestTriggeredTraits(GamePlayTestBase):
+    @staticmethod
+    def _opportunist_trait() -> Triggered:
+        return Triggered(
+            when={
+                "event": "creature_played",
+                "source": {"controller": "self", "exclude_self": True},
+            },
+            actions=[
+                BuffAction(attribute="attack", amount=1, target="self"),
+                BuffAction(attribute="health", amount=1, target="self"),
+            ],
+        )
+
     def _spawn_card(
         self,
         *,
@@ -249,6 +262,181 @@ class TestTriggeredTraits(GamePlayTestBase):
         self.assertEqual(new_state.creatures[any_observer.creature_id].attack, 3)
         self.assertEqual(new_state.creatures[creature_observer.creature_id].attack, 2)
         self.assertEqual(new_state.creatures[spell_observer.creature_id].attack, 2)
+
+    def test_opportunist_buffs_when_friendly_creature_is_played_from_hand(self):
+        opportunist = self._spawn_card(
+            side="side_a",
+            card_id="10",
+            attack=5,
+            health=5,
+            traits=[self._opportunist_trait()],
+        )
+        self.game_state.cards["11"] = CardInPlay(
+            card_type="creature",
+            card_id="11",
+            template_slug="recruit",
+            name="Recruit",
+            attack=1,
+            health=1,
+            cost=0,
+        )
+        self.game_state.hands["side_a"] = ["11"]
+
+        result = apply_effects(
+            self.game_state,
+            [PlayEffect(side="side_a", source_id="11", position=0)],
+        )
+
+        self.assertEqual(result.errors, [])
+        buffed = result.state.creatures[opportunist.creature_id]
+        self.assertEqual(
+            (buffed.attack, buffed.attack_max, buffed.health, buffed.health_max),
+            (6, 6, 6, 6),
+        )
+
+    def test_opportunist_buffs_when_commander_summons_recruit(self):
+        opportunist = self._spawn_card(
+            side="side_a",
+            card_id="10",
+            attack=5,
+            health=5,
+            traits=[self._opportunist_trait()],
+        )
+        self.game_state.heroes["side_a"].hero_power = HeroPower(
+            name="Recruit",
+            description="Summon a 1/1 Recruit.",
+            cost=0,
+            actions=[SummonAction(target="recruit")],
+        )
+        self.game_state.heroes["side_a"].exhausted = False
+        self.game_state.summonable_cards["recruit"] = CardInPlay(
+            card_type="creature",
+            card_id="",
+            template_slug="recruit",
+            name="Recruit",
+            attack=1,
+            health=1,
+            cost=0,
+        )
+
+        result = apply_effects(
+            self.game_state,
+            [UseHeroEffect(side="side_a", source_id="1")],
+        )
+
+        self.assertEqual(result.errors, [])
+        buffed = result.state.creatures[opportunist.creature_id]
+        self.assertEqual(
+            (buffed.attack, buffed.attack_max, buffed.health, buffed.health_max),
+            (6, 6, 6, 6),
+        )
+        event_types = [event["type"] for event in result.events]
+        self.assertEqual(event_types.count("event_summon"), 1)
+        self.assertEqual(event_types.count("event_buff"), 2)
+
+    def test_opportunist_buffs_once_for_each_phalanx_summon(self):
+        opportunist = self._spawn_card(
+            side="side_a",
+            card_id="10",
+            attack=5,
+            health=5,
+            traits=[self._opportunist_trait()],
+        )
+        self.game_state.cards["11"] = CardInPlay(
+            card_type="spell",
+            card_id="11",
+            template_slug="phalanx",
+            name="Phalanx",
+            cost=0,
+            traits=[
+                Battlecry(
+                    actions=[
+                        SummonAction(target="shield"),
+                        SummonAction(target="spear"),
+                    ]
+                )
+            ],
+        )
+        self.game_state.hands["side_a"] = ["11"]
+        self.game_state.summonable_cards["shield"] = CardInPlay(
+            card_type="creature",
+            card_id="",
+            template_slug="shield",
+            name="Shield",
+            attack=0,
+            health=4,
+            cost=0,
+        )
+        self.game_state.summonable_cards["spear"] = CardInPlay(
+            card_type="creature",
+            card_id="",
+            template_slug="spear",
+            name="Spear",
+            attack=3,
+            health=3,
+            cost=0,
+        )
+
+        result = apply_effects(
+            self.game_state,
+            [PlayEffect(side="side_a", source_id="11", position=0)],
+        )
+
+        self.assertEqual(result.errors, [])
+        buffed = result.state.creatures[opportunist.creature_id]
+        self.assertEqual(
+            (buffed.attack, buffed.attack_max, buffed.health, buffed.health_max),
+            (7, 7, 7, 7),
+        )
+        board_slugs = {
+            result.state.cards[
+                result.state.creatures[creature_id].card_id
+            ].template_slug
+            for creature_id in result.state.board["side_a"]
+        }
+        self.assertEqual(board_slugs, {"10", "shield", "spear"})
+        self.assertIn("11", result.state.graveyard["side_a"])
+        event_types = [event["type"] for event in result.events]
+        self.assertEqual(event_types.count("event_summon"), 2)
+        self.assertEqual(event_types.count("event_buff"), 4)
+
+    def test_summoned_opportunist_does_not_trigger_itself(self):
+        self.game_state.summonable_cards["opportunist"] = CardInPlay(
+            card_type="creature",
+            card_id="",
+            template_slug="opportunist",
+            name="Opportunist",
+            attack=5,
+            health=5,
+            cost=5,
+            traits=[self._opportunist_trait()],
+        )
+
+        result = apply_effects(
+            self.game_state,
+            [
+                SummonEffect(
+                    side="side_a",
+                    source_type="hero",
+                    source_id="1",
+                    target="opportunist",
+                )
+            ],
+        )
+
+        self.assertEqual(result.errors, [])
+        creature_id = result.state.board["side_a"][0]
+        opportunist = result.state.creatures[creature_id]
+        self.assertEqual(
+            (
+                opportunist.attack,
+                opportunist.attack_max,
+                opportunist.health,
+                opportunist.health_max,
+            ),
+            (5, 5, 5, 5),
+        )
+        self.assertNotIn("event_buff", [event["type"] for event in result.events])
 
     def test_triggered_trait_observes_hero_and_creature_damage(self):
         observer = self._spawn_card(
