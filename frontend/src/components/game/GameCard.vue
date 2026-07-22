@@ -140,9 +140,13 @@ const displayCost = computed(() => {
 
 // Determine if this is a spell (spells don't show attack/health)
 const isSpell = computed(() => {
-    // Check if card has a card_type property indicating it's a spell
-    if ('card_type' in props.card && props.card.card_type === 'spell') {
-        return true
+    // Prefer explicit card type information when it is available.
+    if ('card_type' in props.card) {
+        return props.card.card_type === 'spell'
+    }
+    // A zero-health creature retained briefly for its damage animation is still a creature.
+    if (props.in_lane || 'creature_id' in props.card) {
+        return false
     }
     // Check if both attack and health are 0 (heuristic for spells)
     if (props.card.attack === 0 && props.card.health === 0) {

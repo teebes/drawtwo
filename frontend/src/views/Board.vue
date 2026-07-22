@@ -97,16 +97,21 @@
 
                  <!-- OPPONENT BOARD -->
                  <div class="opponent-board flex-1 flex flex-row bg-gray-800 items-center overflow-x-auto">
-                    <div class="lane flex flex-row h-24 mx-auto space-x-2">
+                    <div
+                        class="lane flex flex-row h-24 mx-auto space-x-2"
+                        :class="{ 'pointer-events-none': hasRetainedCreatures }">
                         <div
-                            v-for="creature in opposingBoard"
+                            v-for="creature in renderedOpposingBoard"
                             :key="creature.creature_id"
                             class="w-14 shrink-0"
                             :ref="(el) => setEntityElement(creature.creature_id, el)"
-                            :class="getCombatEntityClass(creature.creature_id)"
+                            :class="[
+                                getCombatEntityClass(creature.creature_id),
+                                { 'pointer-events-none': isRetainedCreature(creature.creature_id) }
+                            ]"
                             :style="getCombatEntityStyle(creature.creature_id)">
                             <GameCard v-if="creature"
-                                      class="cursor-pointer"
+                                      :class="isRetainedCreature(creature.creature_id) ? 'pointer-events-none' : 'cursor-pointer'"
                                       :card="creature"
                                       @click="handleClickOpposingCreature(creature.creature_id)"
                                       compact in_lane/>
@@ -140,16 +145,21 @@
             <div class="side-a flex-1 flex flex-col">
                 <!-- VIEWER BOARD -->
                 <div class="viewer-board flex-1 flex flex-row bg-gray-800 items-center overflow-x-auto">
-                    <div class="lane flex flex-row h-24 mx-auto space-x-2">
+                    <div
+                        class="lane flex flex-row h-24 mx-auto space-x-2"
+                        :class="{ 'pointer-events-none': hasRetainedCreatures }">
                         <div
-                            v-for="creature in ownBoard"
+                            v-for="creature in renderedOwnBoard"
                             :key="creature.creature_id"
                             class="w-14 shrink-0"
                             :ref="(el) => setEntityElement(creature.creature_id, el)"
-                            :class="getCombatEntityClass(creature.creature_id)"
+                            :class="[
+                                getCombatEntityClass(creature.creature_id),
+                                { 'pointer-events-none': isRetainedCreature(creature.creature_id) }
+                            ]"
                             :style="getCombatEntityStyle(creature.creature_id)">
                             <GameCard v-if="creature"
-                                      class="cursor-pointer"
+                                      :class="isRetainedCreature(creature.creature_id) ? 'pointer-events-none' : 'cursor-pointer'"
                                       :card="creature"
                                       @click="handleClickOwnCreature(creature.creature_id)"
                                       compact in_lane/>
@@ -401,7 +411,7 @@ import { useRoute, useRouter } from 'vue-router'
 import type { CardInPlay, Creature, LadderType, Side } from '../types/game'
 import { useAuthStore } from '../stores/auth'
 import { useTitleStore } from '../stores/title'
-import { useGameStore } from '../stores/game'
+import { useGameStore, type LiveUpdateBoardSnapshot } from '../stores/game'
 import { storeToRefs } from 'pinia'
 
 import axios from '../config/api'
@@ -455,6 +465,7 @@ const {
   bottomSide,
   displayUpdates,
   liveUpdateBatch,
+  liveUpdatePreviousBoardSnapshot,
   liveUpdateBatchId,
   canUseHero,
   wsStatus,
@@ -597,12 +608,21 @@ interface PlayedSpellCard {
     leaving: boolean
 }
 
+interface RetainedCreature {
+    creature: Creature
+    side: Side
+    index: number
+    layoutIds: string[]
+    generation: number
+}
+
 const showingGameOver = ref(false)
 const rematchLoading = ref(false)
 const boardSurface = ref<HTMLElement | null>(null)
 const activeCombatAnimation = ref<CombatAnimationState | null>(null)
 const combatValueBursts = ref<CombatValueBurst[]>([])
 const playedSpellCards = ref<PlayedSpellCard[]>([])
+const retainedCreatures = ref<Record<string, RetainedCreature>>({})
 const mulliganSelectedCardIds = ref<string[]>([])
 const mulliganSubmitting = ref(false)
 
@@ -617,6 +637,8 @@ let combatAnimationKey = 0
 let combatAnimationTimeout: number | null = null
 let combatValueBurstKey = 0
 let playedSpellCardKey = 0
+let retainedCreatureGeneration = 0
+let retainedCreatureClearTimeout: number | null = null
 let autoSwitchNavigateTimeout: number | null = null
 let autoSwitchClearTimeout: number | null = null
 
@@ -625,6 +647,7 @@ const COMBAT_ENTITY_RECOIL = 10
 const HEAL_ENTITY_DRIFT = 6
 const SPELL_ENTITY_PULSE = 8
 const COMBAT_ANIMATION_DURATION_MS = 620
+const CASUALTY_HOLD_DURATION_MS = COMBAT_ANIMATION_DURATION_MS
 const COMBAT_VALUE_BURST_DURATION_MS = 2200
 const PLAYED_SPELL_CARD_CENTER_OFFSET_PX = 76
 const PLAYED_SPELL_CARD_FLOAT_OFFSET_PX = 12
@@ -633,6 +656,80 @@ const PLAYED_SPELL_CARD_EXIT_MS = 260
 const PLAYED_SPELL_CARD_AFTER_ANIMATION_MS = 400
 const AUTO_SWITCH_NAVIGATE_MS = 760
 const AUTO_SWITCH_CLEAR_MS = 520
+
+const authoritativeBoardCreatureIds = computed(() => new Set([
+    ...ownBoard.value.map((creature) => creature.creature_id),
+    ...opposingBoard.value.map((creature) => creature.creature_id),
+]))
+
+const visibleRetainedCreatureIds = computed(() => new Set(
+    Object.keys(retainedCreatures.value).filter(
+        (creatureId) => !authoritativeBoardCreatureIds.value.has(creatureId)
+    )
+))
+
+const hasRetainedCreatures = computed(() => Object.keys(retainedCreatures.value).length > 0)
+
+const isRetainedCreature = (creatureId: string) => {
+    return visibleRetainedCreatureIds.value.has(creatureId)
+}
+
+const mergeRetainedCreatureIds = (boardIds: string[], side: Side): string[] => {
+    const authoritativeIds = new Set(boardIds)
+    const retainedForSide = Object.values(retainedCreatures.value)
+        .filter((entry) => entry.side === side && !authoritativeIds.has(entry.creature.creature_id))
+        .sort((left, right) => left.index - right.index || left.generation - right.generation)
+
+    if (retainedForSide.length === 0) {
+        return [...boardIds]
+    }
+
+    const retainedIds = new Set(retainedForSide.map((entry) => entry.creature.creature_id))
+    const latestLayout = retainedForSide.reduce((latest, entry) =>
+        entry.generation > latest.generation ? entry : latest
+    ).layoutIds
+    const mergedIds: string[] = []
+    const insertedIds = new Set<string>()
+    const appendIfVisible = (creatureId: string) => {
+        if (
+            !insertedIds.has(creatureId)
+            && (authoritativeIds.has(creatureId) || retainedIds.has(creatureId))
+        ) {
+            mergedIds.push(creatureId)
+            insertedIds.add(creatureId)
+        }
+    }
+
+    for (const creatureId of latestLayout) {
+        appendIfVisible(creatureId)
+    }
+
+    for (const entry of retainedForSide) {
+        const creatureId = entry.creature.creature_id
+        if (insertedIds.has(creatureId)) continue
+
+        const insertionIndex = Math.min(Math.max(entry.index, 0), mergedIds.length)
+        mergedIds.splice(insertionIndex, 0, creatureId)
+        insertedIds.add(creatureId)
+    }
+
+    // Newly summoned cards appear after the casualty hold, so they cannot displace a damage target.
+    return mergedIds
+}
+
+const mergeRetainedCreatures = (board: Creature[], side: Side | null): Creature[] => {
+    if (!side) {
+        return board
+    }
+
+    const boardById = new Map(board.map((creature) => [creature.creature_id, creature]))
+    return mergeRetainedCreatureIds(board.map((creature) => creature.creature_id), side)
+        .map((creatureId) => boardById.get(creatureId) ?? retainedCreatures.value[creatureId]?.creature)
+        .filter((creature): creature is Creature => Boolean(creature))
+}
+
+const renderedOwnBoard = computed(() => mergeRetainedCreatures(ownBoard.value, bottomSide.value))
+const renderedOpposingBoard = computed(() => mergeRetainedCreatures(opposingBoard.value, topSide.value))
 
 const title = computed(() => titleStore.currentTitle)
 
@@ -808,6 +905,136 @@ const getEntityCenter = (entityId: string): CombatPoint | null => {
     }
 }
 
+const findPreviousBoardPlacement = (
+    snapshot: LiveUpdateBoardSnapshot,
+    creatureId: string
+): { side: Side; index: number; layoutIds: string[] } | null => {
+    for (const side of ['side_a', 'side_b'] as const) {
+        const previousBoardIds = mergeRetainedCreatureIds(snapshot.board[side], side)
+        if (
+            snapshot.board[side].includes(creatureId)
+            && !previousBoardIds.includes(creatureId)
+        ) {
+            // Reveal a deferred summon if it is killed before the earlier casualty sequence ends.
+            previousBoardIds.push(creatureId)
+        }
+        const index = previousBoardIds.indexOf(creatureId)
+        if (index >= 0) {
+            return { side, index, layoutIds: previousBoardIds }
+        }
+    }
+
+    return null
+}
+
+const scheduleRetainedCreatureClear = () => {
+    if (Object.keys(retainedCreatures.value).length === 0) {
+        return
+    }
+
+    if (retainedCreatureClearTimeout !== null) {
+        clearTimeout(retainedCreatureClearTimeout)
+    }
+    retainedCreatureClearTimeout = window.setTimeout(() => {
+        retainedCreatures.value = {}
+        retainedCreatureClearTimeout = null
+    }, CASUALTY_HOLD_DURATION_MS)
+}
+
+const isDisplayedBoardCreature = (targetId: string) => {
+    return renderedOwnBoard.value.some((creature) => creature.creature_id === targetId)
+        || renderedOpposingBoard.value.some((creature) => creature.creature_id === targetId)
+}
+
+const revealSuppressedBoardTarget = (targetId: string): boolean => {
+    if (isDisplayedBoardCreature(targetId)) {
+        return false
+    }
+
+    const side = (['side_a', 'side_b'] as const).find(
+        (candidateSide) => gameState.value.board[candidateSide]?.includes(targetId)
+    )
+    if (!side) {
+        return false
+    }
+
+    const latestRetained = Object.values(retainedCreatures.value)
+        .filter((entry) => entry.side === side)
+        .reduce<RetainedCreature | null>(
+            (latest, entry) => !latest || entry.generation > latest.generation ? entry : latest,
+            null
+        )
+    if (!latestRetained) {
+        return false
+    }
+
+    const retainedId = latestRetained.creature.creature_id
+    retainedCreatures.value = {
+        ...retainedCreatures.value,
+        [retainedId]: {
+            ...latestRetained,
+            layoutIds: [...latestRetained.layoutIds, targetId],
+            generation: ++retainedCreatureGeneration,
+        },
+    }
+    return true
+}
+
+const extendRetainedCreatureHoldForTarget = (targetId: string) => {
+    if (isDisplayedBoardCreature(targetId)) {
+        scheduleRetainedCreatureClear()
+    }
+}
+
+const retainDamagedCreature = (
+    update: DamageUpdate,
+    previousBoardSnapshot: LiveUpdateBoardSnapshot | null
+) => {
+    if (overlay.value || !previousBoardSnapshot) {
+        return
+    }
+
+    const creatureId = update.target_id
+    const previousPlacement = findPreviousBoardPlacement(previousBoardSnapshot, creatureId)
+    if (!previousPlacement) {
+        return
+    }
+
+    const remainsOnBoard = ['side_a', 'side_b'].some(
+        (side) => (gameState.value.board[side] || []).includes(creatureId)
+    )
+    if (remainsOnBoard) {
+        return
+    }
+
+    const finalCreature = gameState.value.creatures[creatureId]
+    const previousCreature = previousBoardSnapshot.creatures[creatureId]
+    const creatureSnapshot = finalCreature && finalCreature.health <= 0
+        ? { ...finalCreature, health: 0 }
+        : previousCreature
+            ? { ...previousCreature }
+            : finalCreature
+                ? { ...finalCreature }
+                : null
+    if (!creatureSnapshot) {
+        return
+    }
+
+    const generation = ++retainedCreatureGeneration
+    retainedCreatures.value = {
+        ...retainedCreatures.value,
+        [creatureId]: {
+            creature: creatureSnapshot,
+            side: previousPlacement.side,
+            index: previousPlacement.index,
+            layoutIds: previousPlacement.layoutIds,
+            generation,
+        },
+    }
+
+    scheduleRetainedCreatureClear()
+}
+
 const clearCombatAnimationTimeout = () => {
     if (combatAnimationTimeout !== null) {
         clearTimeout(combatAnimationTimeout)
@@ -833,6 +1060,14 @@ const clearPlayedSpellCardTimeouts = () => {
     playedSpellCardExitTimeouts.clear()
 }
 
+const clearRetainedCreatures = () => {
+    if (retainedCreatureClearTimeout !== null) {
+        clearTimeout(retainedCreatureClearTimeout)
+        retainedCreatureClearTimeout = null
+    }
+    retainedCreatures.value = {}
+}
+
 const resetCombatAnimations = () => {
     clearCombatAnimationTimeout()
     activeCombatAnimation.value = null
@@ -841,6 +1076,7 @@ const resetCombatAnimations = () => {
     combatValueBursts.value = []
     clearPlayedSpellCardTimeouts()
     playedSpellCards.value = []
+    clearRetainedCreatures()
 }
 
 const playNextCombatAnimation = () => {
@@ -861,15 +1097,13 @@ const playNextCombatAnimation = () => {
     }, COMBAT_ANIMATION_DURATION_MS)
 }
 
-const isCombatDamageUpdate = (update: any): update is DamageUpdate => {
+const isDamageUpdate = (update: any): update is DamageUpdate => {
     if (update?.type !== 'update_damage') {
         return false
     }
 
-    const validSource = update.source_type === 'hero' || update.source_type === 'creature'
     const validTarget = update.target_type === 'hero' || update.target_type === 'creature' || update.target_type === 'card'
-
-    return validSource && validTarget && Boolean(update.source_id) && Boolean(update.target_id)
+    return validTarget && Boolean(update.target_id) && typeof update.damage === 'number'
 }
 
 const isSpellDamageUpdate = (update: DamageUpdate) => {
@@ -1333,6 +1567,8 @@ const handleClickHandCard = (card_id: string) => {
 // When clicking own creature on board - show details if not your turn, otherwise go to targeting
 const handleClickOwnCreature = (creature_id: string) => {
     console.log('handleClickOwnCreature', creature_id)
+    if (isRetainedCreature(creature_id)) return
+
     const creature = get_creature(creature_id)
     if (!creature) return
 
@@ -1361,6 +1597,8 @@ const handleClickOwnCreature = (creature_id: string) => {
 // When clicking opposing creature (just for info, cannot attack)
 const handleClickOpposingCreature = (creature_id: string) => {
     console.log('handleClickOpposingCreature', creature_id)
+    if (isRetainedCreature(creature_id)) return
+
     selectedEntity.value = { type: 'creature', id: creature_id, isOwned: false }
     overlay.value = 'entity_detail'
     overlayTitle.value = 'Enemy Creature'
@@ -2056,6 +2294,7 @@ watch([title, gameId], async ([newTitle, newGameId], [, oldGameId]) => {
 
     // Clear any open overlays when switching games in-place.
     if (oldGameId && oldGameId !== newGameId) {
+        resetCombatAnimations()
         clearLocalState()
         showingGameOver.value = false
     }
@@ -2121,14 +2360,61 @@ watch(
         }
 
         for (const update of liveUpdateBatch.value) {
+            const damageUpdate = isDamageUpdate(update)
+            if (damageUpdate) {
+                retainDamagedCreature(update, liveUpdatePreviousBoardSnapshot.value)
+                if (update.target_type === 'creature') {
+                    revealSuppressedBoardTarget(update.target_id)
+                    extendRetainedCreatureHoldForTarget(update.target_id)
+                }
+                if (update.source_type === 'creature') {
+                    revealSuppressedBoardTarget(update.source_id)
+                    extendRetainedCreatureHoldForTarget(update.source_id)
+                }
+            }
+
             if (isSpellPlayUpdate(update)) {
                 queuePlayedSpellCard(update)
             }
 
-            if (isCombatDamageUpdate(update) || (update?.type === 'update_damage' && isSpellDamageUpdate(update))) {
-                queueCombatAnimation(update)
+            if (damageUpdate) {
+                const boardEntityIds = [
+                    update.target_type === 'creature' ? update.target_id : null,
+                    update.source_type === 'creature' ? update.source_id : null,
+                ].filter((entityId): entityId is string => Boolean(entityId))
+                const animationEntityNeedsMount = boardEntityIds.some(
+                    (entityId) => isDisplayedBoardCreature(entityId)
+                        && !entityElements.has(entityId)
+                        && !entityFrames.has(entityId)
+                )
+                if (animationEntityNeedsMount) {
+                    void nextTick(() => queueCombatAnimation(update))
+                } else {
+                    queueCombatAnimation(update)
+                }
             } else if (isHealUpdate(update)) {
-                queueHealAnimation(update)
+                if (update.target_type === 'creature') {
+                    revealSuppressedBoardTarget(update.target_id)
+                    extendRetainedCreatureHoldForTarget(update.target_id)
+                }
+                if (update.source_type === 'creature') {
+                    revealSuppressedBoardTarget(update.source_id)
+                    extendRetainedCreatureHoldForTarget(update.source_id)
+                }
+                const boardEntityIds = [
+                    update.target_type === 'creature' ? update.target_id : null,
+                    update.source_type === 'creature' ? update.source_id : null,
+                ].filter((entityId): entityId is string => Boolean(entityId))
+                const animationEntityNeedsMount = boardEntityIds.some(
+                    (entityId) => isDisplayedBoardCreature(entityId)
+                        && !entityElements.has(entityId)
+                        && !entityFrames.has(entityId)
+                )
+                if (animationEntityNeedsMount) {
+                    void nextTick(() => queueHealAnimation(update))
+                } else {
+                    queueHealAnimation(update)
+                }
             }
         }
     },

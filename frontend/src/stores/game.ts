@@ -18,6 +18,11 @@ import { fetchIntroGame, getIntroGameAccessToken } from '@/services/introScenari
 type WebSocketStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
 type GameType = 'pve' | 'ranked' | 'friendly' | 'intro'
 
+export interface LiveUpdateBoardSnapshot {
+  board: Record<Side, string[]>
+  creatures: Record<string, Creature>
+}
+
 // Game store state interface
 interface GameStoreState {
   gameState: GameState
@@ -46,6 +51,7 @@ interface GameStoreState {
 
   updates: any[]
   liveUpdateBatch: any[]
+  liveUpdatePreviousBoardSnapshot: LiveUpdateBoardSnapshot | null
   liveUpdateBatchId: number
   awaitingInitialUpdateSnapshot: boolean
 }
@@ -96,6 +102,23 @@ function heroPowerCost(hero: HeroInPlay | null | undefined): number {
   return Math.max(0, Math.trunc(cost))
 }
 
+function snapshotBoardState(state: GameState): LiveUpdateBoardSnapshot {
+  const board: Record<Side, string[]> = {
+    side_a: [...(state.board.side_a || [])],
+    side_b: [...(state.board.side_b || [])]
+  }
+  const creatures: Record<string, Creature> = {}
+
+  for (const creatureId of [...board.side_a, ...board.side_b]) {
+    const creature = state.creatures[creatureId]
+    if (creature) {
+      creatures[creatureId] = { ...creature }
+    }
+  }
+
+  return { board, creatures }
+}
+
 export const useGameStore = defineStore('game', {
   state: (): GameStoreState => ({
     gameState: createInitialGameState(),
@@ -124,6 +147,7 @@ export const useGameStore = defineStore('game', {
     currentLadderType: null,
     updates: [],
     liveUpdateBatch: [],
+    liveUpdatePreviousBoardSnapshot: null,
     liveUpdateBatchId: 0,
     awaitingInitialUpdateSnapshot: false
   }),
@@ -705,6 +729,7 @@ export const useGameStore = defineStore('game', {
 
       const hasStatePayload = Boolean(data.state)
       const isInitialSnapshot = this.awaitingInitialUpdateSnapshot && hasStatePayload
+      const previousBoardSnapshot = snapshotBoardState(this.gameState)
       if (hasStatePayload) {
         this.awaitingInitialUpdateSnapshot = false
       }
@@ -795,6 +820,7 @@ export const useGameStore = defineStore('game', {
         }
 
         if (newUpdates.length > 0 && !isInitialSnapshot) {
+          this.liveUpdatePreviousBoardSnapshot = previousBoardSnapshot
           this.liveUpdateBatch = newUpdates
           this.liveUpdateBatchId++
         }
@@ -1005,6 +1031,7 @@ export const useGameStore = defineStore('game', {
       this.disconnectWebSocket()
       this.updates = []
       this.liveUpdateBatch = []
+      this.liveUpdatePreviousBoardSnapshot = null
       this.resetGameOverState()
 
       await this.fetchGameState(gameId)
@@ -1036,6 +1063,7 @@ export const useGameStore = defineStore('game', {
       this.currentLadderType = null
       this.updates = []
       this.liveUpdateBatch = []
+      this.liveUpdatePreviousBoardSnapshot = null
       this.resetGameOverState()
     },
 

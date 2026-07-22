@@ -390,6 +390,15 @@ struct BoardPlayedSpellCard: Identifiable, Equatable {
     let isLeaving: Bool
 }
 
+private struct BoardPendingRemoval: Identifiable, Equatable {
+    let id: String
+    let side: String
+    let originalIndex: Int
+    let layoutIds: [String]
+    let generation: Int
+    let card: BoardCardSnapshot
+}
+
 struct BoardEntityAnchorPreferenceKey: PreferenceKey {
     static var defaultValue: [String: Anchor<CGRect>] = [:]
 
@@ -553,6 +562,7 @@ final class GameDetailViewModel: ObservableObject {
     @Published var gameJSON: JSONValue?
     @Published var updates: [GameUpdateSnapshot] = []
     @Published private(set) var liveUpdateBatch: [GameUpdateSnapshot] = []
+    @Published private(set) var livePreviousBoardCardsBySide: [String: [BoardCardSnapshot]] = [:]
     @Published private(set) var liveUpdateBatchId = 0
     @Published private(set) var liveGameOverVersion = 0
     @Published var isLoading = false
@@ -758,6 +768,7 @@ final class GameDetailViewModel: ObservableObject {
         gameJSON = nil
         updates = []
         liveUpdateBatch = []
+        livePreviousBoardCardsBySide = [:]
         liveUpdateBatchId = 0
         liveGameOverVersion = 0
         hasReceivedInitialSocketSnapshot = false
@@ -770,6 +781,7 @@ final class GameDetailViewModel: ObservableObject {
     func prepareForSocketSnapshotSync() {
         hasReceivedInitialSocketSnapshot = false
         liveUpdateBatch = []
+        livePreviousBoardCardsBySide = [:]
     }
 
     func load(gameId: Int, using authStore: AuthStore, guestAccessToken: String? = nil) async {
@@ -868,6 +880,10 @@ final class GameDetailViewModel: ObservableObject {
 
         do {
             let payload = try JSONDecoder().decode(JSONValue.self, from: data)
+            let previousBoardCardsBySide = [
+                "side_a": boardCards(for: "side_a"),
+                "side_b": boardCards(for: "side_b"),
+            ]
             let state = payload["state"]
             let hasStatePayload = state?.objectValue != nil
             let shouldPublishLiveBatch = hasReceivedInitialSocketSnapshot
@@ -881,7 +897,11 @@ final class GameDetailViewModel: ObservableObject {
                 state.objectValue != nil
             else {
                 appendErrors(from: payload)
-                appendUpdates(from: payload, publishLiveBatch: shouldPublishLiveBatch)
+                appendUpdates(
+                    from: payload,
+                    publishLiveBatch: shouldPublishLiveBatch,
+                    previousBoardCardsBySide: previousBoardCardsBySide
+                )
                 if shouldPublishLiveBatch, payloadIncludesGameOverUpdate(payload) {
                     liveGameOverVersion += 1
                 }
@@ -897,7 +917,11 @@ final class GameDetailViewModel: ObservableObject {
                 prefetchArt(in: mergedState)
             }
             appendErrors(from: payload)
-            appendUpdates(from: payload, publishLiveBatch: shouldPublishLiveBatch)
+            appendUpdates(
+                from: payload,
+                publishLiveBatch: shouldPublishLiveBatch,
+                previousBoardCardsBySide: previousBoardCardsBySide
+            )
             if shouldPublishLiveBatch, previousWinner == "none", winner != "none" {
                 liveGameOverVersion += 1
             }
@@ -1526,7 +1550,11 @@ final class GameDetailViewModel: ObservableObject {
         )
     }
 
-    private func appendUpdates(from payload: JSONValue, publishLiveBatch: Bool = false) {
+    private func appendUpdates(
+        from payload: JSONValue,
+        publishLiveBatch: Bool = false,
+        previousBoardCardsBySide: [String: [BoardCardSnapshot]] = [:]
+    ) {
         guard let rawUpdates = payload["updates"]?.arrayValue else {
             return
         }
@@ -1553,6 +1581,7 @@ final class GameDetailViewModel: ObservableObject {
         guard publishLiveBatch, !newUpdates.isEmpty else {
             return
         }
+        livePreviousBoardCardsBySide = previousBoardCardsBySide
         liveUpdateBatch = newUpdates
         liveUpdateBatchId += 1
     }
@@ -2700,6 +2729,8 @@ private struct NativeBoardSurface: View {
     @State private var entityPointCache: [String: CGPoint] = [:]
     @State private var valueBursts: [BoardValueBurst] = []
     @State private var valueBurstRemoveWorkItems: [String: DispatchWorkItem] = [:]
+    @State private var pendingBoardRemovals: [String: BoardPendingRemoval] = [:]
+    @State private var pendingBoardRemovalGeneration = 0
 
     private static let combatAnimationDuration: TimeInterval = 0.62
     private static let valueBurstDuration: TimeInterval = 2.2
@@ -2713,6 +2744,18 @@ private struct NativeBoardSurface: View {
 
     private var player: GameSideSnapshot {
         model.snapshot(for: model.viewerSide, label: "You")
+    }
+
+    private var opponentBoardCards: [BoardCardSnapshot] {
+        displayedBoardCards(for: opponent.side)
+    }
+
+    private var playerBoardCards: [BoardCardSnapshot] {
+        displayedBoardCards(for: player.side)
+    }
+
+    private var pendingBoardRemovalIds: Set<String> {
+        Set(pendingBoardRemovals.keys)
     }
 
     private var combatMarker: BoardCombatMarker? {
@@ -2765,9 +2808,11 @@ private struct NativeBoardSurface: View {
             StatStrip(snapshot: opponent)
 
             BoardLane(
-                cards: model.boardCards(for: opponent.side),
+                cards: opponentBoardCards,
                 combatMarker: combatMarker,
                 isOpponent: true,
+                nonInteractiveCardIds: pendingBoardRemovalIds,
+                interactionLocked: !pendingBoardRemovals.isEmpty,
                 onCardTap: onOpponentCreatureTap
             )
             .frame(maxHeight: .infinity)
@@ -2783,9 +2828,11 @@ private struct NativeBoardSurface: View {
             )
 
             BoardLane(
-                cards: model.boardCards(for: player.side),
+                cards: playerBoardCards,
                 combatMarker: combatMarker,
                 isOpponent: false,
+                nonInteractiveCardIds: pendingBoardRemovalIds,
+                interactionLocked: !pendingBoardRemovals.isEmpty,
                 onCardTap: onOwnCreatureTap
             )
             .frame(maxHeight: .infinity)
@@ -2832,8 +2879,20 @@ private struct NativeBoardSurface: View {
                 .fill(ArchetypeTheme.border)
                 .frame(width: 1)
         }
-        .onChange(of: model.liveUpdateBatchId) { _, _ in
+        .onChange(of: model.liveUpdateBatchId) { oldBatchId, newBatchId in
+            guard newBatchId > oldBatchId else {
+                resetTransientCombatState()
+                return
+            }
             triggerTransientCombatIfNeeded(from: model.liveUpdateBatch)
+        }
+        .onChange(of: authoritativeBoardCardIdsKey) { _, _ in
+            removePendingRemovalsThatReappeared()
+        }
+        .onChange(of: model.gameJSON == nil) { _, isNil in
+            if isNil {
+                resetTransientCombatState()
+            }
         }
         .onChange(of: gameId) { _, _ in
             resetTransientCombatState()
@@ -2852,8 +2911,16 @@ private struct NativeBoardSurface: View {
                 player.heroId,
             ]
                 .compactMap { $0 }
-            + model.boardCards(for: opponent.side).map(\.id)
-            + model.boardCards(for: player.side).map(\.id)
+            + opponentBoardCards.map(\.id)
+            + playerBoardCards.map(\.id)
+        )
+        .joined(separator: "|")
+    }
+
+    private var authoritativeBoardCardIdsKey: String {
+        (
+            model.boardCards(for: opponent.side).map { "\(opponent.side):\($0.id)" }
+                + model.boardCards(for: player.side).map { "\(player.side):\($0.id)" }
         )
         .joined(separator: "|")
     }
@@ -2897,6 +2964,204 @@ private struct NativeBoardSurface: View {
             id: update.value[idKey]?.stringValue,
             side: update.side
         )
+    }
+
+    private func displayedBoardCards(for side: String) -> [BoardCardSnapshot] {
+        mergedBoardCards(
+            baseCards: model.boardCards(for: side),
+            side: side,
+            removals: Array(pendingBoardRemovals.values)
+        )
+    }
+
+    private func mergedBoardCards(
+        baseCards: [BoardCardSnapshot],
+        side: String,
+        removals: [BoardPendingRemoval]
+    ) -> [BoardCardSnapshot] {
+        let baseById = Dictionary(
+            baseCards.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let baseIds = Set(baseById.keys)
+        let visibleRemovals = removals
+            .filter { $0.side == side && !baseIds.contains($0.id) }
+            .sorted { lhs, rhs in
+                if lhs.originalIndex == rhs.originalIndex {
+                    return lhs.generation < rhs.generation
+                }
+                return lhs.originalIndex < rhs.originalIndex
+            }
+        guard !visibleRemovals.isEmpty else {
+            return baseCards
+        }
+
+        let removalById = Dictionary(
+            visibleRemovals.map { ($0.id, $0) },
+            uniquingKeysWith: { _, latest in latest }
+        )
+        let latestLayoutIds = visibleRemovals
+            .max { $0.generation < $1.generation }?
+            .layoutIds ?? []
+        var cards: [BoardCardSnapshot] = []
+        var insertedIds: Set<String> = []
+
+        for id in latestLayoutIds where !insertedIds.contains(id) {
+            if let card = baseById[id] {
+                cards.append(card)
+                insertedIds.insert(id)
+            } else if let removal = removalById[id] {
+                cards.append(removal.card)
+                insertedIds.insert(id)
+            }
+        }
+
+        for removal in visibleRemovals where !insertedIds.contains(removal.id) {
+            let index = min(max(removal.originalIndex, 0), cards.count)
+            cards.insert(removal.card, at: index)
+            insertedIds.insert(removal.id)
+        }
+
+        // Reveal newly summoned cards after the casualty sequence so old target slots stay stable.
+        return cards
+    }
+
+    private func authoritativeBoardCardIds() -> Set<String> {
+        Set(
+            model.boardCards(for: "side_a").map(\.id)
+                + model.boardCards(for: "side_b").map(\.id)
+        )
+    }
+
+    private func retainPendingBoardRemovals(from updates: [GameUpdateSnapshot]) {
+        let damageTargetIds = Set(updates.compactMap { update -> String? in
+            guard update.type == "update_damage" else {
+                return nil
+            }
+            return update.value["target_id"]?.stringValue
+        })
+        guard !damageTargetIds.isEmpty else {
+            removePendingRemovalsThatReappeared()
+            return
+        }
+
+        let authoritativeIds = authoritativeBoardCardIds()
+        removePendingRemovalsThatReappeared(authoritativeIds: authoritativeIds)
+
+        for side in ["side_a", "side_b"] {
+            let previousCards = model.livePreviousBoardCardsBySide[side] ?? []
+            let previousDisplayedCards = mergedBoardCards(
+                baseCards: previousCards,
+                side: side,
+                removals: Array(pendingBoardRemovals.values)
+            )
+            var casualtyCandidates = previousDisplayedCards
+            var layoutIds = previousDisplayedCards.map(\.id)
+            var layoutIdSet = Set(layoutIds)
+
+            // A summon deferred behind an earlier casualty may itself die before being revealed.
+            // Append only targeted casualties so they have a stable slot for their own bubble.
+            for previousCard in previousCards
+            where !layoutIdSet.contains(previousCard.id)
+                && damageTargetIds.contains(previousCard.id)
+                && !authoritativeIds.contains(previousCard.id) {
+                casualtyCandidates.append(previousCard)
+                layoutIds.append(previousCard.id)
+                layoutIdSet.insert(previousCard.id)
+            }
+
+            for (index, previousCard) in casualtyCandidates.enumerated()
+            where damageTargetIds.contains(previousCard.id)
+                && !authoritativeIds.contains(previousCard.id) {
+                let card = pendingRemovalCardSnapshot(
+                    id: previousCard.id,
+                    side: side,
+                    fallback: previousCard
+                )
+                pendingBoardRemovalGeneration += 1
+                pendingBoardRemovals[previousCard.id] = BoardPendingRemoval(
+                    id: previousCard.id,
+                    side: side,
+                    originalIndex: index,
+                    layoutIds: layoutIds,
+                    generation: pendingBoardRemovalGeneration,
+                    card: card
+                )
+            }
+        }
+    }
+
+    private func pendingRemovalCardSnapshot(
+        id: String,
+        side: String,
+        fallback: BoardCardSnapshot
+    ) -> BoardCardSnapshot {
+        if case let .card(card)? = model.updateEntitySnapshot(
+            type: "creature",
+            id: id,
+            side: side
+        ), card.health <= 0 {
+            return BoardCardSnapshot(
+                id: card.id,
+                name: card.name,
+                description: card.description,
+                attack: card.attack,
+                health: 0,
+                cost: card.cost,
+                isSpell: false,
+                exhausted: card.exhausted,
+                artURL: card.artURL,
+                traits: card.traits,
+                traitIcon: card.traitIcon
+            )
+        }
+        return fallback
+    }
+
+    private func removePendingRemovalsThatReappeared() {
+        removePendingRemovalsThatReappeared(authoritativeIds: authoritativeBoardCardIds())
+    }
+
+    private func removePendingRemovalsThatReappeared(authoritativeIds: Set<String>) {
+        for id in Array(pendingBoardRemovals.keys) where authoritativeIds.contains(id) {
+            pendingBoardRemovals.removeValue(forKey: id)
+        }
+    }
+
+    private func revealDeferredAnimationEntities(from updates: [GameUpdateSnapshot]) {
+        for update in updates
+        where update.type == "update_damage" || update.type == "update_heal" {
+            let entityIds = [
+                (update.value["target_type"]?.stringValue, update.value["target_id"]?.stringValue),
+                (update.value["source_type"]?.stringValue, update.value["source_id"]?.stringValue),
+            ].compactMap { entityType, entityId in
+                entityType == "creature" ? entityId : nil
+            }
+
+            for entityId in entityIds {
+                for side in ["side_a", "side_b"] {
+                    guard model.boardCards(for: side).contains(where: { $0.id == entityId }),
+                          !displayedBoardCards(for: side).contains(where: { $0.id == entityId }),
+                          let latestRemoval = pendingBoardRemovals.values
+                            .filter({ $0.side == side })
+                            .max(by: { $0.generation < $1.generation })
+                    else {
+                        continue
+                    }
+
+                    pendingBoardRemovalGeneration += 1
+                    pendingBoardRemovals[latestRemoval.id] = BoardPendingRemoval(
+                        id: latestRemoval.id,
+                        side: latestRemoval.side,
+                        originalIndex: latestRemoval.originalIndex,
+                        layoutIds: latestRemoval.layoutIds + [entityId],
+                        generation: pendingBoardRemovalGeneration,
+                        card: latestRemoval.card
+                    )
+                    break
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -2968,6 +3233,8 @@ private struct NativeBoardSurface: View {
     }
 
     private func triggerTransientCombatIfNeeded(from updates: [GameUpdateSnapshot]) {
+        retainPendingBoardRemovals(from: updates)
+        revealDeferredAnimationEntities(from: updates)
         queuePlayedSpellCards(from: updates)
 
         for update in updates where canAnimate(update) {
@@ -3015,6 +3282,7 @@ private struct NativeBoardSurface: View {
             transientUpdate = nil
             transientUpdateId = nil
             combatClearWorkItem = nil
+            releasePendingBoardRemovalsIfReady()
             playNextTransientCombatIfNeeded()
         }
         combatClearWorkItem = workItem
@@ -3022,6 +3290,16 @@ private struct NativeBoardSurface: View {
             deadline: .now() + Self.combatAnimationDuration,
             execute: workItem
         )
+    }
+
+    private func releasePendingBoardRemovalsIfReady() {
+        guard !pendingBoardRemovals.isEmpty else {
+            return
+        }
+
+        if combatAnimationQueue.isEmpty {
+            pendingBoardRemovals = [:]
+        }
     }
 
     private func canAnimate(_ update: GameUpdateSnapshot) -> Bool {
@@ -3177,6 +3455,8 @@ private struct NativeBoardSurface: View {
         }
         valueBurstRemoveWorkItems = [:]
         valueBursts = []
+        pendingBoardRemovals = [:]
+        pendingBoardRemovalGeneration = 0
         entityPointCache = [:]
     }
 
@@ -3306,12 +3586,12 @@ private struct NativeBoardSurface: View {
         }
 
         if type == "creature" || type == "card" || type == "board" || type == nil {
-            let opponentCards = model.boardCards(for: opponent.side)
+            let opponentCards = displayedBoardCards(for: opponent.side)
             if let index = opponentCards.firstIndex(where: { $0.id == id }) {
                 return cardPoint(index: index, count: opponentCards.count, isOpponent: true, in: size)
             }
 
-            let playerCards = model.boardCards(for: player.side)
+            let playerCards = displayedBoardCards(for: player.side)
             if let index = playerCards.firstIndex(where: { $0.id == id }) {
                 return cardPoint(index: index, count: playerCards.count, isOpponent: false, in: size)
             }
@@ -3897,6 +4177,8 @@ private struct BoardLane: View {
     let cards: [BoardCardSnapshot]
     let combatMarker: BoardCombatMarker?
     let isOpponent: Bool
+    var nonInteractiveCardIds: Set<String> = []
+    var interactionLocked = false
     let onCardTap: (BoardCardSnapshot) -> Void
 
     var body: some View {
@@ -3929,6 +4211,12 @@ private struct BoardLane: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .allowsHitTesting(
+                                !interactionLocked && !nonInteractiveCardIds.contains(card.id)
+                            )
+                            .accessibilityHidden(
+                                interactionLocked || nonInteractiveCardIds.contains(card.id)
+                            )
                             .frame(width: 56, height: 78)
                             .anchorPreference(key: BoardEntityAnchorPreferenceKey.self, value: .bounds) { anchor in
                                 [card.id: anchor]
