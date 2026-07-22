@@ -1,4 +1,4 @@
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Union
 
 from pydantic import BaseModel, Discriminator, Field
 
@@ -73,6 +73,7 @@ class CardRetaliationEffect(EffectBase):
 class DrawEffect(EffectBase):
     type: Literal["effect_draw"] = "effect_draw"
     amount: int = 1
+    spec: Optional[dict[str, Any]] = None
 
 
 class HealEffect(EffectBase):

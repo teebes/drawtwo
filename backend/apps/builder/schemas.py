@@ -1,4 +1,4 @@
-from typing import Annotated, List, Literal, Optional, Union
+from typing import Annotated, Any, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Discriminator, Field, model_serializer
 
@@ -35,6 +35,7 @@ AmountValue = Union[int, EventValue]
 class DrawAction(ActionBase):
     action: Literal["draw"] = "draw"
     amount: AmountValue = 1
+    spec: Optional[dict[str, Any]] = None
 
 
 class DamageAction(ActionBase):

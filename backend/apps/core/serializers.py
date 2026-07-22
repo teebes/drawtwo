@@ -47,6 +47,8 @@ def to_card_schema(card) -> Card:
         health=card.health or 0,  # Handle null values for spells
         traits=traits_list,
         faction=card.faction.slug if card.faction else None,
+        spec=card.spec or {},
+        tags=sorted(tag.slug for tag in card.tags.all()),
         art_url=get_card_art_url(card.title.slug, card.slug),
         is_collectible=card.is_collectible,
         hero_slugs=[hero.slug for hero in card.allowed_heroes.all()],
@@ -67,6 +69,7 @@ def serialize_cards_with_traits(queryset, *, skip_invalid=False) -> List[Card]:
     cards = queryset.select_related("title", "faction").prefetch_related(
         "cardtrait_set",  # Prefetch card traits
         "allowed_heroes",
+        "tags",
     )
 
     card_schemas = []

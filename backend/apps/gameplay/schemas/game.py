@@ -1,7 +1,7 @@
 import hashlib
 import random
 import uuid
-from typing import Annotated, Dict, List, Literal, Optional, TypeVar, Union
+from typing import Annotated, Any, Dict, List, Literal, Optional, TypeVar, Union
 
 from pydantic import BaseModel, Discriminator, Field, model_validator
 
@@ -30,6 +30,9 @@ class CardInPlay(BaseModel):
     health: int = 0
     cost: int = 0
     traits: List[Trait] = Field(default_factory=list)
+    faction: Optional[str] = None
+    spec: dict[str, Any] = Field(default_factory=dict)
+    tags: List[str] = Field(default_factory=list)
     exhausted: bool = True
     art_url: Optional[str] = None
 

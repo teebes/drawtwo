@@ -126,6 +126,9 @@ class GameService:
             health=card.health,
             cost=card.cost,
             traits=card.traits,
+            faction=card.faction,
+            spec=card.spec,
+            tags=card.tags,
             art_url=card.art_url,
         )
 
@@ -256,7 +259,7 @@ class GameService:
                         is_latest=True,
                     )
                     .select_related("title", "faction")
-                    .prefetch_related("cardtrait_set", "allowed_heroes")
+                    .prefetch_related("cardtrait_set", "allowed_heroes", "tags")
                 }
                 missing_ids = sorted(set(ordered_card_ids) - set(cards_by_id))
                 if missing_ids:
@@ -344,6 +347,9 @@ class GameService:
                     health=card_schema.health,
                     cost=card_schema.cost,
                     traits=card_schema.traits,
+                    faction=card_schema.faction,
+                    spec=card_schema.spec,
+                    tags=card_schema.tags,
                     art_url=card_schema.art_url,
                 )
             except CardTemplate.DoesNotExist:
@@ -1318,6 +1324,7 @@ class GameService:
                 DrawEffect(
                     side=event.side,
                     amount=amount,
+                    spec=action.spec,
                 )
             ]
 

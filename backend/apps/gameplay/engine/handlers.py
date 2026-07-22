@@ -79,12 +79,84 @@ def spawn_creature(
     return creature
 
 
-def draw_card_for_side(state: GameState, side: str):
-    try:
-        card_id = state.decks[side].pop(0)
-    except IndexError:
+def _matches_partial_value(actual, expected) -> bool:
+    """Return whether ``actual`` contains the partial value in ``expected``."""
+    if hasattr(actual, "model_dump"):
+        actual = actual.model_dump(mode="python")
+
+    if isinstance(expected, dict):
+        if not isinstance(actual, dict):
+            return False
+        return all(
+            key in actual and _matches_partial_value(actual[key], value)
+            for key, value in expected.items()
+        )
+
+    if isinstance(expected, list):
+        if not isinstance(actual, (list, tuple)):
+            return False
+        return all(
+            any(_matches_partial_value(item, expected_item) for item in actual)
+            for expected_item in expected
+        )
+
+    return actual == expected
+
+
+def _matches_traits(card: CardInPlay, expected) -> bool:
+    expected_traits = expected if isinstance(expected, list) else [expected]
+    for expected_trait in expected_traits:
+        if isinstance(expected_trait, str):
+            if not card.has_trait(expected_trait):
+                return False
+        elif not any(
+            _matches_partial_value(trait, expected_trait) for trait in card.traits
+        ):
+            return False
+    return True
+
+
+def card_matches_spec(card: CardInPlay, spec: dict) -> bool:
+    """Match a card against a partial card definition used by draw actions."""
+    for key, expected in spec.items():
+        if key in ("trait", "traits"):
+            if not _matches_traits(card, expected):
+                return False
+            continue
+
+        if key in CardInPlay.model_fields:
+            actual = getattr(card, key)
+        elif key in card.spec:
+            actual = card.spec[key]
+        else:
+            return False
+
+        if not _matches_partial_value(actual, expected):
+            return False
+
+    return True
+
+
+def draw_card_for_side(state: GameState, side: str, spec: dict | None = None):
+    deck = state.decks[side]
+    card_index = 0
+    if spec is not None:
+        card_index = next(
+            (
+                index
+                for index, candidate_id in enumerate(deck)
+                if (candidate := state.cards.get(candidate_id))
+                and card_matches_spec(candidate, spec)
+            ),
+            None,
+        )
+        if card_index is None:
+            return None, None
+    elif not deck:
         opposing_side = "side_b" if side == "side_a" else "side_a"
         return None, GameOverEvent(side=side, winner=opposing_side)
+
+    card_id = deck.pop(card_index)
 
     state.hands[side].append(card_id)
     return card_id, DrawEvent(
@@ -101,7 +173,9 @@ def draw(effect: DrawEffect, state: GameState) -> Result:
     events = []
 
     for _ in range(effect.amount):
-        _, event = draw_card_for_side(state, effect.side)
+        _, event = draw_card_for_side(state, effect.side, effect.spec)
+        if event is None:
+            break
         events.append(event)
         if isinstance(event, GameOverEvent):
             return Success(new_state=state, events=events)
@@ -1096,6 +1170,9 @@ def summon(effect: SummonEffect, state: GameState) -> Result:
         health=template.health,
         cost=template.cost,
         traits=template.traits,
+        faction=template.faction,
+        spec=template.spec,
+        tags=template.tags,
         exhausted=True,
         art_url=template.art_url,
     )

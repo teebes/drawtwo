@@ -32,8 +32,8 @@ Required card fields are:
 - `cost`
 
 Creature cards should include `attack` and `health`. Spell cards can omit them.
-Optional fields include `description`, `traits`, `faction`, `art_url`,
-`is_collectible`, and `hero_slugs`.
+Optional fields include `description`, `traits`, `faction`, `spec`, `tags`,
+`art_url`, `is_collectible`, and `hero_slugs`.
 
 Use `is_collectible: false` for cards that should exist for gameplay effects,
 such as summoned tokens, but should not be added to player decks.
@@ -63,6 +63,42 @@ Common valid trait types include `charge`, `ranged`, `taunt`, `battlecry`,
 `deathrattle`, `triggered`, `stealth`, and `unique`. Common action types
 include `draw`, `damage`, `heal`, `remove`, `buff`, `summon`, `clear`, and
 `temp_mana_boost`.
+
+### Filtered Draws
+
+A draw action can include an optional `spec` that selects cards by a partial
+card definition. For example, this spell draws the first card in the deck with
+the `unique` trait:
+
+```yaml
+- type: card
+  card_type: spell
+  slug: seek-the-unique
+  name: Seek the Unique
+  description: Draw 1 unique card from your deck.
+  cost: 1
+  traits:
+    - type: battlecry
+      actions:
+        - action: draw
+          amount: 1
+          spec:
+            traits:
+              - type: unique
+```
+
+Selectors can use card fields such as `card_type`, `faction`, `tags`,
+`template_slug`, and `traits`. They can also use arbitrary keys defined in the
+card's manifest `spec`; for example, `rarity: legendary` selects cards whose
+`spec` contains that value. Object and list values are matched partially, so
+`traits: [{type: unique}]` does not require the trait's complete definition.
+
+Filtered draws scan the current deck from the top and draw the first matching
+card for each point of `amount`. Cards that do not match remain in place and
+keep their relative order. If fewer cards match than requested, the action
+draws the available matches and stops without causing a loss. Omitting `spec`
+retains the normal top-of-deck behavior, including the existing loss when an
+unfiltered draw is attempted from an empty deck.
 
 ## Triggered Traits
 

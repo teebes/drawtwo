@@ -5,7 +5,7 @@ from typing import Any
 from apps.builder.models import CardTemplate, HeroTemplate, Title
 from apps.builder.trait_definitions import TRAIT_DEFINITIONS
 
-RULESET_ENGINE_VERSION = "drawtwo-gameplay-v1"
+RULESET_ENGINE_VERSION = "drawtwo-gameplay-v2"
 
 
 def _canonical(value: Any) -> str:
@@ -31,7 +31,8 @@ def compute_ruleset_id(title: Title) -> str:
     cards = []
     for card in (
         CardTemplate.objects.filter(title=title, is_latest=True)
-        .prefetch_related("cardtrait_set", "allowed_heroes")
+        .select_related("faction")
+        .prefetch_related("cardtrait_set", "allowed_heroes", "tags")
         .order_by("slug", "version")
     ):
         cards.append(
@@ -44,6 +45,9 @@ def compute_ruleset_id(title: Title) -> str:
                 "cost": card.cost,
                 "attack": card.attack,
                 "health": card.health,
+                "faction": card.faction.slug if card.faction else None,
+                "spec": card.spec or {},
+                "tags": sorted(tag.slug for tag in card.tags.all()),
                 "is_collectible": card.is_collectible,
                 "allowed_heroes": sorted(
                     card.allowed_heroes.values_list("slug", flat=True)

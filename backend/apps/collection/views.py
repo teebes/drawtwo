@@ -230,6 +230,7 @@ def deck_detail(request, deck_id):
             .prefetch_related(
                 "card__cardtrait_set",
                 "card__allowed_heroes",
+                "card__tags",
             )
             .filter(card__is_collectible=True)
             .order_by("card__name")
@@ -342,6 +343,7 @@ def deck_detail(request, deck_id):
             .prefetch_related(
                 "card__cardtrait_set",
                 "card__allowed_heroes",
+                "card__tags",
             )
             .order_by("card__name")
         )

@@ -13,7 +13,7 @@ export type EventAmount =
   | { event: 'amount' | 'damage' | 'damage_taken' | 'healing_done'; multiplier?: number }
 
 export type CardAction =
-  | { action: 'draw'; amount: EventAmount }
+  | { action: 'draw'; amount: EventAmount; spec?: Record<string, unknown> }
   | { action: 'damage'; amount: EventAmount; target: 'hero' | 'creature' | 'enemy' | 'self' | 'friendly'; scope?: 'single' | 'cleave' | 'all'; damage_type?: 'physical' | 'spell' }
   | { action: 'heal'; amount: EventAmount; target: 'hero' | 'creature' | 'friendly' | 'self'; scope?: 'single' | 'cleave' | 'all' }
   | { action: 'remove'; target: 'creature' | 'enemy'; scope?: 'single' | 'cleave' | 'all' }
@@ -54,6 +54,9 @@ export interface CardInPlay {
   health: number
   cost: number
   traits: Trait[]
+  faction?: string | null
+  spec?: Record<string, unknown>
+  tags?: string[]
   exhausted: boolean
   art_url?: string | null
 }

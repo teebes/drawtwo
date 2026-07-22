@@ -181,7 +181,9 @@ class ScenarioGameService:
                 title=title,
                 slug__in=slugs,
                 is_latest=True,
-            ).prefetch_related("cardtrait_set", "allowed_heroes")
+            )
+            .select_related("title", "faction")
+            .prefetch_related("cardtrait_set", "allowed_heroes", "tags")
         }
         missing = sorted(slugs - set(cards))
         if missing:
@@ -299,6 +301,9 @@ class ScenarioGameService:
                 health=card_schema.health,
                 cost=card_schema.cost,
                 traits=card_schema.traits,
+                faction=card_schema.faction,
+                spec=card_schema.spec,
+                tags=card_schema.tags,
                 art_url=card_schema.art_url,
             )
         return summonable_cards

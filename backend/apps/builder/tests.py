@@ -777,6 +777,44 @@ class TestCardYamlValidation(APITestCase):
             {"actions": [{"action": "silence", "target": "enemy", "scope": "single"}]},
         )
 
+    def test_create_card_accepts_filtered_draw_action(self):
+        url = reverse("card-create", kwargs={"title_slug": self.title.slug})
+        yaml_definition = """
+        name: Seek the Unique
+        description: Draw a unique card from your deck.
+        card_type: spell
+        cost: 1
+        traits:
+          - type: battlecry
+            actions:
+              - action: draw
+                amount: 1
+                spec:
+                  traits:
+                    - type: unique
+        """
+
+        response = self.client.post(
+            url,
+            {"slug": "seek-the-unique", "yaml_definition": yaml_definition},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        card = CardTemplate.objects.get(title=self.title, slug="seek-the-unique")
+        self.assertEqual(
+            card.cardtrait_set.get().data,
+            {
+                "actions": [
+                    {
+                        "action": "draw",
+                        "amount": 1,
+                        "spec": {"traits": [{"type": "unique"}]},
+                    }
+                ]
+            },
+        )
+
 
 class TestIngestion(TestCase):
 
