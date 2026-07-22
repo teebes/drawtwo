@@ -4327,6 +4327,7 @@ private struct MiniGameCard: View {
             ("deathrattle", "💀"),
             ("triggered", "⚡️"),
             ("stealth", "👁️"),
+            ("ranged", "🏹"),
             ("unique", "⭐"),
         ]
 

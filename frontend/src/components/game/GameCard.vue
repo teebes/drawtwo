@@ -92,6 +92,7 @@ const inPlayTraitBadges: TraitBadge[] = [
     { type: 'deathrattle', glyph: '💀', title: 'Deathrattle', textClass: 'text-white' },
     { type: 'triggered', glyph: '⚡️', title: 'Triggered', textClass: 'text-white' },
     { type: 'stealth', glyph: '👁️', title: 'Stealth', textClass: 'text-white' },
+    { type: 'ranged', glyph: '🏹', title: 'Ranged', textClass: 'text-white' },
     { type: 'unique', glyph: '⭐', title: 'Unique', textClass: 'text-white' }
 ]
 
