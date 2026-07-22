@@ -4029,6 +4029,22 @@ private struct MiniGameCard: View {
         isLarge ? 12 : 4
     }
 
+    private var displayedTraitIcon: String? {
+        guard inLane else {
+            return card.traitIcon
+        }
+
+        let priority: [(String, String)] = [
+            ("taunt", "🛡️"),
+            ("deathrattle", "💀"),
+            ("triggered", "⚡️"),
+            ("stealth", "👁️"),
+            ("unique", "⭐"),
+        ]
+
+        return priority.first { card.traitTypes.contains($0.0) }?.1
+    }
+
     private var borderColor: Color {
         if active {
             return ArchetypeTheme.gold2
@@ -4080,7 +4096,7 @@ private struct MiniGameCard: View {
             )
         )
         .overlay(alignment: .topLeading) {
-            if let traitIcon = card.traitIcon {
+            if let traitIcon = displayedTraitIcon {
                 BadgeIcon(glyph: traitIcon, isLarge: isLarge)
                     .offset(x: -badgeOffset, y: -badgeOffset)
             }
@@ -4734,12 +4750,21 @@ private struct EntityDetailSheet: View {
         return "No description"
     }
 
+    private var cardIsInLane: Bool {
+        switch context.kind {
+        case .ownCreature, .opponentCreature:
+            return true
+        case .handCard, .ownHero, .opponentHero:
+            return false
+        }
+    }
+
     var body: some View {
         GameOverlayFrame(title: title, onDismiss: onDismiss) {
             VStack(spacing: 0) {
                 VStack {
                     if let card = context.card {
-                        MiniGameCard(card: card, active: false, inLane: false, isLarge: true)
+                        MiniGameCard(card: card, active: false, inLane: cardIsInLane, isLarge: true)
                             .frame(width: 184, height: 258)
                     } else if let hero = context.hero {
                         HeroDetailCard(hero: hero)
@@ -5106,12 +5131,24 @@ private struct TargetingSheet: View {
     private var sourceBand: some View {
         VStack {
             if let sourceCard = context.sourceCard {
-                MiniGameCard(card: sourceCard, active: false, inLane: false, isLarge: true)
+                MiniGameCard(
+                    card: sourceCard,
+                    active: false,
+                    inLane: sourceCardIsInLane,
+                    isLarge: true
+                )
                     .frame(width: 184, height: 258)
                     .padding(.vertical, 20)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var sourceCardIsInLane: Bool {
+        if case .attack = context.command {
+            return true
+        }
+        return false
     }
 
     @ViewBuilder

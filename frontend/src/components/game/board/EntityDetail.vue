@@ -5,7 +5,11 @@
             <div class="flex h-72 my-4 w-full">
                 <div class="p-1 w-48 mx-auto">
                     <!-- Display Card or Creature -->
-                    <GameCard v-if="displayCard" :card="displayCard" />
+                    <GameCard
+                        v-if="displayCard"
+                        :card="displayCard"
+                        :in_lane="entityType === 'creature'"
+                    />
 
                     <!-- Display Hero -->
                     <div v-else-if="entityType === 'hero' && hero"

@@ -89,6 +89,11 @@
     </div>
 
     <div class="flex">
+      <div class="card-badge mr-4">⚡️</div>
+      <div>Triggered - effect is executed when its event happens while the creature is in play.</div>
+    </div>
+
+    <div class="flex">
       <div class="card-badge mr-4">👁️</div>
       <div>Stealth - creature cannot be directly targeted until it attacks.</div>
     </div>

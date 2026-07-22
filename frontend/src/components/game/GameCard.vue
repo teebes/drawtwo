@@ -1,33 +1,12 @@
 <template>
     <div class="game-card border-2 border-gray-900 bg-gray-300 text-gray-900 rounded-xl relative" :class="active_classes">
-        <!-- Trait indicator (only one shown, priority order) -->
-        <!-- Stealth indicator -->
-        <div v-if="hasStealth" :class="['card-badge bg-white text-white', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Stealth">
-            👁️
-        </div>
-        <!-- Taunt indicator -->
-        <div v-else-if="hasTaunt" :class="['card-badge bg-white text-gray-900', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Taunt">
-            🛡️
-        </div>
-        <!-- Deathrattle indicator -->
-        <div v-else-if="hasDeathrattle" :class="['card-badge bg-white text-white', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Deathrattle">
-            💀
-        </div>
-        <!-- Battlecry indicator -->
-        <div v-else-if="hasBattlecry" :class="['card-badge bg-white text-white', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Battlecry">
-            📣
-        </div>
-        <!-- Ranged indicator -->
-        <div v-else-if="hasRanged" :class="['card-badge bg-white text-white', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Ranged">
-            🏹
-        </div>
-        <!-- Charge indicator -->
-        <div v-else-if="hasCharge" :class="['card-badge bg-white text-white', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Charge">
-            ⚔️
-        </div>
-        <!-- Unique indicator -->
-        <div v-else-if="hasUnique" :class="['card-badge bg-white text-white', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]" title="Unique">
-            ⭐
+        <!-- Trait indicator (only one shown, with a separate in-play priority) -->
+        <div
+            v-if="visibleTraitBadge"
+            :class="['card-badge bg-white', visibleTraitBadge.textClass, badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.left, badgeFontClasses, badgeTextSizeClasses]"
+            :title="visibleTraitBadge.title"
+        >
+            {{ visibleTraitBadge.glyph }}
         </div>
 
         <div v-if="details" class="card-name absolute bg-black/80 text-white px-8 py-2 flex items-center justify-center gap-2 z-[15] text-lg font-bold">
@@ -57,12 +36,12 @@
         </div>
 
         <!-- Cost Badge (upper right corner, only when in hand, extends beyond) -->
-        <div v-if="!in_lane && displayCost !== null" :class="['card-badge bg-secondary-500', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.right, badgeFontClasses, badgeTextSizeClasses]">
+        <div v-if="!isInPlay && displayCost !== null" :class="['card-badge bg-secondary-500', badgeSizeClasses, badgePositionClasses.top, badgePositionClasses.right, badgeFontClasses, badgeTextSizeClasses]">
             {{ displayCost }}
         </div>
 
         <!-- Exhausted overlay -->
-        <div v-if="props.in_lane && 'exhausted' in props.card && props.card.exhausted"
+        <div v-if="isInPlay && 'exhausted' in props.card && props.card.exhausted"
              class="absolute top-0 left-0 right-0 bottom-0 z-index-10 bg-gray-900/70 rounded-lg">
         </div>
 
@@ -90,6 +69,31 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const imageError = ref(false)
+
+interface TraitBadge {
+    type: string
+    glyph: string
+    title: string
+    textClass: string
+}
+
+const cardTraitBadges: TraitBadge[] = [
+    { type: 'stealth', glyph: '👁️', title: 'Stealth', textClass: 'text-white' },
+    { type: 'taunt', glyph: '🛡️', title: 'Taunt', textClass: 'text-gray-900' },
+    { type: 'deathrattle', glyph: '💀', title: 'Deathrattle', textClass: 'text-white' },
+    { type: 'battlecry', glyph: '📣', title: 'Battlecry', textClass: 'text-white' },
+    { type: 'ranged', glyph: '🏹', title: 'Ranged', textClass: 'text-white' },
+    { type: 'charge', glyph: '⚔️', title: 'Charge', textClass: 'text-white' },
+    { type: 'unique', glyph: '⭐', title: 'Unique', textClass: 'text-white' }
+]
+
+const inPlayTraitBadges: TraitBadge[] = [
+    { type: 'taunt', glyph: '🛡️', title: 'Taunt', textClass: 'text-gray-900' },
+    { type: 'deathrattle', glyph: '💀', title: 'Deathrattle', textClass: 'text-white' },
+    { type: 'triggered', glyph: '⚡️', title: 'Triggered', textClass: 'text-white' },
+    { type: 'stealth', glyph: '👁️', title: 'Stealth', textClass: 'text-white' },
+    { type: 'unique', glyph: '⭐', title: 'Unique', textClass: 'text-white' }
+]
 
 const cardArtUrl = computed(() => {
 
@@ -147,60 +151,22 @@ const isSpell = computed(() => {
     return false
 })
 
+const traitTypes = computed(() => {
+    const traits = Array.isArray(props.card.traits) ? props.card.traits : []
+    return new Set(traits.map(trait => trait.type))
+})
+
+const isInPlay = computed(() => {
+    return props.in_lane || 'creature_id' in props.card
+})
+
+const visibleTraitBadge = computed(() => {
+    const priority = isInPlay.value ? inPlayTraitBadges : cardTraitBadges
+    return priority.find(badge => traitTypes.value.has(badge.type)) ?? null
+})
+
 const hasStealth = computed(() => {
-    // Check if card has stealth trait
-    if ('traits' in props.card && Array.isArray(props.card.traits)) {
-        return props.card.traits.some((trait: any) => trait.type === 'stealth')
-    }
-    return false
-})
-
-const hasUnique = computed(() => {
-    // Check if card has unique trait
-    if ('traits' in props.card && Array.isArray(props.card.traits)) {
-        return props.card.traits.some((trait: any) => trait.type === 'unique')
-    }
-    return false
-})
-
-const hasTaunt = computed(() => {
-    // Check if card has taunt trait
-    if ('traits' in props.card && Array.isArray(props.card.traits)) {
-        return props.card.traits.some((trait: any) => trait.type === 'taunt')
-    }
-    return false
-})
-
-const hasCharge = computed(() => {
-    // Check if card has charge trait
-    if ('traits' in props.card && Array.isArray(props.card.traits)) {
-        return props.card.traits.some((trait: any) => trait.type === 'charge')
-    }
-    return false
-})
-
-const hasDeathrattle = computed(() => {
-    // Check if card has deathrattle trait
-    if ('traits' in props.card && Array.isArray(props.card.traits)) {
-        return props.card.traits.some((trait: any) => trait.type === 'deathrattle')
-    }
-    return false
-})
-
-const hasBattlecry = computed(() => {
-    // Check if card has battlecry trait
-    if ('traits' in props.card && Array.isArray(props.card.traits)) {
-        return props.card.traits.some((trait: any) => trait.type === 'battlecry')
-    }
-    return false
-})
-
-const hasRanged = computed(() => {
-    // Check if card has ranged trait
-    if ('traits' in props.card && Array.isArray(props.card.traits)) {
-        return props.card.traits.some((trait: any) => trait.type === 'ranged')
-    }
-    return false
+    return traitTypes.value.has('stealth')
 })
 
 const active_classes = computed(() => {
@@ -212,7 +178,7 @@ const active_classes = computed(() => {
     }
 
     // Add special styling for stealth creatures
-    if (hasStealth.value && props.in_lane) {
+    if (hasStealth.value && isInPlay.value) {
         classes.push('!border-purple-500')
         classes.push('opacity-70')
     }

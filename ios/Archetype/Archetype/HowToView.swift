@@ -82,6 +82,7 @@ struct HowToGuideContent: View {
             VStack(alignment: .leading, spacing: 14) {
                 TraitGuideRow(glyph: "📣", text: "On Play - effect is executed when the card is played.")
                 TraitGuideRow(glyph: "💀", text: "On Death - effect is executed when the creature dies.")
+                TraitGuideRow(glyph: "⚡️", text: "Triggered - effect is executed when its trigger event occurs.")
                 TraitGuideRow(glyph: "👁️", text: "Stealth - creature cannot be directly targeted until it attacks.")
                 TraitGuideRow(glyph: "🛡️", text: "Taunt - creature must be attacked before other targets.")
                 TraitGuideRow(glyph: "🏹", text: "Ranged - creature can attack without taking counterattack damage.")
