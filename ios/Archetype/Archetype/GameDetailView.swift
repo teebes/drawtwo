@@ -4291,16 +4291,6 @@ private struct TurnDivider: View {
         .frame(height: 56)
         .padding(.horizontal, 8)
         .background(ArchetypeTheme.ink)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(ArchetypeTheme.border)
-                .frame(height: 1)
-        }
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(ArchetypeTheme.border)
-                .frame(height: 1)
-        }
     }
 }
 
@@ -5415,11 +5405,6 @@ private struct TargetingSheet: View {
             .foregroundStyle(ArchetypeTheme.text)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
-            .overlay(alignment: .top) {
-                Rectangle()
-                    .fill(ArchetypeTheme.border)
-                    .frame(height: 1)
-            }
             .overlay(alignment: .bottom) {
                 Rectangle()
                     .fill(ArchetypeTheme.border)
