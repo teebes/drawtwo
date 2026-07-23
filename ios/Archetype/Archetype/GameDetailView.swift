@@ -5372,7 +5372,12 @@ private struct TargetingSheet: View {
     private var targetBands: some View {
         if showsEnemyTargets {
             if let enemySide, let option = heroOption(for: enemySide) {
-                TargetHeroBand(label: "Opponent", option: option, onSelectTarget: onSelectTarget)
+                TargetHeroBand(
+                    label: "Opponent",
+                    option: option,
+                    showsActiveTurnOutline: false,
+                    onSelectTarget: onSelectTarget
+                )
             }
 
             if context.allowed.allowsCreature {
@@ -5394,7 +5399,12 @@ private struct TargetingSheet: View {
             }
 
             if let friendlySide, let option = heroOption(for: friendlySide) {
-                TargetHeroBand(label: "Your Hero", option: option, onSelectTarget: onSelectTarget)
+                TargetHeroBand(
+                    label: "Your Hero",
+                    option: option,
+                    showsActiveTurnOutline: true,
+                    onSelectTarget: onSelectTarget
+                )
             }
         }
     }
@@ -5510,22 +5520,22 @@ private struct TargetingSheet: View {
 private struct TargetHeroBand: View {
     let label: String
     let option: GameTargetOption
+    let showsActiveTurnOutline: Bool
     let onSelectTarget: (GameTargetOption) -> Void
 
     var body: some View {
         Button {
             onSelectTarget(option)
         } label: {
-            VStack(spacing: 5) {
-                Text(label)
-                    .font(.archetypeBody(12))
-                    .foregroundStyle(ArchetypeTheme.muted)
-                Text(option.title)
-                    .font(.archetypeBody(17))
-                    .foregroundStyle(ArchetypeTheme.text)
-                Text(option.subtitle)
-                    .font(.archetypeBody(15))
-                    .foregroundStyle(ArchetypeTheme.text)
+            Group {
+                if let hero = option.hero {
+                    HeroTile(snapshot: hero, isActive: showsActiveTurnOutline)
+                        .overlay(alignment: .leading) {
+                            Rectangle()
+                                .fill(ArchetypeTheme.border)
+                                .frame(width: 1)
+                        }
+                }
             }
             .frame(maxWidth: .infinity)
             .frame(height: 96)
@@ -5534,6 +5544,9 @@ private struct TargetHeroBand: View {
         .buttonStyle(.plain)
         .disabled(!option.enabled)
         .opacity(option.enabled ? 1 : 0.3)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label), \(option.title), \(option.subtitle)")
+        .accessibilityHint(option.enabled ? "Select target" : "Target unavailable")
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(ArchetypeTheme.border)

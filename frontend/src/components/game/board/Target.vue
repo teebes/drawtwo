@@ -22,21 +22,34 @@
         <template v-else>
 
             <!-- Opponent Hero (if targeting enemies) -->
-            <div v-if="showOpposingHero && canTargetHero && opposingHero"
+            <button v-if="showOpposingHero && canTargetHero && opposingHero"
+                type="button"
                 class="flex w-full justify-center border-gray-700 border-b cursor-pointer hover:bg-gray-700"
+                :aria-label="`Opponent, ${opposingHero.name}, ${opposingHero.health} HP`"
                 @click="handleHeroClick(opposingHero.hero_id)">
-                <div class="flex flex-col h-24 items-center justify-center">
-                    <div class="text-xs opacity-75">Opponent</div>
-                    <div>{{ opposingHero?.name }}</div>
-                    <div>{{ opposingHero?.health }} HP</div>
+                <div class="h-24">
+                    <Hero
+                        class="border-l pointer-events-none"
+                        :hero="opposingHero"
+                        :hero-art-url="opposingHero.art_url ?? null"
+                        :hero-name="opposingHero.name"
+                        :health="opposingHero.health"
+                    />
                 </div>
-            </div>
+            </button>
             <div v-else-if="showOpposingHero && opposingHero"
-                class="flex w-full justify-center border-gray-700 border-b opacity-30">
-                <div class="flex flex-col h-24 items-center justify-center">
-                    <div class="text-xs opacity-75">Opponent</div>
-                    <div>{{ opposingHero?.name }}</div>
-                    <div>{{ opposingHero?.health }} HP</div>
+                class="flex w-full justify-center border-gray-700 border-b opacity-30"
+                role="button"
+                aria-disabled="true"
+                :aria-label="`Opponent, ${opposingHero.name}, ${opposingHero.health} HP, target unavailable`">
+                <div class="h-24">
+                    <Hero
+                        class="border-l pointer-events-none"
+                        :hero="opposingHero"
+                        :hero-art-url="opposingHero.art_url ?? null"
+                        :hero-name="opposingHero.name"
+                        :health="opposingHero.health"
+                    />
                 </div>
             </div>
 
@@ -79,21 +92,36 @@
             </div>
 
             <!-- Own Hero (if targeting friendly) -->
-            <div v-if="showOwnHero && canTargetHero && ownHero"
+            <button v-if="showOwnHero && canTargetHero && ownHero"
+                type="button"
                 class="flex w-full justify-center border-gray-700 border-b cursor-pointer hover:bg-gray-700"
+                :aria-label="`Your Hero, ${ownHero.name}, ${ownHero.health} HP`"
                 @click="handleHeroClick(ownHero.hero_id)">
-                <div class="flex flex-col h-24 items-center justify-center">
-                    <div class="text-xs opacity-75">Your Hero</div>
-                    <div>{{ ownHero?.name }}</div>
-                    <div>{{ ownHero?.health }} HP</div>
+                <div class="h-24">
+                    <Hero
+                        class="border-l pointer-events-none"
+                        :hero="ownHero"
+                        :hero-art-url="ownHero.art_url ?? null"
+                        :hero-name="ownHero.name"
+                        :health="ownHero.health"
+                        active
+                    />
                 </div>
-            </div>
+            </button>
             <div v-else-if="showOwnHero && ownHero"
-                class="flex w-full justify-center border-gray-700 border-b opacity-30">
-                <div class="flex flex-col h-24 items-center justify-center">
-                    <div class="text-xs opacity-75">Your Hero</div>
-                    <div>{{ ownHero?.name }}</div>
-                    <div>{{ ownHero?.health }} HP</div>
+                class="flex w-full justify-center border-gray-700 border-b opacity-30"
+                role="button"
+                aria-disabled="true"
+                :aria-label="`Your Hero, ${ownHero.name}, ${ownHero.health} HP, target unavailable`">
+                <div class="h-24">
+                    <Hero
+                        class="border-l pointer-events-none"
+                        :hero="ownHero"
+                        :hero-art-url="ownHero.art_url ?? null"
+                        :hero-name="ownHero.name"
+                        :health="ownHero.health"
+                        active
+                    />
                 </div>
             </div>
 
@@ -127,6 +155,7 @@
 import { computed } from 'vue'
 import type { CardInPlay, Creature, HeroInPlay } from '@/types/game'
 import GameCard from '../GameCard.vue'
+import Hero from './Hero.vue'
 
 type TargetType = 'creature' | 'hero' | 'both'
 type TargetScope = 'enemy' | 'friendly' | 'any'
