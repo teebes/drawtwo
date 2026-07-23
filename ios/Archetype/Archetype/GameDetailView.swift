@@ -2870,9 +2870,17 @@ private struct NativeBoardSurface: View {
             .allowsHitTesting(false)
         }
         .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(ArchetypeTheme.border)
-                .frame(width: 1)
+            VStack(spacing: 0) {
+                Color.clear
+                    .frame(height: 96)
+
+                Rectangle()
+                    .fill(ArchetypeTheme.border)
+
+                Color.clear
+                    .frame(height: 96)
+            }
+            .frame(width: 1)
         }
         .overlay(alignment: .trailing) {
             Rectangle()
@@ -3656,6 +3664,9 @@ private struct BoardSideHeader: View {
                 HeroTile(
                     snapshot: snapshot,
                     isActive: isActive,
+                    showsLeadingDivider: true,
+                    showsBottomDivider: isTop,
+                    showsTopDivider: !isTop,
                     combatRole: combatMarker?.role(forHeroId: snapshot.heroId),
                     combatMotion: combatMarker?.motion(forHeroId: snapshot.heroId),
                     animationToken: combatMarker?.animationToken
@@ -3713,9 +3724,14 @@ private struct BoardSideHeader: View {
         .frame(height: 96)
         .background(ArchetypeTheme.ink, ignoresSafeAreaEdges: [])
         .overlay(alignment: isTop ? .bottom : .top) {
-            Rectangle()
-                .fill(ArchetypeTheme.border)
-                .frame(height: 1)
+            HStack(spacing: 0) {
+                Color.clear
+                    .frame(width: 96)
+
+                Rectangle()
+                    .fill(ArchetypeTheme.border)
+            }
+            .frame(height: 1)
         }
     }
 
@@ -3737,6 +3753,8 @@ private struct PlayerFooter: View {
                 HeroTile(
                     snapshot: snapshot,
                     isActive: isActive,
+                    showsLeadingDivider: true,
+                    showsTopDivider: true,
                     isDimmed: isHeroDimmed,
                     combatRole: combatMarker?.role(forHeroId: snapshot.heroId),
                     combatMotion: combatMarker?.motion(forHeroId: snapshot.heroId),
@@ -3777,9 +3795,14 @@ private struct PlayerFooter: View {
         .frame(height: 96)
         .background(ArchetypeTheme.ink)
         .overlay(alignment: .top) {
-            Rectangle()
-                .fill(ArchetypeTheme.border)
-                .frame(height: 1)
+            HStack(spacing: 0) {
+                Color.clear
+                    .frame(width: 96)
+
+                Rectangle()
+                    .fill(ArchetypeTheme.border)
+            }
+            .frame(height: 1)
         }
     }
 }
@@ -4001,6 +4024,9 @@ private struct UpdateCardThumb: View {
 private struct HeroTile: View {
     let snapshot: GameSideSnapshot
     let isActive: Bool
+    var showsLeadingDivider = false
+    var showsBottomDivider = false
+    var showsTopDivider = false
     var isDimmed = false
     var combatRole: BoardCombatRole? = nil
     var combatMotion: BoardCombatMotion? = nil
@@ -4043,6 +4069,27 @@ private struct HeroTile: View {
             Rectangle()
                 .fill(ArchetypeTheme.border)
                 .frame(width: 1)
+        }
+        .overlay(alignment: .leading) {
+            if showsLeadingDivider {
+                Rectangle()
+                    .fill(ArchetypeTheme.border)
+                    .frame(width: 1)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if showsBottomDivider {
+                Rectangle()
+                    .fill(ArchetypeTheme.border)
+                    .frame(height: 1)
+            }
+        }
+        .overlay(alignment: .top) {
+            if showsTopDivider {
+                Rectangle()
+                    .fill(ArchetypeTheme.border)
+                    .frame(height: 1)
+            }
         }
         .overlay {
             if let outlineColor {
@@ -5514,12 +5561,12 @@ private struct TargetHeroBand: View {
         } label: {
             Group {
                 if let hero = option.hero {
-                    HeroTile(snapshot: hero, isActive: showsActiveTurnOutline)
-                        .overlay(alignment: .leading) {
-                            Rectangle()
-                                .fill(ArchetypeTheme.border)
-                                .frame(width: 1)
-                        }
+                    HeroTile(
+                        snapshot: hero,
+                        isActive: showsActiveTurnOutline,
+                        showsLeadingDivider: true,
+                        showsBottomDivider: true
+                    )
                 }
             }
             .frame(maxWidth: .infinity)
@@ -5532,7 +5579,7 @@ private struct TargetHeroBand: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(label), \(option.title), \(option.subtitle)")
         .accessibilityHint(option.enabled ? "Select target" : "Target unavailable")
-        .overlay(alignment: .bottom) {
+        .background(alignment: .bottom) {
             Rectangle()
                 .fill(ArchetypeTheme.border)
                 .frame(height: 1)
