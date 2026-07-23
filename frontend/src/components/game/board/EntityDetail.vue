@@ -33,8 +33,8 @@
 
         <!-- Entity Information -->
         <div class="text-center border-t border-gray-700 py-4">
-            <div class="text-lg mb-4">{{ entityName }}</div>
-            <div>{{  entityDescription }}</div>
+            <div :class="['text-lg', entityDescription ? 'mb-4' : '']">{{ entityName }}</div>
+            <div v-if="entityDescription">{{ entityDescription }}</div>
         </div>
 
         <!-- Action Section -->
@@ -179,10 +179,12 @@ const entityName = computed(() => {
 })
 
 const entityDescription = computed(() => {
-    if (props.card) return props.card.description || 'No description'
-    if (props.creature) return props.creature.description || 'No description'
-    if (props.hero) return props.hero.description || 'No description'
-    return 'No description'
+    const description = props.card?.description
+        ?? props.creature?.description
+        ?? props.hero?.description
+        ?? ''
+
+    return description.trim() ? description : ''
 })
 
 const heroPowerCost = computed(() => {

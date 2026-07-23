@@ -38,6 +38,12 @@ struct BoardCardSnapshot: Identifiable, Equatable {
         name.isEmpty ? "Unknown" : name
     }
 
+    var nonEmptyDescription: String? {
+        description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? nil
+            : description
+    }
+
     var isCreatureCard: Bool {
         !isSpell
     }
@@ -5066,14 +5072,16 @@ private struct EntityDetailSheet: View {
         context.card?.shortName ?? context.hero?.heroName ?? "Entity"
     }
 
-    private var detail: String {
+    private var detail: String? {
         if let card = context.card {
-            return card.description.isEmpty ? "No description" : card.description
+            return card.nonEmptyDescription
         }
         if let hero = context.hero {
-            return hero.description.isEmpty ? "No description" : hero.description
+            return hero.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? nil
+                : hero.description
         }
-        return "No description"
+        return nil
     }
 
     private var cardIsInLane: Bool {
@@ -5106,11 +5114,13 @@ private struct EntityDetailSheet: View {
                         .foregroundStyle(ArchetypeTheme.text)
                         .multilineTextAlignment(.center)
 
-                    Text(detail)
-                        .font(.archetypeBody(16))
-                        .foregroundStyle(ArchetypeTheme.text)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if let detail {
+                        Text(detail)
+                            .font(.archetypeBody(16))
+                            .foregroundStyle(ArchetypeTheme.text)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 18)
@@ -5491,11 +5501,13 @@ private struct TargetingSheet: View {
                     .foregroundStyle(ArchetypeTheme.text)
                     .multilineTextAlignment(.center)
 
-                Text(sourceCard.description.isEmpty ? "No description" : sourceCard.description)
-                    .font(.archetypeBody(16))
-                    .foregroundStyle(ArchetypeTheme.text)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let description = sourceCard.nonEmptyDescription {
+                    Text(description)
+                        .font(.archetypeBody(16))
+                        .foregroundStyle(ArchetypeTheme.text)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 18)
