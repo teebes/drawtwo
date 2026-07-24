@@ -5364,15 +5364,28 @@ private struct TargetingSheet: View {
                 unavailableState(unavailableReason)
             } else {
                 VStack(spacing: 0) {
-                    targetBands
-                    if context.sourceDescription == nil {
-                        promptBand
+                    if alignsFriendlyTargetsToBottom {
+                        if context.sourceDescription == nil {
+                            promptBand
+                        }
+                        sourceBand
+                        sourceInfoBand
+                        targetBands
+                    } else {
+                        targetBands
+                        if context.sourceDescription == nil {
+                            promptBand
+                        }
+                        sourceBand
+                        sourceInfoBand
                     }
-                    sourceBand
-                    sourceInfoBand
                 }
             }
         }
+    }
+
+    private var alignsFriendlyTargetsToBottom: Bool {
+        context.scope == .friendly
     }
 
     private var overlayTitle: String {
@@ -5442,6 +5455,7 @@ private struct TargetingSheet: View {
                 TargetBoardBand(
                     options: creatureOptions(for: enemySide),
                     emptyText: "No enemy creatures",
+                    showsTopBorder: false,
                     onSelectTarget: onSelectTarget
                 )
             }
@@ -5452,6 +5466,7 @@ private struct TargetingSheet: View {
                 TargetBoardBand(
                     options: creatureOptions(for: friendlySide),
                     emptyText: "No friendly creatures",
+                    showsTopBorder: alignsFriendlyTargetsToBottom,
                     onSelectTarget: onSelectTarget
                 )
             }
@@ -5460,7 +5475,7 @@ private struct TargetingSheet: View {
                 TargetHeroBand(
                     label: "Your Hero",
                     option: option,
-                    showsActiveTurnOutline: true,
+                    showsActiveTurnOutline: !alignsFriendlyTargetsToBottom,
                     onSelectTarget: onSelectTarget
                 )
             }
@@ -5496,25 +5511,36 @@ private struct TargetingSheet: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let sourceDescription = context.sourceDescription {
                 GeometryReader { proxy in
-                    let topPadding = min(max(proxy.size.height * 0.17, 48), 96)
+                    let edgePadding = min(max(proxy.size.height * 0.17, 48), 96)
 
-                    VStack(spacing: 16) {
-                        Text("\(context.title):")
-                            .font(.archetypeBody(16))
-                            .foregroundStyle(ArchetypeTheme.muted)
-                            .frame(maxWidth: .infinity)
+                    VStack(spacing: 0) {
+                        if alignsFriendlyTargetsToBottom {
+                            Spacer(minLength: 0)
+                        }
 
-                        Text(sourceDescription)
-                            .font(.archetypeBody(16))
-                            .foregroundStyle(ArchetypeTheme.text)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        VStack(spacing: 16) {
+                            Text("\(context.title):")
+                                .font(.archetypeBody(16))
+                                .foregroundStyle(ArchetypeTheme.muted)
+                                .frame(maxWidth: .infinity)
+
+                            Text(sourceDescription)
+                                .font(.archetypeBody(16))
+                                .foregroundStyle(ArchetypeTheme.text)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(maxWidth: 250)
+                        .padding(.horizontal, 24)
+
+                        if !alignsFriendlyTargetsToBottom {
+                            Spacer(minLength: 0)
+                        }
                     }
-                    .frame(maxWidth: 250)
-                    .padding(.horizontal, 24)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, topPadding)
+                    .padding(.top, alignsFriendlyTargetsToBottom ? 0 : edgePadding)
+                    .padding(.bottom, alignsFriendlyTargetsToBottom ? edgePadding : 0)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         }
@@ -5638,6 +5664,7 @@ private struct TargetHeroBand: View {
 private struct TargetBoardBand: View {
     let options: [GameTargetOption]
     let emptyText: String
+    let showsTopBorder: Bool
     let onSelectTarget: (GameTargetOption) -> Void
 
     var body: some View {
@@ -5679,6 +5706,13 @@ private struct TargetBoardBand: View {
         .frame(height: 160)
         .frame(maxWidth: .infinity)
         .background(ArchetypeTheme.creatureLaneBackground)
+        .overlay(alignment: .top) {
+            if showsTopBorder {
+                Rectangle()
+                    .fill(ArchetypeTheme.border)
+                    .frame(height: 1)
+            }
+        }
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(ArchetypeTheme.border)

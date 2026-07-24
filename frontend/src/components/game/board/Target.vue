@@ -73,7 +73,11 @@
             </div>
 
             <!-- Own Board (if targeting friendly) -->
-            <div v-if="showOwnBoard" class="flex w-full bg-gray-800 border-b border-gray-700 py-8 overflow-x-auto">
+            <div
+                v-if="showOwnBoard"
+                class="flex w-full bg-gray-800 border-b border-gray-700 py-8 overflow-x-auto"
+                :class="alignFriendlyTargetsToBottom ? 'order-last border-t' : ''"
+            >
                 <div v-if="ownBoard && ownBoard.length > 0" class="flex flex-row h-24 mx-auto">
                     <div v-for="creature in ownBoard" :key="creature.creature_id" class="w-14">
                         <GameCard
@@ -95,6 +99,7 @@
             <button v-if="showOwnHero && canTargetHero && ownHero"
                 type="button"
                 class="flex w-full justify-center border-gray-700 border-b cursor-pointer hover:bg-gray-700"
+                :class="{ 'order-last': alignFriendlyTargetsToBottom }"
                 :aria-label="`Your Hero, ${ownHero.name}, ${ownHero.health} HP`"
                 @click="handleHeroClick(ownHero.hero_id)">
                 <div class="h-24">
@@ -104,12 +109,13 @@
                         :hero-art-url="ownHero.art_url ?? null"
                         :hero-name="ownHero.name"
                         :health="ownHero.health"
-                        active
+                        :active="!alignFriendlyTargetsToBottom"
                     />
                 </div>
             </button>
             <div v-else-if="showOwnHero && ownHero"
                 class="flex w-full justify-center border-gray-700 border-b opacity-30"
+                :class="{ 'order-last': alignFriendlyTargetsToBottom }"
                 role="button"
                 aria-disabled="true"
                 :aria-label="`Your Hero, ${ownHero.name}, ${ownHero.health} HP, target unavailable`">
@@ -120,7 +126,7 @@
                         :hero-art-url="ownHero.art_url ?? null"
                         :hero-name="ownHero.name"
                         :health="ownHero.health"
-                        active
+                        :active="!alignFriendlyTargetsToBottom"
                     />
                 </div>
             </div>
@@ -136,7 +142,9 @@
         <div
             class="flex flex-1 justify-center border-t border-gray-700"
             :class="sourceDescription
-                ? 'items-start pt-[clamp(3rem,10vh,6rem)]'
+                ? (alignFriendlyTargetsToBottom
+                    ? 'items-end pb-[clamp(3rem,10vh,6rem)]'
+                    : 'items-start pt-[clamp(3rem,10vh,6rem)]')
                 : 'items-center'"
         >
             <div v-if="sourceCard" class="flex h-72 my-4 w-full">
@@ -289,6 +297,10 @@ const showOwnBoard = computed(() => {
 
 const showOwnHero = computed(() => {
     return props.targetScope === 'friendly' || props.targetScope === 'any'
+})
+
+const alignFriendlyTargetsToBottom = computed(() => {
+    return props.targetScope === 'friendly'
 })
 
 const handleHeroClick = (heroId: string) => {
