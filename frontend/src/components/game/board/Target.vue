@@ -126,23 +126,37 @@
             </div>
 
             <!-- Header -->
-            <div class="text-center w-full py-2">
+            <div v-if="!sourceDescription" class="text-center w-full py-2">
                 {{ title }}
             </div>
 
         </template>
 
         <!-- Source Card Display (if provided) -->
-        <div class="flex flex-1 justify-center items-center border-t border-gray-700">
+        <div
+            class="flex flex-1 justify-center border-t border-gray-700"
+            :class="sourceDescription
+                ? 'items-start pt-[clamp(3rem,10vh,6rem)]'
+                : 'items-center'"
+        >
             <div v-if="sourceCard" class="flex h-72 my-4 w-full">
                 <div class="p-1 w-48 mx-auto">
                     <GameCard :card="sourceCard" />
                 </div>
             </div>
+            <div
+                v-else-if="sourceDescription"
+                class="w-full px-6 text-base leading-relaxed"
+            >
+                <div class="mx-auto flex w-full max-w-[250px] flex-col gap-4">
+                    <div class="text-center text-gray-400">{{ title }}:</div>
+                    <div class="text-left text-gray-100">{{ sourceDescription }}</div>
+                </div>
+            </div>
         </div>
 
         <!-- Card Information -->
-        <div class="text-center border-t border-gray-700 py-4">
+        <div v-if="sourceCard" class="text-center border-t border-gray-700 py-4">
             <div class="text-lg mb-4">{{ sourceCard?.name }}</div>
             <div>{{  sourceCard?.description }}</div>
         </div>
@@ -168,6 +182,7 @@ interface Props {
     allowedTargetTypes: TargetType
     targetScope?: TargetScope  // Default to 'enemy' for backward compatibility
     sourceCard?: CardInPlay | Creature | null
+    sourceDescription?: string | null
     errorMessage?: string | null
     title?: string
     bypassTaunt?: boolean
@@ -178,6 +193,7 @@ const props = withDefaults(defineProps<Props>(), {
     ownHero: null,
     targetScope: 'enemy',
     sourceCard: null,
+    sourceDescription: null,
     errorMessage: null,
     title: 'Select Target',
     bypassTaunt: false

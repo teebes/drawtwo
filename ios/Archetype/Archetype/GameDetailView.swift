@@ -19,6 +19,15 @@ struct GameSideSnapshot {
     let boardCount: Int
     let energy: Int
     let energyPool: Int
+
+    var nonEmptyHeroPowerDescription: String? {
+        guard let heroPowerDescription else {
+            return nil
+        }
+        return heroPowerDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? nil
+            : heroPowerDescription
+    }
 }
 
 struct BoardCardSnapshot: Identifiable, Equatable {
@@ -470,6 +479,7 @@ struct GameTargetingContext: Identifiable {
     let title: String
     let sourceName: String
     let sourceCard: BoardCardSnapshot?
+    let sourceDescription: String?
     let allowed: TargetAllowed
     let scope: TargetScope
     let bypassTaunt: Bool
@@ -2219,6 +2229,7 @@ struct GameDetailView: View {
             title: "Use Hero Power",
             sourceName: hero.heroPowerName ?? "Hero Power",
             sourceCard: nil,
+            sourceDescription: hero.nonEmptyHeroPowerDescription,
             rules: rules,
             unavailableReason: unavailableReason,
             command: .heroPower(heroId: heroId)
@@ -2229,6 +2240,7 @@ struct GameDetailView: View {
         title: String,
         sourceName: String,
         sourceCard: BoardCardSnapshot?,
+        sourceDescription: String? = nil,
         rules: TargetRules,
         unavailableReason: String?,
         command: PendingGameCommand
@@ -2238,6 +2250,7 @@ struct GameDetailView: View {
                 title: title,
                 sourceName: sourceName,
                 sourceCard: sourceCard,
+                sourceDescription: sourceDescription,
                 allowed: rules.allowed,
                 scope: rules.scope,
                 bypassTaunt: rules.bypassTaunt,
@@ -2517,6 +2530,7 @@ struct GameDetailView: View {
             title: "Cast Spell",
             sourceName: card.shortName,
             sourceCard: card,
+            sourceDescription: nil,
             allowed: rules.allowed,
             scope: rules.scope,
             bypassTaunt: rules.bypassTaunt,
@@ -2544,6 +2558,7 @@ struct GameDetailView: View {
             title: "Select Attack Target",
             sourceName: card.shortName,
             sourceCard: card,
+            sourceDescription: nil,
             allowed: .both,
             scope: .enemy,
             bypassTaunt: false,
@@ -2571,6 +2586,7 @@ struct GameDetailView: View {
             title: "Use Hero Power",
             sourceName: hero.heroPowerName ?? "Hero Power",
             sourceCard: nil,
+            sourceDescription: hero.nonEmptyHeroPowerDescription,
             allowed: rules.allowed,
             scope: rules.scope,
             bypassTaunt: rules.bypassTaunt,
@@ -4236,14 +4252,7 @@ private struct BoardLane: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(hex: 0x1F2937),
-                    Color(hex: 0x1F2937),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            ArchetypeTheme.creatureLaneBackground
 
             GeometryReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -5303,7 +5312,7 @@ private struct PlacementSheet: View {
         }
         .frame(height: 160)
         .frame(maxWidth: .infinity)
-        .background(ArchetypeTheme.panel2)
+        .background(ArchetypeTheme.creatureLaneBackground)
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(ArchetypeTheme.border)
@@ -5356,7 +5365,9 @@ private struct TargetingSheet: View {
             } else {
                 VStack(spacing: 0) {
                     targetBands
-                    promptBand
+                    if context.sourceDescription == nil {
+                        promptBand
+                    }
                     sourceBand
                     sourceInfoBand
                 }
@@ -5470,16 +5481,41 @@ private struct TargetingSheet: View {
     }
 
     private var sourceBand: some View {
-        VStack {
+        Group {
             if let sourceCard = context.sourceCard {
-                MiniGameCard(
-                    card: sourceCard,
-                    active: false,
-                    inLane: sourceCardIsInLane,
-                    isLarge: true
-                )
-                    .frame(width: 184, height: 258)
-                    .padding(.vertical, 20)
+                VStack {
+                    MiniGameCard(
+                        card: sourceCard,
+                        active: false,
+                        inLane: sourceCardIsInLane,
+                        isLarge: true
+                    )
+                        .frame(width: 184, height: 258)
+                        .padding(.vertical, 20)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let sourceDescription = context.sourceDescription {
+                GeometryReader { proxy in
+                    let topPadding = min(max(proxy.size.height * 0.17, 48), 96)
+
+                    VStack(spacing: 16) {
+                        Text("\(context.title):")
+                            .font(.archetypeBody(16))
+                            .foregroundStyle(ArchetypeTheme.muted)
+                            .frame(maxWidth: .infinity)
+
+                        Text(sourceDescription)
+                            .font(.archetypeBody(16))
+                            .foregroundStyle(ArchetypeTheme.text)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxWidth: 250)
+                    .padding(.horizontal, 24)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, topPadding)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -5642,7 +5678,7 @@ private struct TargetBoardBand: View {
         }
         .frame(height: 160)
         .frame(maxWidth: .infinity)
-        .background(ArchetypeTheme.panel2)
+        .background(ArchetypeTheme.creatureLaneBackground)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(ArchetypeTheme.border)

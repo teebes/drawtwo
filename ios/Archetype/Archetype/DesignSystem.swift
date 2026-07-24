@@ -9,6 +9,16 @@ enum ArchetypeTheme {
     static var border: Color { adaptive(light: 0xE5E7EB, dark: 0x374151) }
     static var text: Color { adaptive(light: 0x111827, dark: 0xF8FAFC) }
     static var muted: Color { adaptive(light: 0x6B7280, dark: 0x9CA3AF) }
+    static var creatureLaneBackground: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(hex: 0x1F2937),
+                Color(hex: 0x1F2937),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
     static let gold = Color(hex: 0xD97706)
     static let gold2 = Color(hex: 0xF59E0B)
     static let sky = Color(hex: 0x0EA5E9)

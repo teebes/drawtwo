@@ -340,6 +340,7 @@
                 :allowed-target-types="targetingState.allowedTypes"
                 :target-scope="targetingState.scope"
                 :source-card="targetingState.sourceCard"
+                :source-description="targetingState.sourceDescription"
                 :error-message="targetingState.errorMessage"
                 :title="targetingState.title"
                 :title-slug="titleStore.titleSlug ?? undefined"
@@ -537,6 +538,7 @@ interface TargetingState {
     allowedTypes: 'creature' | 'hero' | 'both'
     scope: 'enemy' | 'friendly' | 'any'
     sourceCard: CardInPlay | Creature | null
+    sourceDescription?: string | null
     errorMessage: string | null
     title: string
     bypassTaunt?: boolean
@@ -1741,6 +1743,7 @@ const handleUseHero = (side_id: string) => {
         allowedTypes: 'both',  // Hero powers can target various things
         scope: getHeroPowerTargetScope(hero), // Determine scope based on hero power actions
         sourceCard: null,
+        sourceDescription: hero.hero_power?.description?.trim() || null,
         errorMessage: !canUseHero.value ? 'Cannot use hero power' : null,
         title: 'Use Hero Power',
         bypassTaunt: bypassTaunt
