@@ -94,6 +94,7 @@ class CardDestroyedUpdate(UpdateBase):
 class GameOverUpdate(UpdateBase):
     type: Literal["update_game_over"] = "update_game_over"
     winner: Literal["side_a", "side_b"]
+    reason: Optional[Literal["empty_deck"]] = None
 
 
 class GameAbortedUpdate(UpdateBase):

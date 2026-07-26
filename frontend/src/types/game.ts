@@ -2,6 +2,7 @@ export type Phase = 'mulligan' | 'start' | 'refresh' | 'draw' | 'main' | 'combat
 export type Side = 'side_a' | 'side_b'
 export type Winner = 'side_a' | 'side_b' | 'none'
 export type LadderType = 'rapid' | 'daily'
+export type GameOverReason = 'empty_deck'
 
 export interface Event {
   type: string
@@ -109,6 +110,20 @@ export interface EloChange {
   }
 }
 
+export interface GameOverState {
+  isGameOver: boolean
+  winner: Side | null
+  reason: GameOverReason | null
+}
+
+export interface GameOverUpdate {
+  type: 'update_game_over'
+  side: Side
+  winner: Side
+  reason?: GameOverReason | null
+  timestamp?: string
+}
+
 export interface GameState {
   turn: number
   active: Side
@@ -127,6 +142,7 @@ export interface GameState {
   mana_pool: Record<string, number>
   mana_used: Record<string, number>
   winner: Winner
+  game_over_reason?: GameOverReason | null
   is_vs_ai: boolean
   elo_change?: EloChange
   time_per_turn?: number

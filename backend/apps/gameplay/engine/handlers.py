@@ -154,7 +154,11 @@ def draw_card_for_side(state: GameState, side: str, spec: dict | None = None):
             return None, None
     elif not deck:
         opposing_side = "side_b" if side == "side_a" else "side_a"
-        return None, GameOverEvent(side=side, winner=opposing_side)
+        return None, GameOverEvent(
+            side=side,
+            winner=opposing_side,
+            reason="empty_deck",
+        )
 
     card_id = deck.pop(card_index)
 

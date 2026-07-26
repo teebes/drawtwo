@@ -83,7 +83,9 @@
                  <div class="flex flex-row justify-around border-b border-gray-700 p-2">
                     <div class="flex flex-col text-center">
                         <div class="text-gray-500">Deck</div>
-                        <div>{{ opposingDeckSize }}</div>
+                        <div :class="{ 'text-red-400': opposingDeckSize <= 5 }">
+                            {{ opposingDeckSize }}
+                        </div>
                     </div>
                     <div class="flex flex-col text-center">
                         <div class="text-gray-500">Hand</div>
@@ -171,7 +173,9 @@
                  <div class="flex flex-row justify-around border-t border-gray-700 p-2">
                     <div class="flex flex-col text-center">
                         <div class="text-gray-500">Deck</div>
-                        <div>{{ ownDeckSize }}</div>
+                        <div :class="{ 'text-red-400': ownDeckSize <= 5 }">
+                            {{ ownDeckSize }}
+                        </div>
                     </div>
                     <div class="flex flex-col text-center">
                         <div class="text-gray-500">Hand</div>

@@ -521,6 +521,9 @@ class GameService:
                 if isinstance(result, Success):
                     # Update state and process normally
                     game_state = result.new_state
+                    # Collect terminal events before stopping so their updates are
+                    # persisted and sent alongside the final state.
+                    all_events.extend(result.events)
 
                     # Terminal Check
                     for event in result.events:
@@ -531,6 +534,7 @@ class GameService:
                             GameService._mark_actions_final_winner(game, event.winner)
                             GameService._create_game_ended_notifications(game)
                             game_state.winner = event.winner
+                            game_state.game_over_reason = event.reason
                             game_state.queue = []
                             # Clear the queue immediately to prevent processing any remaining effects
                             game.queue = []
@@ -558,8 +562,6 @@ class GameService:
                     # Enqueue child effects (depth-first)
                     if result.child_effects:
                         game.enqueue(result.child_effects, trigger=False, prepend=True)
-
-                    all_events.extend(result.events)
 
                     # ==== Event Triggers =====
                     from apps.gameplay import traits
@@ -1937,6 +1939,7 @@ class GameService:
                     GameOverUpdate(
                         side=event.side,
                         winner=event.winner,
+                        reason=event.reason,
                     )
                 )
             elif event.type == "event_end_turn":

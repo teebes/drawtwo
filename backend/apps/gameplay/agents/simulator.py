@@ -91,6 +91,7 @@ def apply_effects(
             for event in result.events:
                 if isinstance(event, GameOverEvent):
                     working_state.winner = event.winner
+                    working_state.game_over_reason = event.reason
                     queue = []
                     break
 

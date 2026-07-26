@@ -8,7 +8,7 @@
                 <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
                     {{ resultTitle }}
                 </h2>
-                <p v-if="isIntroGame" class="text-base text-gray-600 dark:text-gray-300">
+                <p v-if="resultMessage" class="text-base text-gray-600 dark:text-gray-300">
                     {{ resultMessage }}
                 </p>
             </div>
@@ -104,14 +104,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useTitleStore } from '@/stores/title'
-import type { Side, EloChange } from '../../../types/game'
+import type { EloChange, GameOverState, Side } from '../../../types/game'
 
 const titleStore = useTitleStore()
-
-interface GameOverState {
-    isGameOver: boolean
-    winner: Side | null
-}
 
 interface Props {
     gameOver: GameOverState
@@ -139,13 +134,18 @@ const resultTitle = computed(() => {
     return didWin.value ? 'Intro Complete!' : 'Defeat!'
 })
 const resultMessage = computed(() => {
-    if (!isIntroGame.value) {
-        return ''
+    if (props.gameOver.reason === 'empty_deck') {
+        return didWin.value
+            ? 'Your opponent ran out of cards while trying to draw.'
+            : 'You ran out of cards while trying to draw.'
     }
-    if (didWin.value) {
-        return 'You won the intro match. Create an account to keep playing Draw Two.'
+    if (isIntroGame.value) {
+        if (didWin.value) {
+            return 'You won the intro match. Create an account to keep playing Draw Two.'
+        }
+        return 'Try the intro match again with the same starting setup.'
     }
-    return 'Try the intro match again with the same starting setup.'
+    return ''
 })
 
 const handleReturnToGame = () => {

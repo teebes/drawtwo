@@ -55,6 +55,7 @@ class EndTurnEvent(EventBase):
 class GameOverEvent(EventBase):
     type: Literal["event_game_over"] = "event_game_over"
     winner: Literal["side_a", "side_b"]
+    reason: Optional[Literal["empty_deck"]] = None
 
 
 class NewPhaseEvent(EventBase):

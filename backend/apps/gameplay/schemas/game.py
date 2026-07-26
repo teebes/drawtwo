@@ -154,6 +154,7 @@ class GameState(BaseModel):
     )
 
     winner: Literal["side_a", "side_b", "none"] = "none"
+    game_over_reason: Optional[Literal["empty_deck"]] = None
 
     config: TitleConfig = Field(default_factory=TitleConfig)
 

@@ -611,7 +611,9 @@ final class GameDetailViewModel: ObservableObject {
         "update_summon",
         "update_remove",
         "update_silence",
+        "update_game_over",
     ]
+    private static let emptyDeckGameOverReason = "empty_deck"
     private static let socketPreservedKeys = [
         "viewer",
         "is_vs_ai",
@@ -663,6 +665,31 @@ final class GameDetailViewModel: ObservableObject {
 
     var winner: String {
         gameJSON?["winner"]?.stringValue ?? "none"
+    }
+
+    var gameOverReason: String? {
+        if let reason = gameJSON?["game_over_reason"]?.stringValue {
+            return reason
+        }
+
+        return updates
+            .last(where: { $0.type == "update_game_over" })?
+            .value["reason"]?
+            .stringValue
+    }
+
+    var gameOverExplanation: String? {
+        guard gameOverReason == Self.emptyDeckGameOverReason else {
+            return nil
+        }
+
+        if winner == viewerSide {
+            return "Your opponent needed to draw from an empty deck, so you won."
+        }
+        if winner == opponentSide {
+            return "You needed to draw from an empty deck, so you lost."
+        }
+        return "A player needed to draw from an empty deck and lost the game."
     }
 
     var isMulliganPhase: Bool {
@@ -1202,6 +1229,8 @@ final class GameDetailViewModel: ObservableObject {
                 side: update.side
             ) ?? "a creature"
             return "\(sideName)Silence \(target)"
+        case "update_game_over":
+            return gameOverUpdateText(update)
         default:
             return sideName + update.type.replacingOccurrences(of: "update_", with: "").displayNameFromSlug
         }
@@ -1670,6 +1699,36 @@ final class GameDetailViewModel: ObservableObject {
         return nil
     }
 
+    private func gameOverUpdateText(_ update: GameUpdateSnapshot) -> String {
+        let winnerSide = update.value["winner"]?.stringValue
+
+        if update.value["reason"]?.stringValue == Self.emptyDeckGameOverReason {
+            let losingSide: String
+            if winnerSide == "side_a" {
+                losingSide = "side_b"
+            } else if winnerSide == "side_b" {
+                losingSide = "side_a"
+            } else {
+                losingSide = update.side
+            }
+
+            if losingSide == viewerSide {
+                return "You could not draw from an empty deck and lost the game."
+            }
+
+            let loserName = snapshot(for: losingSide, label: "Opponent").heroName
+            return "\(loserName) could not draw from an empty deck and lost the game."
+        }
+
+        if winnerSide == viewerSide {
+            return "You won the game."
+        }
+        if winnerSide == opponentSide {
+            return "\(snapshot(for: opponentSide, label: "Opponent").heroName) won the game."
+        }
+        return "The game ended."
+    }
+
     private func guestQueryItems(_ token: String) -> [URLQueryItem] {
         [URLQueryItem(name: "guest_token", value: token)]
     }
@@ -1763,6 +1822,7 @@ struct GameDetailView: View {
                     GameOverOverlay(
                         title: gameOverTitle,
                         winnerText: winnerText,
+                        reasonText: model.gameOverExplanation,
                         isVictory: model.winner == model.viewerSide,
                         eloChange: model.eloChange,
                         isIntroGame: isIntroGuestGame,
@@ -4326,7 +4386,11 @@ private struct StatStrip: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            CompactStat(label: "Deck", value: "\(snapshot.deckCount)")
+            CompactStat(
+                label: "Deck",
+                value: "\(snapshot.deckCount)",
+                valueColor: snapshot.deckCount <= 5 ? ArchetypeTheme.red : ArchetypeTheme.text
+            )
             CompactStat(label: "Hand", value: "\(snapshot.handCount)")
             CompactStat(label: "Energy", value: "\(snapshot.energy)/\(snapshot.energyPool)")
         }
@@ -4343,6 +4407,7 @@ private struct StatStrip: View {
 private struct CompactStat: View {
     let label: String
     let value: String
+    var valueColor = ArchetypeTheme.text
 
     var body: some View {
         VStack(spacing: 2) {
@@ -4351,7 +4416,7 @@ private struct CompactStat: View {
                 .foregroundStyle(Color(hex: 0x6B7280))
             Text(value)
                 .font(.archetypeBody(16))
-                .foregroundStyle(ArchetypeTheme.text)
+                .foregroundStyle(valueColor)
         }
         .frame(maxWidth: .infinity)
     }
@@ -6549,6 +6614,13 @@ private struct UpdateLogRow: View {
                     ),
                     targetBorderColor: borderColor
                 )
+            case "update_game_over":
+                Image(systemName: "rectangle.stack.fill")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(ArchetypeTheme.gold2)
+
+                Text(text)
+                    .multilineTextAlignment(.leading)
             default:
                 fallbackContent
             }
@@ -6717,6 +6789,8 @@ private struct UpdateGlyph: View {
             return "speaker.slash.fill"
         case "update_end_turn":
             return "forward.end.fill"
+        case "update_game_over":
+            return "rectangle.stack.fill"
         default:
             return "circle.fill"
         }
@@ -6736,6 +6810,8 @@ private struct UpdateGlyph: View {
             return ArchetypeTheme.sky
         case "update_end_turn":
             return ArchetypeTheme.gold2
+        case "update_game_over":
+            return ArchetypeTheme.gold2
         default:
             return ArchetypeTheme.muted
         }
@@ -6745,6 +6821,7 @@ private struct UpdateGlyph: View {
 private struct GameOverOverlay: View {
     let title: String
     let winnerText: String
+    let reasonText: String?
     let isVictory: Bool
     let eloChange: EloRatingChangeSnapshot?
     let isIntroGame: Bool
@@ -6773,6 +6850,14 @@ private struct GameOverOverlay: View {
                         Text(title)
                             .font(.archetypeBody(30, weight: .black))
                             .foregroundStyle(ArchetypeTheme.text)
+
+                        if let reasonText {
+                            Text(reasonText)
+                                .font(.archetypeBody(14))
+                                .foregroundStyle(ArchetypeTheme.muted)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
 
                         if isIntroGame {
                             Text(introResultText)

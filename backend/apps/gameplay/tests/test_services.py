@@ -10,7 +10,8 @@ from apps.authentication.models import User
 from apps.builder.models import CardTemplate, HeroTemplate, Title
 from apps.collection.models import Deck, DeckCard
 from apps.collection.validation import DeckValidationError
-from apps.gameplay.models import Game, MatchmakingQueue, PlayerNotification
+from apps.gameplay.models import Game, GameUpdate, MatchmakingQueue, PlayerNotification
+from apps.gameplay.schemas.effects import DamageEffect, DrawEffect
 from apps.gameplay.services import GameService
 from apps.gameplay.tests import ServiceTestsBase
 
@@ -54,6 +55,63 @@ class ServiceTests(ServiceTestsBase):
         self.assertEqual(action.observation["side"], "side_a")
         self.assertIn("public_state", action.observation)
         self.assertEqual(action.observation["public_state"]["phase"], "start")
+
+    def test_empty_draw_persists_reason_and_game_over_update(self):
+        game_state = self.game.game_state
+        game_state.active = "side_a"
+        game_state.phase = "main"
+        game_state.decks["side_a"] = []
+        self.game.state = game_state.model_dump(mode="json")
+        self.game.queue = [DrawEffect(side="side_a").model_dump(mode="json")]
+        self.game.save(update_fields=["state", "queue"])
+
+        GameService.step(self.game.id)
+
+        self.game.refresh_from_db()
+        self.assertEqual(self.game.status, Game.GAME_STATUS_ENDED)
+        self.assertEqual(self.game.winner, self.game.side_b)
+        self.assertEqual(self.game.state["winner"], "side_b")
+        self.assertEqual(self.game.state["game_over_reason"], "empty_deck")
+
+        update = GameUpdate.objects.get(game=self.game)
+        self.assertEqual(update.update["type"], "update_game_over")
+        self.assertEqual(update.update["winner"], "side_b")
+        self.assertEqual(update.update["reason"], "empty_deck")
+
+    def test_lethal_damage_persists_damage_and_reasonless_game_over(self):
+        game_state = self.game.game_state
+        game_state.active = "side_a"
+        game_state.phase = "main"
+        game_state.heroes["side_b"].health = 1
+        damage = DamageEffect(
+            side="side_a",
+            source_type="hero",
+            source_id=game_state.heroes["side_a"].hero_id,
+            target_type="hero",
+            target_id=game_state.heroes["side_b"].hero_id,
+            damage=1,
+        )
+        self.game.state = game_state.model_dump(mode="json")
+        self.game.queue = [damage.model_dump(mode="json")]
+        self.game.save(update_fields=["state", "queue"])
+
+        GameService.step(self.game.id)
+
+        self.game.refresh_from_db()
+        self.assertEqual(self.game.status, Game.GAME_STATUS_ENDED)
+        self.assertEqual(self.game.state["winner"], "side_a")
+        self.assertIsNone(self.game.state["game_over_reason"])
+
+        updates = list(
+            GameUpdate.objects.filter(game=self.game)
+            .order_by("created_at")
+            .values_list("update", flat=True)
+        )
+        self.assertEqual(
+            [update["type"] for update in updates],
+            ["update_damage", "update_game_over"],
+        )
+        self.assertIsNone(updates[-1]["reason"])
 
 
 class MatchmakingTests(TestCase):

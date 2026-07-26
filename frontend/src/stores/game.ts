@@ -8,7 +8,10 @@ import type {
   Creature,
   HeroInPlay,
   GameError,
-  LadderType
+  LadderType,
+  GameOverReason,
+  GameOverState,
+  GameOverUpdate
 } from '../types/game'
 import { useNotificationStore } from './notifications'
 import { useAuthStore } from './auth'
@@ -31,10 +34,7 @@ interface GameStoreState {
   loading: boolean
   error: string | null
   cardNameMap: Record<string, string>
-  gameOver: {
-    isGameOver: boolean
-    winner: Side | null
-  }
+  gameOver: GameOverState
   socket: WebSocket | null
   wsStatus: WebSocketStatus
   intentionalDisconnect: boolean
@@ -76,6 +76,7 @@ function createInitialGameState(): GameState {
     mana_pool: { side_a: 0, side_b: 0 },
     mana_used: { side_a: 0, side_b: 0 },
     winner: 'none',
+    game_over_reason: null,
     is_vs_ai: false
   }
 }
@@ -94,6 +95,10 @@ function formatDuration(seconds: number): string {
     return `${seconds / 60}m`
   }
   return `${seconds}s`
+}
+
+function normalizeGameOverReason(reason: unknown): GameOverReason | null {
+  return reason === 'empty_deck' ? reason : null
 }
 
 function heroPowerCost(hero: HeroInPlay | null | undefined): number {
@@ -129,7 +134,8 @@ export const useGameStore = defineStore('game', {
     cardNameMap: {},
     gameOver: {
       isGameOver: false,
-      winner: null
+      winner: null,
+      reason: null
     },
     // WebSocket state
     socket: null,
@@ -366,6 +372,7 @@ export const useGameStore = defineStore('game', {
           'update_summon',
           'update_remove',
           'update_silence',
+          'update_game_over',
         ]
 
         if (display_types.includes(update.type)) {
@@ -748,7 +755,16 @@ export const useGameStore = defineStore('game', {
       if (data.state) {
         const oldTurnExpires = this.gameState.turn_expires
         const oldActive = this.gameState.active
-        this.gameState = data.state
+        const incomingGameOverReason = normalizeGameOverReason(data.state.game_over_reason)
+        const retainedGameOverReason = (
+          incomingGameOverReason
+          ?? this.gameOver.reason
+          ?? normalizeGameOverReason(this.gameState.game_over_reason)
+        )
+        this.gameState = {
+          ...data.state,
+          game_over_reason: retainedGameOverReason,
+        }
 
         const oldTurnExpiresMs = oldTurnExpires ? new Date(oldTurnExpires).getTime() : null
         const newTurnExpiresMs = this.gameState.turn_expires
@@ -790,9 +806,11 @@ export const useGameStore = defineStore('game', {
         }
 
         // Check if the game is over based on the state's winner field
-        if (data.state.winner && data.state.winner !== 'none' && !this.gameOver.isGameOver) {
-          this.setGameOver(data.state.winner)
-          sawGameOver = true
+        if (data.state.winner && data.state.winner !== 'none') {
+          sawGameOver = this.setGameOver(
+            data.state.winner,
+            retainedGameOverReason,
+          ) || sawGameOver
         }
       }
 
@@ -802,21 +820,36 @@ export const useGameStore = defineStore('game', {
 
         for (const update of data.updates) {
           if (update.type === 'update_game_over') {
-            this.setGameOver(update.winner)
-            sawGameOver = true
+            const gameOverUpdate = update as GameOverUpdate
+            sawGameOver = this.setGameOver(
+              gameOverUpdate.winner,
+              normalizeGameOverReason(gameOverUpdate.reason),
+            ) || sawGameOver
             break
           }
         }
 
         // Only add updates that don't already exist.
         for (const update of data.updates) {
-          const existingUpdate = this.updates.find(existing =>
+          const existingUpdateIndex = this.updates.findIndex(existing =>
             existing.timestamp === update.timestamp && existing.type === update.type
           )
-          if (!existingUpdate) {
-            this.updates.push(update)
-            newUpdates.push(update)
+          if (existingUpdateIndex >= 0) {
+            const updateReason = normalizeGameOverReason(update.reason)
+            if (
+              update.type === 'update_game_over'
+              && updateReason
+              && !normalizeGameOverReason(this.updates[existingUpdateIndex].reason)
+            ) {
+              this.updates[existingUpdateIndex] = {
+                ...this.updates[existingUpdateIndex],
+                reason: updateReason,
+              }
+            }
+            continue
           }
+          this.updates.push(update)
+          newUpdates.push(update)
         }
 
         if (newUpdates.length > 0 && !isInitialSnapshot) {
@@ -833,17 +866,32 @@ export const useGameStore = defineStore('game', {
     },
 
     // Set game over state and handle cleanup
-    setGameOver(winner: Side): void {
-      if (this.gameOver.isGameOver) return // Already game over
-
+    setGameOver(winner: Side, reason: GameOverReason | null = null): boolean {
+      const wasGameOver = this.gameOver.isGameOver
+      const retainedReason = (
+        reason
+        ?? this.gameOver.reason
+        ?? normalizeGameOverReason(this.gameState.game_over_reason)
+      )
       this.gameOver = {
         isGameOver: true,
-        winner: winner
+        winner,
+        reason: retainedReason,
       }
-      console.log(`Game over! Winner: ${winner}`)
+      if (retainedReason && this.gameState.game_over_reason !== retainedReason) {
+        this.gameState = {
+          ...this.gameState,
+          game_over_reason: retainedReason,
+        }
+      }
 
-      // Clear any pending actions or state that shouldn't persist
-      this.clearGameOverState()
+      if (!wasGameOver) {
+        console.log(`Game over! Winner: ${winner}`)
+
+        // Clear any pending actions or state that shouldn't persist
+        this.clearGameOverState()
+      }
+      return !wasGameOver
     },
 
     // Clear any state that should be reset when game over happens
@@ -1046,7 +1094,8 @@ export const useGameStore = defineStore('game', {
     resetGameOverState(): void {
       this.gameOver = {
         isGameOver: false,
-        winner: null
+        winner: null,
+        reason: null
       }
     },
 

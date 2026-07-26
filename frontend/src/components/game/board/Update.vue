@@ -1,7 +1,21 @@
 <template>
 
+    <!-- Game Over -->
+    <div
+        v-if="props.update.type === 'update_game_over'"
+        class="game-update flex max-w-full items-center"
+    >
+        <div
+            class="ui-alert flex max-w-full items-center gap-2 text-left"
+            :class="props.update.reason === 'empty_deck' ? 'ui-alert-warning' : 'ui-alert-info'"
+        >
+            <span aria-hidden="true">{{ props.update.reason === 'empty_deck' ? '🃏' : '🏁' }}</span>
+            <span>{{ gameOverUpdateText }}</span>
+        </div>
+    </div>
+
     <!-- Damage -->
-    <div class="game-update flex items-center" v-if="props.update.type === 'update_damage'">
+    <div class="game-update flex items-center" v-else-if="props.update.type === 'update_damage'">
         <UpdateEntity
             v-if="source && gameStore.viewer"
             :name="source.name"
@@ -178,7 +192,7 @@
 import { computed } from 'vue'
 import UpdateEntity from './UpdateEntity.vue'
 import { useGameStore } from '@/stores/game'
-import { HeroInPlay } from '@/types/game'
+import type { HeroInPlay, Side } from '@/types/game'
 
 interface Props {
     update: any
@@ -191,6 +205,22 @@ const gameStore = useGameStore()
 
 const isViewerTurn = computed(() => {
     return gameStore.viewer === props.update.side
+})
+
+const gameOverUpdateText = computed(() => {
+    const winner = props.update.winner as Side | undefined
+    if (props.update.reason === 'empty_deck' && winner) {
+        const defeatedSide: Side = winner === 'side_a' ? 'side_b' : 'side_a'
+        return defeatedSide === gameStore.viewer
+            ? 'You ran out of cards while trying to draw.'
+            : 'Your opponent ran out of cards while trying to draw.'
+    }
+    if (!winner) {
+        return 'Game over.'
+    }
+    return winner === gameStore.viewer
+        ? 'Game over. You won.'
+        : 'Game over. Your opponent won.'
 })
 
 const updateText = (update: any) => {
