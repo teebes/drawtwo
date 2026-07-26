@@ -1,8 +1,19 @@
 <template>
-    <div class="flex-1 flex flex-col">
-        <!-- Board Placement Area -->
+    <div class="placement-selector flex-1 min-h-0">
+        <!-- Selected Card Display -->
+        <div class="placement-source flex min-h-0 items-center justify-center overflow-hidden py-4">
+            <div v-if="cardId && card" class="placement-source-card">
+                <GameCard class="h-full w-full" :card="card"/>
+            </div>
+        </div>
+
         <template v-if="gameState.winner === 'none'">
-            <div class="flex w-full bg-gray-800 border-b border-t border-gray-700 py-8 overflow-x-auto">
+            <div class="placement-prompt flex items-center justify-center border-y border-gray-700 px-4 text-center">
+                Choose where to place this creature
+            </div>
+
+            <!-- Board Placement Area -->
+            <div class="placement-lane flex w-full items-center overflow-x-auto border-b border-gray-700 bg-gray-800">
                 <!-- If the card can be played -->
                 <div v-if="canPlaceCreature" class="flex flex-row h-24 items-center mx-auto">
                     <!-- Show placement zones with current board creatures -->
@@ -51,18 +62,16 @@
                     </div>
                 </div>
             </div>
-
-            <div class="text-center w-full border-b border-gray-700 py-2">
-                Choose where to place this creature
-            </div>
         </template>
 
-        <!-- Selected Card Display -->
-        <div class="flex flex-1 justify-center items-center">
-            <div v-if="cardId && card" class="flex h-72 my-4">
-                <div class="p-1 w-48 mx-auto">
-                    <GameCard class="" :card="card"/>
-                </div>
+        <div
+            v-if="card"
+            class="placement-details flex min-h-0 flex-col items-center justify-center px-6 text-center">
+            <div class="text-lg" :class="{ 'mb-4': card.description }">
+                {{ card.name }}
+            </div>
+            <div v-if="card.description">
+                {{ card.description }}
             </div>
         </div>
     </div>
@@ -222,3 +231,43 @@ function getTargetScope(card: any): 'enemy' | 'friendly' {
     return 'enemy'
 }
 </script>
+
+<style scoped>
+.placement-selector {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows:
+        calc(4.2rem + 1px)
+        minmax(0, 1fr)
+        3.5rem
+        minmax(0, 1fr)
+        calc(4.2rem + 1px)
+        6rem;
+}
+
+.placement-source {
+    grid-column: 1;
+    grid-row: 1 / 3;
+}
+
+.placement-source-card {
+    aspect-ratio: 5 / 7;
+    height: min(16.8rem, calc(100% - 2rem));
+    max-width: calc(100% - 2rem);
+}
+
+.placement-prompt {
+    grid-column: 1;
+    grid-row: 3;
+}
+
+.placement-lane {
+    grid-column: 1;
+    grid-row: 4;
+}
+
+.placement-details {
+    grid-column: 1;
+    grid-row: 5 / 7;
+}
+</style>

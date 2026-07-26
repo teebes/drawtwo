@@ -12,21 +12,10 @@
                     />
 
                     <!-- Display Hero -->
-                    <div v-else-if="entityType === 'hero' && hero"
-                         class="game-card border-2 border-gray-900 bg-gray-300 text-gray-900 rounded-xl flex-1 relative overflow-visible">
-                        <!-- Hero Art (fills whole card) -->
-                        <img
-                            :src="heroArtUrl"
-                            :alt="`${hero.name} artwork`"
-                            class="absolute inset-0 w-full h-full object-cover rounded-[0.625rem]"
-                            @error="onHeroImageError"
-                        />
-
-                        <!-- Health Badge (lower right corner, extends beyond) -->
-                        <div class="card-badge -bottom-3 -right-3 bg-green-600">
-                            {{ hero.health }}
-                        </div>
-                    </div>
+                    <HeroDetailCard
+                        v-else-if="entityType === 'hero' && hero"
+                        :hero="hero"
+                    />
                 </div>
             </div>
         </div>
@@ -103,10 +92,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, onMounted, onBeforeUnmount } from 'vue'
 import type { CardInPlay, Creature, HeroInPlay } from '@/types/game'
 import { useGameStore } from '@/stores/game'
 import GameCard from '../GameCard.vue'
+import HeroDetailCard from './HeroDetailCard.vue'
 
 interface Props {
     entityType: 'card' | 'creature' | 'hero'
@@ -119,25 +109,6 @@ interface Props {
 
 const props = defineProps<Props>()
 const gameStore = useGameStore()
-
-const heroImageError = ref(false)
-
-// Get hero art URL
-const heroArtUrl = computed(() => {
-    if (!props.hero || heroImageError.value) {
-        return '/card_backs/placeholder.svg'
-    }
-
-    if ('art_url' in props.hero && props.hero.art_url) {
-        return props.hero.art_url
-    }
-
-    return '/card_backs/placeholder.svg'
-})
-
-const onHeroImageError = () => {
-    heroImageError.value = true
-}
 
 const emit = defineEmits<{
     'close': []
@@ -379,7 +350,4 @@ function handleUseHero() {
     aspect-ratio: 5 / 7;
 }
 
-.card-badge {
-    @apply absolute text-white rounded-full w-10 h-10 flex font-bold items-center justify-center text-xs border border-gray-900 z-20 shadow-lg;
-}
 </style>

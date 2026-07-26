@@ -1,5 +1,5 @@
 <template>
-    <div class="w-24 h-full relative flex flex-col items-center justify-center border-r cursor-pointer hover:bg-gray-700/50 overflow-hidden transition-all"
+    <div class="w-24 h-full relative flex flex-col items-center justify-center cursor-pointer hover:bg-gray-700/50 overflow-hidden transition-all"
          :class="activeClasses"
          @click="handleClick">
         <!-- Hero Art (fills whole area, cropped to fit) -->
@@ -42,7 +42,7 @@ const props = withDefaults(defineProps<Props>(), {
 const imageError = ref(false)
 
 const activeClasses = computed(() => {
-    const classes: string[] = ['border-gray-700']
+    const classes: string[] = ['border-r', 'border-gray-700']
     if (props.opacity) {
         classes.push('opacity-50')
     }

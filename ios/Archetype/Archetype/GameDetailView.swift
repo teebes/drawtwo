@@ -425,6 +425,16 @@ struct BoardEntityAnchorPreferenceKey: PreferenceKey {
     }
 }
 
+private struct BoardSurfaceFramePreferenceKey: PreferenceKey {
+    static var defaultValue: CGRect?
+
+    static func reduce(value: inout CGRect?, nextValue: () -> CGRect?) {
+        if let nextValue = nextValue() {
+            value = nextValue
+        }
+    }
+}
+
 enum TargetAllowed {
     case creature
     case hero
@@ -479,6 +489,7 @@ struct GameTargetingContext: Identifiable {
     let title: String
     let sourceName: String
     let sourceCard: BoardCardSnapshot?
+    let sourceHero: GameSideSnapshot?
     let sourceDescription: String?
     let allowed: TargetAllowed
     let scope: TargetScope
@@ -1680,6 +1691,7 @@ struct GameDetailView: View {
     @State private var isAutoSwitchingGame = false
     @State private var isIntroRestartLoading = false
     @State private var autoSwitchTask: Task<Void, Never>?
+    @State private var boardSurfaceFrame: CGRect?
     #if DEBUG
     @State private var didApplyInitialGameOverlay = false
     @State private var didApplyInitialGameCommand = false
@@ -1714,6 +1726,14 @@ struct GameDetailView: View {
                         isAutoSwitchingGame: isAutoSwitchingGame,
                         onEndTurn: sendEndTurn
                     )
+                    .background {
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: BoardSurfaceFramePreferenceKey.self,
+                                value: proxy.frame(in: .global)
+                            )
+                        }
+                    }
 
                     if model.errorMessage != nil || model.statusMessage != nil {
                         boardMessages
@@ -1760,7 +1780,37 @@ struct GameDetailView: View {
                 }
 
                 if let overlay {
-                    overlayContent(overlay)
+                    overlayContent(
+                        overlay,
+                        boardSurfaceFrame: boardSurfaceFrame
+                    )
+                }
+
+                if let overlay, case let .placement(context) = overlay {
+                    PlacementSheet(
+                        layer: .tracks,
+                        context: context,
+                        boardSurfaceFrame: boardSurfaceFrame,
+                        onSelectPosition: { position in
+                            playCreature(context.card, at: position)
+                        },
+                        onDismiss: { self.overlay = nil }
+                    )
+                }
+
+                if let overlay, case let .targeting(context) = overlay {
+                    TargetingSheet(
+                        layer: .tracks,
+                        context: context,
+                        options: model.targetOptions(for: context),
+                        enemySide: model.opponentSide,
+                        friendlySide: model.viewerSide,
+                        boardSurfaceFrame: boardSurfaceFrame,
+                        onSelectTarget: { option in
+                            selectTarget(option, for: context)
+                        },
+                        onDismiss: { self.overlay = nil }
+                    )
                 }
 
                 if let autoSwitchTarget {
@@ -1769,6 +1819,14 @@ struct GameDetailView: View {
                         .zIndex(80)
                 }
             }
+        }
+        .onPreferenceChange(BoardSurfaceFramePreferenceKey.self) {
+            if let frame = $0 {
+                boardSurfaceFrame = frame
+            }
+        }
+        .onChange(of: boardSurfaceFrame) { _, _ in
+            recordCaptureState()
         }
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
@@ -1863,6 +1921,19 @@ struct GameDetailView: View {
         if let errorMessage = model.errorMessage, !errorMessage.isEmpty {
             detail["model_error"] = errorMessage
         }
+
+        #if DEBUG
+        if let boardSurfaceFrame {
+            detail["board_frame_min_y"] = String(
+                format: "%.3f",
+                boardSurfaceFrame.minY
+            )
+            detail["board_frame_height"] = String(
+                format: "%.3f",
+                boardSurfaceFrame.height
+            )
+        }
+        #endif
 
         CaptureStateRecorder.record(currentCaptureScreenName, detail: detail)
     }
@@ -1993,7 +2064,10 @@ struct GameDetailView: View {
     }
 
     @ViewBuilder
-    private func overlayContent(_ overlay: GameOverlay) -> some View {
+    private func overlayContent(
+        _ overlay: GameOverlay,
+        boardSurfaceFrame: CGRect?
+    ) -> some View {
         switch overlay {
         case .entity(let context):
             EntityDetailSheet(
@@ -2011,7 +2085,9 @@ struct GameDetailView: View {
             )
         case .placement(let context):
             PlacementSheet(
+                layer: .chrome,
                 context: context,
+                boardSurfaceFrame: boardSurfaceFrame,
                 onSelectPosition: { position in
                     playCreature(context.card, at: position)
                 },
@@ -2019,8 +2095,12 @@ struct GameDetailView: View {
             )
         case .targeting(let context):
             TargetingSheet(
+                layer: .chrome,
                 context: context,
                 options: model.targetOptions(for: context),
+                enemySide: model.opponentSide,
+                friendlySide: model.viewerSide,
+                boardSurfaceFrame: boardSurfaceFrame,
                 onSelectTarget: { option in
                     selectTarget(option, for: context)
                 },
@@ -2082,6 +2162,19 @@ struct GameDetailView: View {
             return
         }
 
+        if card.isCreatureCard {
+            let boardCards = model.boardCards(for: model.viewerSide)
+            if !boardCards.isEmpty {
+                overlay = .placement(
+                    GamePlacementContext(
+                        card: card,
+                        boardCards: boardCards
+                    )
+                )
+                return
+            }
+        }
+
         overlay = .entity(
             GameEntityDetailContext(
                 kind: .handCard,
@@ -2117,6 +2210,11 @@ struct GameDetailView: View {
     }
 
     private func handleOwnHeroTap(_ hero: GameSideSnapshot) {
+        if model.heroPowerRequiresTarget(for: hero.side) {
+            beginHeroPower(hero)
+            return
+        }
+
         overlay = .entity(
             GameEntityDetailContext(
                 kind: .ownHero,
@@ -2229,6 +2327,7 @@ struct GameDetailView: View {
             title: "Use Hero Power",
             sourceName: hero.heroPowerName ?? "Hero Power",
             sourceCard: nil,
+            sourceHero: hero,
             sourceDescription: hero.nonEmptyHeroPowerDescription,
             rules: rules,
             unavailableReason: unavailableReason,
@@ -2240,6 +2339,7 @@ struct GameDetailView: View {
         title: String,
         sourceName: String,
         sourceCard: BoardCardSnapshot?,
+        sourceHero: GameSideSnapshot? = nil,
         sourceDescription: String? = nil,
         rules: TargetRules,
         unavailableReason: String?,
@@ -2250,6 +2350,7 @@ struct GameDetailView: View {
                 title: title,
                 sourceName: sourceName,
                 sourceCard: sourceCard,
+                sourceHero: sourceHero,
                 sourceDescription: sourceDescription,
                 allowed: rules.allowed,
                 scope: rules.scope,
@@ -2530,6 +2631,7 @@ struct GameDetailView: View {
             title: "Cast Spell",
             sourceName: card.shortName,
             sourceCard: card,
+            sourceHero: nil,
             sourceDescription: nil,
             allowed: rules.allowed,
             scope: rules.scope,
@@ -2558,6 +2660,7 @@ struct GameDetailView: View {
             title: "Select Attack Target",
             sourceName: card.shortName,
             sourceCard: card,
+            sourceHero: nil,
             sourceDescription: nil,
             allowed: .both,
             scope: .enemy,
@@ -2586,6 +2689,7 @@ struct GameDetailView: View {
             title: "Use Hero Power",
             sourceName: hero.heroPowerName ?? "Hero Power",
             sourceCard: nil,
+            sourceHero: hero,
             sourceDescription: hero.nonEmptyHeroPowerDescription,
             allowed: rules.allowed,
             scope: rules.scope,
@@ -2687,6 +2791,10 @@ struct GameDetailView: View {
                         card: nil,
                         hero: model.snapshot(for: model.viewerSide, label: "You")
                     )
+                )
+            case "hero_power_target", "targeting_hero_power":
+                beginHeroPower(
+                    model.snapshot(for: model.viewerSide, label: "You")
                 )
             case "opponent_hero":
                 overlay = .entity(
@@ -4053,6 +4161,7 @@ private struct HeroTile: View {
     var combatRole: BoardCombatRole? = nil
     var combatMotion: BoardCombatMotion? = nil
     var animationToken: UUID? = nil
+    var targetFrameWidth: CGFloat? = nil
 
     private var outlineColor: Color? {
         if let combatRole {
@@ -4117,6 +4226,12 @@ private struct HeroTile: View {
             if let outlineColor {
                 Rectangle()
                     .strokeBorder(outlineColor, lineWidth: 4)
+            }
+        }
+        .overlay {
+            if let targetFrameWidth {
+                Rectangle()
+                    .strokeBorder(ArchetypeTheme.border, lineWidth: targetFrameWidth)
             }
         }
         .opacity(isDimmed ? 0.35 : 1)
@@ -4986,7 +5101,11 @@ private struct GameOverlayFrame<Content: View>: View {
     let onDismiss: () -> Void
     let content: Content
 
-    init(title: String, onDismiss: @escaping () -> Void, @ViewBuilder content: () -> Content) {
+    init(
+        title: String,
+        onDismiss: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
+    ) {
         self.title = title
         self.onDismiss = onDismiss
         self.content = content()
@@ -5254,42 +5373,149 @@ private struct EntityDetailSheet: View {
     }
 }
 
+private enum PlacementSheetLayer {
+    case chrome
+    case tracks
+}
+
 private struct PlacementSheet: View {
+    let layer: PlacementSheetLayer
     let context: GamePlacementContext
+    let boardSurfaceFrame: CGRect?
     let onSelectPosition: (Int) -> Void
     let onDismiss: () -> Void
 
+    // Mirrors NativeBoardSurface so the placement lane replaces the player's lane.
+    private static let headerTrackHeight: CGFloat = 96
+    private static let statsTrackHeight: CGFloat = 68
+    private static let turnTrackHeight: CGFloat = 56
+    private static let footerTrackHeight: CGFloat = 96
+    private static let sourceCardBottomClearance: CGFloat = 14
+
+    @ViewBuilder
     var body: some View {
-        GameOverlayFrame(title: "Place Creature", onDismiss: onDismiss) {
-            VStack(spacing: 0) {
-                placementBand
+        switch layer {
+        case .chrome:
+            GameOverlayFrame(title: "Place Creature", onDismiss: onDismiss) {
+                Color.clear
+                    .accessibilityHidden(true)
+            }
 
-                Text("Choose where to place this creature")
-                    .font(.archetypeBody(16))
-                    .foregroundStyle(ArchetypeTheme.text)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .overlay(alignment: .bottom) {
-                        Rectangle()
-                            .fill(ArchetypeTheme.border)
-                            .frame(height: 1)
-                    }
+        case .tracks:
+            if let boardSurfaceFrame {
+                let laneHeight = max(
+                    (
+                        boardSurfaceFrame.height
+                            - Self.headerTrackHeight
+                            - (Self.statsTrackHeight * 2)
+                            - Self.turnTrackHeight
+                            - Self.footerTrackHeight
+                    ) / 2,
+                    0
+                )
 
-                VStack(spacing: 0) {
-                    MiniGameCard(card: context.card, active: false, inLane: false, isLarge: true)
-                        .frame(width: 184, height: 258)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                Spacer(minLength: 0)
+                placementTracks(laneHeight: laneHeight)
+                    .frame(maxWidth: 448)
+                    .frame(
+                        height: boardSurfaceFrame.height,
+                        alignment: .top
+                    )
             }
         }
+    }
+
+    private func placementTracks(laneHeight: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            Color.clear
+                .frame(height: Self.headerTrackHeight)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+
+            sourceCardRegion
+                .frame(height: Self.statsTrackHeight + laneHeight)
+
+            placementPromptBand
+                .frame(height: Self.turnTrackHeight)
+
+            placementBand
+                .frame(height: laneHeight)
+
+            placementDetailsRegion
+                .frame(height: Self.statsTrackHeight + Self.footerTrackHeight)
+                .allowsHitTesting(false)
+        }
+        .frame(maxWidth: 448)
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(ArchetypeTheme.border)
+                .frame(width: 1)
+        }
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(ArchetypeTheme.border)
+                .frame(width: 1)
+        }
+    }
+
+    private var sourceCardRegion: some View {
+        GeometryReader { proxy in
+            let scale = sourceCardScale(in: proxy.size)
+
+            ZStack {
+                ArchetypeTheme.ink
+
+                MiniGameCard(
+                    card: context.card,
+                    active: false,
+                    inLane: false,
+                    isLarge: true
+                )
+                .frame(width: 184, height: 258)
+                .scaleEffect(scale)
+                .frame(width: 184 * scale, height: 258 * scale)
+                .padding(.bottom, Self.sourceCardBottomClearance * scale)
+                .offset(y: sourceCardVerticalOffset(scale: scale))
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(ArchetypeTheme.border)
+                .frame(height: 1)
+        }
+    }
+
+    private var placementPromptBand: some View {
+        Text("Choose where to place this creature")
+            .font(.archetypeBody(16))
+            .foregroundStyle(ArchetypeTheme.text)
+            .lineLimit(2)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 18)
+            .background(ArchetypeTheme.ink)
+    }
+
+    private func sourceCardVerticalOffset(scale: CGFloat) -> CGFloat {
+        guard let boardSurfaceFrame else {
+            return 0
+        }
+
+        // The board tracks begin below the device's top safe area, while the
+        // placement chrome begins at the top edge. Split that reclaimed space
+        // evenly so the card is centered between the header and prompt. The
+        // bottom clearance shifts the padded card upward by half its height,
+        // so add that half back to center the card's visible badge extents.
+        return (
+            -max(boardSurfaceFrame.minY, 0)
+                + (Self.sourceCardBottomClearance * scale)
+        ) / 2
     }
 
     private var placementBand: some View {
         GeometryReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(alignment: .center, spacing: 8) {
                     Spacer(minLength: 0)
 
                     if context.boardCards.isEmpty {
@@ -5306,11 +5532,11 @@ private struct PlacementSheet: View {
 
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 18)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
                 .frame(minWidth: proxy.size.width, minHeight: proxy.size.height)
             }
         }
-        .frame(height: 160)
         .frame(maxWidth: .infinity)
         .background(ArchetypeTheme.creatureLaneBackground)
         .overlay(alignment: .top) {
@@ -5318,11 +5544,38 @@ private struct PlacementSheet: View {
                 .fill(ArchetypeTheme.border)
                 .frame(height: 1)
         }
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(ArchetypeTheme.border)
-                .frame(height: 1)
+    }
+
+    private var placementDetailsRegion: some View {
+        VStack(spacing: context.card.nonEmptyDescription == nil ? 0 : 14) {
+            Text(context.card.shortName)
+                .font(.archetypeBody(18))
+                .foregroundStyle(ArchetypeTheme.text)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+
+            if let description = context.card.nonEmptyDescription {
+                Text(description)
+                    .font(.archetypeBody(16))
+                    .foregroundStyle(ArchetypeTheme.text)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(4)
+                    .minimumScaleFactor(0.78)
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 18)
+        .background(ArchetypeTheme.ink)
+    }
+
+    private func sourceCardScale(in size: CGSize) -> CGFloat {
+        let widthScale = max(size.width / 184, 0)
+        let heightScale = max(
+            size.height / (258 + Self.sourceCardBottomClearance),
+            0
+        )
+        return min(1, min(widthScale, heightScale))
     }
 }
 
@@ -5352,40 +5605,62 @@ private struct PlacementZoneButton: View {
     }
 }
 
+private enum TargetingSheetLayer {
+    case chrome
+    case tracks
+}
+
 private struct TargetingSheet: View {
+    let layer: TargetingSheetLayer
     let context: GameTargetingContext
     let options: [GameTargetOption]
+    let enemySide: String
+    let friendlySide: String
+    let boardSurfaceFrame: CGRect?
     let onSelectTarget: (GameTargetOption) -> Void
     let onDismiss: () -> Void
 
+    // Mirrors NativeBoardSurface below its 96-point BoardSideHeader.
+    private static let headerTrackHeight: CGFloat = 96
+    private static let heroTargetSize: CGFloat = 96
+    private static let statsTrackHeight: CGFloat = 68
+    private static let turnTrackHeight: CGFloat = 56
+    private static let footerTrackHeight: CGFloat = 96
+
+    @ViewBuilder
     var body: some View {
-        GameOverlayFrame(title: overlayTitle, onDismiss: onDismiss) {
-            if let unavailableReason = context.unavailableReason {
-                unavailableState(unavailableReason)
-            } else {
-                VStack(spacing: 0) {
-                    if alignsFriendlyTargetsToBottom {
-                        if context.sourceDescription == nil {
-                            promptBand
-                        }
-                        sourceBand
-                        sourceInfoBand
-                        targetBands
-                    } else {
-                        targetBands
-                        if context.sourceDescription == nil {
-                            promptBand
-                        }
-                        sourceBand
-                        sourceInfoBand
-                    }
+        switch layer {
+        case .chrome:
+            GameOverlayFrame(title: overlayTitle, onDismiss: onDismiss) {
+                if let unavailableReason = context.unavailableReason {
+                    unavailableState(unavailableReason)
+                } else {
+                    Color.clear
+                        .accessibilityHidden(true)
                 }
             }
-        }
-    }
 
-    private var alignsFriendlyTargetsToBottom: Bool {
-        context.scope == .friendly
+        case .tracks:
+            if context.unavailableReason == nil, let boardSurfaceFrame {
+                let laneHeight = max(
+                    (
+                        boardSurfaceFrame.height
+                            - Self.headerTrackHeight
+                            - (Self.statsTrackHeight * 2)
+                            - Self.turnTrackHeight
+                            - Self.footerTrackHeight
+                    ) / 2,
+                    0
+                )
+
+                targetingTracks(laneHeight: laneHeight)
+                    .frame(maxWidth: 448)
+                    .frame(
+                        height: boardSurfaceFrame.height,
+                        alignment: .top
+                    )
+            }
+        }
     }
 
     private var overlayTitle: String {
@@ -5401,36 +5676,6 @@ private struct TargetingSheet: View {
         }
     }
 
-    private var orderedTargetSides: [String] {
-        var seen = Set<String>()
-        var sides: [String] = []
-        for option in options where !seen.contains(option.side) {
-            seen.insert(option.side)
-            sides.append(option.side)
-        }
-        return sides
-    }
-
-    private var enemySide: String? {
-        switch context.scope {
-        case .enemy, .any:
-            return orderedTargetSides.first
-        case .friendly:
-            return nil
-        }
-    }
-
-    private var friendlySide: String? {
-        switch context.scope {
-        case .friendly:
-            return orderedTargetSides.first
-        case .any:
-            return orderedTargetSides.dropFirst().first
-        case .enemy:
-            return nil
-        }
-    }
-
     private var showsEnemyTargets: Bool {
         context.scope == .enemy || context.scope == .any
     }
@@ -5439,112 +5684,381 @@ private struct TargetingSheet: View {
         context.scope == .friendly || context.scope == .any
     }
 
-    @ViewBuilder
-    private var targetBands: some View {
-        if showsEnemyTargets {
-            if let enemySide, let option = heroOption(for: enemySide) {
-                TargetHeroBand(
-                    label: "Opponent",
-                    option: option,
-                    showsActiveTurnOutline: false,
-                    onSelectTarget: onSelectTarget
-                )
-            }
+    private var isEnemyOnly: Bool {
+        if case .enemy = context.scope {
+            return true
+        }
+        return false
+    }
 
-            if context.allowed.allowsCreature {
-                TargetBoardBand(
-                    options: creatureOptions(for: enemySide),
-                    emptyText: "No enemy creatures",
-                    showsTopBorder: false,
-                    onSelectTarget: onSelectTarget
+    private var isFriendlyOnly: Bool {
+        if case .friendly = context.scope {
+            return true
+        }
+        return false
+    }
+
+    private var usesBothTargetSides: Bool {
+        if case .any = context.scope {
+            return true
+        }
+        return false
+    }
+
+    private func targetingTracks(laneHeight: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            Color.clear
+                .frame(height: Self.headerTrackHeight)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+
+            if isFriendlyOnly {
+                singleSideSourceRegion
+                    .frame(
+                        height: Self.statsTrackHeight
+                            + laneHeight
+                            + Self.turnTrackHeight
+                    )
+
+                friendlyLaneTrack
+                    .frame(height: laneHeight)
+                    .overlay(alignment: .bottom) {
+                        Rectangle()
+                            .fill(ArchetypeTheme.border)
+                            .frame(height: 1)
+                    }
+
+                friendlyHeroTargetRegion
+                    .frame(
+                        height: Self.statsTrackHeight
+                            + Self.footerTrackHeight
+                    )
+                    .zIndex(3)
+            } else if isEnemyOnly {
+                targetStatsTrack(
+                    option: heroOption(for: enemySide),
+                    label: "Opponent",
+                    isAboveLane: true,
+                    showsActiveTurnOutline: false
                 )
+                .frame(height: Self.statsTrackHeight)
+                .zIndex(3)
+
+                opponentLaneTrack
+                    .frame(height: laneHeight)
+
+                singleSideSourceRegion
+                    .frame(
+                        height: Self.turnTrackHeight
+                            + laneHeight
+                            + Self.statsTrackHeight
+                            + Self.footerTrackHeight
+                    )
+            } else {
+                targetStatsTrack(
+                    option: showsEnemyTargets ? heroOption(for: enemySide) : nil,
+                    label: "Opponent",
+                    isAboveLane: true,
+                    showsActiveTurnOutline: false
+                )
+                .frame(height: Self.statsTrackHeight)
+                .zIndex(3)
+
+                opponentLaneTrack
+                    .frame(height: laneHeight)
+
+                promptTrack
+                    .frame(height: Self.turnTrackHeight)
+
+                friendlyLaneTrack
+                    .frame(height: laneHeight)
+
+                targetStatsTrack(
+                    option: showsFriendlyTargets ? heroOption(for: friendlySide) : nil,
+                    label: "Your Hero",
+                    isAboveLane: false,
+                    showsActiveTurnOutline: usesBothTargetSides
+                )
+                .frame(height: Self.statsTrackHeight)
+                .zIndex(3)
+
+                sourceFooterTrack
+                    .frame(height: Self.footerTrackHeight)
             }
         }
-
-        if showsFriendlyTargets {
-            if context.allowed.allowsCreature {
-                TargetBoardBand(
-                    options: creatureOptions(for: friendlySide),
-                    emptyText: "No friendly creatures",
-                    showsTopBorder: alignsFriendlyTargetsToBottom,
-                    onSelectTarget: onSelectTarget
-                )
-            }
-
-            if let friendlySide, let option = heroOption(for: friendlySide) {
-                TargetHeroBand(
-                    label: "Your Hero",
-                    option: option,
-                    showsActiveTurnOutline: !alignsFriendlyTargetsToBottom,
-                    onSelectTarget: onSelectTarget
-                )
-            }
+        .frame(maxWidth: 448)
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(ArchetypeTheme.border)
+                .frame(width: 1)
+        }
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(ArchetypeTheme.border)
+                .frame(width: 1)
         }
     }
 
-    private var promptBand: some View {
-        Text(context.title)
-            .font(.archetypeBody(16))
-            .foregroundStyle(ArchetypeTheme.text)
+    private var friendlyHeroTargetRegion: some View {
+        ArchetypeTheme.ink
+            .overlay {
+                if let option = heroOption(for: friendlySide) {
+                    TargetHeroBand(
+                        label: "Your Hero",
+                        option: option,
+                        showsActiveTurnOutline: false,
+                        showsBottomDivider: true,
+                        targetFrameWidth: 2,
+                        onSelectTarget: onSelectTarget
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var singleSideSourceRegion: some View {
+        ZStack {
+            ArchetypeTheme.ink
+
+            if context.sourceHero != nil {
+                heroPowerSourceSummary
+            } else if context.sourceCard != nil {
+                sourceCardSummary
+            } else if let sourceDescription = context.sourceDescription {
+                VStack(spacing: 16) {
+                    Text("\(context.title):")
+                        .font(.archetypeBody(16))
+                        .foregroundStyle(ArchetypeTheme.muted)
+
+                    Text(sourceDescription)
+                        .font(.archetypeBody(16))
+                        .foregroundStyle(ArchetypeTheme.text)
+                        .multilineTextAlignment(.leading)
+                }
+                .frame(maxWidth: 250)
+                .padding(.horizontal, 24)
+            } else {
+                Text(context.title)
+                    .font(.archetypeBody(16))
+                    .foregroundStyle(ArchetypeTheme.text)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var heroPowerSourceSummary: some View {
+        VStack(spacing: 12) {
+            Text(context.title)
+                .font(.archetypeBody(16))
+                .foregroundStyle(ArchetypeTheme.muted)
+
+            if let sourceDescription = context.sourceDescription {
+                Text(sourceDescription)
+                    .font(.archetypeBody(16))
+                    .foregroundStyle(ArchetypeTheme.text)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(4)
+                    .minimumScaleFactor(0.78)
+            }
+        }
+        .frame(maxWidth: 280)
+        .padding(.horizontal, 20)
+    }
+
+    private var sourceCardSummary: some View {
+        VStack(spacing: 0) {
+            GeometryReader { proxy in
+                ZStack {
+                    ArchetypeTheme.ink
+
+                    if let sourceCard = context.sourceCard {
+                        let maximumScale: CGFloat = isFriendlyOnly ? 0.65 : 1.0
+                        let scale = min(sourceCardScale(in: proxy.size), maximumScale)
+
+                        MiniGameCard(
+                            card: sourceCard,
+                            active: false,
+                            inLane: sourceCardIsInLane,
+                            isLarge: true
+                        )
+                        .frame(width: 184, height: 258)
+                        .scaleEffect(scale)
+                        .frame(width: 184 * scale, height: 258 * scale)
+                    }
+                }
+                .frame(width: proxy.size.width, height: proxy.size.height)
+            }
+
+            VStack(spacing: 12) {
+                Text(context.sourceName)
+                    .font(.archetypeBody(18))
+                    .foregroundStyle(ArchetypeTheme.text)
+                    .lineLimit(1)
+
+                if let description = sourceDescription {
+                    Text(description)
+                        .font(.archetypeBody(16))
+                        .foregroundStyle(ArchetypeTheme.text)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(4)
+                        .minimumScaleFactor(0.78)
+                }
+            }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .overlay(alignment: .bottom) {
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .overlay(alignment: .top) {
                 Rectangle()
                     .fill(ArchetypeTheme.border)
                     .frame(height: 1)
             }
+        }
     }
 
-    private var sourceBand: some View {
-        Group {
-            if let sourceCard = context.sourceCard {
-                VStack {
+    private func targetStatsTrack(
+        option: GameTargetOption?,
+        label: String,
+        isAboveLane: Bool,
+        showsActiveTurnOutline: Bool
+    ) -> some View {
+        ArchetypeTheme.ink
+            .overlay(alignment: isAboveLane ? .bottom : .top) {
+                if let option {
+                    TargetHeroBand(
+                        label: label,
+                        option: option,
+                        showsActiveTurnOutline: showsActiveTurnOutline,
+                        showsBottomDivider: !isAboveLane,
+                        targetFrameWidth: 2,
+                        onSelectTarget: onSelectTarget
+                    )
+                    .offset(y: isAboveLane ? enemyHeroVerticalOffset : 0)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if isAboveLane || option == nil {
+                    Rectangle()
+                        .fill(ArchetypeTheme.border)
+                        .frame(height: 1)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var enemyHeroVerticalOffset: CGFloat {
+        guard let boardSurfaceFrame else {
+            return 0
+        }
+
+        let targetRegionTop = Self.headerTrackHeight
+        let enemyLaneTop = boardSurfaceFrame.minY
+            + Self.headerTrackHeight
+            + Self.statsTrackHeight
+        let targetRegionHeight = enemyLaneTop - targetRegionTop
+        return (Self.heroTargetSize - targetRegionHeight) / 2
+    }
+
+    private var opponentLaneTrack: some View {
+        TargetBoardBand(
+            options: context.allowed.allowsCreature
+                ? creatureOptions(for: enemySide)
+                : [],
+            emptyText: context.allowed.allowsCreature
+                ? "No enemy creatures"
+                : "Creatures cannot be targeted",
+            isOpponent: true,
+            onSelectTarget: onSelectTarget
+        )
+    }
+
+    private var friendlyLaneTrack: some View {
+        TargetBoardBand(
+            options: context.allowed.allowsCreature
+                ? creatureOptions(for: friendlySide)
+                : [],
+            emptyText: context.allowed.allowsCreature
+                ? "No friendly creatures"
+                : "Creatures cannot be targeted",
+            isOpponent: false,
+            onSelectTarget: onSelectTarget
+        )
+    }
+
+    private var promptTrack: some View {
+        Text(context.title)
+            .font(.archetypeBody(16))
+            .foregroundStyle(ArchetypeTheme.text)
+            .lineLimit(2)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 18)
+            .background(ArchetypeTheme.ink)
+    }
+
+    private var sourceFooterTrack: some View {
+        ZStack {
+            ArchetypeTheme.ink
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(ArchetypeTheme.border)
+                        .frame(height: 1)
+                }
+
+            sourceFooterContent
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var sourceFooterContent: some View {
+        HStack(spacing: 0) {
+            Group {
+                if let sourceCard = context.sourceCard {
                     MiniGameCard(
                         card: sourceCard,
                         active: false,
-                        inLane: sourceCardIsInLane,
-                        isLarge: true
+                        inLane: sourceCardIsInLane
                     )
-                        .frame(width: 184, height: 258)
-                        .padding(.vertical, 20)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let sourceDescription = context.sourceDescription {
-                GeometryReader { proxy in
-                    let edgePadding = min(max(proxy.size.height * 0.17, 48), 96)
-
-                    VStack(spacing: 0) {
-                        if alignsFriendlyTargetsToBottom {
-                            Spacer(minLength: 0)
-                        }
-
-                        VStack(spacing: 16) {
-                            Text("\(context.title):")
-                                .font(.archetypeBody(16))
-                                .foregroundStyle(ArchetypeTheme.muted)
-                                .frame(maxWidth: .infinity)
-
-                            Text(sourceDescription)
-                                .font(.archetypeBody(16))
-                                .foregroundStyle(ArchetypeTheme.text)
-                                .multilineTextAlignment(.leading)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .frame(maxWidth: 250)
-                        .padding(.horizontal, 24)
-
-                        if !alignsFriendlyTargetsToBottom {
-                            Spacer(minLength: 0)
-                        }
-                    }
-                    .padding(.top, alignsFriendlyTargetsToBottom ? 0 : edgePadding)
-                    .padding(.bottom, alignsFriendlyTargetsToBottom ? edgePadding : 0)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(width: 56, height: 78)
+                } else if let sourceHero = context.sourceHero {
+                    HeroDetailCard(hero: sourceHero)
+                    .frame(width: 56, height: 78)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Color.clear
+                .frame(width: 96)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(context.sourceName)
+                    .font(.archetypeBody(14, weight: .semibold))
+                    .foregroundStyle(ArchetypeTheme.text)
+                    .lineLimit(1)
+
+                if let description = sourceDescription {
+                    Text(description)
+                        .font(.archetypeBody(12))
+                        .foregroundStyle(ArchetypeTheme.muted)
+                        .lineLimit(3)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 9)
+    }
+
+    private var sourceDescription: String? {
+        context.sourceCard?.nonEmptyDescription ?? context.sourceDescription
+    }
+
+    private func sourceCardScale(in size: CGSize) -> CGFloat {
+        let widthScale = max((size.width - 40) / 184, 0)
+        let heightScale = max((size.height - 20) / 258, 0)
+        return min(1, min(widthScale, heightScale))
     }
 
     private var sourceCardIsInLane: Bool {
@@ -5552,34 +6066,6 @@ private struct TargetingSheet: View {
             return true
         }
         return false
-    }
-
-    @ViewBuilder
-    private var sourceInfoBand: some View {
-        if let sourceCard = context.sourceCard {
-            VStack(spacing: 14) {
-                Text(sourceCard.shortName)
-                    .font(.archetypeBody(18))
-                    .foregroundStyle(ArchetypeTheme.text)
-                    .multilineTextAlignment(.center)
-
-                if let description = sourceCard.nonEmptyDescription {
-                    Text(description)
-                        .font(.archetypeBody(16))
-                        .foregroundStyle(ArchetypeTheme.text)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 18)
-            .overlay(alignment: .top) {
-                Rectangle()
-                    .fill(ArchetypeTheme.border)
-                    .frame(height: 1)
-            }
-        }
     }
 
     private func heroOption(for side: String?) -> GameTargetOption? {
@@ -5627,6 +6113,8 @@ private struct TargetHeroBand: View {
     let label: String
     let option: GameTargetOption
     let showsActiveTurnOutline: Bool
+    let showsBottomDivider: Bool
+    let targetFrameWidth: CGFloat?
     let onSelectTarget: (GameTargetOption) -> Void
 
     var body: some View {
@@ -5639,7 +6127,8 @@ private struct TargetHeroBand: View {
                         snapshot: hero,
                         isActive: showsActiveTurnOutline,
                         showsLeadingDivider: true,
-                        showsBottomDivider: true
+                        showsBottomDivider: showsBottomDivider,
+                        targetFrameWidth: targetFrameWidth
                     )
                 }
             }
@@ -5653,31 +6142,28 @@ private struct TargetHeroBand: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(label), \(option.title), \(option.subtitle)")
         .accessibilityHint(option.enabled ? "Select target" : "Target unavailable")
-        .background(alignment: .bottom) {
-            Rectangle()
-                .fill(ArchetypeTheme.border)
-                .frame(height: 1)
-        }
     }
 }
 
 private struct TargetBoardBand: View {
     let options: [GameTargetOption]
     let emptyText: String
-    let showsTopBorder: Bool
+    let isOpponent: Bool
     let onSelectTarget: (GameTargetOption) -> Void
 
     var body: some View {
-        Group {
-            if options.isEmpty {
-                Text(emptyText)
-                    .font(.archetypeBody(16))
-                    .foregroundStyle(ArchetypeTheme.muted.opacity(0.72))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                GeometryReader { proxy in
+        GeometryReader { proxy in
+            ZStack {
+                ArchetypeTheme.creatureLaneBackground
+
+                if options.isEmpty {
+                    Text(emptyText)
+                        .font(.archetypeBody(16))
+                        .foregroundStyle(ArchetypeTheme.muted.opacity(0.72))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(alignment: .center, spacing: 9) {
+                        HStack(alignment: .center, spacing: 8) {
                             Spacer(minLength: 0)
 
                             ForEach(options) { option in
@@ -5693,30 +6179,27 @@ private struct TargetBoardBand: View {
                                 }
                                 .buttonStyle(.plain)
                                 .disabled(!option.enabled)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel("\(option.title), \(option.subtitle)")
+                                .accessibilityHint(
+                                    option.enabled ? "Select target" : "Target unavailable"
+                                )
                             }
 
                             Spacer(minLength: 0)
                         }
-                        .padding(.horizontal, 18)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 9)
                         .frame(minWidth: proxy.size.width, minHeight: proxy.size.height)
                     }
                 }
             }
-        }
-        .frame(height: 160)
-        .frame(maxWidth: .infinity)
-        .background(ArchetypeTheme.creatureLaneBackground)
-        .overlay(alignment: .top) {
-            if showsTopBorder {
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .overlay(alignment: isOpponent ? .bottom : .top) {
                 Rectangle()
                     .fill(ArchetypeTheme.border)
                     .frame(height: 1)
             }
-        }
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(ArchetypeTheme.border)
-                .frame(height: 1)
         }
     }
 }

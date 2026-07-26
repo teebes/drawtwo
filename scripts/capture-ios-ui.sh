@@ -240,6 +240,9 @@ run_fast_capture "game-targeting-spell" \
 run_fast_capture "game-targeting-attack" \
   ARCHETYPE_INITIAL_GAME_OVERLAY=targeting_attack \
   ARCHETYPE_SCREENSHOT_DELAY="$GAME_SCREENSHOT_DELAY"
+run_fast_capture "game-targeting-hero-power" \
+  ARCHETYPE_INITIAL_GAME_OVERLAY=targeting_hero_power \
+  ARCHETYPE_SCREENSHOT_DELAY="$GAME_SCREENSHOT_DELAY"
 run_capture "game-command-zap-board" \
   ARCHETYPE_SKIP_STACK=0 \
   ARCHETYPE_SKIP_BUILD=1 \

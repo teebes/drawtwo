@@ -1,62 +1,140 @@
 <template>
-    <div class="flex-1 flex flex-col">
-
-        <!-- Target Selection State -->
-
+    <div class="target-selector flex-1 min-h-0">
         <!-- Error State -->
-        <template v-if="errorMessage">
-            <div class="flex flex-col flex-1 items-center justify-center"
-                @click="emit('cancelled')">
-                <div class="text-red-400 text-center cursor-pointer">
-                    <div class="text-lg">Cannot Select Target</div>
-                    <div class="text-sm opacity-75 mt-2">
-                        {{ errorMessage }}
-                    </div>
-                    <div class="text-xs opacity-50 mt-4">
-                        Click to close
-                    </div>
+        <div
+            v-if="errorMessage"
+            class="target-error flex flex-col items-center justify-center"
+            @click="emit('cancelled')">
+            <div class="text-red-400 text-center cursor-pointer">
+                <div class="text-lg">Cannot Select Target</div>
+                <div class="text-sm opacity-75 mt-2">
+                    {{ errorMessage }}
+                </div>
+                <div class="text-xs opacity-50 mt-4">
+                    Click to close
                 </div>
             </div>
-        </template>
+        </div>
 
         <template v-else>
+            <!-- Source card, description, or prompt occupies the non-targeted side. -->
+            <div
+                class="target-source flex min-h-0 flex-col justify-center overflow-y-auto"
+                :class="[
+                    sourceRegionClass,
+                    { 'border-t border-gray-700 bg-gray-900': targetScope === 'any' }
+                ]">
+                <template v-if="targetScope === 'any'">
+                    <div class="target-source-any-content grid h-full min-w-0 items-center px-3 py-2">
+                        <div class="flex min-w-0 justify-center">
+                            <div v-if="sourceCard" class="w-14 shrink-0">
+                                <GameCard :card="sourceCard" compact />
+                            </div>
+                        </div>
+                        <div aria-hidden="true"></div>
+                        <div class="min-w-0 flex-1">
+                            <div class="truncate text-sm font-semibold">
+                                {{ sourceCard?.name ?? title }}
+                            </div>
+                            <div
+                                v-if="sourceSummaryDescription"
+                                class="target-source-summary-description mt-1 text-xs leading-snug text-gray-400">
+                                {{ sourceSummaryDescription }}
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <template v-else>
+                    <div
+                        v-if="sourceHero"
+                        class="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-5 w-full">
+                        <div class="max-w-[280px] text-center">
+                            <div class="text-base text-gray-400">{{ title }}</div>
+                            <div
+                                v-if="sourceDescription"
+                                class="mt-3 text-base leading-relaxed text-gray-100">
+                                {{ sourceDescription }}
+                            </div>
+                        </div>
+                    </div>
+                    <div v-else-if="sourceCard" class="flex min-h-0 flex-1 items-center py-4 w-full">
+                        <div
+                            class="p-1 mx-auto"
+                            :class="targetScope === 'friendly' ? 'w-[7.8rem]' : 'w-48'">
+                            <GameCard :card="sourceCard" />
+                        </div>
+                    </div>
+                    <div
+                        v-else-if="sourceDescription"
+                        class="w-full px-6 text-base leading-relaxed"
+                        :class="sourceDescriptionAlignmentClass">
+                        <div class="mx-auto flex w-full max-w-[250px] flex-col gap-4">
+                            <div class="text-center text-gray-400">{{ title }}:</div>
+                            <div class="text-left text-gray-100">{{ sourceDescription }}</div>
+                        </div>
+                    </div>
+                    <div v-else class="text-center w-full py-2">
+                        {{ title }}
+                    </div>
+
+                    <div v-if="sourceCard" class="shrink-0 text-center border-t border-gray-700 py-4 px-4">
+                        <div class="text-lg mb-4">{{ sourceCard.name }}</div>
+                        <div>{{ sourceCard.description }}</div>
+                    </div>
+                </template>
+            </div>
 
             <!-- Opponent Hero (if targeting enemies) -->
-            <button v-if="showOpposingHero && canTargetHero && opposingHero"
+            <button
+                v-if="showOpposingHero && canTargetHero && opposingHero"
                 type="button"
-                class="flex w-full justify-center border-gray-700 border-b cursor-pointer hover:bg-gray-700"
+                class="target-opposing-hero flex h-24 w-24 justify-center cursor-pointer hover:bg-gray-700"
                 :aria-label="`Opponent, ${opposingHero.name}, ${opposingHero.health} HP`"
                 @click="handleHeroClick(opposingHero.hero_id)">
                 <div class="h-24">
                     <Hero
-                        class="border-l pointer-events-none"
+                        class="pointer-events-none"
                         :hero="opposingHero"
                         :hero-art-url="opposingHero.art_url ?? null"
                         :hero-name="opposingHero.name"
                         :health="opposingHero.health"
                     />
                 </div>
+                <span
+                    aria-hidden="true"
+                    class="pointer-events-none absolute inset-0 z-30 border-x border-gray-700">
+                </span>
             </button>
-            <div v-else-if="showOpposingHero && opposingHero"
-                class="flex w-full justify-center border-gray-700 border-b opacity-30"
+            <div
+                v-else-if="showOpposingHero && opposingHero"
+                class="target-opposing-hero flex h-24 w-24 justify-center opacity-30"
                 role="button"
                 aria-disabled="true"
                 :aria-label="`Opponent, ${opposingHero.name}, ${opposingHero.health} HP, target unavailable`">
                 <div class="h-24">
                     <Hero
-                        class="border-l pointer-events-none"
+                        class="pointer-events-none"
                         :hero="opposingHero"
                         :hero-art-url="opposingHero.art_url ?? null"
                         :hero-name="opposingHero.name"
                         :health="opposingHero.health"
                     />
                 </div>
+                <span
+                    aria-hidden="true"
+                    class="pointer-events-none absolute inset-0 z-30 border-x border-gray-700">
+                </span>
             </div>
 
             <!-- Opponent Board (if targeting enemies) -->
-            <div v-if="showOpposingBoard" class="flex w-full bg-gray-800 border-b border-gray-700 py-8 overflow-x-auto">
-                <div v-if="opposingBoard.length > 0" class="flex flex-row h-24 mx-auto">
-                    <div v-for="creature in opposingBoard" :key="creature.creature_id" class="w-14">
+            <div
+                v-if="showOpposingBoard"
+                class="target-opposing-board flex w-full items-center bg-gray-800 border-y border-gray-700 overflow-x-auto">
+                <div v-if="opposingBoard.length > 0" class="lane flex flex-row h-24 mx-auto space-x-2">
+                    <div
+                        v-for="creature in opposingBoard"
+                        :key="creature.creature_id"
+                        class="w-14 shrink-0">
                         <GameCard
                             class="flex-grow-0"
                             :card="creature"
@@ -75,11 +153,12 @@
             <!-- Own Board (if targeting friendly) -->
             <div
                 v-if="showOwnBoard"
-                class="flex w-full bg-gray-800 border-b border-gray-700 py-8 overflow-x-auto"
-                :class="alignFriendlyTargetsToBottom ? 'order-last border-t' : ''"
-            >
-                <div v-if="ownBoard && ownBoard.length > 0" class="flex flex-row h-24 mx-auto">
-                    <div v-for="creature in ownBoard" :key="creature.creature_id" class="w-14">
+                class="target-own-board flex w-full items-center bg-gray-800 border-y border-gray-700 overflow-x-auto">
+                <div v-if="ownBoard && ownBoard.length > 0" class="lane flex flex-row h-24 mx-auto space-x-2">
+                    <div
+                        v-for="creature in ownBoard"
+                        :key="creature.creature_id"
+                        class="w-14 shrink-0">
                         <GameCard
                             class="flex-grow-0"
                             :card="creature"
@@ -96,80 +175,51 @@
             </div>
 
             <!-- Own Hero (if targeting friendly) -->
-            <button v-if="showOwnHero && canTargetHero && ownHero"
+            <button
+                v-if="showOwnHero && canTargetHero && ownHero"
                 type="button"
-                class="flex w-full justify-center border-gray-700 border-b cursor-pointer hover:bg-gray-700"
-                :class="{ 'order-last': alignFriendlyTargetsToBottom }"
+                class="target-own-hero flex h-24 w-24 justify-center cursor-pointer hover:bg-gray-700"
+                :class="{ 'target-own-hero--friendly': targetScope === 'friendly' }"
                 :aria-label="`Your Hero, ${ownHero.name}, ${ownHero.health} HP`"
                 @click="handleHeroClick(ownHero.hero_id)">
                 <div class="h-24">
                     <Hero
-                        class="border-l pointer-events-none"
+                        class="pointer-events-none"
                         :hero="ownHero"
                         :hero-art-url="ownHero.art_url ?? null"
                         :hero-name="ownHero.name"
                         :health="ownHero.health"
-                        :active="!alignFriendlyTargetsToBottom"
+                        :active="targetScope === 'any'"
                     />
                 </div>
+                <span
+                    aria-hidden="true"
+                    class="pointer-events-none absolute inset-0 z-30 border-2 border-gray-700">
+                </span>
             </button>
-            <div v-else-if="showOwnHero && ownHero"
-                class="flex w-full justify-center border-gray-700 border-b opacity-30"
-                :class="{ 'order-last': alignFriendlyTargetsToBottom }"
+            <div
+                v-else-if="showOwnHero && ownHero"
+                class="target-own-hero flex h-24 w-24 justify-center opacity-30"
+                :class="{ 'target-own-hero--friendly': targetScope === 'friendly' }"
                 role="button"
                 aria-disabled="true"
                 :aria-label="`Your Hero, ${ownHero.name}, ${ownHero.health} HP, target unavailable`">
                 <div class="h-24">
                     <Hero
-                        class="border-l pointer-events-none"
+                        class="pointer-events-none"
                         :hero="ownHero"
                         :hero-art-url="ownHero.art_url ?? null"
                         :hero-name="ownHero.name"
                         :health="ownHero.health"
-                        :active="!alignFriendlyTargetsToBottom"
+                        :active="targetScope === 'any'"
                     />
                 </div>
+                <span
+                    aria-hidden="true"
+                    class="pointer-events-none absolute inset-0 z-30 border-2 border-gray-700">
+                </span>
             </div>
-
-            <!-- Header -->
-            <div v-if="!sourceDescription" class="text-center w-full py-2">
-                {{ title }}
-            </div>
-
         </template>
-
-        <!-- Source Card Display (if provided) -->
-        <div
-            class="flex flex-1 justify-center border-t border-gray-700"
-            :class="sourceDescription
-                ? (alignFriendlyTargetsToBottom
-                    ? 'items-end pb-[clamp(3rem,10vh,6rem)]'
-                    : 'items-start pt-[clamp(3rem,10vh,6rem)]')
-                : 'items-center'"
-        >
-            <div v-if="sourceCard" class="flex h-72 my-4 w-full">
-                <div class="p-1 w-48 mx-auto">
-                    <GameCard :card="sourceCard" />
-                </div>
-            </div>
-            <div
-                v-else-if="sourceDescription"
-                class="w-full px-6 text-base leading-relaxed"
-            >
-                <div class="mx-auto flex w-full max-w-[250px] flex-col gap-4">
-                    <div class="text-center text-gray-400">{{ title }}:</div>
-                    <div class="text-left text-gray-100">{{ sourceDescription }}</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Card Information -->
-        <div v-if="sourceCard" class="text-center border-t border-gray-700 py-4">
-            <div class="text-lg mb-4">{{ sourceCard?.name }}</div>
-            <div>{{  sourceCard?.description }}</div>
-        </div>
-
-
     </div>
 </template>
 
@@ -190,6 +240,7 @@ interface Props {
     allowedTargetTypes: TargetType
     targetScope?: TargetScope  // Default to 'enemy' for backward compatibility
     sourceCard?: CardInPlay | Creature | null
+    sourceHero?: HeroInPlay | null
     sourceDescription?: string | null
     errorMessage?: string | null
     title?: string
@@ -201,6 +252,7 @@ const props = withDefaults(defineProps<Props>(), {
     ownHero: null,
     targetScope: 'enemy',
     sourceCard: null,
+    sourceHero: null,
     sourceDescription: null,
     errorMessage: null,
     title: 'Select Target',
@@ -299,8 +351,20 @@ const showOwnHero = computed(() => {
     return props.targetScope === 'friendly' || props.targetScope === 'any'
 })
 
-const alignFriendlyTargetsToBottom = computed(() => {
+const sourceRegionClass = computed(() => {
+    if (props.targetScope === 'friendly') return 'target-source--friendly'
+    if (props.targetScope === 'enemy') return 'target-source--enemy'
+    return 'target-source--any'
+})
+
+const sourceDescriptionAlignmentClass = computed(() => {
     return props.targetScope === 'friendly'
+        ? 'mt-auto pb-[clamp(3rem,10vh,6rem)]'
+        : 'mb-auto pt-[clamp(3rem,10vh,6rem)]'
+})
+
+const sourceSummaryDescription = computed(() => {
+    return props.sourceCard?.description || props.sourceDescription
 })
 
 const handleHeroClick = (heroId: string) => {
@@ -319,3 +383,89 @@ const handleCreatureClick = (creatureId: string) => {
     })
 }
 </script>
+
+<style scoped>
+.target-selector {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    /*
+     * The compact targeting header gives its reclaimed height to the first
+     * row, so a 6rem hero fits between the title and the enemy lane while the
+     * lane itself stays at the same board coordinate.
+     */
+    grid-template-rows:
+        6rem
+        minmax(0, 1fr)
+        3.5rem
+        minmax(0, 1fr)
+        calc(4.2rem + 1px)
+        6rem;
+}
+
+.target-error {
+    grid-column: 1;
+    grid-row: 1 / -1;
+}
+
+.target-source {
+    grid-column: 1;
+}
+
+.target-source--enemy {
+    grid-row: 3 / 7;
+}
+
+.target-source--friendly {
+    grid-row: 1 / 4;
+}
+
+.target-source--any {
+    grid-row: 6;
+    overflow: hidden;
+    z-index: 5;
+}
+
+.target-source-any-content {
+    grid-template-columns: minmax(0, 1fr) 6rem minmax(0, 1fr);
+}
+
+.target-source-summary-description {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+}
+
+.target-opposing-hero {
+    align-self: end;
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: center;
+    position: relative;
+    z-index: 10;
+}
+
+.target-opposing-board {
+    grid-column: 1;
+    grid-row: 2;
+}
+
+.target-own-board {
+    grid-column: 1;
+    grid-row: 4;
+}
+
+.target-own-hero {
+    align-self: start;
+    grid-column: 1;
+    grid-row: 5;
+    justify-self: center;
+    position: relative;
+    z-index: 10;
+}
+
+.target-own-hero--friendly {
+    align-self: center;
+    grid-row: 5 / 7;
+}
+</style>

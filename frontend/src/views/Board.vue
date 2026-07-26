@@ -299,7 +299,10 @@
         <!-- Overlay Mode -->
          <main v-else class="board flex-1 flex flex-col max-w-md w-full border-r border-l border-gray-700">
             <!-- Header -->
-            <OverlayHeader :text="overlayTitle" @close="closeOverlay" />
+            <OverlayHeader
+                :text="overlayTitle"
+                :compact="overlay === 'select_target'"
+                @close="closeOverlay" />
 
             <!-- Entity Detail Overlay -->
             <EntityDetail
@@ -340,6 +343,7 @@
                 :allowed-target-types="targetingState.allowedTypes"
                 :target-scope="targetingState.scope"
                 :source-card="targetingState.sourceCard"
+                :source-hero="targetingState.sourceHero"
                 :source-description="targetingState.sourceDescription"
                 :error-message="targetingState.errorMessage"
                 :title="targetingState.title"
@@ -538,6 +542,7 @@ interface TargetingState {
     allowedTypes: 'creature' | 'hero' | 'both'
     scope: 'enemy' | 'friendly' | 'any'
     sourceCard: CardInPlay | Creature | null
+    sourceHero?: HeroInPlay | null
     sourceDescription?: string | null
     errorMessage: string | null
     title: string
@@ -1560,7 +1565,17 @@ const handleClickHandCard = (card_id: string) => {
         return
     }
 
-    // Otherwise show entity detail (for creatures or non-targeting spells)
+    // A populated board needs an explicit creature position, so skip the
+    // confirmation screen and go directly to placement.
+    if (card.card_type === 'creature' && ownBoard.value.length > 0) {
+        selectedCardId.value = card_id
+        overlay.value = 'place_creature'
+        overlayTitle.value = 'Place Creature'
+        return
+    }
+
+    // Empty-board creatures and non-targeting spells use details as their
+    // confirmation step before the action resolves.
     selectedEntity.value = { type: 'card', id: card_id, isOwned: true }
     overlay.value = 'entity_detail'
     overlayTitle.value = 'Card Details'
@@ -1610,10 +1625,15 @@ const handleClickOpposingCreature = (creature_id: string) => {
 const handleClickOwnHero = () => {
     if (!ownHero.value || !viewer.value) return
     console.log('handleClickOwnHero', ownHero.value.hero_id)
-    // Store the side (viewer) as the ID since heroes are keyed by side in the state
-    selectedEntity.value = { type: 'hero', id: viewer.value, isOwned: true }
-    overlay.value = 'entity_detail'
-    overlayTitle.value = 'Hero Power'
+
+    if (!heroPowerRequiresTarget(ownHero.value)) {
+        selectedEntity.value = { type: 'hero', id: viewer.value, isOwned: true }
+        overlay.value = 'entity_detail'
+        overlayTitle.value = 'Hero Power'
+        return
+    }
+
+    handleUseHero(viewer.value)
 }
 
 // When clicking opposing hero (just for info, cannot use)
@@ -1724,6 +1744,7 @@ const handleUseHero = (side_id: string) => {
     if (!hero) return
 
     if (!heroPowerRequiresTarget(hero)) {
+        if (!canUseHero.value) return
         gameStore.useHero(hero.hero_id)
         closeOverlay()
         return
@@ -1743,6 +1764,7 @@ const handleUseHero = (side_id: string) => {
         allowedTypes: 'both',  // Hero powers can target various things
         scope: getHeroPowerTargetScope(hero), // Determine scope based on hero power actions
         sourceCard: null,
+        sourceHero: hero,
         sourceDescription: hero.hero_power?.description?.trim() || null,
         errorMessage: !canUseHero.value ? 'Cannot use hero power' : null,
         title: 'Use Hero Power',
