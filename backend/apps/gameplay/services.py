@@ -13,7 +13,7 @@ from pydantic import TypeAdapter, ValidationError
 
 logger = logging.getLogger(__name__)
 
-from apps.builder.models import CardTemplate
+from apps.builder.models import CardTemplate, Title
 from apps.builder.schemas import (
     Action,
     BuffAction,
@@ -1969,6 +1969,10 @@ class GameService:
         if ladder_type not in dict(Game.LADDER_TYPE_CHOICES):
             ladder_type = Game.LADDER_TYPE_RAPID
 
+        # Queueing and game completion can trigger overlapping matchmaking tasks.
+        # Serialize them per title so the same queued entries cannot be matched twice.
+        Title.objects.select_for_update().only("id").get(id=title_id)
+
         logger.info(
             "Processing matchmaking for title_id=%s ladder_type=%s",
             title_id,
@@ -2065,11 +2069,13 @@ class GameService:
         matches_created = 0
         for entry_a, entry_b in matched_pairs:
             try:
-                # Create the game
+                # A queue match is always a new game. Reusing an active matchup
+                # could claim and relabel an unrelated friendly game.
                 game = GameService.create_game(
                     entry_a.deck,
                     entry_b.deck,
                     randomize_starting_player=True,
+                    reuse_active_game=False,
                 )
 
                 # Set game type to ranked for matchmaking games

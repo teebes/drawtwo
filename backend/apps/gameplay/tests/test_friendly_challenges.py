@@ -175,6 +175,44 @@ class FriendlyChallengesAPITests(TestCase):
         # Ensure no ELO change record exists for friendly match
         self.assertFalse(ELORatingChange.objects.filter(game=game).exists())
 
+    def test_direct_pvp_create_does_not_reuse_active_friendly_game(self):
+        friendly_game = GameService.create_game(
+            self.deck_a,
+            self.deck_b,
+            randomize_starting_player=False,
+        )
+        friendly_game.type = Game.GAME_TYPE_FRIENDLY
+        friendly_game.status = Game.GAME_STATUS_IN_PROGRESS
+        friendly_game.state = {
+            **friendly_game.state,
+            "turn": 2,
+            "time_per_turn": 0,
+        }
+        friendly_game.save(update_fields=["type", "status", "state"])
+        original_friendly_state = friendly_game.state
+
+        self.client.force_authenticate(self.user_a)
+        response = self.client.post(
+            reverse("game-create"),
+            {
+                "player_deck_id": self.deck_a.id,
+                "opponent_deck_id": self.deck_b.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        ranked_game = Game.objects.get(id=response.json()["id"])
+        self.assertNotEqual(ranked_game.id, friendly_game.id)
+        self.assertEqual(ranked_game.type, Game.GAME_TYPE_RANKED)
+        self.assertEqual(ranked_game.ladder_type, Game.LADDER_TYPE_RAPID)
+
+        friendly_game.refresh_from_db()
+        self.assertEqual(friendly_game.type, Game.GAME_TYPE_FRIENDLY)
+        self.assertIsNone(friendly_game.ladder_type)
+        self.assertEqual(friendly_game.status, Game.GAME_STATUS_IN_PROGRESS)
+        self.assertEqual(friendly_game.state, original_friendly_state)
+
     def test_accept_rematch_creates_distinct_game_when_swapped_matchup_is_active(self):
         previous_game = GameService.create_game(
             self.deck_a,

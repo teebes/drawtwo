@@ -495,7 +495,12 @@ def create_game(request):
         # TODO: In the future, this could be enhanced to alternate starting players
         # between the same two opponents based on previous game history
         game = GameService.create_game(
-            player_deck, opponent_deck, randomize_starting_player=True
+            player_deck,
+            opponent_deck,
+            randomize_starting_player=True,
+            # Human-vs-human games can coexist across modes, so reusing one here
+            # could relabel an active friendly game as ranked.
+            reuse_active_game=bool(ai_deck_id),
         )
 
         # Set game type based on whether it's PvE or PvP

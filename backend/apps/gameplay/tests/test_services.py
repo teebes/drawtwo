@@ -2,6 +2,7 @@
 Tests for GameService - game initialization and high-level operations.
 """
 
+from copy import deepcopy
 from unittest.mock import patch
 
 from django.test import TestCase
@@ -223,6 +224,61 @@ class MatchmakingTests(TestCase):
         ).count()
         self.assertEqual(game_count, 1)
 
+    def test_matchmaking_does_not_reuse_active_friendly_game_with_same_decks(self):
+        friendly_game = GameService.create_game(
+            self.deck_a,
+            self.deck_b,
+            randomize_starting_player=False,
+        )
+        friendly_state = deepcopy(friendly_game.state)
+        friendly_state["turn"] = 2
+        friendly_state["time_per_turn"] = 0
+        friendly_game.type = Game.GAME_TYPE_FRIENDLY
+        friendly_game.ladder_type = None
+        friendly_game.status = Game.GAME_STATUS_IN_PROGRESS
+        friendly_game.state = friendly_state
+        friendly_game.save(update_fields=["type", "ladder_type", "status", "state"])
+        original_friendly_state = deepcopy(friendly_game.state)
+
+        queue_a = MatchmakingQueue.objects.create(
+            user=self.user_a,
+            deck=self.deck_a,
+            elo_rating=1499,
+            status=MatchmakingQueue.STATUS_QUEUED,
+            ladder_type=Game.LADDER_TYPE_DAILY,
+        )
+        queue_b = MatchmakingQueue.objects.create(
+            user=self.user_b,
+            deck=self.deck_b,
+            elo_rating=1501,
+            status=MatchmakingQueue.STATUS_QUEUED,
+            ladder_type=Game.LADDER_TYPE_DAILY,
+        )
+
+        matches_created = GameService.process_matchmaking(
+            self.title.id,
+            ladder_type=Game.LADDER_TYPE_DAILY,
+        )
+
+        self.assertEqual(matches_created, 1)
+        queue_a.refresh_from_db()
+        queue_b.refresh_from_db()
+        self.assertEqual(queue_a.status, MatchmakingQueue.STATUS_MATCHED)
+        self.assertEqual(queue_b.status, MatchmakingQueue.STATUS_MATCHED)
+        self.assertEqual(queue_a.game_id, queue_b.game_id)
+        self.assertNotEqual(queue_a.game_id, friendly_game.id)
+
+        ranked_game = Game.objects.get(id=queue_a.game_id)
+        self.assertEqual(ranked_game.type, Game.GAME_TYPE_RANKED)
+        self.assertEqual(ranked_game.ladder_type, Game.LADDER_TYPE_DAILY)
+
+        friendly_game.refresh_from_db()
+        self.assertEqual(friendly_game.type, Game.GAME_TYPE_FRIENDLY)
+        self.assertIsNone(friendly_game.ladder_type)
+        self.assertEqual(friendly_game.status, Game.GAME_STATUS_IN_PROGRESS)
+        self.assertEqual(friendly_game.state, original_friendly_state)
+        self.assertEqual(Game.objects.filter(title=self.title).count(), 2)
+
     def test_allow_duplicate_rapid_ranked_games(self):
         """Test that two players CAN have multiple active rapid ranked games."""
         # Create an existing active rapid ranked game between user_a and user_b
@@ -236,18 +292,18 @@ class MatchmakingTests(TestCase):
         existing_game.status = Game.GAME_STATUS_IN_PROGRESS
         existing_game.save()
 
-        # Queue both users for rapid ranked matchmaking with DIFFERENT decks
-        # (same deck matchup would be caught by create_game's duplicate check)
+        # Queue both users with the same decks. Each Rapid queue pairing should
+        # create a distinct game even when that exact matchup is already active.
         queue_a = MatchmakingQueue.objects.create(
             user=self.user_a,
-            deck=self.deck_a2,  # Use alternate deck
+            deck=self.deck_a,
             elo_rating=1500,
             status=MatchmakingQueue.STATUS_QUEUED,
             ladder_type=Game.LADDER_TYPE_RAPID,
         )
         queue_b = MatchmakingQueue.objects.create(
             user=self.user_b,
-            deck=self.deck_b2,  # Use alternate deck
+            deck=self.deck_b,
             elo_rating=1500,
             status=MatchmakingQueue.STATUS_QUEUED,
             ladder_type=Game.LADDER_TYPE_RAPID,
