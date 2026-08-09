@@ -2921,6 +2921,7 @@ private struct NativeBoardSurface: View {
     @State private var valueBurstRemoveWorkItems: [String: DispatchWorkItem] = [:]
     @State private var pendingBoardRemovals: [String: BoardPendingRemoval] = [:]
     @State private var pendingBoardRemovalGeneration = 0
+    @State private var observedLiveUpdateBatchId: Int?
 
     private static let combatAnimationDuration: TimeInterval = 0.62
     private static let valueBurstDuration: TimeInterval = 2.2
@@ -3077,11 +3078,23 @@ private struct NativeBoardSurface: View {
                 .fill(ArchetypeTheme.border)
                 .frame(width: 1)
         }
-        .onChange(of: model.liveUpdateBatchId) { oldBatchId, newBatchId in
+        .onReceive(model.$liveUpdateBatchId) { newBatchId in
+            guard let oldBatchId = observedLiveUpdateBatchId else {
+                observedLiveUpdateBatchId = newBatchId
+                return
+            }
+            guard newBatchId != oldBatchId else {
+                return
+            }
+            observedLiveUpdateBatchId = newBatchId
+
             guard newBatchId > oldBatchId else {
                 resetTransientCombatState()
                 return
             }
+
+            // Published values arrive synchronously, so retain casualties before
+            // SwiftUI can render the authoritative board without them.
             triggerTransientCombatIfNeeded(from: model.liveUpdateBatch)
         }
         .onChange(of: authoritativeBoardCardIdsKey) { _, _ in
