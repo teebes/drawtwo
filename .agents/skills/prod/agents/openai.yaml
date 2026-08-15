@@ -1,0 +1,4 @@
+interface:
+  display_name: "Draw Two Production"
+  short_description: "Inspect and operate Draw Two production safely"
+  default_prompt: "Use $prod to inspect Draw Two production safely."

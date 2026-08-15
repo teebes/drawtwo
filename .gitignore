@@ -115,5 +115,9 @@ dmypy.json
 # Security and testing reports
 bandit-report.json
 
-# Claude AI session documentation
-.claude/
+# Claude local artifacts; expose only shared cross-agent skill aliases
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/archetype
+!.claude/skills/prod

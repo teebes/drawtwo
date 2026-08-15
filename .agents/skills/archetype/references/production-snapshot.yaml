@@ -1,0 +1,759 @@
+- type: title
+  slug: archetype
+  name: Archetype
+  description: ''
+- type: config
+  deck_size_limit: 40
+  min_cards_in_deck: 10
+  deck_card_max_count: 4
+  hand_start_size: 3
+  side_b_compensation: powerup
+  death_retaliation: true
+  ranked_time_per_turn: 60
+- type: hero
+  slug: berserker
+  name: Berserker
+  description: Deal 2 damage to an enemy.
+  health: 30
+  hero_power:
+    name: Crush
+    description: Deal 2 damage to an enemy.
+    cost: 1
+    actions:
+    - action: damage
+      amount: 2
+      target: enemy
+      scope: single
+      damage_type: physical
+  spec: {}
+- type: hero
+  slug: bloodmage
+  name: Bloodmage
+  description: Deal 1 damage to yourself or one of your creatures and draw 1 card.
+  health: 30
+  hero_power:
+    name: Pact
+    description: Deal 1 damage to yourself or one of your creatures and draw 1 card.
+    cost: 1
+    actions:
+    - action: damage
+      amount: 1
+      target: friendly
+      scope: single
+      damage_type: spell
+    - action: draw
+      amount: 1
+  spec: {}
+- type: hero
+  slug: commander
+  name: Commander
+  description: Summon a 1/1 Recruit to fight for you.
+  health: 30
+  hero_power:
+    name: Recruit
+    description: Summon a 1/1 Recruit to fight for you.
+    cost: 1
+    actions:
+    - action: summon
+      target: recruit
+  spec: {}
+- type: hero
+  slug: healer
+  name: Healer
+  description: Heals an ally for 2 health.
+  health: 30
+  hero_power:
+    name: Heal
+    description: Heals an ally for 1 health and increases their max health by 1.
+    cost: 1
+    actions:
+    - action: heal
+      amount: 1
+      target: friendly
+      scope: single
+    - action: buff
+      attribute: health
+      amount: 1
+      target: friendly
+      scope: single
+  spec: {}
+- type: hero
+  slug: sniper
+  name: Sniper
+  description: Deal 1 spell damage to an enemy.
+  health: 30
+  hero_power:
+    name: Power
+    description: Deal 1 spell damage to an enemy.
+    cost: 1
+    actions:
+    - action: damage
+      amount: 1
+      target: enemy
+      scope: single
+      damage_type: spell
+  spec: {}
+- type: card
+  card_type: creature
+  slug: abomination
+  name: Abomination
+  description: 'Unique. On death: Deal 2 damage to all enemies.'
+  cost: 6
+  attack: 6
+  health: 5
+  traits:
+  - type: deathrattle
+    actions:
+    - action: damage
+      amount: 2
+      target: enemy
+      scope: all
+      damage_type: spell
+  - type: unique
+    actions: []
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: ambusher
+  name: Ambusher
+  description: 'On play: deal 1 damage to an enemy.'
+  cost: 4
+  attack: 4
+  health: 4
+  traits:
+  - type: battlecry
+    actions:
+    - action: damage
+      amount: 1
+      target: enemy
+      scope: single
+      damage_type: spell
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: spell
+  slug: apocalypse
+  name: Apocalypse
+  description: Clear both sides of the board.
+  cost: 8
+  attack: 0
+  health: 0
+  traits:
+  - type: battlecry
+    actions:
+    - action: clear
+      target: both
+  - type: unique
+    actions: []
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: archer
+  name: Archer
+  description: Attacks without taking damage.
+  cost: 2
+  attack: 2
+  health: 2
+  traits:
+  - type: ranged
+    actions: []
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: spell
+  slug: bandage
+  name: Bandage
+  description: Heal 3 health to a friendly unit.
+  cost: 1
+  attack: 0
+  health: 0
+  traits:
+  - type: battlecry
+    actions:
+    - action: heal
+      amount: 3
+      target: friendly
+      scope: single
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: brute
+  name: Brute
+  description: ''
+  cost: 3
+  attack: 3
+  health: 4
+  traits: []
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: cheerleader
+  name: Cheerleader
+  description: 'Unique. On play: increase the health of all friendly creatures by
+    2.'
+  cost: 5
+  attack: 4
+  health: 4
+  traits:
+  - type: battlecry
+    actions:
+    - action: buff
+      attribute: health
+      amount: 2
+      target: creature
+      scope: all
+  - type: unique
+    actions: []
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: spell
+  slug: cleave
+  name: Cleave
+  description: Deal 2 damage to an enemy and adjacent enemies.
+  cost: 2
+  attack: 0
+  health: 0
+  traits:
+  - type: battlecry
+    actions:
+    - action: damage
+      amount: 2
+      target: enemy
+      scope: cleave
+      damage_type: spell
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: decoy
+  name: Decoy
+  description: Must be attacked first.
+  cost: 2
+  attack: 1
+  health: 3
+  traits:
+  - type: taunt
+    actions: []
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: spell
+  slug: destiny
+  name: Destiny
+  description: Unique. Draw 1 unique card from your deck.
+  cost: 1
+  attack: 0
+  health: 0
+  traits:
+  - type: battlecry
+    actions:
+    - action: draw
+      amount: 1
+      spec:
+        traits:
+        - type: unique
+  - type: unique
+    actions: []
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: spell
+  slug: drawtwo
+  name: Draw Two
+  description: Draw 2 cards.
+  cost: 3
+  attack: 0
+  health: 0
+  traits:
+  - type: battlecry
+    actions:
+    - action: draw
+      amount: 2
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: ghost
+  name: Ghost
+  description: Can't be targeted until it attacks.
+  cost: 5
+  attack: 5
+  health: 4
+  traits:
+  - type: stealth
+    actions: []
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: spell
+  slug: grenade
+  name: Grenade
+  description: Deal 2 damage to all enemies.
+  cost: 3
+  attack: 0
+  health: 0
+  traits:
+  - type: battlecry
+    actions:
+    - action: damage
+      amount: 2
+      target: enemy
+      scope: all
+      damage_type: spell
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: harbinger
+  name: Harbinger
+  description: 'On death: draw 1 card.'
+  cost: 2
+  attack: 1
+  health: 2
+  traits:
+  - type: deathrattle
+    actions:
+    - action: draw
+      amount: 1
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: herald
+  name: Herald
+  description: 'On play: draw 1 card.'
+  cost: 5
+  attack: 4
+  health: 4
+  traits:
+  - type: battlecry
+    actions:
+    - action: draw
+      amount: 1
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: hornet
+  name: Hornet
+  description: Unique. Charge. Whenever your hero deals damage, gain that much Attack.
+  cost: 2
+  attack: 1
+  health: 1
+  traits:
+  - type: charge
+    actions: []
+  - type: triggered
+    actions:
+    - action: buff
+      attribute: attack
+      amount:
+        event: damage
+      target: self
+      scope: single
+    when:
+      event: damage
+      source:
+        kind: hero
+        controller: self
+        self: false
+        exclude_self: false
+      target:
+        controller: any
+        self: false
+        exclude_self: false
+  - type: unique
+    actions: []
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: knight
+  name: Knight
+  description: Can attack immediately.
+  cost: 6
+  attack: 6
+  health: 4
+  traits:
+  - type: charge
+    actions: []
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: medic
+  name: Medic
+  description: 'On play: heal 3 health to a friendly unit.'
+  cost: 4
+  attack: 3
+  health: 3
+  traits:
+  - type: battlecry
+    actions:
+    - action: heal
+      amount: 3
+      target: friendly
+      scope: single
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: spell
+  slug: meteor
+  name: Meteor
+  description: Deal 4 damage to one enemy and 2 damage to all enemies.
+  cost: 6
+  attack: 0
+  health: 0
+  traits:
+  - type: battlecry
+    actions:
+    - action: damage
+      amount: 4
+      target: enemy
+      scope: single
+      damage_type: spell
+    - action: damage
+      amount: 2
+      target: enemy
+      scope: all
+      damage_type: spell
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: mine
+  name: Mine
+  description: 'On death: deal 1 damage to all enemies.'
+  cost: 3
+  attack: 2
+  health: 1
+  traits:
+  - type: deathrattle
+    actions:
+    - action: damage
+      amount: 1
+      target: enemy
+      scope: all
+      damage_type: spell
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: mongoose
+  name: Mongoose
+  description: ''
+  cost: 1
+  attack: 1
+  health: 2
+  traits: []
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: opportunist
+  name: Opportunist
+  description: Unique. Whenever you play another creature, gain 1 Attack and 1 Health.
+  cost: 3
+  attack: 4
+  health: 3
+  traits:
+  - type: triggered
+    actions:
+    - action: buff
+      attribute: attack
+      amount: 1
+      target: self
+      scope: single
+    - action: buff
+      attribute: health
+      amount: 1
+      target: self
+      scope: single
+    when:
+      event: creature_played
+      source:
+        controller: self
+        self: false
+        exclude_self: true
+      target:
+        controller: any
+        self: false
+        exclude_self: false
+  - type: unique
+    actions: []
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: spell
+  slug: phalanx
+  name: Phalanx
+  description: Unique. Summon a shield and a spear to fight for you.
+  cost: 4
+  attack: 0
+  health: 0
+  traits:
+  - type: battlecry
+    actions:
+    - action: summon
+      target: shield
+    - action: summon
+      target: spear
+  - type: unique
+    actions: []
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: phoenix
+  name: Phoenix
+  description: 'On death: rise from the ashes.'
+  cost: 7
+  attack: 5
+  health: 5
+  traits:
+  - type: deathrattle
+    actions:
+    - action: summon
+      target: phoenix
+  - type: unique
+    actions: []
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: spell
+  slug: powerup
+  name: Powerup
+  description: Gain 1 energy for the rest of this turn.
+  cost: 0
+  attack: 0
+  health: 0
+  traits:
+  - type: battlecry
+    actions:
+    - action: temp_mana_boost
+      amount: 1
+      target: hero
+  spec: {}
+  tags: []
+  is_collectible: false
+  hero_slugs: []
+- type: card
+  card_type: spell
+  slug: radiance
+  name: Radiance
+  description: Heal 4 health to all friendly units.
+  cost: 5
+  attack: 0
+  health: 0
+  traits:
+  - type: battlecry
+    actions:
+    - action: heal
+      amount: 4
+      target: friendly
+      scope: all
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: recruit
+  name: Recruit
+  description: ''
+  cost: 0
+  attack: 1
+  health: 1
+  traits: []
+  spec: {}
+  tags: []
+  is_collectible: false
+  hero_slugs: []
+- type: card
+  card_type: spell
+  slug: remove
+  name: Remove
+  description: Remove an enemy creature from the board.
+  cost: 4
+  attack: 0
+  health: 0
+  traits:
+  - type: battlecry
+    actions:
+    - action: remove
+      target: enemy
+      scope: single
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: spell
+  slug: sharpen
+  name: Sharpen
+  description: Increase the attack of a friendly creature by 3. Making it just a little
+    longer just to see.
+  cost: 1
+  attack: 0
+  health: 0
+  traits:
+  - type: battlecry
+    actions:
+    - action: buff
+      attribute: attack
+      amount: 3
+      target: creature
+      scope: single
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: shield
+  name: Shield
+  description: ''
+  cost: 0
+  attack: 0
+  health: 4
+  traits:
+  - type: taunt
+    actions: []
+  spec: {}
+  tags: []
+  is_collectible: false
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: shieldwall
+  name: Shield Wall
+  description: Must be attacked first.
+  cost: 5
+  attack: 3
+  health: 7
+  traits:
+  - type: taunt
+    actions: []
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: spell
+  slug: silence
+  name: Silence
+  description: Remove all traits from an enemy creature.
+  cost: 1
+  attack: 0
+  health: 0
+  traits:
+  - type: battlecry
+    actions:
+    - action: silence
+      target: enemy
+      scope: single
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: soldier
+  name: Soldier
+  description: ''
+  cost: 4
+  attack: 4
+  health: 5
+  traits: []
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []
+- type: card
+  card_type: creature
+  slug: spear
+  name: Spear
+  description: ''
+  cost: 0
+  attack: 3
+  health: 3
+  traits:
+  - type: ranged
+    actions: []
+  spec: {}
+  tags: []
+  is_collectible: false
+  hero_slugs: []
+- type: card
+  card_type: spell
+  slug: zap
+  name: Zap
+  description: Deal 2 damage to an enemy.
+  cost: 1
+  attack: 0
+  health: 0
+  traits:
+  - type: battlecry
+    actions:
+    - action: damage
+      amount: 2
+      target: enemy
+      scope: single
+      damage_type: spell
+  spec: {}
+  tags: []
+  is_collectible: true
+  hero_slugs: []

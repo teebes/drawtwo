@@ -1,0 +1,4 @@
+interface:
+  display_name: "Archetype"
+  short_description: "Iterate on Archetype content and production"
+  default_prompt: "Use $archetype to inspect or update Archetype cards and heroes safely."
