@@ -35,6 +35,11 @@ urlpatterns = [
         views.start_scenario,
         name="scenario-start",
     ),
+    path(
+        "titles/<slug:title_slug>/compositions/<str:code>/stats/",
+        views.composition_stats,
+        name="composition-stats",
+    ),
     # Matchmaking
     path("matchmaking/queue/", views.queue_for_ranked_match, name="queue-ranked-match"),
     path(

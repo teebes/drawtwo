@@ -5,12 +5,24 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.authentication.models import Friendship
 from apps.builder.models import CardTemplate, HeroTemplate, Title
-from apps.collection.models import Deck, DeckCard, UserTitleDeckPreference
+from apps.collection.compositions import (
+    CompositionCodeError,
+    ensure_deck_revision,
+    resolve_composition_code,
+    serialize_deck_composition,
+    serialize_resolved_composition,
+)
+from apps.collection.models import (
+    Deck,
+    DeckCard,
+    DeckCompositionFavorite,
+    UserTitleDeckPreference,
+)
 from apps.collection.validation import get_title_config, validate_deck_card_count
 from apps.core.card_assets import get_hero_art_url
 from apps.core.serializers import serialize_cards_with_traits, to_card_schema
@@ -39,6 +51,15 @@ def _eligible_cards_for_hero(title, hero):
         .filter(Q(allowed_heroes__isnull=True) | Q(allowed_heroes=hero))
         .distinct()
     )
+
+
+def _current_composition_data(deck):
+    revision = deck.current_revision
+    if revision is None:
+        # Transitional safety for decks created by old scripts after the schema
+        # migration. Normal API mutations and the data migration already capture it.
+        revision, _ = ensure_deck_revision(deck, source="migration")
+    return serialize_deck_composition(deck, revision)
 
 
 def _archive_deck(deck):
@@ -81,7 +102,11 @@ def deck_list_by_title(request, title_slug):
                 hero__title=title,
                 archived_at__isnull=True,
             )
-            .select_related("hero")
+            .select_related(
+                "hero",
+                "title",
+                "current_revision__composition",
+            )
             .annotate(card_count=Coalesce(Sum("deckcard__count"), 0))
             .order_by("-updated_at")
         )
@@ -101,6 +126,7 @@ def deck_list_by_title(request, title_slug):
                         "art_url": get_hero_art_url(title.slug, deck.hero.slug),
                     },
                     "card_count": deck.card_count,
+                    "composition": _current_composition_data(deck),
                     "created_at": deck.created_at.isoformat(),
                     "updated_at": deck.updated_at.isoformat(),
                 }
@@ -172,14 +198,16 @@ def deck_list_by_title(request, title_slug):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Create the deck
-        deck = Deck.objects.create(
-            user=request.user,
-            name=name,
-            description=description,
-            hero=hero,
-            title=title,
-        )
+        # Create the deck and its empty baseline revision together.
+        with transaction.atomic():
+            deck = Deck.objects.create(
+                user=request.user,
+                name=name,
+                description=description,
+                hero=hero,
+                title=title,
+            )
+            revision, _ = ensure_deck_revision(deck, source="create")
 
         return Response(
             {
@@ -200,6 +228,7 @@ def deck_list_by_title(request, title_slug):
                 },
                 "cards": [],
                 "total_cards": 0,
+                "composition": serialize_deck_composition(deck, revision),
                 "created_at": deck.created_at.isoformat(),
                 "updated_at": deck.updated_at.isoformat(),
                 "message": f'Deck "{name}" created successfully',
@@ -216,7 +245,11 @@ def deck_detail(request, deck_id):
     PUT: Update an existing deck.
     DELETE: Archive a deck.
     """
-    deck_queryset = Deck.objects.filter(id=deck_id, user=request.user)
+    deck_queryset = Deck.objects.filter(id=deck_id, user=request.user).select_related(
+        "title",
+        "hero",
+        "current_revision__composition",
+    )
     if request.method != "DELETE":
         deck_queryset = deck_queryset.filter(archived_at__isnull=True)
     deck = get_object_or_404(deck_queryset)
@@ -275,95 +308,98 @@ def deck_detail(request, deck_id):
                 # All available collectible cards for adding to deck.
                 "all_cards": all_cards,
                 "total_cards": sum(card["count"] for card in card_data),
+                "composition": _current_composition_data(deck),
                 "created_at": deck.created_at.isoformat(),
                 "updated_at": deck.updated_at.isoformat(),
             }
         )
 
     elif request.method == "PUT":
-        # Update the deck
-        # Get data from request
         name = request.data.get("name", "").strip()
         description = request.data.get("description", "").strip()
         hero_id = request.data.get("hero_id")
 
-        # Validate input
         if not name:
             return Response(
                 {"error": "Name is required"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Check if deck name already exists for this user (excluding current deck)
-        name_exists = (
-            Deck.objects.filter(user=request.user, name=name)
-            .exclude(id=deck.id)
-            .filter(archived_at__isnull=True)
-            .exists()
-        )
-        if name_exists:
-            return Response(
-                {"error": "A deck with this name already exists"},
-                status=status.HTTP_400_BAD_REQUEST,
+        with transaction.atomic():
+            deck = get_object_or_404(
+                Deck.objects.select_for_update().select_related(
+                    "title",
+                    "hero",
+                ),
+                id=deck_id,
+                user=request.user,
+                archived_at__isnull=True,
             )
 
-        # Update basic fields
-        deck.name = name
-        if description is not None:
-            deck.description = description
-
-        # Update hero if provided
-        if hero_id:
-            hero = get_object_or_404(
-                HeroTemplate,
-                id=hero_id,
-                title=deck.hero.title,
-                is_latest=True,
+            name_exists = (
+                Deck.objects.filter(user=request.user, name=name)
+                .exclude(id=deck.id)
+                .filter(archived_at__isnull=True)
+                .exists()
             )
-            invalid_cards = _ineligible_deck_cards(deck, hero)
-            if invalid_cards.exists():
-                invalid_names = ", ".join(
-                    deck_card.card.name for deck_card in invalid_cards[:3]
-                )
+            if name_exists:
                 return Response(
-                    {
-                        "error": (
-                            f'Cannot switch to "{hero.name}" while the deck contains '
-                            f"ineligible cards: {invalid_names}"
-                        )
-                    },
+                    {"error": "A deck with this name already exists"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            deck.hero = hero
 
-        deck.save()
+            deck.name = name
+            deck.description = description
 
-        # Get deck cards with counts for response
-        deck_cards = (
-            deck.deckcard_set.select_related("card", "card__title", "card__faction")
-            .prefetch_related(
-                "card__cardtrait_set",
-                "card__allowed_heroes",
-                "card__tags",
+            if hero_id:
+                hero = get_object_or_404(
+                    HeroTemplate,
+                    id=hero_id,
+                    title=deck.title,
+                    is_latest=True,
+                )
+                invalid_cards = _ineligible_deck_cards(deck, hero)
+                if invalid_cards.exists():
+                    invalid_names = ", ".join(
+                        deck_card.card.name for deck_card in invalid_cards[:3]
+                    )
+                    return Response(
+                        {
+                            "error": (
+                                f'Cannot switch to "{hero.name}" while the deck '
+                                f"contains ineligible cards: {invalid_names}"
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                deck.hero = hero
+
+            deck.save()
+            revision, _ = ensure_deck_revision(deck, source="edit")
+
+            deck_cards = (
+                deck.deckcard_set.select_related("card", "card__title", "card__faction")
+                .prefetch_related(
+                    "card__cardtrait_set",
+                    "card__allowed_heroes",
+                    "card__tags",
+                )
+                .order_by("card__name")
             )
-            .order_by("card__name")
-        )
+            card_data = []
+            for deck_card in deck_cards:
+                schema = to_card_schema(deck_card.card)
+                data = schema.model_dump()
+                data["count"] = deck_card.count
+                card_data.append(data)
 
-        card_data = []
-        for deck_card in deck_cards:
-            schema = to_card_schema(deck_card.card)
-            data = schema.model_dump()
-            data["count"] = deck_card.count
-            card_data.append(data)
-
-        return Response(
-            {
+            response_data = {
                 "id": deck.id,
                 "name": deck.name,
                 "description": deck.description,
                 "title": {
-                    "id": deck.hero.title.id,
-                    "slug": deck.hero.title.slug,
-                    "name": deck.hero.title.name,
+                    "id": deck.title.id,
+                    "slug": deck.title.slug,
+                    "name": deck.title.name,
                 },
                 "hero": {
                     "id": deck.hero.id,
@@ -373,11 +409,13 @@ def deck_detail(request, deck_id):
                 },
                 "cards": card_data,
                 "total_cards": sum(card["count"] for card in card_data),
+                "composition": serialize_deck_composition(deck, revision),
                 "created_at": deck.created_at.isoformat(),
                 "updated_at": deck.updated_at.isoformat(),
                 "message": f'Deck "{deck.name}" updated successfully',
             }
-        )
+
+        return Response(response_data)
 
     elif request.method == "DELETE":
         # Archive the deck so historical games can keep their protected references.
@@ -404,21 +442,6 @@ def update_deck_card(request, deck_id, card_id):
     """
     Update the count of a specific card in a deck.
     """
-    deck = get_object_or_404(
-        Deck,
-        id=deck_id,
-        user=request.user,
-        archived_at__isnull=True,
-    )
-    # Get the deck card relationship
-    deck_card = get_object_or_404(
-        DeckCard.objects.select_related("card"),
-        deck=deck,
-        card_id=card_id,
-    )
-    card = deck_card.card
-
-    # Get the new count from request data
     new_count = request.data.get("count")
     if new_count is None:
         return Response(
@@ -434,23 +457,41 @@ def update_deck_card(request, deck_id, card_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    validation_error = validate_deck_card_count(
-        deck,
-        card,
-        new_count,
-        current_count=deck_card.count,
-    )
-    if validation_error:
-        return Response({"error": validation_error}, status=status.HTTP_400_BAD_REQUEST)
+    with transaction.atomic():
+        deck = get_object_or_404(
+            Deck.objects.select_for_update().select_related("title", "hero"),
+            id=deck_id,
+            user=request.user,
+            archived_at__isnull=True,
+        )
+        deck_card = get_object_or_404(
+            DeckCard.objects.select_for_update().select_related("card"),
+            deck=deck,
+            card_id=card_id,
+        )
+        card = deck_card.card
 
-    # Update the count
-    deck_card.count = new_count
-    deck_card.save()
+        validation_error = validate_deck_card_count(
+            deck,
+            card,
+            new_count,
+            current_count=deck_card.count,
+        )
+        if validation_error:
+            return Response(
+                {"error": validation_error}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        deck_card.count = new_count
+        deck_card.save()
+        revision, _ = ensure_deck_revision(deck, source="edit")
+        composition_data = serialize_deck_composition(deck, revision)
 
     return Response(
         {
             "id": card.id,
             "count": deck_card.count,
+            "composition": composition_data,
             "message": f"Card count updated to {new_count}",
         }
     )
@@ -462,22 +503,25 @@ def delete_deck_card(request, deck_id, card_id):
     """
     Remove a card from a deck.
     """
-    deck = get_object_or_404(
-        Deck,
-        id=deck_id,
-        user=request.user,
-        archived_at__isnull=True,
-    )
-    card = get_object_or_404(CardTemplate, id=card_id)
-
-    # Get the deck card relationship
-    deck_card = get_object_or_404(DeckCard, deck=deck, card=card)
-
-    # Delete the deck card
-    deck_card.delete()
+    with transaction.atomic():
+        deck = get_object_or_404(
+            Deck.objects.select_for_update().select_related("title", "hero"),
+            id=deck_id,
+            user=request.user,
+            archived_at__isnull=True,
+        )
+        card = get_object_or_404(CardTemplate, id=card_id)
+        deck_card = get_object_or_404(DeckCard, deck=deck, card=card)
+        deck_card.delete()
+        revision, _ = ensure_deck_revision(deck, source="edit")
+        composition_data = serialize_deck_composition(deck, revision)
 
     return Response(
-        {"message": f'Card "{card.name}" removed from deck'}, status=status.HTTP_200_OK
+        {
+            "message": f'Card "{card.name}" removed from deck',
+            "composition": composition_data,
+        },
+        status=status.HTTP_200_OK,
     )
 
 
@@ -539,6 +583,102 @@ def opponent_decks_by_title(request, title_slug):
     )
 
 
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def resolve_composition(request, title_slug):
+    """Validate and describe a portable composition code without writing."""
+
+    title = get_object_or_404(Title, slug=title_slug, is_latest=True)
+    if not title.can_be_viewed_by(request.user):
+        return Response(
+            {"error": "You do not have access to this title"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    code = request.query_params.get("deck")
+    if not code:
+        return Response(
+            {"error": "deck is required"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    try:
+        resolved = resolve_composition_code(title, code, create=False)
+    except CompositionCodeError as exc:
+        return Response(
+            {"error": str(exc)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    composition_data = serialize_resolved_composition(resolved, title)
+    composition_data["is_favorite"] = bool(
+        request.user.is_authenticated
+        and resolved.composition is not None
+        and DeckCompositionFavorite.objects.filter(
+            user=request.user,
+            composition=resolved.composition,
+        ).exists()
+    )
+    return Response(
+        {
+            "title": {
+                "id": title.id,
+                "slug": title.slug,
+                "name": title.name,
+            },
+            "composition": composition_data,
+        }
+    )
+
+
+@api_view(["PUT", "DELETE"])
+@permission_classes([IsAuthenticated])
+def composition_favorite(request, title_slug, code):
+    """Idempotently favorite or unfavorite a portable composition."""
+
+    title = get_object_or_404(Title, slug=title_slug, is_latest=True)
+    if not title.can_be_viewed_by(request.user):
+        return Response(
+            {"error": "You do not have access to this title"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    try:
+        resolved = resolve_composition_code(
+            title,
+            code,
+            create=request.method == "PUT",
+        )
+    except CompositionCodeError as exc:
+        return Response(
+            {"error": str(exc)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if request.method == "PUT":
+        favorite, created = DeckCompositionFavorite.objects.get_or_create(
+            user=request.user,
+            composition=resolved.composition,
+        )
+        return Response(
+            {
+                "composition_code": resolved.code,
+                "is_favorite": True,
+                "favorited_at": favorite.created_at.isoformat(),
+            },
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+    if resolved.composition is not None:
+        DeckCompositionFavorite.objects.filter(
+            user=request.user,
+            composition=resolved.composition,
+        ).delete()
+    return Response(
+        {
+            "composition_code": resolved.code,
+            "is_favorite": False,
+        }
+    )
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def add_deck_card(request, deck_id):
@@ -546,40 +686,12 @@ def add_deck_card(request, deck_id):
     Add a card to a deck or update its count if it already exists.
     """
 
-    deck = get_object_or_404(
-        Deck,
-        id=deck_id,
-        user=request.user,
-        archived_at__isnull=True,
-    )
-
-    # Get card_id from request data
     card_slug = request.data.get("card_slug")
     if not card_slug:
         return Response(
             {"error": "card_slug is required"}, status=status.HTTP_400_BAD_REQUEST
         )
 
-    # Get the card and verify it belongs to the same title as the deck's hero
-    card = get_object_or_404(
-        CardTemplate,
-        slug=card_slug,
-        title=deck.hero.title,
-        is_latest=True,
-    )
-
-    # Check if card is collectible
-    if not card.is_collectible:
-        error = f'"{card.name}" is not collectible and cannot be added to a deck'
-        return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
-
-    if not card.is_available_to_hero(deck.hero):
-        return Response(
-            {"error": _card_not_available_error(card, deck.hero)},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    # Get count from request (default to 1)
     count = request.data.get("count", 1)
     try:
         count = int(count)
@@ -594,32 +706,62 @@ def add_deck_card(request, deck_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    deck_card = DeckCard.objects.filter(deck=deck, card=card).first()
-    current_count = deck_card.count if deck_card else 0
-    new_total = current_count + count
-    validation_error = validate_deck_card_count(
-        deck,
-        card,
-        new_total,
-        current_count=current_count,
-    )
-    if validation_error:
-        return Response({"error": validation_error}, status=status.HTTP_400_BAD_REQUEST)
+    with transaction.atomic():
+        deck = get_object_or_404(
+            Deck.objects.select_for_update().select_related("title", "hero"),
+            id=deck_id,
+            user=request.user,
+            archived_at__isnull=True,
+        )
+        card = get_object_or_404(
+            CardTemplate,
+            slug=card_slug,
+            title=deck.title,
+            is_latest=True,
+        )
 
-    if deck_card:
-        # Update existing card count
-        deck_card.count = new_total
-        deck_card.save()
-        message = f'Updated "{card.name}" count to {deck_card.count}'
-    else:
-        deck_card = DeckCard.objects.create(deck=deck, card=card, count=count)
-        message = f'Added "{card.name}" to deck with count {count}'
+        if not card.is_collectible:
+            error = f'"{card.name}" is not collectible and cannot be added to a deck'
+            return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
+        if not card.is_available_to_hero(deck.hero):
+            return Response(
+                {"error": _card_not_available_error(card, deck.hero)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        deck_card = (
+            DeckCard.objects.select_for_update().filter(deck=deck, card=card).first()
+        )
+        current_count = deck_card.count if deck_card else 0
+        new_total = current_count + count
+        validation_error = validate_deck_card_count(
+            deck,
+            card,
+            new_total,
+            current_count=current_count,
+        )
+        if validation_error:
+            return Response(
+                {"error": validation_error}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if deck_card:
+            deck_card.count = new_total
+            deck_card.save()
+            message = f'Updated "{card.name}" count to {deck_card.count}'
+        else:
+            deck_card = DeckCard.objects.create(deck=deck, card=card, count=count)
+            message = f'Added "{card.name}" to deck with count {count}'
+
+        revision, _ = ensure_deck_revision(deck, source="edit")
+        composition_data = serialize_deck_composition(deck, revision)
 
     return Response(
         {
             "id": card.id,
             "name": card.name,
             "count": deck_card.count,
+            "composition": composition_data,
             "message": message,
         },
         status=status.HTTP_200_OK,

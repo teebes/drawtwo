@@ -1,16 +1,22 @@
-from django.db.models import Q
+from django.db.models import Count, F, Min, Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from apps.builder.models import Title
-from apps.collection.models import Deck, UserTitleDeckPreference
+from apps.builder.models import HeroTemplate, Title
+from apps.collection.compositions import CompositionCodeError, resolve_composition_code
+from apps.collection.models import (
+    Deck,
+    DeckCompositionFavorite,
+    UserTitleDeckPreference,
+)
 from apps.collection.validation import DeckValidationError, validate_deck_for_play
 from apps.gameplay.models import (
     FriendlyChallenge,
     Game,
+    GameLoadout,
     MatchmakingQueue,
     PlayerNotification,
     PushDevice,
@@ -23,6 +29,111 @@ from apps.gameplay.services import GameService
 from apps.gameplay.tasks import step
 
 FRIENDLY_GAME_ACTIVITY_LIMIT = 5
+
+
+def _empty_composition_record() -> dict:
+    return {
+        "wins": 0,
+        "losses": 0,
+        "draws": 0,
+        "games": 0,
+        "win_rate": 0.0,
+    }
+
+
+def _record_composition_result(record: dict, result: str) -> None:
+    record[result] += 1
+    record["games"] += 1
+    record["win_rate"] = round(record["wins"] / record["games"], 4)
+
+
+def _result_for_loadout(loadout: GameLoadout) -> str:
+    """Return wins/losses/draws from this loadout's point of view."""
+
+    game = loadout.game
+    winner_side = (game.state or {}).get("winner")
+
+    # Every normally completed captured game has winner side in state. Keep the
+    # FK fallback for tests and manually finalized games, while avoiding a guess
+    # if both sides somehow point to the same source deck.
+    if winner_side not in {GameLoadout.SIDE_A, GameLoadout.SIDE_B} and game.winner_id:
+        if game.side_a_id != game.side_b_id:
+            if game.winner_id == game.side_a_id:
+                winner_side = GameLoadout.SIDE_A
+            elif game.winner_id == game.side_b_id:
+                winner_side = GameLoadout.SIDE_B
+
+    if winner_side == loadout.side:
+        return "wins"
+    if winner_side in {GameLoadout.SIDE_A, GameLoadout.SIDE_B}:
+        return "losses"
+    return "draws"
+
+
+def _aggregate_composition_record(loadouts) -> dict:
+    """Aggregate headline records in SQL so history size is not a response cost."""
+
+    valid_state_winner = Q(
+        game__state__winner__in=[GameLoadout.SIDE_A, GameLoadout.SIDE_B]
+    )
+    state_win = Q(
+        side=GameLoadout.SIDE_A,
+        game__state__winner=GameLoadout.SIDE_A,
+    ) | Q(
+        side=GameLoadout.SIDE_B,
+        game__state__winner=GameLoadout.SIDE_B,
+    )
+    state_loss = Q(
+        side=GameLoadout.SIDE_A,
+        game__state__winner=GameLoadout.SIDE_B,
+    ) | Q(
+        side=GameLoadout.SIDE_B,
+        game__state__winner=GameLoadout.SIDE_A,
+    )
+
+    # A winner FK predates the side value in state for a few manually finalized
+    # games. It is unambiguous only when the two source decks are different.
+    fallback_available = (
+        (~valid_state_winner | Q(game__state__winner__isnull=True))
+        & Q(game__winner_id__isnull=False)
+        & ~Q(game__side_a_id=F("game__side_b_id"))
+    )
+    fallback_win = fallback_available & (
+        Q(
+            side=GameLoadout.SIDE_A,
+            game__winner_id=F("game__side_a_id"),
+        )
+        | Q(
+            side=GameLoadout.SIDE_B,
+            game__winner_id=F("game__side_b_id"),
+        )
+    )
+    fallback_loss = fallback_available & (
+        Q(
+            side=GameLoadout.SIDE_A,
+            game__winner_id=F("game__side_b_id"),
+        )
+        | Q(
+            side=GameLoadout.SIDE_B,
+            game__winner_id=F("game__side_a_id"),
+        )
+    )
+
+    totals = loadouts.aggregate(
+        games=Count("id"),
+        wins=Count("id", filter=state_win | fallback_win),
+        losses=Count("id", filter=state_loss | fallback_loss),
+    )
+    games = totals["games"] or 0
+    wins = totals["wins"] or 0
+    losses = totals["losses"] or 0
+    return {
+        "wins": wins,
+        "losses": losses,
+        "draws": games - wins - losses,
+        "games": games,
+        "win_rate": round(wins / games, 4) if games else 0.0,
+    }
 
 
 def _update_game_time_per_turn(game: Game):
@@ -162,6 +273,203 @@ def _mark_ended_game_notifications_read(request, game: Game) -> None:
         game=game,
         is_read=False,
     ).update(is_read=True)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def composition_stats(request, title_slug, code):
+    """Stats for a hero-independent composition captured by new games."""
+
+    title = get_object_or_404(Title, slug=title_slug, is_latest=True)
+    if not title.can_be_viewed_by(request.user):
+        return Response(
+            {"error": "You do not have access to this title"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    game_type = request.query_params.get("game_type", Game.GAME_TYPE_RANKED)
+    if game_type not in {Game.GAME_TYPE_RANKED, Game.GAME_TYPE_FRIENDLY}:
+        return Response(
+            {"error": "game_type must be ranked or friendly"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    breakdown = request.query_params.get("breakdown", "")
+    if breakdown not in {"", "hero"}:
+        return Response(
+            {"error": "breakdown must be hero when provided"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    include_hero_matchups = breakdown == "hero" or request.query_params.get(
+        "hero_matchups", ""
+    ).lower() in {"1", "true", "yes"}
+
+    try:
+        resolved = resolve_composition_code(title, code, create=False)
+    except CompositionCodeError as exc:
+        return Response(
+            {"error": str(exc)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    card_counts = resolved.card_counts
+    card_names = {card.slug: card.name for card in resolved.cards}
+    cards = [
+        {
+            "slug": slug,
+            "name": card_names.get(slug, slug),
+            "count": count,
+        }
+        for slug, count in sorted(card_counts.items())
+    ]
+
+    global_record = _empty_composition_record()
+    player_record = (
+        _empty_composition_record() if request.user.is_authenticated else None
+    )
+    matchup_records = {}
+    first_captured_at = None
+    captured_games = 0
+
+    composition = resolved.composition
+    is_favorite = bool(
+        request.user.is_authenticated
+        and composition is not None
+        and DeckCompositionFavorite.objects.filter(
+            user=request.user,
+            composition=composition,
+        ).exists()
+    )
+    if composition is not None:
+        all_captures = GameLoadout.objects.filter(composition=composition)
+        first_captured_at = all_captures.aggregate(first=Min("created_at"))["first"]
+
+        loadouts = GameLoadout.objects.filter(
+            composition=composition,
+            game__title=title,
+            game__type=game_type,
+            game__status=Game.GAME_STATUS_ENDED,
+        )
+        captured_games = loadouts.values("game_id").distinct().count()
+
+        if include_hero_matchups:
+            loadouts = loadouts.select_related("game").prefetch_related(
+                "game__loadouts"
+            )
+        else:
+            global_record = _aggregate_composition_record(loadouts)
+            if request.user.is_authenticated:
+                player_record = _aggregate_composition_record(
+                    loadouts.filter(player=request.user)
+                )
+
+        if include_hero_matchups:
+            for loadout in loadouts:
+                result = _result_for_loadout(loadout)
+                _record_composition_result(global_record, result)
+
+                is_player_loadout = (
+                    request.user.is_authenticated
+                    and loadout.player_id == request.user.id
+                )
+                if is_player_loadout:
+                    _record_composition_result(player_record, result)
+
+                opposing_side = (
+                    GameLoadout.SIDE_B
+                    if loadout.side == GameLoadout.SIDE_A
+                    else GameLoadout.SIDE_A
+                )
+                opposing_loadout = next(
+                    (
+                        item
+                        for item in loadout.game.loadouts.all()
+                        if item.side == opposing_side
+                    ),
+                    None,
+                )
+                if opposing_loadout is None:
+                    continue
+
+                key = (
+                    loadout.hero_slug,
+                    opposing_loadout.hero_slug,
+                )
+                matchup = matchup_records.setdefault(
+                    key,
+                    {
+                        "hero": {
+                            "slug": loadout.hero_slug,
+                            "name": loadout.hero_name,
+                        },
+                        "opponent_hero": {
+                            "slug": opposing_loadout.hero_slug,
+                            "name": opposing_loadout.hero_name,
+                        },
+                        "global": _empty_composition_record(),
+                        "player": (
+                            _empty_composition_record()
+                            if request.user.is_authenticated
+                            else None
+                        ),
+                    },
+                )
+                _record_composition_result(matchup["global"], result)
+                if is_player_loadout:
+                    _record_composition_result(matchup["player"], result)
+
+    if matchup_records:
+        hero_slugs = {
+            slug
+            for own_slug, opponent_slug in matchup_records
+            for slug in (own_slug, opponent_slug)
+        }
+        current_hero_names = {}
+        for hero in HeroTemplate.objects.filter(
+            title=title,
+            slug__in=hero_slugs,
+        ).order_by("slug", "-is_latest", "-version", "-id"):
+            current_hero_names.setdefault(hero.slug, hero.name)
+        for matchup in matchup_records.values():
+            matchup["hero"]["name"] = current_hero_names.get(
+                matchup["hero"]["slug"], matchup["hero"]["name"]
+            )
+            matchup["opponent_hero"]["name"] = current_hero_names.get(
+                matchup["opponent_hero"]["slug"],
+                matchup["opponent_hero"]["name"],
+            )
+
+    hero_matchups = sorted(
+        matchup_records.values(),
+        key=lambda row: (
+            -row["global"]["games"],
+            row["hero"]["name"].lower(),
+            row["opponent_hero"]["name"].lower(),
+        ),
+    )
+
+    return Response(
+        {
+            "composition": {
+                "code": resolved.code,
+                "version": (composition.version if composition is not None else 1),
+                "total_cards": resolved.total_cards,
+                "cards": cards,
+                "is_favorite": is_favorite,
+            },
+            "game_type": game_type,
+            "global": global_record,
+            "player": player_record,
+            "hero_matchups": hero_matchups,
+            "attribution": {
+                "first_captured_at": (
+                    first_captured_at.isoformat() if first_captured_at else None
+                ),
+                "captured_games": captured_games,
+                "legacy_games_excluded": True,
+            },
+        }
+    )
 
 
 @api_view(["GET"])

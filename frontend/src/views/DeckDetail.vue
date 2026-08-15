@@ -62,6 +62,88 @@
           </div>
         </Panel>
 
+        <Panel
+          v-if="deck.composition"
+          padding="sm"
+          :custom-class="isAddCardMode ? 'ring-2 ring-primary-400/70 dark:ring-primary-500/70' : ''"
+        >
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="ui-panel-title text-base sm:text-lg">Deck Composition</h2>
+            <div class="ml-auto flex items-center gap-2">
+              <router-link
+                :to="compositionRoute"
+                class="ui-btn ui-btn-xs ui-btn-outline"
+              >
+                View Results
+              </router-link>
+              <button
+                type="button"
+                class="ui-btn ui-btn-xs ui-btn-secondary"
+                :aria-expanded="compositionExpanded"
+                aria-controls="deck-composition-details"
+                @click="compositionExpanded = !compositionExpanded"
+              >
+                {{ compositionExpanded ? 'Collapse' : 'Expand' }}
+                <ChevronUp v-if="compositionExpanded" class="h-3.5 w-3.5" aria-hidden="true" />
+                <ChevronDown v-else class="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+
+          <p class="sr-only" aria-live="polite" aria-atomic="true">
+            {{ compositionAnnouncement }}
+          </p>
+
+          <transition name="panel-fade">
+            <div
+              v-if="compositionExpanded"
+              id="deck-composition-details"
+              class="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700"
+            >
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                  <template v-if="isAddCardMode">This code updates as you change the card list.</template>
+                  <template v-else>This code identifies the exact card list, independent of its hero.</template>
+                </p>
+                <span
+                  :class="['ui-status-badge flex-none', compositionWasSeen ? 'ui-status-info' : 'ui-status-success']"
+                >
+                  {{ compositionWasSeen ? 'Previously seen' : 'New composition' }}
+                </span>
+              </div>
+
+              <div class="mt-4 flex min-w-0 flex-col gap-2 sm:flex-row">
+                <input
+                  class="ui-input min-w-0 flex-1 font-mono"
+                  type="text"
+                  readonly
+                  :value="deck.composition.code"
+                  aria-label="Deck composition code"
+                  @focus="selectCompositionCode"
+                />
+                <button
+                  type="button"
+                  class="ui-btn ui-btn-md ui-btn-secondary flex-none"
+                  @click="copyCompositionCode"
+                >
+                  <Check v-if="compositionCodeCopied" class="h-4 w-4" aria-hidden="true" />
+                  <Copy v-else class="h-4 w-4" aria-hidden="true" />
+                  {{ compositionCodeCopied ? 'Copied' : 'Copy code' }}
+                </button>
+              </div>
+
+              <p class="mt-4 text-sm text-gray-500 dark:text-gray-400">
+                <template v-if="compositionWasSeen">
+                  This exact card list already has continuity with its earlier appearances.
+                </template>
+                <template v-else>
+                  This is the first recorded appearance of this exact card list.
+                </template>
+              </p>
+            </div>
+          </transition>
+        </Panel>
+
         <transition name="panel-fade" mode="out-in">
           <Panel v-if="displayCards.length > 0" :key="isAddCardMode ? 'add-mode' : 'normal-mode'">
             <transition-group
@@ -227,6 +309,8 @@ import GameButton from '../components/ui/GameButton.vue'
 import { useNotificationStore } from '../stores/notifications'
 import BaseModal from '../components/modals/BaseModal.vue'
 import CardDetailContent from '../components/game/CardDetailContent.vue'
+import { Check, ChevronDown, ChevronUp, Copy } from 'lucide-vue-next'
+import type { DeckCompositionSummary } from '../types/composition'
 
 interface DeckData {
   id: number
@@ -250,6 +334,7 @@ interface DeckData {
   total_cards: number
   created_at: string
   updated_at: string
+  composition?: DeckCompositionSummary | null
 }
 
 interface DeckConfig {
@@ -264,6 +349,9 @@ const notificationStore = useNotificationStore()
 const deck = ref<DeckData | null>(null)
 const loading = ref<boolean>(true)
 const error = ref<string | null>(null)
+const compositionExpanded = ref(false)
+const compositionCodeCopied = ref(false)
+let compositionCopyResetTimer: ReturnType<typeof setTimeout> | null = null
 
 // Inline count editing state
 const editingCardId = ref<number | null>(null)
@@ -307,6 +395,76 @@ const closeCardModal = () => {
 const titleSlug = computed(() => {
   return deck.value?.title?.slug || ''
 })
+
+const compositionWasSeen = computed(() => {
+  const composition = deck.value?.composition
+  if (!composition) return false
+  return composition.previously_seen === true ||
+    composition.is_existing === true ||
+    composition.is_preexisting === true ||
+    composition.existing === true ||
+    composition.preexisting === true ||
+    composition.seen_before === true
+})
+
+const compositionAnnouncement = computed(() => {
+  const composition = deck.value?.composition
+  if (!composition) return ''
+  const revision = typeof composition.revision === 'object'
+    ? composition.revision?.sequence
+    : composition.revision
+  const revisionLabel = revision ? ` revision ${revision}` : ''
+  const continuityLabel = compositionWasSeen.value
+    ? 'This card list was previously seen.'
+    : 'This is a new card list.'
+  return `Deck composition${revisionLabel} updated. ${continuityLabel}`
+})
+
+const compositionRoute = computed(() => ({
+  name: 'CompositionDetail',
+  params: {
+    slug: deck.value?.title.slug || String(route.params.slug || ''),
+    code: deck.value?.composition?.code || ''
+  }
+}))
+
+const selectCompositionCode = (event: FocusEvent): void => {
+  ;(event.target as HTMLInputElement).select()
+}
+
+const copyCompositionCode = async (): Promise<void> => {
+  const code = deck.value?.composition?.code
+  if (!code) return
+
+  try {
+    await navigator.clipboard.writeText(code)
+    compositionCodeCopied.value = true
+    if (compositionCopyResetTimer) clearTimeout(compositionCopyResetTimer)
+    compositionCopyResetTimer = setTimeout(() => {
+      compositionCodeCopied.value = false
+    }, 2000)
+  } catch {
+    notificationStore.warning('Copy failed. Select the deck code and copy it manually.')
+  }
+}
+
+const syncComposition = async (responseData?: { composition?: DeckCompositionSummary | null }): Promise<void> => {
+  if (!deck.value) return
+
+  if (responseData?.composition) {
+    deck.value.composition = responseData.composition
+    return
+  }
+
+  // Older mutation responses may not include the new composition yet. Fetch only
+  // the identity metadata so the editor never displays a stale share code.
+  try {
+    const response = await axios.get(`/collection/decks/${deck.value.id}/`)
+    deck.value.composition = response.data.composition || null
+  } catch (err) {
+    console.error('Error refreshing deck composition:', err)
+  }
+}
 
 const averageCost = computed(() => {
   if (!deck.value || deck.value.cards.length === 0) return 0
@@ -514,6 +672,8 @@ const addCardToDeck = async (card: Card): Promise<void> => {
     // Recalculate total cards
     deck.value.total_cards = deck.value.cards.reduce((sum, card) => sum + card.count, 0)
 
+    await syncComposition(response.data)
+
     // Show success notification
     notificationStore.handleApiSuccess(response)
   } catch (err: any) {
@@ -543,6 +703,8 @@ const updateCardCount = async (card: DeckCard, newCount: number): Promise<void> 
       // Recalculate total cards
       deck.value.total_cards = deck.value.cards.reduce((sum, card) => sum + card.count, 0)
     }
+
+    await syncComposition(response.data)
 
     notificationStore.handleApiSuccess(response)
   } catch (err: any) {
@@ -628,11 +790,13 @@ const deleteCard = async (card: DeckCard): Promise<void> => {
   if (!confirmed) return
 
   try {
-    await axios.delete(`/collection/decks/${deck.value.id}/cards/${card.id}/delete/`)
+    const response = await axios.delete(`/collection/decks/${deck.value.id}/cards/${card.id}/delete/`)
 
     // Update local state
     deck.value.cards = deck.value.cards.filter(c => c.id !== card.id)
     deck.value.total_cards = deck.value.cards.reduce((sum, card) => sum + card.count, 0)
+
+    await syncComposition(response.data)
 
     notificationStore.success('Card removed from deck successfully')
   } catch (err: any) {

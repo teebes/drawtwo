@@ -30,6 +30,8 @@ from apps.builder.schemas import (
     TempManaBoostAction,
     TitleConfig,
 )
+from apps.collection.compositions import ensure_deck_revision
+from apps.collection.models import Deck
 from apps.collection.validation import (
     DeckValidationError,
     validate_deck_for_play,
@@ -38,7 +40,7 @@ from apps.collection.validation import (
 from apps.core.card_assets import get_hero_art_url
 from apps.core.serializers import serialize_cards_with_traits, to_card_schema
 from apps.gameplay.engine.dispatcher import resolve
-from apps.gameplay.models import Game, PlayerNotification
+from apps.gameplay.models import Game, GameLoadout, PlayerNotification
 from apps.gameplay.notifications import send_game_updates_to_clients
 from apps.gameplay.schemas.commands import (
     AttackCommand,
@@ -196,6 +198,21 @@ class GameService:
         randomize_starting_player: bool = False,
         reuse_active_game: bool = True,
     ) -> Game:
+        # A game must copy cards and capture attribution from the same locked deck
+        # state. Lock in primary-key order so concurrent game creation and deck
+        # edits cannot observe two different versions of a deck.
+        deck_ids = {deck_a.pk, deck_b.pk}
+        locked_decks = {
+            deck.pk: deck
+            for deck in Deck.objects.select_for_update()
+            .filter(pk__in=deck_ids)
+            .order_by("pk")
+        }
+        if len(locked_decks) != len(deck_ids):
+            raise DeckValidationError("One or both decks no longer exist")
+        deck_a = locked_decks[deck_a.pk]
+        deck_b = locked_decks[deck_b.pk]
+
         if deck_a.title_id != deck_b.title_id:
             raise DeckValidationError("Both decks must be from the same title")
 
@@ -234,6 +251,9 @@ class GameService:
         if randomize_starting_player and creation_rng("starting_player").random() < 0.5:
             # Swap the decks so deck_b starts
             deck_a, deck_b = deck_b, deck_a
+
+        revision_a, _ = ensure_deck_revision(deck_a, source="game")
+        revision_b, _ = ensure_deck_revision(deck_b, source="game")
 
         card_id = 0
         cards_in_play = {}
@@ -419,6 +439,33 @@ class GameService:
             side_b=deck_b,
             state=game_state.model_dump(),
             ruleset_id=compute_ruleset_id(deck_a.title),
+        )
+
+        GameLoadout.objects.bulk_create(
+            [
+                GameLoadout(
+                    game=game,
+                    side=GameLoadout.SIDE_A,
+                    player=deck_a.user,
+                    source_deck=deck_a,
+                    source_revision=revision_a,
+                    composition=revision_a.composition,
+                    hero_slug=revision_a.hero_slug,
+                    hero_name=revision_a.hero_name,
+                    deck_name=deck_a.name,
+                ),
+                GameLoadout(
+                    game=game,
+                    side=GameLoadout.SIDE_B,
+                    player=deck_b.user,
+                    source_deck=deck_b,
+                    source_revision=revision_b,
+                    composition=revision_b.composition,
+                    hero_slug=revision_b.hero_slug,
+                    hero_name=revision_b.hero_name,
+                    deck_name=deck_b.name,
+                ),
+            ]
         )
 
         # Callers still need to set game type / time controls after create_game()

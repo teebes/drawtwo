@@ -6,6 +6,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from apps.builder.models import CardTemplate
+from apps.collection.compositions import ensure_deck_revision
 from apps.collection.models import Deck, DeckCard
 from apps.collection.validation import validate_deck_for_play
 
@@ -75,6 +76,7 @@ class Command(BaseCommand):
                     for card, quantity in assignments
                 ]
             )
+            ensure_deck_revision(deck, source="import")
 
             validation_error = validate_deck_for_play(deck)
             if validation_error and not options["allow_invalid"]:

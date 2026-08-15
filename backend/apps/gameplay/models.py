@@ -7,7 +7,7 @@ from django.db import models, transaction
 from django.db.models import Case, Q, Value, When
 from django.utils import timezone
 
-from apps.collection.models import Deck
+from apps.collection.models import Deck, DeckComposition, DeckRevision
 from apps.core.models import TimestampedModel, list_to_choices
 from apps.gameplay.schemas.effects import Effect
 from apps.gameplay.schemas.game import GameState
@@ -271,6 +271,68 @@ class Game(TimestampedModel):
             # Ensure the transaction is committed before triggering the step task
             # This prevents the step task from failing silently due to lock contention
             transaction.on_commit(lambda: step.apply_async(args=[self.id]))
+
+
+class GameLoadout(TimestampedModel):
+    """Immutable attribution for one side's deck at game creation time."""
+
+    SIDE_A = "side_a"
+    SIDE_B = "side_b"
+    SIDE_CHOICES = list_to_choices([SIDE_A, SIDE_B])
+
+    game = models.ForeignKey(
+        Game,
+        on_delete=models.CASCADE,
+        related_name="loadouts",
+    )
+    side = models.CharField(max_length=10, choices=SIDE_CHOICES)
+    player = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="game_loadouts",
+        null=True,
+        blank=True,
+    )
+    source_deck = models.ForeignKey(
+        Deck,
+        on_delete=models.PROTECT,
+        related_name="game_loadouts",
+    )
+    source_revision = models.ForeignKey(
+        DeckRevision,
+        on_delete=models.PROTECT,
+        related_name="game_loadouts",
+    )
+    composition = models.ForeignKey(
+        DeckComposition,
+        on_delete=models.PROTECT,
+        related_name="game_loadouts",
+    )
+    hero_slug = models.SlugField(max_length=255)
+    hero_name = models.CharField(max_length=120)
+    deck_name = models.CharField(max_length=255)
+
+    class Meta:
+        db_table = "gameplay_game_loadout"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["game", "side"],
+                name="gameplay_game_loadout_game_side_unique",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["composition", "player"],
+                name="gameplay_gl_comp_player_idx",
+            ),
+            models.Index(
+                fields=["composition", "hero_slug"],
+                name="gameplay_gl_comp_hero_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Game {self.game_id} {self.side}: {self.composition.code}"
 
 
 class GameUpdate(TimestampedModel):

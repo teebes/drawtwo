@@ -70,6 +70,14 @@ class Deck(TimestampedModel):
         help_text="Whether this AI deck appears in normal PvE opponent selection.",
     )
     archived_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    current_revision = models.ForeignKey(
+        "DeckRevision",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="The latest immutable composition/hero revision for this deck.",
+    )
 
     objects = DeckQuerySet.as_manager()
 
@@ -182,3 +190,121 @@ class DeckCard(TimestampedModel):
 
     def __str__(self):
         return f"{self.deck.name} → {self.card.name} ({self.count})"
+
+
+class DeckComposition(TimestampedModel):
+    """A hero-independent, immutable multiset of card slugs."""
+
+    title = models.ForeignKey(
+        Title,
+        on_delete=models.PROTECT,
+        related_name="deck_compositions",
+    )
+    # Format version for `code`; title + version + digest is the database identity.
+    version = models.PositiveSmallIntegerField(default=1)
+    # SHA-256 lookup key derived from the title and canonical composition code.
+    digest = models.CharField(max_length=64)
+    # Canonical, hero-independent, URL-safe signature, e.g. `dt1.bandage~4`.
+    code = models.TextField()
+    # Parsed `code`, stored as slug/count entries for serialization and validation.
+    manifest = models.JSONField(default=list)
+    total_cards = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["title", "version", "digest"],
+                name="deck_composition_u_title_version_digest",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.title.slug}: {self.code}"
+
+
+class DeckCompositionFavorite(TimestampedModel):
+    """A user's bookmark of an immutable composition, including public builds."""
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="deck_composition_favorites",
+    )
+    composition = models.ForeignKey(
+        DeckComposition,
+        on_delete=models.CASCADE,
+        related_name="favorites",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "composition"],
+                name="deck_comp_favorite_u_user_composition",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["user", "created_at"],
+                name="deck_comp_fav_user_created_idx",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user.display_name} → {self.composition.code}"
+
+
+class DeckRevision(TimestampedModel):
+    """One immutable occurrence in a mutable deck's gameplay history."""
+
+    SOURCE_CREATE = "create"
+    SOURCE_EDIT = "edit"
+    SOURCE_RESTORE = "restore"
+    SOURCE_IMPORT = "import"
+    SOURCE_MIGRATION = "migration"
+    SOURCE_GAME = "game"
+    SOURCE_CHOICES = [
+        (SOURCE_CREATE, "Create"),
+        (SOURCE_EDIT, "Edit"),
+        (SOURCE_RESTORE, "Restore"),
+        (SOURCE_IMPORT, "Import"),
+        (SOURCE_MIGRATION, "Migration"),
+        (SOURCE_GAME, "Game"),
+    ]
+
+    deck = models.ForeignKey(
+        Deck,
+        on_delete=models.CASCADE,
+        related_name="revisions",
+    )
+    sequence = models.PositiveIntegerField()
+    composition = models.ForeignKey(
+        DeckComposition,
+        on_delete=models.PROTECT,
+        related_name="revisions",
+    )
+    hero_slug = models.SlugField(max_length=255)
+    hero_name = models.CharField(max_length=120)
+    source = models.CharField(
+        max_length=20,
+        choices=SOURCE_CHOICES,
+        default=SOURCE_EDIT,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["deck", "sequence"],
+                name="deck_revision_u_deck_sequence",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["composition", "created_at"],
+                name="deck_revision_comp_created_idx",
+            )
+        ]
+        ordering = ["deck_id", "sequence"]
+
+    def __str__(self):
+        return f"{self.deck.name} r{self.sequence}: {self.composition.code}"
