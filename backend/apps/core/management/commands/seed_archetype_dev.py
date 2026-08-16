@@ -1,5 +1,4 @@
 from datetime import timedelta
-from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -20,6 +19,8 @@ from apps.builder.models import (
 from apps.builder.services import TitleService
 from apps.collection.models import Deck, DeckCard, OwnedCard, OwnedHero
 from apps.collection.validation import validate_deck_for_play
+from apps.core.archetype_dev import ARCHETYPE_DEV_MANIFEST_PATH
+from apps.gameplay.engine.handlers import spawn_creature
 from apps.gameplay.models import (
     ELORatingChange,
     FriendlyChallenge,
@@ -28,7 +29,6 @@ from apps.gameplay.models import (
     MatchmakingQueue,
     UserTitleRating,
 )
-from apps.gameplay.engine.handlers import spawn_creature
 from apps.gameplay.schemas.game import GameState
 from apps.gameplay.services import GameService
 
@@ -149,12 +149,12 @@ class Command(BaseCommand):
                 "status": Title.STATUS_PUBLISHED,
                 "published_at": timezone.now(),
                 "config": {
-                    "deck_size_limit": 30,
+                    "deck_size_limit": 40,
                     "min_cards_in_deck": 10,
-                    "deck_card_max_count": 9,
+                    "deck_card_max_count": 4,
                     "hand_start_size": 3,
-                    "side_b_compensation": None,
-                    "death_retaliation": False,
+                    "side_b_compensation": "powerup",
+                    "death_retaliation": True,
                     "ranked_time_per_turn": 60,
                 },
             },
@@ -166,12 +166,12 @@ class Command(BaseCommand):
         title.is_latest = True
         title.published_at = title.published_at or timezone.now()
         title.config = {
-            "deck_size_limit": 30,
+            "deck_size_limit": 40,
             "min_cards_in_deck": 10,
-            "deck_card_max_count": 9,
+            "deck_card_max_count": 4,
             "hand_start_size": 3,
-            "side_b_compensation": None,
-            "death_retaliation": False,
+            "side_b_compensation": "powerup",
+            "death_retaliation": True,
             "ranked_time_per_turn": 60,
         }
         title.save()
@@ -192,7 +192,7 @@ class Command(BaseCommand):
         Faction.objects.filter(title=title).delete()
 
     def seed_content(self, title):
-        manifest_path = Path(settings.BASE_DIR) / "dev_data" / "archetypes.yaml"
+        manifest_path = ARCHETYPE_DEV_MANIFEST_PATH
         if not manifest_path.exists():
             raise CommandError(f"Missing manifest: {manifest_path}")
 
@@ -202,17 +202,16 @@ class Command(BaseCommand):
         bloodmage = HeroTemplate.objects.get(
             title=title, slug="bloodmage", is_latest=True
         )
-        balanced = HeroTemplate.objects.get(
-            title=title, slug="balanced", is_latest=True
+        sniper = HeroTemplate.objects.get(title=title, slug="sniper", is_latest=True)
+        berserker = HeroTemplate.objects.get(
+            title=title, slug="berserker", is_latest=True
         )
-        offensive = HeroTemplate.objects.get(
-            title=title, slug="offensive", is_latest=True
+        commander = HeroTemplate.objects.get(
+            title=title, slug="commander", is_latest=True
         )
-        defensive = HeroTemplate.objects.get(
-            title=title, slug="defensive", is_latest=True
-        )
+        healer = HeroTemplate.objects.get(title=title, slug="healer", is_latest=True)
 
-        for hero in [bloodmage, balanced, offensive, defensive]:
+        for hero in [bloodmage, sniper, berserker, commander, healer]:
             OwnedHero.objects.get_or_create(user=users["ios"], hero=hero)
 
         cards = list(
@@ -246,28 +245,28 @@ class Command(BaseCommand):
                 title=title,
                 owner=users["finding"],
                 name="FindingDevo",
-                hero=balanced,
+                hero=sniper,
                 cards=cards,
             ),
             "ink": self.upsert_deck(
                 title=title,
                 owner=users["ink"],
                 name="Inkgoblin",
-                hero=offensive,
+                hero=berserker,
                 cards=cards,
             ),
             "ai": self.upsert_deck(
                 title=title,
                 owner=ai_player,
                 name="Control",
-                hero=defensive,
+                hero=commander,
                 cards=cards,
             ),
             "ai_mulligan": self.upsert_deck(
                 title=title,
                 owner=ai_player,
                 name="Control Opening",
-                hero=defensive,
+                hero=healer,
                 cards=cards,
             ),
         }
@@ -513,9 +512,7 @@ class Command(BaseCommand):
         return game
 
     def seed_mulligan_game(self, title, user, player_deck, ai_deck):
-        mulligan_game = self.find_in_progress_pve_game_by_phase(
-            title, user, "mulligan"
-        )
+        mulligan_game = self.find_in_progress_pve_game_by_phase(title, user, "mulligan")
         if mulligan_game:
             self.configure_mulligan_game_for_ui(mulligan_game)
             return mulligan_game
@@ -576,7 +573,14 @@ class Command(BaseCommand):
 
         side_a_hand_slugs = ["drawtwo", "zap", "bandage", "mongoose"]
         side_a_board_slugs = ["archer"]
-        side_a_deck_slugs = ["cleave", "decoy", "hornet", "sharpen", "harbinger", "brute"]
+        side_a_deck_slugs = [
+            "cleave",
+            "decoy",
+            "hornet",
+            "sharpen",
+            "harbinger",
+            "brute",
+        ]
         side_b_hand_slugs = ["zap", "bandage", "mongoose"]
         side_b_board_slugs = ["decoy", "brute"]
         side_b_deck_slugs = ["archer", "cleave", "hornet", "sharpen", "harbinger"]
@@ -656,12 +660,8 @@ class Command(BaseCommand):
         side_b_hand = self.card_ids_for_slugs(side_b_cards, side_b_hand_slugs)
         state.hands["side_a"] = side_a_hand
         state.hands["side_b"] = side_b_hand
-        state.decks["side_a"] = self.card_ids_for_slugs(
-            side_a_cards, side_a_deck_slugs
-        )
-        state.decks["side_b"] = self.card_ids_for_slugs(
-            side_b_cards, side_b_deck_slugs
-        )
+        state.decks["side_a"] = self.card_ids_for_slugs(side_a_cards, side_a_deck_slugs)
+        state.decks["side_b"] = self.card_ids_for_slugs(side_b_cards, side_b_deck_slugs)
         state.mulligan_options = {
             "side_a": list(side_a_hand),
             "side_b": [],
@@ -679,8 +679,10 @@ class Command(BaseCommand):
         for side in ["side_a", "side_b"]:
             for card_id in state.hands.get(side, [])[:3]:
                 timestamp = (
-                    base_timestamp + timedelta(microseconds=len(updates))
-                ).isoformat().replace("+00:00", "Z")
+                    (base_timestamp + timedelta(microseconds=len(updates)))
+                    .isoformat()
+                    .replace("+00:00", "Z")
+                )
                 updates.append(
                     {
                         "side": side,
@@ -728,11 +730,7 @@ class Command(BaseCommand):
         }
 
     def card_ids_for_slugs(self, cards_by_slug, slugs):
-        return [
-            cards_by_slug[slug].card_id
-            for slug in slugs
-            if slug in cards_by_slug
-        ]
+        return [cards_by_slug[slug].card_id for slug in slugs if slug in cards_by_slug]
 
     def card_ids_for_side(self, state, side):
         seen = set()

@@ -1,0 +1,11 @@
+version: 1
+source:
+  url: https://drawtwo.com/archetype/decks/4
+  captured_at: '2026-08-15'
+deck:
+  title: archetype
+  name: Your First Deck
+  description: ''
+  hero: sniper
+  composition: >-
+    dt1.abomination~1.ambusher~2.brute~2.cheerleader~1.cleave~2.decoy~3.dragoon~2.drawtwo~2.grenade~2.herald~3.hornet~1.knight~2.medic~1.meteor~2.opportunist~1.phalanx~1.phoenix~1.remove~2.sharpen~1.shieldwall~3.silence~1.soldier~2.zap~2

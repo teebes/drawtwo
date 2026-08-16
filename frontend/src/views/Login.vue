@@ -318,7 +318,11 @@ const handleSubmit = async () => {
       const result = await authStore.register(userData)
 
       if (result.success) {
-        showMessage('Registration successful! Please check your email to verify your account.', 'success')
+        const emailSent = result.data?.email_sent !== false
+        showMessage(
+          result.data?.message || 'Registration successful! Please check your email to verify your account.',
+          emailSent ? 'success' : 'info'
+        )
         // Switch to login mode
         isSignUp.value = false
       } else {

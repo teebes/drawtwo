@@ -64,6 +64,12 @@ class CustomRegisterSerializer(RegisterSerializer):
     username = serializers.CharField(
         max_length=150, required=False, allow_blank=True, allow_null=True
     )
+    client = serializers.ChoiceField(
+        choices=("web", "ios"),
+        default="web",
+        required=False,
+        write_only=True,
+    )
 
     def validate_email(self, email):
         email = get_adapter().clean_email(email)

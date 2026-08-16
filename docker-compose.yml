@@ -64,6 +64,7 @@ services:
       - APNS_AUTH_KEY_PATH=${APNS_AUTH_KEY_PATH:-}
       - APNS_AUTH_KEY=${APNS_AUTH_KEY:-}
       - APNS_TOPIC=${APNS_TOPIC:-}
+      - SYNC_ARCHETYPE_DEV_CONTENT=1
     volumes:
       - ./backend:/app
       - ./ai:/app/ai
@@ -73,6 +74,18 @@ services:
       - media_volume:/app/media
     ports:
       - "8002:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
     depends_on:
       db:
         condition: service_healthy
@@ -112,6 +125,8 @@ services:
       - APNS_AUTH_KEY_PATH=${APNS_AUTH_KEY_PATH:-}
       - APNS_AUTH_KEY=${APNS_AUTH_KEY:-}
       - APNS_TOPIC=${APNS_TOPIC:-}
+      - RUN_DJANGO_MIGRATIONS=0
+      - RUN_COLLECTSTATIC=0
     volumes:
       - ./backend:/app
       - ./ai:/app/ai
@@ -121,6 +136,8 @@ services:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      backend:
         condition: service_healthy
     command: ["celery", "-A", "config", "worker", "--loglevel=info"]
 
@@ -150,6 +167,8 @@ services:
       - APNS_AUTH_KEY_PATH=${APNS_AUTH_KEY_PATH:-}
       - APNS_AUTH_KEY=${APNS_AUTH_KEY:-}
       - APNS_TOPIC=${APNS_TOPIC:-}
+      - RUN_DJANGO_MIGRATIONS=0
+      - RUN_COLLECTSTATIC=0
     volumes:
       - ./backend:/app
       - ./ai:/app/ai
@@ -159,6 +178,8 @@ services:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      backend:
         condition: service_healthy
     command: ["celery", "-A", "config", "beat", "--loglevel=info", "--scheduler", "django_celery_beat.schedulers:DatabaseScheduler"]
 

@@ -58,6 +58,8 @@ services:
       - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
       - R2_BUCKET_NAME=${R2_BUCKET_NAME}
+      - RUN_DJANGO_MIGRATIONS=1
+      - RUN_COLLECTSTATIC=1
     volumes:
       - ${APPLE_SIGN_IN_PRIVATE_KEY_HOST_PATH:-/dev/null}:${APPLE_SIGN_IN_PRIVATE_KEY_PATH:-/run/secrets/drawtwo/apple-sign-in/AuthKey.p8}:ro
       - ./secrets/apns/AuthKey.p8:/run/secrets/drawtwo/apns/AuthKey.p8:ro
@@ -66,6 +68,18 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import socket; socket.create_connection(('127.0.0.1', 8000), timeout=2).close()",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 60s
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -113,12 +127,16 @@ services:
       - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
       - R2_BUCKET_NAME=${R2_BUCKET_NAME}
+      - RUN_DJANGO_MIGRATIONS=0
+      - RUN_COLLECTSTATIC=0
     volumes:
       - ${APPLE_SIGN_IN_PRIVATE_KEY_HOST_PATH:-/dev/null}:${APPLE_SIGN_IN_PRIVATE_KEY_PATH:-/run/secrets/drawtwo/apple-sign-in/AuthKey.p8}:ro
       - ./secrets/apns/AuthKey.p8:/run/secrets/drawtwo/apns/AuthKey.p8:ro
       - media_volume:/app/media
     depends_on:
       redis:
+        condition: service_healthy
+      backend:
         condition: service_healthy
     restart: unless-stopped
     extra_hosts:
@@ -166,11 +184,15 @@ services:
       - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
       - R2_BUCKET_NAME=${R2_BUCKET_NAME}
+      - RUN_DJANGO_MIGRATIONS=0
+      - RUN_COLLECTSTATIC=0
     volumes:
       - ${APPLE_SIGN_IN_PRIVATE_KEY_HOST_PATH:-/dev/null}:${APPLE_SIGN_IN_PRIVATE_KEY_PATH:-/run/secrets/drawtwo/apple-sign-in/AuthKey.p8}:ro
       - ./secrets/apns/AuthKey.p8:/run/secrets/drawtwo/apns/AuthKey.p8:ro
     depends_on:
       redis:
+        condition: service_healthy
+      backend:
         condition: service_healthy
     restart: unless-stopped
     extra_hosts:

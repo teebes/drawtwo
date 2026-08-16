@@ -1,10 +1,10 @@
 {
-  "captured_at": "2026-08-09T23:19:05.203127+00:00",
-  "cards": 35,
+  "captured_at": "2026-08-15T20:53:36.018120+00:00",
+  "cards": 36,
   "environment": "production",
   "heroes": 5,
   "schema_version": 1,
-  "sha256": "adc75fdbd13a40b298575fe2a2eaaa7977ebc3ba30bdf621962bdee25bb5d6d4",
+  "sha256": "c4b1567daa99e2db38a0c14986329bd86f5b07afbfab19343f1e16d5199be362",
   "title_id": 3,
   "title_slug": "archetype",
   "title_status": "published",

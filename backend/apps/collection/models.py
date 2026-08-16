@@ -175,6 +175,65 @@ class UserTitleDeckPreference(TimestampedModel):
         return f"{self.user.display_name} → {self.title.name}"
 
 
+class StarterDeckProgram(TimestampedModel):
+    """A title's durable new-account eligibility boundary."""
+
+    title_slug = models.SlugField(max_length=255, unique=True)
+    eligible_after = models.DateTimeField()
+
+    def __str__(self):
+        return f"{self.title_slug} starters after {self.eligible_after.isoformat()}"
+
+
+class StarterDeckProvisioning(TimestampedModel):
+    """Durable state for a starter deck promised to a newly created user."""
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="starter_deck_provisionings",
+    )
+    title_slug = models.SlugField(max_length=255)
+    deck = models.ForeignKey(
+        Deck,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    last_attempted_at = models.DateTimeField(null=True, blank=True)
+    last_dispatched_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "title_slug"],
+                name="starter_deck_provisioning_u_user_title",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["user", "completed_at"],
+                name="starter_deck_user_pending_idx",
+            ),
+            models.Index(
+                fields=[
+                    "title_slug",
+                    "last_attempted_at",
+                    "last_dispatched_at",
+                ],
+                name="starter_deck_pending_due_idx",
+                condition=models.Q(completed_at__isnull=True),
+            ),
+        ]
+
+    def __str__(self):
+        state = "complete" if self.completed_at else "pending"
+        return f"{self.user.display_name} → {self.title_slug} ({state})"
+
+
 class DeckCard(TimestampedModel):
     deck = models.ForeignKey(Deck, on_delete=models.CASCADE)
     card = models.ForeignKey(CardTemplate, on_delete=models.PROTECT)

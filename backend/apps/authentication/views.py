@@ -86,6 +86,44 @@ def _passwordless_login_message(client, key):
     return f"Click this link to log in: {frontend_url}"
 
 
+def _send_passwordless_login_email(user, *, client="web"):
+    """Create and send a one-time login link for an existing user."""
+
+    email_address = EmailAddress.objects.filter(user=user, primary=True).first()
+    if email_address is None:
+        email_address = EmailAddress.objects.filter(
+            user=user,
+            email__iexact=user.email,
+        ).first()
+    created = email_address is None
+    if created:
+        email_address = EmailAddress.objects.create(
+            user=user,
+            email=user.email,
+            verified=False,
+            primary=True,
+        )
+
+    # A passwordless link doubles as email verification. Reset allauth's address
+    # state so accepting the new confirmation consistently verifies the user.
+    if not created and email_address.verified:
+        email_address.verified = False
+        email_address.save(update_fields=["verified"])
+
+    confirmation = EmailConfirmation.create(email_address)
+    confirmation.sent = timezone.now()
+    confirmation.save()
+
+    send_mail(
+        subject="DrawTwo - Login Link",
+        message=_passwordless_login_message(client, confirmation.key),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+        fail_silently=False,
+    )
+    return confirmation
+
+
 @method_decorator(csrf_exempt, name="dispatch")
 class GoogleLogin(SocialLoginView):
     """Google OAuth2 login view."""
@@ -671,34 +709,8 @@ class PasswordlessLoginView(APIView):
             email = serializer.validated_data["email"]
             client = serializer.validated_data.get("client", "web")
             try:
-                user = User.objects.get(email=email)
-
-                # Create email confirmation manually
-                email_address, created = EmailAddress.objects.get_or_create(
-                    user=user,
-                    email=user.email,
-                    defaults={"verified": False, "primary": True},
-                )
-
-                # For passwordless login, we need to reset verification status
-                # so the confirmation can work properly
-                if not created and email_address.verified:
-                    email_address.verified = False
-                    email_address.save()
-
-                # Create confirmation object
-                confirmation = EmailConfirmation.create(email_address)
-                confirmation.sent = timezone.now()
-                confirmation.save()
-
-                # Send email with console backend for development
-                send_mail(
-                    subject="DrawTwo - Login Link",
-                    message=_passwordless_login_message(client, confirmation.key),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[email],
-                    fail_silently=False,
-                )
+                user = User.objects.get(email__iexact=email)
+                _send_passwordless_login_email(user, client=client)
 
                 return Response(
                     {
@@ -924,12 +936,30 @@ def register_view(request):
     serializer = CustomRegisterSerializer(data=request.data)
     if serializer.is_valid():
         user = serializer.save(request)
+        email_sent = True
+        try:
+            _send_passwordless_login_email(
+                user,
+                client=serializer.validated_data.get("client", "web"),
+            )
+        except Exception:
+            email_sent = False
+            logger.exception(
+                "Registered user %s but could not send their login email",
+                user.pk,
+            )
 
         # New users start as pending by default (already set in model)
-        message = (
-            "Registration successful. Please check your email to "
-            "verify your account."
-        )
+        if email_sent:
+            message = (
+                "Registration successful. Please check your email to "
+                "verify your account."
+            )
+        else:
+            message = (
+                "Registration successful, but the login email could not be sent. "
+                "Switch to Sign In and request a new login link."
+            )
 
         # Add additional message if whitelist mode is enabled
         if site_settings.whitelist_mode_enabled:
@@ -943,6 +973,7 @@ def register_view(request):
                 "message": message,
                 "user": UserSerializer(user).data,
                 "requires_approval": site_settings.whitelist_mode_enabled,
+                "email_sent": email_sent,
             },
             status=status.HTTP_201_CREATED,
         )

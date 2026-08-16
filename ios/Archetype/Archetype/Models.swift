@@ -86,6 +86,7 @@ struct LoginLinkResponse: Decodable {
 struct RegistrationRequest: Encodable {
     let email: String
     let username: String?
+    let client = "ios"
 }
 
 struct RegistrationResponse: Decodable {

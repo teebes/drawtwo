@@ -354,6 +354,12 @@ CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
 
 # Beat scheduler configuration (for periodic tasks)
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+CELERY_BEAT_SCHEDULE = {
+    "reconcile-starter-deck-provisioning": {
+        "task": "apps.collection.tasks.reconcile_starter_deck_provisionings",
+        "schedule": 60.0,
+    },
+}
 
 # Store task results in Django database
 CELERY_RESULT_BACKEND = "django-db"

@@ -149,7 +149,11 @@ class AuthenticationAPITestCase(APITestCase):
         cache.clear()
         super().tearDown()
 
-    def test_register_with_email_only(self):
+    @override_settings(
+        FRONTEND_EMAIL_CONFIRM_URL="https://drawtwo.test/auth/email-confirm"
+    )
+    @patch("apps.authentication.views.send_mail")
+    def test_register_with_email_only(self, mock_send_mail):
         """Test user registration with just email (minimal friction)."""
         data = {"email": "minimal@example.com"}
         response = self.client.post(self.register_url, data, format="json")
@@ -168,6 +172,74 @@ class AuthenticationAPITestCase(APITestCase):
         self.assertIsNone(user_data["username"])
         self.assertEqual(user_data["display_name"], f"Gamer {user.id}")
         self.assertFalse(user_data["is_email_verified"])
+
+        email_address = EmailAddress.objects.get(email="minimal@example.com")
+        confirmation = EmailConfirmation.objects.get(email_address=email_address)
+        message = mock_send_mail.call_args.kwargs["message"]
+        self.assertIn(
+            f"https://drawtwo.test/auth/email-confirm/{confirmation.key}",
+            message,
+        )
+
+    @override_settings(
+        IOS_APP_LOGIN_URL="https://drawtwo.test/app/login",
+        IOS_LOGIN_URL_SCHEME="drawtwo://login",
+    )
+    @patch("apps.authentication.views.send_mail")
+    def test_register_ios_sends_app_login_links(self, mock_send_mail):
+        response = self.client.post(
+            self.register_url,
+            {"email": "ios-register@example.com", "client": "ios"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        email_address = EmailAddress.objects.get(email="ios-register@example.com")
+        confirmation = EmailConfirmation.objects.get(email_address=email_address)
+        message = mock_send_mail.call_args.kwargs["message"]
+        self.assertIn(f"https://drawtwo.test/app/login/{confirmation.key}", message)
+        self.assertIn(f"drawtwo://login/{confirmation.key}", message)
+        self.assertNotIn("client", response.data["user"])
+
+    @patch("apps.authentication.views.send_mail")
+    def test_register_mixed_case_email_uses_existing_address(self, mock_send_mail):
+        response = self.client.post(
+            self.register_url,
+            {"email": "MixedCase@Example.com"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        user = User.objects.get(email__iexact="mixedcase@example.com")
+        self.assertEqual(EmailAddress.objects.filter(user=user).count(), 1)
+        self.assertTrue(
+            EmailConfirmation.objects.filter(email_address__user=user).exists()
+        )
+        mock_send_mail.assert_called_once()
+
+    @patch(
+        "apps.authentication.views.send_mail",
+        side_effect=RuntimeError("SMTP unavailable"),
+    )
+    def test_register_mail_failure_keeps_recoverable_account(self, mock_send_mail):
+        response = self.client.post(
+            self.register_url,
+            {"email": "mail-failure@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(response.data["email_sent"])
+        self.assertIn("Switch to Sign In", response.data["message"])
+        self.assertTrue(User.objects.filter(email="mail-failure@example.com").exists())
+
+        mock_send_mail.side_effect = None
+        response = self.client.post(
+            self.passwordless_login_url,
+            {"email": "mail-failure@example.com"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_register_with_email_and_username(self):
         """Test user registration with email and optional username."""
@@ -230,6 +302,19 @@ class AuthenticationAPITestCase(APITestCase):
         self.assertIn("message", response.data)
         self.assertIn("email", response.data)
 
+    @patch("apps.authentication.views.send_mail")
+    def test_passwordless_login_matches_email_case_insensitively(self, mock_send_mail):
+        User.objects.create_user(email="case-login@example.com")
+
+        response = self.client.post(
+            self.passwordless_login_url,
+            {"email": "Case-Login@Example.com"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mock_send_mail.assert_called_once()
+
     def test_passwordless_login_nonexistent_user(self):
         """Test passwordless login for non-existent user."""
         data = {"email": "nonexistent@example.com"}
@@ -254,15 +339,8 @@ class AuthenticationAPITestCase(APITestCase):
         user = User.objects.get(email="confirm@example.com")
         self.assertFalse(user.is_email_verified)
 
-        # Send passwordless login email
-        login_data = {"email": "confirm@example.com"}
-        response = self.client.post(
-            self.passwordless_login_url, login_data, format="json"
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-        # Mock should have been called to send email
-        mock_send_mail.assert_called()
+        # Registration sends the one-time verification/login email.
+        mock_send_mail.assert_called_once()
 
         # Get the confirmation key from the email confirmation
         email_address = EmailAddress.objects.get(email="confirm@example.com")
@@ -1015,21 +1093,14 @@ class AuthenticationIntegrationTestCase(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-        # 2. User requests login email
-        login_data = {"email": "journey@example.com"}
-        response = self.client.post(
-            reverse("authentication:passwordless_login"), login_data, format="json"
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-        # 3. Simulate email confirmation (get the key)
+        # 2. Registration sent a login email; get its one-time key.
         user = User.objects.get(email="journey@example.com")
         email_address = EmailAddress.objects.get(email="journey@example.com")
         confirmation = EmailConfirmation.objects.filter(
             email_address=email_address
         ).first()
 
-        # 4. User clicks email link (confirms email)
+        # 3. User clicks email link (confirms email)
         confirm_data = {"key": confirmation.key}
         response = self.client.post(
             reverse("authentication:email_confirm"), confirm_data, format="json"
@@ -1040,12 +1111,12 @@ class AuthenticationIntegrationTestCase(APITestCase):
         access_token = response.data["access"]
         self.assertIsNotNone(access_token)
 
-        # 5. Use token to access protected endpoint
+        # 4. Use token to access protected endpoint
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
         response = self.client.get(reverse("authentication:protected_test"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        # 6. User updates profile to add username
+        # 5. User updates profile to add username
         profile_data = {"username": "journeyuser"}
         response = self.client.patch(
             reverse("authentication:user_profile"), profile_data, format="json"
