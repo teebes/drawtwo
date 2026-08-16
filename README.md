@@ -189,7 +189,11 @@ npm run dev
 Key environment variables (see `local.env.template` or `production.env.template` for full list):
 
 ### Core Settings
-- `SECRET_KEY`: Django secret key
+- `DRAWTWO_DEV_SECRET_KEY`: local Docker Django signing key; keep it distinct
+  from every deployed `SECRET_KEY`
+- `DRAWTWO_DEV_BIND_ADDRESS`: host interface for local published ports
+  (defaults to `127.0.0.1`)
+- `SECRET_KEY`: Django signing key for deployed environments
 - `DEBUG`: Enable/disable debug mode
 - `DB_NAME`, `DB_USER`, `DB_PASSWORD`: Database configuration
 - `ALLOWED_HOSTS`: Allowed hosts for production

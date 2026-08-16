@@ -9,16 +9,15 @@ import difflib
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
 import textwrap
-
+from pathlib import Path
 
 TITLE_SLUG = "archetype"
-SSH_HOST = "ssh.drawtwo.com"
 SSH_OPTIONS = (
     "-o",
     "BatchMode=yes",
@@ -32,11 +31,14 @@ SSH_OPTIONS = (
     "ServerAliveCountMax=2",
 )
 REMOTE_TIMEOUT_SECONDS = 120
-REMOTE_COMMAND = (
-    "cd /home/teebes && "
-    "docker compose -f docker-compose.production.yml --env-file production.env "
-    "exec -T backend python manage.py shell"
-)
+PRODUCTION_CONFIG_ENV = "DRAWTWO_PROD_CONFIG"
+PRODUCTION_FIELD_ENVS = {
+    "ssh_host": "DRAWTWO_PROD_SSH_HOST",
+    "workdir": "DRAWTWO_PROD_WORKDIR",
+    "compose_file": "DRAWTWO_PROD_COMPOSE_FILE",
+    "env_file": "DRAWTWO_PROD_ENV_FILE",
+    "backend_service": "DRAWTWO_PROD_BACKEND_SERVICE",
+}
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SNAPSHOT = SKILL_ROOT / "references" / "production-snapshot.yaml"
 DEFAULT_METADATA = SKILL_ROOT / "references" / "production-snapshot.meta.json"
@@ -47,10 +49,82 @@ class ProductionError(RuntimeError):
     """A guarded production operation failed."""
 
 
+def _production_settings() -> dict[str, str]:
+    settings: dict[str, str] = {}
+    config_value = os.environ.get(PRODUCTION_CONFIG_ENV)
+    if config_value:
+        config_path = Path(config_value).expanduser()
+        try:
+            payload = json.loads(config_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ProductionError(
+                f"Cannot load private production config {config_path}: {exc}"
+            ) from exc
+        if not isinstance(payload, dict):
+            raise ProductionError("Private production config must be a JSON object.")
+        configured = payload.get("production", payload)
+        if not isinstance(configured, dict):
+            raise ProductionError(
+                "The production entry in the private config must be a JSON object."
+            )
+        settings.update(
+            {
+                field: value
+                for field, value in configured.items()
+                if field in PRODUCTION_FIELD_ENVS and isinstance(value, str)
+            }
+        )
+
+    for field, env_name in PRODUCTION_FIELD_ENVS.items():
+        value = os.environ.get(env_name)
+        if value:
+            settings[field] = value
+
+    missing = [field for field in PRODUCTION_FIELD_ENVS if not settings.get(field)]
+    if missing:
+        raise ProductionError(
+            "Production coordinates are not configured. Set "
+            f"{PRODUCTION_CONFIG_ENV} to a private JSON file or provide: "
+            + ", ".join(PRODUCTION_FIELD_ENVS[field] for field in missing)
+        )
+
+    for field, value in settings.items():
+        if any(character in value for character in ("\0", "\n", "\r")):
+            raise ProductionError(
+                "Private production config field "
+                f"{field!r} contains a control character."
+            )
+    if not Path(settings["workdir"]).is_absolute():
+        raise ProductionError("Private production workdir must be an absolute path.")
+    if settings["ssh_host"].startswith("-"):
+        raise ProductionError("Private production SSH destination is invalid.")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", settings["backend_service"]):
+        raise ProductionError("Private production backend service name is invalid.")
+    return settings
+
+
 def _run_remote(source: str) -> str:
+    settings = _production_settings()
+    compose_command = shlex.join(
+        [
+            "docker",
+            "compose",
+            "-f",
+            settings["compose_file"],
+            "--env-file",
+            settings["env_file"],
+            "exec",
+            "-T",
+            settings["backend_service"],
+            "python",
+            "manage.py",
+            "shell",
+        ]
+    )
+    remote_command = f"cd {shlex.quote(settings['workdir'])} && {compose_command}"
     try:
         completed = subprocess.run(
-            ["ssh", "-T", *SSH_OPTIONS, SSH_HOST, REMOTE_COMMAND],
+            ["ssh", "-T", *SSH_OPTIONS, settings["ssh_host"], remote_command],
             input=source,
             text=True,
             capture_output=True,

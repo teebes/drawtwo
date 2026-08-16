@@ -141,9 +141,10 @@ After a confirmed success:
 4. Report what changed, the production verification, and that existing games
    retain their copied state while newly created games use the new content.
 
-Use the server-side `/home/teebes/production.env` only. Never treat a local
-`production.env`, local database, ignored `backend/dev_data/archetypes.yaml`, or
-hard-coded title primary key as production evidence.
+Load production coordinates from the operator-private configuration described
+in the `prod` skill. Never treat a repository-local environment file, local
+database, ignored `backend/dev_data/archetypes.yaml`, or hard-coded title
+primary key as production evidence.
 
 ## Decide Between Content and Platform Work
 

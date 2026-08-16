@@ -1,23 +1,40 @@
 ---
 name: prod
-description: Inspect, troubleshoot, and operate the live Draw Two production deployment on drawtwo.com. Use for production data inspection, logs, health checks, Django shell queries, deploy-state verification, or an explicitly requested production mutation. Do not use local production.env or localhost as evidence about the live system.
+description: Inspect, troubleshoot, and operate the live Draw Two production deployment. Use for production data inspection, logs, health checks, Django shell queries, deploy-state verification, or an explicitly requested production mutation. Do not use repository-local configuration or localhost as evidence about the live system.
 ---
 
 # Draw Two Production
 
-Use the DigitalOcean host as the only source of truth for live production.
+Use the configured live deployment as the only source of truth for production.
 
-## Connect
+## Load Private Connection Settings
 
-Run commands through:
+Production coordinates are intentionally absent from this repository. Load them
+from an operator-private JSON file by setting `DRAWTWO_PROD_CONFIG` to its path.
+The file may contain the fields at the top level or under `production`:
 
-```sh
-ssh ssh.drawtwo.com 'cd /home/teebes && docker compose -f docker-compose.production.yml --env-file production.env <command>'
+```json
+{
+  "production": {
+    "ssh_host": "<SSH destination>",
+    "workdir": "<absolute remote deployment directory>",
+    "compose_file": "<remote Compose file>",
+    "env_file": "<remote environment file>",
+    "backend_service": "<backend service name>"
+  }
+}
 ```
 
-Use the server-side `/home/teebes/production.env`. Never use the repository's
-local `production.env`, a local database, or `localhost:5432` to draw conclusions
-about production.
+The Archetype production helper also accepts per-field overrides through
+`DRAWTWO_PROD_SSH_HOST`, `DRAWTWO_PROD_WORKDIR`,
+`DRAWTWO_PROD_COMPOSE_FILE`, `DRAWTWO_PROD_ENV_FILE`, and
+`DRAWTWO_PROD_BACKEND_SERVICE`. Keep all values outside version control. For
+general production commands, resolve the same settings and pass the destination
+to `ssh` as an argument; shell-quote each value used in the remote command.
+
+Use only the configured server-side environment file. Never use a
+repository-local environment file, local database, or `localhost` to draw
+conclusions about production.
 
 ## Work Safely
 

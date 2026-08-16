@@ -8,7 +8,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "${DRAWTWO_DEV_BIND_ADDRESS:-127.0.0.1}:5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
       interval: 10s
@@ -18,7 +18,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6381:6379"
+      - "${DRAWTWO_DEV_BIND_ADDRESS:-127.0.0.1}:6381:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -33,7 +33,7 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.development
-      - SECRET_KEY=${SECRET_KEY:-django-insecure-dev-key}
+      - SECRET_KEY=${DRAWTWO_DEV_SECRET_KEY:-django-insecure-dev-key}
       - DB_NAME=${DB_NAME:-drawtwo}
       - DB_USER=${DB_USER:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
@@ -73,7 +73,7 @@ services:
       - static_volume:/app/staticfiles
       - media_volume:/app/media
     ports:
-      - "8002:8000"
+      - "${DRAWTWO_DEV_BIND_ADDRESS:-127.0.0.1}:8002:8000"
     healthcheck:
       test:
         [
@@ -100,7 +100,7 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.development
-      - SECRET_KEY=${SECRET_KEY:-django-insecure-dev-key}
+      - SECRET_KEY=${DRAWTWO_DEV_SECRET_KEY:-django-insecure-dev-key}
       - DB_NAME=${DB_NAME:-drawtwo}
       - DB_USER=${DB_USER:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
@@ -147,7 +147,7 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.development
-      - SECRET_KEY=${SECRET_KEY:-django-insecure-dev-key}
+      - SECRET_KEY=${DRAWTWO_DEV_SECRET_KEY:-django-insecure-dev-key}
       - DB_NAME=${DB_NAME:-drawtwo}
       - DB_USER=${DB_USER:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
@@ -189,7 +189,7 @@ services:
       - ./frontend:/app
       - /app/node_modules
     ports:
-      - "3000:3000"
+      - "${DRAWTWO_DEV_BIND_ADDRESS:-127.0.0.1}:3000:3000"
     environment:
       - NODE_ENV=development
       - DOCKER=true
