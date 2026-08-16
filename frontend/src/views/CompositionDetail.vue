@@ -155,33 +155,6 @@
           </section>
 
           <section class="ui-panel">
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h2 class="ui-panel-title">Cards</h2>
-                <p class="ui-panel-subtitle">The hero is intentionally not part of this composition.</p>
-              </div>
-              <span class="ui-status-badge ui-status-info">Hero-independent</span>
-            </div>
-
-            <div v-if="compositionCards.length" class="mt-5 grid gap-2 sm:grid-cols-2">
-              <div
-                v-for="card in compositionCards"
-                :key="card.slug"
-                class="ui-panel-muted flex items-center justify-between gap-3 !p-3"
-              >
-                <div class="min-w-0">
-                  <p class="truncate font-medium text-gray-900 dark:text-white">{{ card.name || humanizeSlug(card.slug) }}</p>
-                  <p class="truncate font-mono text-xs text-gray-500 dark:text-gray-400">{{ card.slug }}</p>
-                </div>
-                <span class="flex-none rounded-full bg-gray-200 px-2.5 py-1 text-sm font-bold text-gray-700 dark:bg-gray-700 dark:text-gray-200">
-                  {{ card.count }}×
-                </span>
-              </div>
-            </div>
-            <p v-else class="mt-5 text-sm text-gray-500 dark:text-gray-400">This composition has no cards.</p>
-          </section>
-
-          <section class="ui-panel">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 class="ui-panel-title">Hero matchups</h2>
@@ -237,6 +210,33 @@
             <p v-else class="mt-5 text-sm text-gray-500 dark:text-gray-400">
               The headline result combines games played with every hero.
             </p>
+          </section>
+
+          <section class="ui-panel">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 class="ui-panel-title">Cards</h2>
+                <p class="ui-panel-subtitle">The hero is intentionally not part of this composition.</p>
+              </div>
+              <span class="ui-status-badge ui-status-info">Hero-independent</span>
+            </div>
+
+            <div v-if="compositionCards.length" class="mt-5 grid gap-2 sm:grid-cols-2">
+              <div
+                v-for="card in compositionCards"
+                :key="card.slug"
+                class="ui-panel-muted flex items-center justify-between gap-3 !p-3"
+              >
+                <div class="min-w-0">
+                  <p class="truncate font-medium text-gray-900 dark:text-white">{{ card.name || humanizeSlug(card.slug) }}</p>
+                  <p class="truncate font-mono text-xs text-gray-500 dark:text-gray-400">{{ card.slug }}</p>
+                </div>
+                <span class="flex-none rounded-full bg-gray-200 px-2.5 py-1 text-sm font-bold text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                  {{ card.count }}×
+                </span>
+              </div>
+            </div>
+            <p v-else class="mt-5 text-sm text-gray-500 dark:text-gray-400">This composition has no cards.</p>
           </section>
         </template>
       </div>
