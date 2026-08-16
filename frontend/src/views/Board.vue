@@ -225,7 +225,7 @@
             <!-- Mulligan Overlay -->
             <div
                 v-if="isMulliganPhase"
-                class="absolute inset-0 z-40 flex items-center justify-center bg-gray-950/85 p-4">
+                class="absolute inset-0 z-40 flex items-center justify-center bg-gray-950/55 p-4">
                 <div class="w-full max-w-sm rounded-lg border border-gray-700 bg-gray-900 p-4 shadow-2xl">
                     <div class="mb-4 text-center">
                         <div class="text-lg font-semibold text-white">Opening Hand</div>

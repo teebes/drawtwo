@@ -6329,7 +6329,7 @@ private struct MulliganOverlay: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.84)
+            Color.black.opacity(0.55)
                 .ignoresSafeArea()
 
             ArchetypePanel {
