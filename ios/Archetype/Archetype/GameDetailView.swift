@@ -6358,7 +6358,7 @@ private struct MulliganOverlay: View {
                                             inLane: false
                                         )
                                     }
-                                    .buttonStyle(.plain)
+                                    .buttonStyle(MulliganCardButtonStyle())
                                     .allowsHitTesting(!isDone)
                                     .frame(width: 76, height: 106)
                                 }
@@ -6396,11 +6396,24 @@ private struct MulliganOverlay: View {
     }
 
     private func toggle(_ card: BoardCardSnapshot) {
-        if selectedIds.contains(card.id) {
-            selectedIds.remove(card.id)
-        } else {
-            selectedIds.insert(card.id)
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+
+        withTransaction(transaction) {
+            if selectedIds.contains(card.id) {
+                selectedIds.remove(card.id)
+            } else {
+                selectedIds.insert(card.id)
+            }
         }
+    }
+}
+
+private struct MulliganCardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        // PlainButtonStyle still adds pressed-state feedback on iOS. Keeping the
+        // label stable lets the selection border and badges update in one frame.
+        configuration.label
     }
 }
 
