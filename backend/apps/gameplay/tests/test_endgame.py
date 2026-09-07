@@ -46,3 +46,48 @@ class TestEndGame(GamePlayTestBase):
         self.assertEqual(result.events[1].type, "event_game_over")
         self.assertEqual(result.events[1].winner, "side_a")
         self.assertIsNone(result.events[1].reason)
+
+    def test_lethal_hero_damage_awards_opponent_of_target(self):
+        for source_side in ("side_a", "side_b"):
+            for target_side in ("side_a", "side_b"):
+                for damage in (10, 11):
+                    with self.subTest(
+                        source=source_side, target=target_side, damage=damage
+                    ):
+                        effect = DamageEffect(
+                            side=source_side,
+                            source_type="hero",
+                            source_id=self.game_state.heroes[source_side].hero_id,
+                            target_type="hero",
+                            target_id=self.game_state.heroes[target_side].hero_id,
+                            damage=damage,
+                            damage_type="spell",
+                        )
+
+                        result = resolve(effect, self.game_state)
+
+                        winner = "side_b" if target_side == "side_a" else "side_a"
+                        self.assertIsInstance(result, Success)
+                        self.assertEqual(result.new_state.winner, winner)
+                        self.assertEqual(result.events[0].target_side, target_side)
+                        self.assertEqual(result.events[1].type, "event_game_over")
+                        self.assertEqual(result.events[1].winner, winner)
+                        self.assertEqual(result.events[1].side, source_side)
+
+    def test_nonlethal_self_damage_does_not_end_game(self):
+        effect = DamageEffect(
+            side="side_a",
+            source_type="hero",
+            source_id="1",
+            target_type="hero",
+            target_id="1",
+            damage=1,
+            damage_type="spell",
+        )
+
+        result = resolve(effect, self.game_state)
+
+        self.assertIsInstance(result, Success)
+        self.assertEqual(result.new_state.heroes["side_a"].health, 9)
+        self.assertEqual(result.new_state.winner, "none")
+        self.assertEqual([event.type for event in result.events], ["event_damage"])

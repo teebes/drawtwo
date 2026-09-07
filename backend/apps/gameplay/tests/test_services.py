@@ -9,12 +9,20 @@ from django.test import TestCase
 
 from apps.authentication.models import User
 from apps.builder.models import CardTemplate, HeroTemplate, Title
+from apps.builder.schemas import DamageAction, DrawAction, HeroPower
 from apps.collection.models import Deck, DeckCard
 from apps.collection.validation import DeckValidationError
-from apps.gameplay.models import Game, GameUpdate, MatchmakingQueue, PlayerNotification
-from apps.gameplay.schemas.effects import DamageEffect, DrawEffect
+from apps.gameplay.models import (
+    Game,
+    GameUpdate,
+    MatchmakingQueue,
+    PlayerNotification,
+    UserTitleRating,
+)
+from apps.gameplay.schemas.effects import DamageEffect, DrawEffect, UseHeroEffect
 from apps.gameplay.services import GameService
 from apps.gameplay.tests import ServiceTestsBase
+from apps.gameplay.views import _aggregate_composition_record, _result_for_loadout
 
 
 class ServiceTests(ServiceTestsBase):
@@ -113,6 +121,125 @@ class ServiceTests(ServiceTestsBase):
             ["update_damage", "update_game_over"],
         )
         self.assertIsNone(updates[-1]["reason"])
+
+
+class SelfDamageGameEndTests(ServiceTestsBase):
+    def _assert_lethal_hero_power(self, losing_side):
+        opponent = User.objects.create_user(
+            email="opponent@example.com", username="opponent"
+        )
+        self.deck_b.ai_player = None
+        self.deck_b.user = opponent
+        self.deck_b.save(update_fields=["ai_player", "user"])
+        game = GameService.create_game(
+            self.deck_a,
+            self.deck_b,
+            randomize_starting_player=False,
+            reuse_active_game=False,
+        )
+        game.type = Game.GAME_TYPE_RANKED
+        game.ladder_type = Game.LADDER_TYPE_DAILY
+        state = game.game_state
+        state.active = losing_side
+        state.phase = "main"
+        state.mana_pool[losing_side] = 1
+        hero = state.heroes[losing_side]
+        hero.health = 1
+        hero.hero_power = HeroPower(
+            name="Pact",
+            cost=1,
+            actions=[
+                DamageAction(amount=1, target="friendly", damage_type="spell"),
+                DrawAction(amount=1),
+            ],
+        )
+        game.state = state.model_dump(mode="json")
+        game.queue = [
+            UseHeroEffect(
+                side=losing_side,
+                source_id=hero.hero_id,
+                target_type="hero",
+                target_id=hero.hero_id,
+            ).model_dump(mode="json")
+        ]
+        game.save(update_fields=["type", "ladder_type", "state", "queue"])
+        action = game.actions.create(
+            actor_side=losing_side,
+            command={
+                "type": "cmd_use_hero",
+                "hero_id": hero.hero_id,
+                "target_type": "hero",
+                "target_id": hero.hero_id,
+            },
+        )
+
+        GameService.step(game.id)
+
+        game.refresh_from_db()
+        action.refresh_from_db()
+        winning_side = "side_b" if losing_side == "side_a" else "side_a"
+        winning_deck = getattr(game, winning_side)
+        losing_deck = getattr(game, losing_side)
+        self.assertEqual(game.status, Game.GAME_STATUS_ENDED)
+        self.assertEqual(game.winner, winning_deck)
+        self.assertEqual(game.state["winner"], winning_side)
+        self.assertEqual(game.state["heroes"][losing_side]["health"], 0)
+        self.assertEqual(action.final_winner, winning_side)
+        self.assertEqual(game.queue, [])
+        self.assertEqual(game.state["queue"], [])
+        # The power's draw must not resolve after its lethal damage.
+        self.assertEqual(game.state["decks"], state.decks)
+        self.assertEqual(game.state["hands"], state.hands)
+        updates = list(
+            GameUpdate.objects.filter(game=game)
+            .order_by("id")
+            .values_list("update", flat=True)
+        )
+        self.assertEqual(updates[-2]["type"], "update_damage")
+        self.assertEqual(updates[-1]["type"], "update_game_over")
+        self.assertEqual(updates[-1]["winner"], winning_side)
+        self.assertIsNone(updates[-1]["reason"])
+        self.assertEqual(game.elo_change.winner_id, winning_deck.user_id)
+        self.assertEqual(game.elo_change.loser_id, losing_deck.user_id)
+        self.assertEqual(game.elo_change.winner_rating_change, 16)
+        self.assertEqual(game.elo_change.loser_rating_change, -16)
+        self.assertEqual(
+            UserTitleRating.objects.get(
+                title=game.title,
+                user=winning_deck.user,
+                ladder_type=Game.LADDER_TYPE_DAILY,
+            ).elo_rating,
+            1216,
+        )
+        self.assertEqual(
+            UserTitleRating.objects.get(
+                title=game.title,
+                user=losing_deck.user,
+                ladder_type=Game.LADDER_TYPE_DAILY,
+            ).elo_rating,
+            1184,
+        )
+        for side, result in ((winning_side, "wins"), (losing_side, "losses")):
+            loadouts = game.loadouts.filter(side=side)
+            self.assertEqual(_result_for_loadout(loadouts.get()), result)
+            self.assertEqual(_aggregate_composition_record(loadouts)[result], 1)
+
+        GameService.step(game.id)
+        self.assertEqual(game.elo_change.winner.elo_wins.filter(game=game).count(), 1)
+        self.assertEqual(
+            UserTitleRating.objects.get(
+                title=game.title,
+                user=winning_deck.user,
+                ladder_type=Game.LADDER_TYPE_DAILY,
+            ).elo_rating,
+            1216,
+        )
+
+    def test_side_a_lethal_hero_power_awards_side_b(self):
+        self._assert_lethal_hero_power("side_a")
+
+    def test_side_b_lethal_hero_power_awards_side_a(self):
+        self._assert_lethal_hero_power("side_b")
 
 
 class MatchmakingTests(TestCase):

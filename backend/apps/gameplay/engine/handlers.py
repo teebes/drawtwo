@@ -441,9 +441,10 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
         )
 
         if hero.health <= 0:
-            # If the hero dies, that is a game over event
-            state.winner = effect.side
-            events.append(GameOverEvent(side=effect.side, winner=effect.side))
+            # The defeated hero's opponent wins, including lethal self-damage.
+            winner = "side_b" if hero_side == "side_a" else "side_a"
+            state.winner = winner
+            events.append(GameOverEvent(side=effect.side, winner=winner))
 
     if target_type == "card" or target_type == "creature":
 
