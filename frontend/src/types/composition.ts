@@ -66,3 +66,17 @@ export interface CompositionStatsResponse {
     legacy_games_excluded?: boolean
   }
 }
+
+export interface CompositionBrowseRow {
+  composition: DeckCompositionSummary
+  record: CompositionRecord
+}
+
+export interface CompositionBrowseResponse {
+  count: number
+  page: number
+  page_size: number
+  results: CompositionBrowseRow[]
+  summary?: { matches: number; appearances: number; compositions: number }
+  unattributed_appearances?: number
+}

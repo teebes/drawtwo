@@ -2,11 +2,11 @@
   <div class="ui-page">
     <main class="ui-page-container ui-page-container-narrow">
       <router-link
-        :to="{ name: 'Title', params: { slug: titleSlug } }"
+        :to="{ name: 'Compositions', params: { slug: titleSlug }, query: route.query }"
         class="mb-6 inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
       >
         <ChevronLeft class="h-4 w-4" aria-hidden="true" />
-        Back to {{ titleName }}
+        Browse compositions
       </router-link>
 
       <header class="ui-page-header">
@@ -15,7 +15,7 @@
             <Layers3 class="h-6 w-6" aria-hidden="true" />
           </div>
           <div>
-            <h1 class="ui-page-title">Deck composition</h1>
+            <h1 class="ui-page-title">{{ composition ? compositionLabel(composition) : 'Deck composition' }}</h1>
             <p class="ui-page-subtitle">
               Results for this exact card list, independent of the hero used to play it.
             </p>
@@ -77,22 +77,10 @@
           </div>
         </section>
 
-        <div class="ui-tabs-shell !mb-0">
-          <div class="ui-tabs-scroll">
-            <nav class="ui-tabs" aria-label="Game type">
-              <button
-                v-for="option in gameTypeOptions"
-                :key="option.value"
-                type="button"
-                :class="['ui-tab', gameType === option.value ? 'ui-tab-active' : 'ui-tab-inactive']"
-                :aria-pressed="gameType === option.value"
-                @click="setGameType(option.value)"
-              >
-                {{ option.label }}
-              </button>
-            </nav>
-          </div>
-        </div>
+        <section class="ui-panel">
+          <CompositionFilters />
+          <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">Completed matches, filtered by start date. Win rate counts draws as games. Each mirror match contributes two recorded uses. Samples below 20 uses may change substantially as more games are played.</p>
+        </section>
 
         <div v-if="loading" class="ui-panel items-center py-12 text-center" aria-live="polite">
           <LoaderCircle class="mb-3 h-6 w-6 animate-spin text-primary-600 dark:text-primary-400" aria-hidden="true" />
@@ -153,6 +141,8 @@
               </div>
             </div>
           </section>
+
+          <CompositionMatchups :title-slug="titleSlug" :code="routeCode" />
 
           <section class="ui-panel">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -251,7 +241,9 @@ import { Check, ChevronLeft, Copy, Layers3, LoaderCircle, Star } from 'lucide-vu
 import axios from '../config/api'
 import { useAuthStore } from '../stores/auth'
 import { useNotificationStore } from '../stores/notifications'
-import { useTitleStore } from '../stores/title'
+import CompositionFilters from '../components/compositions/CompositionFilters.vue'
+import CompositionMatchups from '../components/compositions/CompositionMatchups.vue'
+import { compositionLabel } from '../utils/compositions'
 import type {
   CompositionCard,
   CompositionGameType,
@@ -263,7 +255,6 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const notificationStore = useNotificationStore()
-const titleStore = useTitleStore()
 
 const stats = ref<CompositionStatsResponse | null>(null)
 const loading = ref(true)
@@ -273,13 +264,7 @@ const favoriteUpdating = ref(false)
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null
 let requestSequence = 0
 
-const gameTypeOptions: Array<{ value: CompositionGameType; label: string }> = [
-  { value: 'ranked', label: 'Ranked' },
-  { value: 'friendly', label: 'Friendly' }
-]
-
 const titleSlug = computed(() => String(route.params.slug || ''))
-const titleName = computed(() => titleStore.titleName || titleSlug.value)
 const routeCode = computed(() => String(route.params.code || ''))
 const gameType = computed<CompositionGameType>(() => route.query.game_type === 'friendly' ? 'friendly' : 'ranked')
 const showHeroBreakdown = computed(() => route.query.breakdown === 'hero')
@@ -333,16 +318,6 @@ const toggleFavorite = async (): Promise<void> => {
   } finally {
     favoriteUpdating.value = false
   }
-}
-
-const setGameType = (value: CompositionGameType): void => {
-  const query = { ...route.query }
-  if (value === 'ranked') {
-    delete query.game_type
-  } else {
-    query.game_type = value
-  }
-  router.replace({ query })
 }
 
 const setHeroBreakdown = (enabled: boolean): void => {
@@ -411,6 +386,8 @@ const fetchStats = async (): Promise<void> => {
       {
         params: {
           game_type: gameType.value,
+          days: route.query.days,
+          ladder: route.query.ladder,
           ...(showHeroBreakdown.value ? { breakdown: 'hero' } : {})
         }
       }
@@ -455,7 +432,7 @@ const humanizeSlug = (slug: string): string => {
 }
 
 watch(
-  [titleSlug, routeCode, gameType, showHeroBreakdown],
+  [titleSlug, routeCode, gameType, showHeroBreakdown, () => route.query.days, () => route.query.ladder],
   fetchStats,
   { immediate: true }
 )

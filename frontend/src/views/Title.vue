@@ -34,7 +34,7 @@
         <Panel v-if="title.description" title="Description">{{ title.description }}</Panel>
 
         <!-- Collection / Games -->
-        <div class="flex w-full">
+        <div class="flex w-full flex-wrap">
           <router-link
             :to="{ name: 'Collection', params: { slug: title.slug } }"
             class="flex-1 flex items-center justify-center text-xl font-bold rounded-lg border border-transparent  hover:border-gray-300 dark:hover:border-gray-800 p-4 underline decoration-dotted underline-offset-8 decoration-gray-500"
@@ -43,6 +43,10 @@
             :to="{ name: 'Games', params: { slug: title.slug } }"
             class="flex-1 flex items-center justify-center text-xl font-bold rounded-lg border border-transparent  hover:border-gray-300 dark:hover:border-gray-800 p-4 underline decoration-dotted underline-offset-8 decoration-gray-500"
           >Games</router-link>
+          <router-link
+            :to="{ name: 'Compositions', params: { slug: title.slug } }"
+            class="flex-1 flex items-center justify-center text-xl font-bold rounded-lg border border-transparent hover:border-gray-300 dark:hover:border-gray-800 p-4 underline decoration-dotted underline-offset-8 decoration-gray-500"
+          >Compositions</router-link>
         </div>
 
         <div class="flex flex-col md:flex-row space-y-8 md:space-y-0 md:space-x-24 md:py-16">

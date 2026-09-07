@@ -1,4 +1,7 @@
+from datetime import timedelta
+
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from apps.authentication.models import User
@@ -121,6 +124,224 @@ class CompositionStatsTests(APITestCase):
         return reverse(
             "composition-stats",
             kwargs={"title_slug": self.title.slug, "code": code},
+        )
+
+    def _browse_url(self):
+        return reverse("composition-list", kwargs={"title_slug": self.title.slug})
+
+    def _matchups_url(self, code):
+        return reverse(
+            "composition-matchups",
+            kwargs={"title_slug": self.title.slug, "code": code},
+        )
+
+    def test_browse_sorts_filters_and_paginates_aggregate_records(self):
+        self._create_game(self.deck_a, self.opponent_x)
+        self._create_game(self.deck_a, self.opponent_x)
+        self._create_game(self.deck_a, self.opponent_x, winner_side=None)
+        # An unplayed revision must not be discoverable.
+        self.deck_b.deckcard_set.update(count=2)
+        ensure_deck_revision(self.deck_b, source="edit")
+
+        response = self.client.get(self._browse_url(), {"page_size": 1})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(
+            response.data["summary"],
+            {
+                "matches": 3,
+                "appearances": 6,
+                "compositions": 2,
+            },
+        )
+        first = response.data["results"][0]
+        self.assertEqual(first["composition"]["code"], "dt1.target-card~1")
+        self.assertEqual(
+            first["record"],
+            {
+                "wins": 2,
+                "losses": 0,
+                "draws": 1,
+                "games": 3,
+                "win_rate": 0.6667,
+            },
+        )
+        second = self.client.get(self._browse_url(), {"page_size": 1, "page": 2})
+        self.assertEqual(second.data["results"][0]["record"]["wins"], 0)
+        ascending = self.client.get(self._browse_url(), {"sort": "win_rate_asc"})
+        self.assertEqual(ascending.data["results"][0]["record"]["wins"], 0)
+        empty = self.client.get(self._browse_url(), {"min_games": 4})
+        self.assertEqual(empty.data["results"], [])
+
+    def test_browse_searches_card_names_slugs_and_exact_codes(self):
+        self._create_game(self.deck_a, self.opponent_x)
+        for search in ("TARGET CARD", "target-card", "dt1.target-card~1"):
+            with self.subTest(search=search):
+                response = self.client.get(self._browse_url(), {"q": search})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.data["count"], 1)
+                self.assertEqual(
+                    response.data["results"][0]["composition"]["code"],
+                    "dt1.target-card~1",
+                )
+        response = self.client.get(self._browse_url(), {"q": "absent"})
+        self.assertEqual(response.data["count"], 0)
+
+    def test_browse_query_count_is_bounded_and_uses_immutable_captures(self):
+        game = self._create_game(self.deck_a, self.opponent_x)
+        # Fall back to the winner FK using the same logic as the detail API.
+        Game.objects.filter(pk=game.pk).update(state={})
+        self.deck_a.deckcard_set.update(count=3)
+        ensure_deck_revision(self.deck_a, source="edit")
+        with self.assertNumQueries(6):
+            response = self.client.get(self._browse_url())
+        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(
+            response.data["results"][0]["composition"]["code"], "dt1.target-card~1"
+        )
+        self.assertEqual(response.data["results"][0]["record"]["wins"], 1)
+        response = self.client.get(self._matchups_url("dt1.target-card~1"))
+        self.assertEqual(response.data["results"][0]["record"]["wins"], 1)
+
+    def test_browse_and_matchups_never_expose_players_or_source_decks(self):
+        game = self._create_game(self.deck_a, self.opponent_x)
+        code = game.loadouts.get(side=GameLoadout.SIDE_A).composition.code
+        for user in (None, self.user_a, self.user_b):
+            self.client.force_authenticate(user)
+            for url in (self._browse_url(), self._matchups_url(code)):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                for row in response.data["results"]:
+                    self.assertEqual(set(row), {"composition", "record"})
+                    self.assertEqual(
+                        set(row["composition"]),
+                        {
+                            "code",
+                            "digest",
+                            "total_cards",
+                            "cards",
+                        },
+                    )
+                payload = response.content.decode()
+                for private_value in (
+                    self.user_a.email,
+                    self.user_a.username,
+                    self.user_b.username,
+                    self.deck_a.name,
+                    self.opponent_x.name,
+                ):
+                    self.assertNotIn(private_value, payload)
+
+    def test_matchups_group_opposing_compositions_and_mirrors(self):
+        game = self._create_game(self.deck_a, self.opponent_x)
+        self._create_game(self.deck_a, self.opponent_y, winner_side="side_b")
+        self._create_game(self.deck_a, self.deck_b)
+        code = game.loadouts.get(side=GameLoadout.SIDE_A).composition.code
+        response = self.client.get(self._matchups_url(code))
+        self.assertEqual(response.status_code, 200)
+        rows = {
+            row["composition"]["code"]: row["record"]
+            for row in response.data["results"]
+        }
+        self.assertEqual(set(rows), {code, "dt1.other-card~1"})
+        for record in rows.values():
+            self.assertEqual(
+                record,
+                {"wins": 1, "losses": 1, "draws": 0, "games": 2, "win_rate": 0.5},
+            )
+        self.assertEqual(
+            sum(row["games"] for row in rows.values()),
+            self.client.get(self._stats_url(code)).data["global"]["games"],
+        )
+        missing = self._create_game(self.deck_a, self.opponent_x)
+        missing.loadouts.filter(side=GameLoadout.SIDE_B).delete()
+        response = self.client.get(self._matchups_url(code))
+        self.assertEqual(response.data["unattributed_appearances"], 1)
+
+    def test_browse_and_detail_share_period_type_and_ladder_filters(self):
+        recent = self._create_game(self.deck_a, self.opponent_x)
+        Game.objects.filter(pk=recent.pk).update(ladder_type="rapid")
+        old = self._create_game(self.deck_a, self.opponent_x, winner_side="side_b")
+        Game.objects.filter(pk=old.pk).update(
+            created_at=timezone.now() - timedelta(days=40),
+            ladder_type="rapid",
+        )
+        daily = self._create_game(self.deck_a, self.opponent_x, winner_side="side_b")
+        Game.objects.filter(pk=daily.pk).update(ladder_type="daily")
+        self._create_game(
+            self.deck_a, self.opponent_x, game_type="friendly", winner_side="side_b"
+        )
+        code = recent.loadouts.get(side=GameLoadout.SIDE_A).composition.code
+        filters = {"days": "7", "ladder": "rapid"}
+        browse = self.client.get(self._browse_url(), filters)
+        self.assertEqual(browse.data["summary"]["matches"], 1)
+        for url in (self._stats_url(code), self._matchups_url(code)):
+            response = self.client.get(url, filters)
+            self.assertEqual(response.status_code, 200)
+            record = (
+                response.data["global"]
+                if "global" in response.data
+                else response.data["results"][0]["record"]
+            )
+            self.assertEqual(record["games"], 1)
+            self.assertEqual(record["wins"], 1)
+        friendly = self.client.get(self._browse_url(), {"game_type": "friendly"})
+        self.assertEqual(friendly.data["summary"]["matches"], 1)
+        self.assertEqual(
+            friendly.data["results"][0]["composition"]["code"], "dt1.other-card~1"
+        )
+
+    def test_browse_excludes_unfinished_legacy_and_other_game_types(self):
+        self._create_game(self.deck_a, self.opponent_x)
+        for game_status in (Game.GAME_STATUS_IN_PROGRESS, Game.GAME_STATUS_ABORTED):
+            self._create_game(self.deck_a, self.opponent_x, status=game_status)
+        for game_type in (Game.GAME_TYPE_PVE, Game.GAME_TYPE_INTRO):
+            self._create_game(self.deck_a, self.opponent_x, game_type=game_type)
+        legacy = self._create_game(self.deck_a, self.opponent_x)
+        legacy.loadouts.all().delete()
+        response = self.client.get(self._browse_url())
+        self.assertEqual(response.data["summary"]["matches"], 1)
+
+    def test_public_composition_endpoints_enforce_title_access_and_scope(self):
+        self._create_game(self.deck_a, self.opponent_x)
+        other = Title.objects.create(
+            slug="other-title",
+            name="Other",
+            author=self.user_a,
+            status=Title.STATUS_PUBLISHED,
+        )
+        response = self.client.get(
+            reverse("composition-list", kwargs={"title_slug": other.slug})
+        )
+        self.assertEqual(response.data["count"], 0)
+        self.title.status = Title.STATUS_DRAFT
+        self.title.save(update_fields=["status"])
+        for url in (self._browse_url(), self._matchups_url("dt1.target-card~1")):
+            self.assertEqual(self.client.get(url).status_code, 403)
+        self.client.force_authenticate(self.user_a)
+        self.assertEqual(self.client.get(self._browse_url()).status_code, 200)
+
+    def test_browse_rejects_invalid_filters_and_handles_empty_data(self):
+        self.assertEqual(self.client.get(self._browse_url()).data["count"], 0)
+        for key, value in (
+            ("days", "oops"),
+            ("ladder", "unknown"),
+            ("game_type", "pve"),
+            ("sort", "unknown"),
+            ("page", "0"),
+            ("page_size", "51"),
+            ("min_games", "-1"),
+            ("page", "abc"),
+        ):
+            with self.subTest(key=key, value=value):
+                self.assertEqual(
+                    self.client.get(self._browse_url(), {key: value}).status_code, 400
+                )
+        self.assertEqual(
+            self.client.get(self._matchups_url("bad-code")).status_code, 400
+        )
+        self.assertEqual(
+            self.client.get(self._matchups_url("dt1.target-card~1")).data["count"], 0
         )
 
     def test_game_creation_captures_immutable_loadouts(self):

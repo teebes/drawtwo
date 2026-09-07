@@ -4,12 +4,23 @@ from rest_framework.routers import DefaultRouter
 from apps.authentication.views import LeaderboardView, UserTitleRatingView
 
 from . import views
+from .composition_browse import composition_list, composition_matchups
 
 # Create a router for ViewSets (if needed later)
 router = DefaultRouter()
 
 # URL patterns for the collection app
 urlpatterns = [
+    path(
+        "titles/<slug:title_slug>/compositions/",
+        composition_list,
+        name="composition-list",
+    ),
+    path(
+        "titles/<slug:title_slug>/compositions/<str:code>/matchups/",
+        composition_matchups,
+        name="composition-matchups",
+    ),
     # Include router URLs
     path("", include(router.urls)),
     # Game endpoints
