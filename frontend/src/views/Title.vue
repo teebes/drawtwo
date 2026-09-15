@@ -29,12 +29,12 @@
 
       <img v-if="title.art_url" :src="title.art_url" :alt="title.name" class="banner h-48 w-auto mx-auto" />
 
-      <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8 mt-8">
+      <main class="mx-auto flex max-w-7xl flex-col gap-16 px-4 sm:px-6 lg:px-8 mt-8">
 
         <Panel v-if="title.description" title="Description">{{ title.description }}</Panel>
 
         <!-- Collection / Games -->
-        <div class="flex w-full">
+        <div class="flex w-full flex-wrap">
           <router-link
             :to="{ name: 'Collection', params: { slug: title.slug } }"
             class="flex-1 flex items-center justify-center text-xl font-bold rounded-lg border border-transparent  hover:border-gray-300 dark:hover:border-gray-800 p-4 underline decoration-dotted underline-offset-8 decoration-gray-500"
@@ -45,14 +45,14 @@
           >Games</router-link>
         </div>
 
-        <div class="flex flex-col md:flex-row space-y-8 md:space-y-0 md:space-x-24 md:py-16">
+        <div class="flex flex-col gap-16 md:flex-row md:gap-24">
 
           <!-- Quick Actions -->
-          <section class="quick-actions flex-[2]">
+          <section class="quick-actions flex flex-[2] flex-col gap-8">
             <!-- New Game-->
             <router-link
               :to="{ name: 'GameCreate', params: { slug: title.slug } }"
-              class="flex mt-4 items-center justify-center w-full rounded-lg border-2 border-dashed border-primary-500 p-3 text-sm font-medium text-primary-500 hover:border-primary-600 hover:text-primary-600 transition-colors mb-8">
+              class="flex items-center justify-center w-full rounded-lg border-2 border-dashed border-primary-500 p-3 text-sm font-medium text-primary-500 hover:border-primary-600 hover:text-primary-600 transition-colors">
               <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
               </svg>
@@ -120,7 +120,23 @@
 
         </div>
 
-        <TitleHelp />
+        <section aria-labelledby="compositions-heading" class="space-y-4">
+          <h2 id="compositions-heading" class="border-b border-gray-200 pb-2 text-2xl font-bold text-gray-800 dark:border-gray-700 dark:text-gray-200">
+            Compositions
+          </h2>
+          <TitleCompositionLeaderboard :title-slug="title.slug" />
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-sm text-gray-600 dark:text-gray-300">
+              Browse compositions, compare win rates, and explore matchups.
+            </p>
+            <router-link
+              :to="{ name: 'Compositions', params: { slug: title.slug } }"
+              class="ui-btn ui-btn-md ui-btn-outline min-h-11 shrink-0"
+            >Browse compositions</router-link>
+          </div>
+        </section>
+
+        <TitleHelp class="w-full !pt-0" />
 
       </main>
     </div>
@@ -136,6 +152,7 @@ import { useAuthStore } from '../stores/auth'
 import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
 import TitleNotifications from '../components/title/TitleNotifications.vue'
+import TitleCompositionLeaderboard from '../components/title/TitleCompositionLeaderboard.vue'
 import type { Notification } from '../types/notification'
 import type { LadderType } from '../types/game'
 import TitleHelp from '../components/title/TitleHelp.vue'

@@ -1,4 +1,4 @@
-from django.db.models import Count, F, Min, Q
+from django.db.models import Min, Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -13,6 +13,13 @@ from apps.collection.models import (
     UserTitleDeckPreference,
 )
 from apps.collection.validation import DeckValidationError, validate_deck_for_play
+from apps.gameplay.composition_browse import eligible_loadouts, stats_filters
+from apps.gameplay.composition_records import (
+    _aggregate_composition_record,
+    _empty_composition_record,
+    _record_composition_result,
+    _result_for_loadout,
+)
 from apps.gameplay.models import (
     FriendlyChallenge,
     Game,
@@ -29,111 +36,6 @@ from apps.gameplay.services import GameService
 from apps.gameplay.tasks import step
 
 FRIENDLY_GAME_ACTIVITY_LIMIT = 5
-
-
-def _empty_composition_record() -> dict:
-    return {
-        "wins": 0,
-        "losses": 0,
-        "draws": 0,
-        "games": 0,
-        "win_rate": 0.0,
-    }
-
-
-def _record_composition_result(record: dict, result: str) -> None:
-    record[result] += 1
-    record["games"] += 1
-    record["win_rate"] = round(record["wins"] / record["games"], 4)
-
-
-def _result_for_loadout(loadout: GameLoadout) -> str:
-    """Return wins/losses/draws from this loadout's point of view."""
-
-    game = loadout.game
-    winner_side = (game.state or {}).get("winner")
-
-    # Every normally completed captured game has winner side in state. Keep the
-    # FK fallback for tests and manually finalized games, while avoiding a guess
-    # if both sides somehow point to the same source deck.
-    if winner_side not in {GameLoadout.SIDE_A, GameLoadout.SIDE_B} and game.winner_id:
-        if game.side_a_id != game.side_b_id:
-            if game.winner_id == game.side_a_id:
-                winner_side = GameLoadout.SIDE_A
-            elif game.winner_id == game.side_b_id:
-                winner_side = GameLoadout.SIDE_B
-
-    if winner_side == loadout.side:
-        return "wins"
-    if winner_side in {GameLoadout.SIDE_A, GameLoadout.SIDE_B}:
-        return "losses"
-    return "draws"
-
-
-def _aggregate_composition_record(loadouts) -> dict:
-    """Aggregate headline records in SQL so history size is not a response cost."""
-
-    valid_state_winner = Q(
-        game__state__winner__in=[GameLoadout.SIDE_A, GameLoadout.SIDE_B]
-    )
-    state_win = Q(
-        side=GameLoadout.SIDE_A,
-        game__state__winner=GameLoadout.SIDE_A,
-    ) | Q(
-        side=GameLoadout.SIDE_B,
-        game__state__winner=GameLoadout.SIDE_B,
-    )
-    state_loss = Q(
-        side=GameLoadout.SIDE_A,
-        game__state__winner=GameLoadout.SIDE_B,
-    ) | Q(
-        side=GameLoadout.SIDE_B,
-        game__state__winner=GameLoadout.SIDE_A,
-    )
-
-    # A winner FK predates the side value in state for a few manually finalized
-    # games. It is unambiguous only when the two source decks are different.
-    fallback_available = (
-        (~valid_state_winner | Q(game__state__winner__isnull=True))
-        & Q(game__winner_id__isnull=False)
-        & ~Q(game__side_a_id=F("game__side_b_id"))
-    )
-    fallback_win = fallback_available & (
-        Q(
-            side=GameLoadout.SIDE_A,
-            game__winner_id=F("game__side_a_id"),
-        )
-        | Q(
-            side=GameLoadout.SIDE_B,
-            game__winner_id=F("game__side_b_id"),
-        )
-    )
-    fallback_loss = fallback_available & (
-        Q(
-            side=GameLoadout.SIDE_A,
-            game__winner_id=F("game__side_b_id"),
-        )
-        | Q(
-            side=GameLoadout.SIDE_B,
-            game__winner_id=F("game__side_a_id"),
-        )
-    )
-
-    totals = loadouts.aggregate(
-        games=Count("id"),
-        wins=Count("id", filter=state_win | fallback_win),
-        losses=Count("id", filter=state_loss | fallback_loss),
-    )
-    games = totals["games"] or 0
-    wins = totals["wins"] or 0
-    losses = totals["losses"] or 0
-    return {
-        "wins": wins,
-        "losses": losses,
-        "draws": games - wins - losses,
-        "games": games,
-        "win_rate": round(wins / games, 4) if games else 0.0,
-    }
 
 
 def _update_game_time_per_turn(game: Game):
@@ -294,6 +196,8 @@ def composition_stats(request, title_slug, code):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    filters = stats_filters(request.query_params)
+
     breakdown = request.query_params.get("breakdown", "")
     if breakdown not in {"", "hero"}:
         return Response(
@@ -344,12 +248,7 @@ def composition_stats(request, title_slug, code):
         all_captures = GameLoadout.objects.filter(composition=composition)
         first_captured_at = all_captures.aggregate(first=Min("created_at"))["first"]
 
-        loadouts = GameLoadout.objects.filter(
-            composition=composition,
-            game__title=title,
-            game__type=game_type,
-            game__status=Game.GAME_STATUS_ENDED,
-        )
+        loadouts = eligible_loadouts(title, filters).filter(composition=composition)
         captured_games = loadouts.values("game_id").distinct().count()
 
         if include_hero_matchups:

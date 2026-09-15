@@ -33,6 +33,7 @@ import Support from '../views/Support.vue'
 import Howto from '../views/Howto.vue'
 import Games from '../views/Games.vue'
 import CompositionDetail from '../views/CompositionDetail.vue'
+import Compositions from '../views/Compositions.vue'
 
 const routes = [
   {
@@ -178,6 +179,12 @@ const routes = [
     name: 'DeckEdit',
     component: DeckEdit,
     meta: { requiresAuth: true, isTitleRoute: true }
+  },
+  {
+    path: '/:slug/compositions',
+    name: 'Compositions',
+    component: Compositions,
+    meta: { requiresAuth: false, isTitleRoute: true }
   },
   {
     path: '/:slug/compositions/:code',

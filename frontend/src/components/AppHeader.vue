@@ -43,12 +43,16 @@
             >
               <span class="sr-only">Open profile menu</span>
               <img
-                v-if="profileImage"
+                v-if="profileImage && !profileImageFailed"
+                v-show="profileImageLoaded"
+                :key="`${authStore.user?.id}:${profileImage}`"
                 :src="profileImage"
-                alt="Profile avatar"
+                alt=""
                 class="h-full w-full rounded-full object-cover"
+                @load="profileImageLoaded = true"
+                @error="profileImageFailed = true"
               />
-              <span v-else class="text-base font-semibold">
+              <span v-if="!profileImageLoaded || profileImageFailed" class="text-base font-semibold" aria-hidden="true">
                 {{ profileInitial }}
               </span>
             </button>
@@ -144,7 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { onClickOutside } from '@vueuse/core'
 import ThemeToggle from './ui/ThemeToggle.vue'
@@ -159,6 +163,14 @@ const isProfileMenuOpen = ref(false)
 const profileMenuRef = ref<HTMLElement | null>(null)
 
 const profileImage = computed(() => authStore.user?.avatar ?? '')
+const profileImageLoaded = ref(false)
+const profileImageFailed = ref(false)
+
+watch([() => authStore.user?.id, profileImage], () => {
+  profileImageLoaded.value = false
+  profileImageFailed.value = false
+})
+
 const profileInitial = computed(() => {
   if (authStore.user?.username) {
     return authStore.user.username.charAt(0).toUpperCase()
