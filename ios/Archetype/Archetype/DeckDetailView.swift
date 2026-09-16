@@ -154,11 +154,9 @@ final class DeckDetailViewModel: ObservableObject {
 
         let maxCost = counts.keys.max() ?? 0
         let maxCount = max(counts.values.max() ?? 1, 1)
-        guard maxCost > 0 else {
-            return []
-        }
+        let minCost = counts[0] == nil ? 1 : 0
 
-        return (1...maxCost).map { cost in
+        return (minCost...maxCost).map { cost in
             let count = counts[cost] ?? 0
             return (cost: cost, count: count, ratio: Double(count) / Double(maxCount))
         }

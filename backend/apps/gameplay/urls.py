@@ -4,7 +4,11 @@ from rest_framework.routers import DefaultRouter
 from apps.authentication.views import LeaderboardView, UserTitleRatingView
 
 from . import views
-from .composition_browse import composition_list, composition_matchups
+from .composition_browse import (
+    composition_list,
+    composition_matchups,
+    composition_players,
+)
 
 # Create a router for ViewSets (if needed later)
 router = DefaultRouter()
@@ -20,6 +24,11 @@ urlpatterns = [
         "titles/<slug:title_slug>/compositions/<str:code>/matchups/",
         composition_matchups,
         name="composition-matchups",
+    ),
+    path(
+        "titles/<slug:title_slug>/compositions/<str:code>/players/",
+        composition_players,
+        name="composition-players",
     ),
     # Include router URLs
     path("", include(router.urls)),

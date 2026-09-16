@@ -9,7 +9,7 @@
         <div>
           <h1 class="ui-page-title">Compositions</h1>
           <p class="ui-page-subtitle">Explore card lists, compare results, and find your next build.</p>
-          <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Community statistics, with player identities kept private.</p>
+          <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Compare card lists, win rates, and matchups across the community.</p>
         </div>
       </header>
 

@@ -4,6 +4,7 @@ export interface CompositionCard {
   slug: string
   count: number
   name?: string
+  cost?: number
 }
 
 export interface DeckCompositionSummary {
@@ -70,6 +71,17 @@ export interface CompositionStatsResponse {
 export interface CompositionBrowseRow {
   composition: DeckCompositionSummary
   record: CompositionRecord
+}
+
+export interface CompositionPlayersResponse {
+  count: number
+  page: number
+  page_size: number
+  results: Array<{
+    player: { id: number; display_name: string }
+    hero: CompositionHero
+    uses: number
+  }>
 }
 
 export interface CompositionBrowseResponse {

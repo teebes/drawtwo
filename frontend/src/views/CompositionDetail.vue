@@ -150,16 +150,9 @@
                 <h2 class="ui-panel-title">Hero matchups</h2>
                 <p class="ui-panel-subtitle">Break down this card list by the hero that used it and the opposing hero.</p>
               </div>
-              <button
-                type="button"
-                :class="['ui-btn ui-btn-sm', showHeroBreakdown ? 'ui-btn-secondary' : 'ui-btn-outline']"
-                @click="setHeroBreakdown(!showHeroBreakdown)"
-              >
-                {{ showHeroBreakdown ? 'Hide breakdown' : 'Show breakdown' }}
-              </button>
             </div>
 
-            <div v-if="showHeroBreakdown" class="mt-5">
+            <div class="mt-5">
               <div v-if="stats.hero_matchups.length" class="ui-table-wrap">
                 <table class="ui-table">
                   <thead class="bg-gray-50 dark:bg-gray-800/70">
@@ -197,19 +190,18 @@
                 No hero matchup data is available for these {{ gameType }} results yet.
               </p>
             </div>
-            <p v-else class="mt-5 text-sm text-gray-500 dark:text-gray-400">
-              The headline result combines games played with every hero.
-            </p>
           </section>
 
           <section class="ui-panel">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h2 class="ui-panel-title">Cards</h2>
-                <p class="ui-panel-subtitle">The hero is intentionally not part of this composition.</p>
+                <p class="ui-panel-subtitle">Current card costs, sorted from lowest to highest. The curve includes every copy.</p>
               </div>
               <span class="ui-status-badge ui-status-info">Hero-independent</span>
             </div>
+
+            <DeckEnergyCurve :cards="compositionCards" />
 
             <div v-if="compositionCards.length" class="mt-5 grid gap-2 sm:grid-cols-2">
               <div
@@ -217,7 +209,10 @@
                 :key="card.slug"
                 class="ui-panel-muted flex items-center justify-between gap-3 !p-3"
               >
-                <div class="min-w-0">
+                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary-100 text-sm font-bold text-secondary-700 dark:bg-secondary-900/50 dark:text-secondary-300" :aria-label="`${card.cost ?? 'Unknown'} energy`">
+                  {{ card.cost ?? '—' }}
+                </span>
+                <div class="min-w-0 flex-1">
                   <p class="truncate font-medium text-gray-900 dark:text-white">{{ card.name || humanizeSlug(card.slug) }}</p>
                   <p class="truncate font-mono text-xs text-gray-500 dark:text-gray-400">{{ card.slug }}</p>
                 </div>
@@ -228,6 +223,8 @@
             </div>
             <p v-else class="mt-5 text-sm text-gray-500 dark:text-gray-400">This composition has no cards.</p>
           </section>
+
+          <CompositionPlayers :title-slug="titleSlug" :code="routeCode" />
         </template>
       </div>
     </main>
@@ -236,13 +233,15 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { Check, ChevronLeft, Copy, Layers3, LoaderCircle, Star } from 'lucide-vue-next'
 import axios from '../config/api'
 import { useAuthStore } from '../stores/auth'
 import { useNotificationStore } from '../stores/notifications'
 import CompositionFilters from '../components/compositions/CompositionFilters.vue'
 import CompositionMatchups from '../components/compositions/CompositionMatchups.vue'
+import CompositionPlayers from '../components/compositions/CompositionPlayers.vue'
+import DeckEnergyCurve from '../components/decks/DeckEnergyCurve.vue'
 import { compositionLabel } from '../utils/compositions'
 import type {
   CompositionCard,
@@ -252,7 +251,6 @@ import type {
 } from '../types/composition'
 
 const route = useRoute()
-const router = useRouter()
 const authStore = useAuthStore()
 const notificationStore = useNotificationStore()
 
@@ -267,12 +265,11 @@ let requestSequence = 0
 const titleSlug = computed(() => String(route.params.slug || ''))
 const routeCode = computed(() => String(route.params.code || ''))
 const gameType = computed<CompositionGameType>(() => route.query.game_type === 'friendly' ? 'friendly' : 'ranked')
-const showHeroBreakdown = computed(() => route.query.breakdown === 'hero')
 const composition = computed(() => stats.value?.composition || null)
 const displayCode = computed(() => composition.value?.code || routeCode.value)
 const compositionCards = computed<CompositionCard[]>(() => {
   return [...(composition.value?.cards || [])].sort((a, b) => {
-    return (a.name || a.slug).localeCompare(b.name || b.slug)
+    return ((a.cost ?? Infinity) - (b.cost ?? Infinity)) || (a.name || a.slug).localeCompare(b.name || b.slug)
   })
 })
 
@@ -320,16 +317,6 @@ const toggleFavorite = async (): Promise<void> => {
   }
 }
 
-const setHeroBreakdown = (enabled: boolean): void => {
-  const query = { ...route.query }
-  if (enabled) {
-    query.breakdown = 'hero'
-  } else {
-    delete query.breakdown
-  }
-  router.replace({ query })
-}
-
 const normalizeRecord = (record: Partial<CompositionRecord> | null | undefined): CompositionRecord => {
   const wins = Number(record?.wins || 0)
   const losses = Number(record?.losses || 0)
@@ -354,7 +341,8 @@ const normalizeResponse = (payload: CompositionStatsResponse): CompositionStatsR
       total_cards: Number(payload.composition.total_cards || 0),
       cards: (payload.composition.cards || []).map(card => ({
         ...card,
-        count: Number(card.count || 0)
+        count: Number(card.count || 0),
+        cost: card.cost == null ? undefined : Number(card.cost)
       }))
     },
     global: normalizeRecord(payload.global),
@@ -388,7 +376,7 @@ const fetchStats = async (): Promise<void> => {
           game_type: gameType.value,
           days: route.query.days,
           ladder: route.query.ladder,
-          ...(showHeroBreakdown.value ? { breakdown: 'hero' } : {})
+          breakdown: 'hero'
         }
       }
     )
@@ -432,7 +420,7 @@ const humanizeSlug = (slug: string): string => {
 }
 
 watch(
-  [titleSlug, routeCode, gameType, showHeroBreakdown, () => route.query.days, () => route.query.ladder],
+  [titleSlug, routeCode, gameType, () => route.query.days, () => route.query.ladder],
   fetchStats,
   { immediate: true }
 )

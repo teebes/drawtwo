@@ -1,8 +1,8 @@
-"""Public, aggregate-only discovery of compositions and their opponents."""
+"""Public composition statistics, matchups, and recorded player/hero usage."""
 
 from datetime import timedelta
 
-from django.db.models import Count, F, FloatField, OuterRef, Q, Subquery
+from django.db.models import Count, F, FloatField, Max, OuterRef, Q, Subquery
 from django.db.models.functions import Cast
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -11,7 +11,8 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from apps.builder.models import CardTemplate, Title
+from apps.authentication.models import User
+from apps.builder.models import CardTemplate, HeroTemplate, Title
 from apps.collection.compositions import CompositionCodeError, resolve_composition_code
 from apps.collection.models import DeckComposition
 from apps.gameplay.composition_records import (
@@ -167,6 +168,58 @@ def composition_list(request, title_slug):
             **_page(request, title, loadouts, "composition_id"),
             "filters": filters,
             "summary": summary,
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def composition_players(request, title_slug, code):
+    title = _title(request, title_slug)
+    filters = stats_filters(request.query_params)
+    try:
+        resolved = resolve_composition_code(title, code, create=False)
+    except CompositionCodeError as exc:
+        raise ValidationError({"error": str(exc)})
+
+    page = _integer(request.query_params, "page", 1, 1000000)
+    page_size = _integer(request.query_params, "page_size", 20, 50)
+    usage = (
+        eligible_loadouts(title, filters)
+        .filter(composition=resolved.composition, player__isnull=False)
+        .order_by()
+        .values("player_id", "hero_slug")
+        .annotate(games=Count("id"), hero_name=Max("hero_name"))
+        .order_by("-games", "player_id", "hero_slug")
+    )
+    count = usage.count()
+    rows = list(usage[(page - 1) * page_size : page * page_size])
+    players = User.objects.in_bulk({row["player_id"] for row in rows})
+    hero_names = {}
+    for hero in HeroTemplate.objects.filter(
+        title=title, slug__in={row["hero_slug"] for row in rows}
+    ).order_by("slug", "-is_latest", "-version", "-id"):
+        hero_names.setdefault(hero.slug, hero.name)
+
+    return Response(
+        {
+            "count": count,
+            "page": page,
+            "page_size": page_size,
+            "results": [
+                {
+                    "player": {
+                        "id": row["player_id"],
+                        "display_name": players[row["player_id"]].display_name,
+                    },
+                    "hero": {
+                        "slug": row["hero_slug"],
+                        "name": hero_names.get(row["hero_slug"], row["hero_name"]),
+                    },
+                    "uses": row["games"],
+                }
+                for row in rows
+            ],
         }
     )
 

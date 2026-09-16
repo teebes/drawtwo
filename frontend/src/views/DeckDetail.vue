@@ -37,29 +37,7 @@
             </div>
           </div>
 
-          <div v-if="powerCurve.length > 0" class="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
-            <div class="mb-2 text-center">
-              <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">Cards by energy cost</h2>
-            </div>
-
-            <div class="overflow-x-auto pb-1">
-              <div class="mx-auto flex w-max items-end gap-1">
-                <div
-                  v-for="bucket in powerCurve"
-                  :key="bucket.cost"
-                  class="flex min-w-[28px] flex-col items-center"
-                >
-                  <span class="mb-1 text-[10px] font-semibold text-gray-500 dark:text-gray-400">{{ bucket.count }}</span>
-                  <div
-                    class="w-5 rounded-t bg-secondary-500 transition-all duration-300"
-                    :class="bucket.count === 0 ? 'opacity-20' : 'opacity-90'"
-                    :style="{ height: `${bucket.height}px` }"
-                  />
-                  <span class="mt-1 text-[10px] font-semibold text-gray-600 dark:text-gray-300">{{ bucket.cost }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
+          <DeckEnergyCurve :cards="deck.cards" />
         </Panel>
 
         <Panel
@@ -304,6 +282,7 @@ import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
+import DeckEnergyCurve from '../components/decks/DeckEnergyCurve.vue'
 import type { DeckCard, Card } from '../types/card'
 import GameButton from '../components/ui/GameButton.vue'
 import { useNotificationStore } from '../stores/notifications'
@@ -497,44 +476,6 @@ const maxCountForCard = (card: DeckCard): number => {
 const canIncrementCard = (card: DeckCard): boolean => {
   return card.count < maxCountForCard(card)
 }
-
-type PowerCurveBucket = {
-  cost: number
-  count: number
-  height: number
-}
-
-const powerCurve = computed<PowerCurveBucket[]>(() => {
-  if (!deck.value || deck.value.cards.length === 0) return []
-
-  const costCounts = new Map<number, number>()
-
-  deck.value.cards.forEach(card => {
-    const normalizedCost = Number.isFinite(card.cost) ? Math.max(0, Math.round(card.cost)) : 0
-    costCounts.set(normalizedCost, (costCounts.get(normalizedCost) || 0) + card.count)
-  })
-
-  const costs = Array.from(costCounts.keys())
-  const counts = Array.from(costCounts.values())
-  const maxCost = costs.length > 0 ? Math.max(...costs) : 0
-  const maxCount = counts.length > 0 ? Math.max(...counts) : 1
-
-  if (maxCost < 1) return []
-
-  return Array.from({ length: maxCost }, (_, index) => {
-    const cost = index + 1
-    const count = costCounts.get(cost) || 0
-    const height = count > 0
-      ? Math.max(8, Math.round((count / maxCount) * 36) + 4)
-      : 8
-
-    return {
-      cost,
-      count,
-      height
-    }
-  })
-})
 
 const sortedCards = computed(() => {
   if (!deck.value || !deck.value.cards) return []

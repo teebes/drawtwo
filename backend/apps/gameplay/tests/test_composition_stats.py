@@ -129,6 +129,12 @@ class CompositionStatsTests(APITestCase):
     def _browse_url(self):
         return reverse("composition-list", kwargs={"title_slug": self.title.slug})
 
+    def _players_url(self, code):
+        return reverse(
+            "composition-players",
+            kwargs={"title_slug": self.title.slug, "code": code},
+        )
+
     def _matchups_url(self, code):
         return reverse(
             "composition-matchups",
@@ -172,6 +178,134 @@ class CompositionStatsTests(APITestCase):
         self.assertEqual(ascending.data["results"][0]["record"]["wins"], 0)
         empty = self.client.get(self._browse_url(), {"min_games": 4})
         self.assertEqual(empty.data["results"], [])
+
+    def test_players_group_captured_heroes_and_paginate_without_deck_details(self):
+        self._create_game(self.deck_a, self.opponent_x)
+        self._create_game(self.deck_a, self.opponent_x)
+        self._create_game(self.deck_b, self.opponent_x)
+        self.deck_a.hero = self.hero_b
+        self.deck_a.save(update_fields=["hero"])
+        self._create_game(self.deck_a, self.opponent_x)
+        self.hero_a.name = "Renamed Hero A"
+        self.hero_a.save(update_fields=["name"])
+
+        response = self.client.get(self._players_url("dt1.target-card~1"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 3)
+        self.assertEqual(
+            response.data["results"][0],
+            {
+                "player": {"id": self.user_a.id, "display_name": "composition-a"},
+                "hero": {"slug": "hero-a", "name": "Renamed Hero A"},
+                "uses": 2,
+            },
+        )
+        self.assertEqual(
+            {(r["player"]["id"], r["hero"]["slug"]) for r in response.data["results"]},
+            {
+                (self.user_a.id, "hero-a"),
+                (self.user_a.id, "hero-b"),
+                (self.user_b.id, "hero-b"),
+            },
+        )
+        for row in response.data["results"]:
+            self.assertEqual(set(row), {"player", "hero", "uses"})
+            self.assertEqual(set(row["player"]), {"id", "display_name"})
+        for private_value in (
+            self.user_a.email,
+            self.user_b.email,
+            self.deck_a.name,
+            self.opponent_x.name,
+        ):
+            self.assertNotIn(private_value, response.content.decode())
+        second = self.client.get(
+            self._players_url("dt1.target-card~1"), {"page_size": 1, "page": 2}
+        )
+        self.assertEqual(second.data["results"], response.data["results"][1:2])
+
+    def test_players_respect_match_filters_and_exclude_unfinished_uses(self):
+        old = self._create_game(self.deck_a, self.opponent_x)
+        Game.objects.filter(pk=old.pk).update(
+            created_at=timezone.now() - timedelta(days=30),
+            ladder_type=Game.LADDER_TYPE_DAILY,
+        )
+        recent = self._create_game(self.deck_b, self.opponent_x)
+        Game.objects.filter(pk=recent.pk).update(ladder_type=Game.LADDER_TYPE_RAPID)
+        self._create_game(
+            self.deck_a, self.opponent_x, game_type=Game.GAME_TYPE_FRIENDLY
+        )
+        self._create_game(
+            self.deck_a, self.opponent_x, status=Game.GAME_STATUS_IN_PROGRESS
+        )
+        self._create_game(self.deck_a, self.opponent_x, status=Game.GAME_STATUS_ABORTED)
+        self._create_game(self.deck_a, self.opponent_x, game_type=Game.GAME_TYPE_PVE)
+        params = {"days": "7", "ladder": "rapid"}
+        response = self.client.get(self._players_url("dt1.target-card~1"), params)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["player"]["id"], self.user_b.id)
+        self.assertEqual(response.data["results"][0]["uses"], 1)
+        friendly = self.client.get(
+            self._players_url("dt1.target-card~1"), {"game_type": "friendly"}
+        )
+        self.assertEqual(friendly.data["results"][0]["player"]["id"], self.user_a.id)
+        self.assertEqual(friendly.data["results"][0]["uses"], 1)
+
+    def test_players_use_safe_display_names_and_skip_missing_players(self):
+        game = self._create_game(self.deck_a, self.deck_b)
+        self.user_a.username = None
+        self.user_a.save(update_fields=["username"])
+        self.user_b.deleted_at = timezone.now()
+        self.user_b.save(update_fields=["deleted_at"])
+        response = self.client.get(self._players_url("dt1.target-card~1"))
+        self.assertEqual(
+            {row["player"]["display_name"] for row in response.data["results"]},
+            {f"Gamer {self.user_a.id}", "Deleted player"},
+        )
+        for private_value in (
+            self.user_a.email,
+            self.user_b.email,
+            self.user_b.username,
+        ):
+            self.assertNotIn(private_value, response.content.decode())
+        game.loadouts.filter(side=GameLoadout.SIDE_B).update(player=None)
+        self.assertEqual(
+            self.client.get(self._players_url("dt1.target-card~1")).data["count"], 1
+        )
+
+    def test_players_validate_filters_codes_and_title_access(self):
+        url = self._players_url("dt1.target-card~1")
+        self.assertEqual(self.client.get(url).data["results"], [])
+        self.assertEqual(
+            self.client.get(self._players_url("invalid-code")).status_code, 400
+        )
+        for params in (
+            {"page": 0},
+            {"page_size": 51},
+            {"days": "bad"},
+            {"ladder": "bad"},
+            {"game_type": "pve"},
+        ):
+            self.assertEqual(self.client.get(url, params).status_code, 400)
+        self.title.status = Title.STATUS_DRAFT
+        self.title.save(update_fields=["status"])
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.client.force_authenticate(self.user_a)
+        self.assertEqual(self.client.get(url).status_code, 200)
+
+    def test_stats_include_current_energy_costs_and_copy_counts(self):
+        self.target_card.cost = 0
+        self.target_card.save(update_fields=["cost"])
+        self.other_card.cost = 7
+        self.other_card.save(update_fields=["cost"])
+        response = self.client.get(self._stats_url("dt1.other-card~2.target-card~3"))
+        self.assertEqual(response.status_code, 200)
+        cards = {card["slug"]: card for card in response.data["composition"]["cards"]}
+        self.assertEqual(
+            (cards["target-card"]["cost"], cards["target-card"]["count"]), (0, 3)
+        )
+        self.assertEqual(
+            (cards["other-card"]["cost"], cards["other-card"]["count"]), (7, 2)
+        )
 
     def test_browse_searches_card_names_slugs_and_exact_codes(self):
         self._create_game(self.deck_a, self.opponent_x)

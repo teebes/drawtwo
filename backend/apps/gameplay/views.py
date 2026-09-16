@@ -217,11 +217,12 @@ def composition_stats(request, title_slug, code):
         )
 
     card_counts = resolved.card_counts
-    card_names = {card.slug: card.name for card in resolved.cards}
+    cards_by_slug = {card.slug: card for card in resolved.cards}
     cards = [
         {
             "slug": slug,
-            "name": card_names.get(slug, slug),
+            "name": cards_by_slug[slug].name,
+            "cost": cards_by_slug[slug].cost,
             "count": count,
         }
         for slug, count in sorted(card_counts.items())
