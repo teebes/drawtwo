@@ -73,7 +73,7 @@ def _integer(params, key, default, maximum):
     return value
 
 
-def _compositions(title, ids):
+def composition_summaries(title, ids):
     """An explicit public projection: never serialize a deck or its owner."""
     compositions = list(DeckComposition.objects.filter(title=title, id__in=ids))
     slugs = {card["slug"] for comp in compositions for card in comp.manifest}
@@ -124,7 +124,7 @@ def _page(request, title, loadouts, group):
     )
     count = rows.count()
     page_rows = list(rows[(page - 1) * page_size : page * page_size])
-    compositions = _compositions(title, [row[group] for row in page_rows])
+    compositions = composition_summaries(title, [row[group] for row in page_rows])
     return {
         "count": count,
         "page": page,

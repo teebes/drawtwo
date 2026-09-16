@@ -1,16 +1,19 @@
 from datetime import datetime, timedelta
 
 from django.contrib.auth import get_user_model
-from django.db import models
+from django.db import connection, models
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from apps.authentication.models import Friendship
 from apps.builder.models import AIPlayer, CardTemplate, CardTrait, HeroTemplate, Title
-from apps.collection.models import Deck
+from apps.collection.compositions import ensure_deck_revision
+from apps.collection.models import Deck, DeckCard
 from apps.gameplay.models import (
     FriendlyChallenge,
     Game,
+    GameLoadout,
     MatchmakingQueue,
     PlayerNotification,
 )
@@ -643,6 +646,127 @@ class TitleGamesHistoryTestCase(TestCase):
             [recent_completion.id, newer_created_stale_game.id],
         )
         self.assertIn("updated_at", games[0])
+
+    def _capture_loadouts(self, game):
+        for side, deck in [("side_a", self.deck_a), ("side_b", self.deck_b)]:
+            revision, _ = ensure_deck_revision(deck)
+            GameLoadout.objects.create(
+                game=game,
+                side=side,
+                player=deck.user,
+                source_deck=deck,
+                source_revision=revision,
+                composition=revision.composition,
+                hero_slug=revision.hero_slug,
+                hero_name=revision.hero_name,
+                deck_name=deck.name,
+            )
+
+    def _history(self, user):
+        self.client.force_login(user)
+        response = self.client.get(f"/api/titles/{self.title.slug}/games/history/")
+        self.assertEqual(response.status_code, 200, response.content)
+        return response.json()["games"]
+
+    def test_history_uses_captured_compositions_and_heroes_from_either_side(self):
+        card = CardTemplate.objects.create(
+            title=self.title, slug="history-card", name="History Card", cost=1
+        )
+        DeckCard.objects.create(deck=self.deck_a, card=card, count=2)
+        DeckCard.objects.create(deck=self.deck_b, card=card, count=3)
+        game = self._create_finished_friendly(self.deck_a)
+        self._capture_loadouts(game)
+        captured = {item.side: item.composition for item in game.loadouts.all()}
+
+        # Later deck changes must not rewrite what was played in this game.
+        DeckCard.objects.filter(deck=self.deck_a).update(count=4)
+        self.deck_a.hero = self.hero_b
+        self.deck_a.name = "Renamed private deck"
+        self.deck_a.save()
+        ensure_deck_revision(self.deck_a)
+
+        for user, own_side, other_side, own_hero in [
+            (self.user_a, "side_a", "side_b", self.hero_a.name),
+            (self.user_b, "side_b", "side_a", self.hero_b.name),
+        ]:
+            with self.subTest(user=user.id):
+                result = self._history(user)[0]
+                own = result["user_composition"]
+                opponent = result["opponent_composition"]
+                self.assertEqual(own["code"], captured[own_side].code)
+                self.assertEqual(opponent["code"], captured[other_side].code)
+                self.assertEqual(own["total_cards"], captured[own_side].total_cards)
+                self.assertEqual(own["cards"][0]["name"], "History Card")
+                self.assertEqual(
+                    own["cards"][0]["count"], captured[own_side].total_cards
+                )
+                self.assertEqual(result["user_hero"], own_hero)
+                self.assertEqual(set(own), {"code", "digest", "total_cards", "cards"})
+                self.assertNotIn("Renamed private deck", str(result))
+
+    def test_history_hides_opponent_composition_until_game_ends(self):
+        from apps.gameplay.services import GameService
+
+        self.title.config = {"min_cards_in_deck": 1}
+        self.title.save(update_fields=["config"])
+        card = CardTemplate.objects.create(
+            title=self.title, slug="active-card", name="Active Card", cost=1
+        )
+        for deck in [self.deck_a, self.deck_b]:
+            DeckCard.objects.create(deck=deck, card=card, count=1)
+        game = GameService.create_game(
+            self.deck_a, self.deck_b, reuse_active_game=False
+        )
+        game.status = Game.GAME_STATUS_IN_PROGRESS
+        game.save(update_fields=["status"])
+        # Both players use the same composition. Even if the summary is loaded
+        # for the user's side, it must not disclose the opponent's choice.
+        for user in [self.user_a, self.user_b]:
+            result = self._history(user)[0]
+            self.assertIsNotNone(result["user_composition"])
+            self.assertIsNone(result["opponent_composition"])
+
+        game.status = Game.GAME_STATUS_ENDED
+        game.save(update_fields=["status"])
+        self.assertIsNotNone(self._history(self.user_a)[0]["opponent_composition"])
+
+    def test_history_does_not_guess_uncaptured_compositions(self):
+        game = self._create_finished_friendly(self.deck_a)
+        result = self._history(self.user_a)[0]
+        self.assertIsNone(result["user_composition"])
+        self.assertIsNone(result["opponent_composition"])
+
+        self._capture_loadouts(game)
+        game.loadouts.filter(side="side_b").delete()
+        result = self._history(self.user_a)[0]
+        self.assertIsNotNone(result["user_composition"])
+        self.assertIsNone(result["opponent_composition"])
+
+    def test_history_compositions_are_only_visible_to_game_participants(self):
+        game = self._create_finished_friendly(self.deck_a)
+        self._capture_loadouts(game)
+        outsider = User.objects.create_user(email="history-outsider@example.com")
+        self.assertEqual(self._history(outsider), [])
+        self.client.logout()
+        response = self.client.get(f"/api/titles/{self.title.slug}/games/history/")
+        self.assertIn(response.status_code, [401, 403])
+
+    def test_history_composition_queries_do_not_grow_per_game(self):
+        card = CardTemplate.objects.create(
+            title=self.title, slug="query-card", name="Query Card", cost=1
+        )
+        DeckCard.objects.create(deck=self.deck_a, card=card, count=2)
+        self._capture_loadouts(self._create_finished_friendly(self.deck_a))
+        self.client.force_login(self.user_a)
+        url = f"/api/titles/{self.title.slug}/games/history/"
+        with CaptureQueriesContext(connection) as single:
+            self.client.get(url)
+        for _ in range(4):
+            self._capture_loadouts(self._create_finished_friendly(self.deck_a))
+        with CaptureQueriesContext(connection) as multiple:
+            response = self.client.get(url)
+        self.assertEqual(len(response.json()["games"]), 5)
+        self.assertLessEqual(len(multiple), len(single))
 
 
 class BasicDjangoTestCase(TestCase):

@@ -73,111 +73,141 @@
 
         <!-- Games List -->
         <section v-if="games.length > 0">
-          <div class="space-y-2">
-            <div
+          <div class="space-y-3">
+            <article
               v-for="game in games"
               :key="game.id"
-              class="flex items-center rounded-lg bg-gray-50 dark:bg-gray-800 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
-              @click="viewGame(game)"
+              class="overflow-hidden rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800"
             >
-              <!-- Game Type Badge -->
-              <div class="flex items-center gap-1">
+              <router-link
+                :to="{ name: 'Board', params: { slug: titleSlug, game_id: game.id } }"
+                class="flex items-center gap-3 p-3 transition-colors hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:hover:bg-gray-700"
+                :aria-label="`Open game against ${game.opponent_name}`"
+              >
+                <!-- Game Type Badge -->
+                <div class="flex flex-none items-center gap-1">
+                  <div
+                    :class="[
+                      'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                      game.type === 'ranked'
+                        ? 'bg-primary-500 text-white'
+                        : game.type === 'friendly'
+                        ? 'bg-secondary-500 text-gray-800'
+                        : 'bg-gray-500 text-white'
+                    ]"
+                    :title="game.type === 'ranked' ? 'Ranked Game' : game.type === 'friendly' ? 'Friendly Game' : 'PvE Game'"
+                  >
+                    {{ game.type === 'ranked' ? 'R' : game.type === 'friendly' ? 'F' : 'AI' }}
+                  </div>
+
+                  <!-- Ladder Type Badge (for ranked games) -->
+                  <div
+                    v-if="game.type === 'ranked' && game.ladder_type"
+                    :class="[
+                      'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-xs font-bold',
+                      'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300'
+                    ]"
+                    :title="game.ladder_type === 'rapid' ? 'Rapid (1 min/turn)' : 'Daily'"
+                  >
+                    {{ game.ladder_type === 'rapid' ? 'R' : 'D' }}
+                  </div>
+                </div>
+
+                <!-- Outcome Indicator (only for ended games) -->
                 <div
+                  v-if="game.status === 'ended' && game.outcome"
                   :class="[
-                    'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold',
-                    game.type === 'ranked'
-                      ? 'bg-primary-500 text-white'
-                      : game.type === 'friendly'
-                      ? 'bg-secondary-500 text-gray-800'
+                    'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold',
+                    game.outcome === 'win'
+                      ? 'bg-green-500 text-white'
+                      : game.outcome === 'loss'
+                      ? 'bg-red-500 text-white'
                       : 'bg-gray-500 text-white'
                   ]"
-                  :title="game.type === 'ranked' ? 'Ranked Game' : game.type === 'friendly' ? 'Friendly Game' : 'PvE Game'"
+                  :title="game.outcome === 'win' ? 'Victory' : game.outcome === 'loss' ? 'Defeat' : 'Draw'"
                 >
-                  {{ game.type === 'ranked' ? 'R' : game.type === 'friendly' ? 'F' : 'AI' }}
+                  {{ game.outcome === 'win' ? 'W' : game.outcome === 'loss' ? 'L' : 'D' }}
                 </div>
 
-                <!-- Ladder Type Badge (for ranked games) -->
+                <!-- Turn Indicator (only for in-progress games) -->
                 <div
-                  v-if="game.type === 'ranked' && game.ladder_type"
+                  v-if="game.status === 'in_progress'"
                   :class="[
-                    'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-xs font-bold',
-                    'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300'
+                    'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold',
+                    game.is_user_turn
+                      ? 'bg-blue-500 text-white animate-pulse'
+                      : 'bg-gray-400 text-white'
                   ]"
-                  :title="game.ladder_type === 'rapid' ? 'Rapid (1 min/turn)' : 'Daily'"
+                  :title="game.is_user_turn ? 'Your turn' : 'Waiting for opponent'"
                 >
-                  {{ game.ladder_type === 'rapid' ? 'R' : 'D' }}
+                  {{ game.is_user_turn ? '→' : '...' }}
                 </div>
-              </div>
 
-              <!-- Outcome Indicator (only for ended games) -->
-              <div
-                v-if="game.status === 'ended' && game.outcome"
-                :class="[
-                  'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold ml-2',
-                  game.outcome === 'win'
-                    ? 'bg-green-500 text-white'
-                    : game.outcome === 'loss'
-                    ? 'bg-red-500 text-white'
-                    : 'bg-gray-500 text-white'
-                ]"
-                :title="game.outcome === 'win' ? 'Victory' : game.outcome === 'loss' ? 'Defeat' : 'Draw'"
-              >
-                {{ game.outcome === 'win' ? 'W' : game.outcome === 'loss' ? 'L' : 'D' }}
-              </div>
+                <!-- Opponent Info -->
+                <div class="min-w-0 flex-1">
+                  <div class="truncate font-medium text-gray-900 dark:text-gray-100" :title="game.opponent_name">
+                    vs {{ game.opponent_name }}
+                    <span
+                      v-if="game.status === 'in_progress'"
+                      :class="[
+                        'block text-xs',
+                        game.is_user_turn
+                          ? 'text-blue-600 dark:text-blue-400 font-semibold'
+                          : 'text-gray-500 dark:text-gray-400'
+                      ]"
+                    >
+                      ({{ game.is_user_turn ? 'Your turn' : 'Opponent\'s turn' }})
+                    </span>
+                  </div>
+                  <div class="truncate text-xs text-gray-500 dark:text-gray-400">
+                    {{ game.user_hero }} vs {{ game.opponent_hero }}
+                  </div>
+                </div>
 
-              <!-- Turn Indicator (only for in-progress games) -->
-              <div
-                v-if="game.status === 'in_progress'"
-                :class="[
-                  'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold ml-2',
-                  game.is_user_turn
-                    ? 'bg-blue-500 text-white animate-pulse'
-                    : 'bg-gray-400 text-white'
-                ]"
-                :title="game.is_user_turn ? 'Your turn' : 'Waiting for opponent'"
-              >
-                {{ game.is_user_turn ? '→' : '...' }}
-              </div>
-
-              <!-- Opponent Info -->
-              <div class="flex-1 ml-4">
-                <div class="font-medium text-gray-900 dark:text-gray-100 truncate">
-                  vs {{ game.opponent_name }}
-                  <span
-                    v-if="game.status === 'in_progress'"
+                <!-- ELO Change (if applicable) -->
+                <div class="flex flex-none flex-col items-end gap-1">
+                  <div
+                    v-if="game.elo_change !== null"
                     :class="[
-                      'ml-2 text-xs',
-                      game.is_user_turn
-                        ? 'text-blue-600 dark:text-blue-400 font-semibold'
-                        : 'text-gray-500 dark:text-gray-400'
+                      'text-sm font-bold',
+                      game.elo_change > 0
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-600 dark:text-red-400'
                     ]"
                   >
-                    ({{ game.is_user_turn ? 'Your turn' : 'Opponent\'s turn' }})
-                  </span>
-                </div>
-                <div class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ game.user_hero }} vs {{ game.opponent_hero }}
-                </div>
-              </div>
+                    {{ game.elo_change > 0 ? '+' : '' }}{{ game.elo_change }}
+                  </div>
 
-              <!-- ELO Change (if applicable) -->
-              <div
-                v-if="game.elo_change !== null"
-                :class="[
-                  'flex-shrink-0 text-sm font-bold ml-4',
-                  game.elo_change > 0
-                    ? 'text-green-600 dark:text-green-400'
-                    : 'text-red-600 dark:text-red-400'
-                ]"
-              >
-                {{ game.elo_change > 0 ? '+' : '' }}{{ game.elo_change }}
-              </div>
+                  <!-- Date -->
+                  <div class="text-xs text-gray-500 dark:text-gray-400">
+                    {{ formatDate(game.updated_at || game.created_at) }}
+                  </div>
+                </div>
+              </router-link>
 
-              <!-- Date -->
-              <div class="flex-shrink-0 text-xs text-gray-500 dark:text-gray-400 ml-4">
-                {{ formatDate(game.updated_at || game.created_at) }}
-              </div>
-            </div>
+              <details class="group/compositions">
+                <summary class="ml-auto flex w-fit cursor-pointer list-none items-center gap-1 px-3 pb-2 text-xs text-gray-500 hover:text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:text-gray-400 dark:hover:text-gray-200 [&::-webkit-details-marker]:hidden">
+                  <span class="group-open/compositions:hidden">Show compositions</span>
+                  <span class="hidden group-open/compositions:inline">Hide compositions</span>
+                  <ChevronDown class="h-3 w-3 transition-transform group-open/compositions:rotate-180" aria-hidden="true" />
+                </summary>
+                <div class="grid grid-cols-1 gap-px border-t border-gray-200 bg-gray-200 dark:border-gray-700 dark:bg-gray-700 sm:grid-cols-2">
+                  <GameHistoryComposition
+                    label="Your composition"
+                    :composition="game.user_composition"
+                    :title-slug="titleSlug"
+                    :game-type="game.type"
+                  />
+                  <GameHistoryComposition
+                    label="Opponent’s composition"
+                    :composition="game.opponent_composition"
+                    :title-slug="titleSlug"
+                    :game-type="game.type"
+                    :unavailable-text="game.status === 'in_progress' ? 'Available after the game' : 'Not recorded'"
+                  />
+                </div>
+              </details>
+            </article>
           </div>
         </section>
 
@@ -222,12 +252,15 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
+import { ChevronDown } from 'lucide-vue-next'
 import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
 import GameButton from '../components/ui/GameButton.vue'
+import GameHistoryComposition from '../components/game/GameHistoryComposition.vue'
 import { useNotificationStore } from '../stores/notifications'
 import type { LadderType } from '../types/game'
+import type { DeckCompositionSummary } from '../types/composition'
 
 interface GameStats {
   total: number
@@ -253,6 +286,8 @@ interface GameHistoryItem {
   opponent_name: string
   opponent_hero: string | null
   user_hero: string | null
+  user_composition: DeckCompositionSummary | null
+  opponent_composition: DeckCompositionSummary | null
   outcome: 'win' | 'loss' | 'draw' | null
   is_user_turn: boolean | null
   elo_change: number | null
@@ -269,7 +304,6 @@ interface Pagination {
 }
 
 const route = useRoute()
-const router = useRouter()
 const notificationStore = useNotificationStore()
 
 const loading = ref(true)
@@ -318,16 +352,6 @@ const goToPage = (page: number) => {
   if (page >= 1 && page <= pagination.value.total_pages) {
     fetchGamesHistory(page)
   }
-}
-
-const viewGame = (game: GameHistoryItem) => {
-  router.push({
-    name: 'Board',
-    params: {
-      slug: titleSlug.value,
-      game_id: game.id
-    }
-  })
 }
 
 const formatDate = (dateString: string): string => {

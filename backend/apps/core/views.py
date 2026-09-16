@@ -10,6 +10,7 @@ from apps.authentication.models import Friendship
 from apps.builder.models import CardTemplate, HeroTemplate, Title
 from apps.builder.serializers import TitleSerializer
 from apps.collection.models import Deck
+from apps.gameplay.composition_browse import composition_summaries
 from apps.gameplay.models import (
     FriendlyChallenge,
     Game,
@@ -489,7 +490,8 @@ def title_games_history(request, slug):
     - stats: ranked game stats (total, wins, losses) and friendly game stats
       (total only)
     - games: paginated list of games (ended and in-progress) with opponent,
-      outcome, status, and turn indicator
+      outcome, status, turn indicator, and captured compositions (opponent's
+      composition is available only after the game ends)
     """
     title = get_title_or_403(slug, request.user)
     user = request.user
@@ -564,7 +566,7 @@ def title_games_history(request, slug):
             "player_a_user",
             "player_b_user",
         )
-        .prefetch_related("elo_change")
+        .prefetch_related("elo_change", "loadouts")
     )
 
     # Paginate games by recent activity so newly completed long-running games
@@ -581,6 +583,18 @@ def title_games_history(request, slug):
     all_games_ordered = all_games.order_by("-updated_at", "-created_at")
     paginator = Paginator(all_games_ordered, page_size)
     page = paginator.get_page(page_number)
+
+    # Only use immutable game-start captures; current decks may have changed.
+    # Keep opponents' card lists hidden while a game is still in progress.
+    compositions = composition_summaries(
+        title,
+        {
+            loadout.composition_id
+            for game in page.object_list
+            for loadout in game.loadouts.all()
+            if game.status == Game.GAME_STATUS_ENDED or loadout.side == game.user_side
+        },
+    )
 
     games_list = []
     for game in page.object_list:
@@ -602,6 +616,10 @@ def title_games_history(request, slug):
             user_deck = game.side_b
             opponent_deck = game.side_a
             opponent_user = game.player_a_user
+
+        loadouts = {loadout.side: loadout for loadout in game.loadouts.all()}
+        user_loadout = loadouts.get(user_side)
+        opponent_loadout = loadouts.get("side_b" if user_side == "side_a" else "side_a")
 
         # Determine opponent name
         if opponent_deck.is_ai_deck:
@@ -648,9 +666,25 @@ def title_games_history(request, slug):
                 "status": game.status,
                 "opponent_name": opponent_name,
                 "opponent_hero": (
-                    opponent_deck.hero.name if opponent_deck.hero else None
+                    opponent_loadout.hero_name
+                    if opponent_loadout
+                    else opponent_deck.hero.name if opponent_deck.hero else None
                 ),
-                "user_hero": user_deck.hero.name if user_deck.hero else None,
+                "user_hero": (
+                    user_loadout.hero_name
+                    if user_loadout
+                    else user_deck.hero.name if user_deck.hero else None
+                ),
+                "user_composition": (
+                    compositions.get(user_loadout.composition_id)
+                    if user_loadout
+                    else None
+                ),
+                "opponent_composition": (
+                    compositions.get(opponent_loadout.composition_id)
+                    if opponent_loadout and game.status == Game.GAME_STATUS_ENDED
+                    else None
+                ),
                 "outcome": outcome,
                 "is_user_turn": is_user_turn,
                 "elo_change": elo_change,
