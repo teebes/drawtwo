@@ -6,7 +6,7 @@
         <div class="flex items-center justify-between py-6">
           <div class="flex items-center space-x-4">
             <router-link
-              :to="`/${titleSlug}/cards`"
+              :to="{ name: 'Collection', params: { slug: titleSlug } }"
               class="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
             >
               ← Back to Cards
@@ -44,7 +44,7 @@
         <Panel variant="error" title="Error">
           <p class="text-red-600 dark:text-red-400">{{ error }}</p>
           <router-link
-            :to="`/${titleSlug}/cards`"
+            :to="{ name: 'Collection', params: { slug: titleSlug } }"
             class="mt-4 inline-flex items-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
           >
             Back to Cards
@@ -179,7 +179,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from '../config/api'
 import Section from '../components/layout/Section.vue'
@@ -216,8 +216,8 @@ interface CardTemplate {
 
 const route = useRoute()
 const router = useRouter()
-const titleSlug = route.params.slug as string
-const cardSlug = route.params.cardSlug as string
+const titleSlug = computed(() => route.params.slug as string)
+const cardSlug = computed(() => route.params.cardSlug as string)
 const isCreating = computed(() => route.name === 'CardCreate')
 
 const card = ref<CardTemplate | null>(null)
@@ -268,7 +268,7 @@ const cardForDisplay = computed((): Card | null => {
 // Methods
 const fetchCard = async (): Promise<void> => {
   try {
-    const response = await axios.get(`/builder/titles/${titleSlug}/cards/${cardSlug}/`)
+    const response = await axios.get(`/builder/titles/${titleSlug.value}/cards/${cardSlug.value}/`)
     card.value = response.data
     yamlDefinition.value = response.data.yaml_definition
     originalYaml.value = response.data.yaml_definition
@@ -296,7 +296,7 @@ const saveCard = async (): Promise<void> => {
 
     if (isCreating.value) {
       // Create new card
-      const response = await axios.post(`/builder/titles/${titleSlug}/cards/`, {
+      const response = await axios.post(`/builder/titles/${titleSlug.value}/cards/`, {
         slug: newCardSlug.value, // Pass the slug to the backend
         yaml_definition: yamlDefinition.value
       })
@@ -305,13 +305,13 @@ const saveCard = async (): Promise<void> => {
       router.push({
         name: 'CardEdit',
         params: {
-          slug: titleSlug,
+          slug: titleSlug.value,
           cardSlug: response.data.slug
         }
       })
     } else {
       // Update existing card
-      const response = await axios.put(`/builder/titles/${titleSlug}/cards/${cardSlug}/`, {
+      const response = await axios.put(`/builder/titles/${titleSlug.value}/cards/${cardSlug.value}/`, {
         yaml_definition: yamlDefinition.value,
         bump_version: bumpVersion.value
       })
@@ -355,12 +355,12 @@ const deleteCard = async (): Promise<void> => {
     deleting.value = true
     deleteError.value = null
 
-    await axios.delete(`/builder/titles/${titleSlug}/cards/${cardSlug}/`)
+    await axios.delete(`/builder/titles/${titleSlug.value}/cards/${cardSlug.value}/`)
 
     // Redirect back to cards list after successful deletion
     router.push({
       name: 'Collection',
-      params: { slug: titleSlug }
+      params: { slug: titleSlug.value }
     })
 
   } catch (err) {
@@ -412,22 +412,19 @@ watch(newCardSlug, () => {
   slugError.value = null
 })
 
-// Watch for route changes to handle navigation from create to edit mode
-watch(() => route.params.cardSlug, () => {
-  // Re-initialize when card slug changes (e.g., after creating a card)
-  initializeCard()
-})
-
-// Watch for route name changes to handle switching between create and edit modes
-watch(() => route.name, () => {
-  // Re-initialize when switching between create and edit modes
-  initializeCard()
-})
-
 const initializeCard = (): void => {
+  card.value = null
+  error.value = null
+  saveError.value = null
+  deleteError.value = null
+  saveSuccess.value = false
+  bumpVersion.value = false
+  loading.value = true
+
   if (isCreating.value) {
     // Initialize with default values for creation
-    card.value = null
+    newCardSlug.value = ''
+    slugError.value = null
     yamlDefinition.value = `name: "New Card"
 description: "A new card description"
 card_type: "creature"
@@ -443,9 +440,8 @@ traits: []
   }
 }
 
-onMounted(() => {
-  initializeCard()
-})
+// The create and edit routes reuse this component. Reload once per route change.
+watch([titleSlug, cardSlug, isCreating], initializeCard, { immediate: true })
 </script>
 
 <style scoped>
