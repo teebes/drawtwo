@@ -5,6 +5,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
@@ -168,6 +169,11 @@ def deck_list_by_title(request, title_slug):
         )
 
     elif request.method == "POST":
+        if not title.can_be_viewed_by(request.user):
+            return Response(
+                {"error": "You do not have access to this title"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         # Create a new deck
         # Get required data from request
         name = request.data.get("name", "").strip()
@@ -199,7 +205,17 @@ def deck_list_by_title(request, title_slug):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Create the deck and its empty baseline revision together.
+        resolved = None
+        if "composition_code" in request.data:
+            try:
+                resolved = resolve_composition_code(
+                    title, request.data["composition_code"], create=False
+                )
+            except CompositionCodeError as exc:
+                return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Capture the initial card list in one revision. Validation failures
+        # roll back the whole deck, including any cards already added.
         with transaction.atomic():
             deck = Deck.objects.create(
                 user=request.user,
@@ -208,6 +224,26 @@ def deck_list_by_title(request, title_slug):
                 hero=hero,
                 title=title,
             )
+            card_data = []
+            if resolved is not None:
+                for card in resolved.cards:
+                    if not card.is_latest:
+                        raise ValidationError(
+                            {
+                                "error": (
+                                    f'"{card.name}" is no longer available '
+                                    "for new decks"
+                                )
+                            }
+                        )
+                    count = resolved.card_counts[card.slug]
+                    validation_error = validate_deck_card_count(deck, card, count)
+                    if validation_error:
+                        raise ValidationError({"error": validation_error})
+                    DeckCard.objects.create(deck=deck, card=card, count=count)
+                    card_data.append(
+                        {**to_card_schema(card).model_dump(), "count": count}
+                    )
             revision, _ = ensure_deck_revision(deck, source="create")
 
         return Response(
@@ -227,8 +263,8 @@ def deck_list_by_title(request, title_slug):
                     "slug": title.slug,
                     "name": title.name,
                 },
-                "cards": [],
-                "total_cards": 0,
+                "cards": card_data,
+                "total_cards": sum(card["count"] for card in card_data),
                 "composition": serialize_deck_composition(deck, revision),
                 "created_at": deck.created_at.isoformat(),
                 "updated_at": deck.updated_at.isoformat(),

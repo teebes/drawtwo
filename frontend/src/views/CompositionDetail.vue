@@ -9,8 +9,8 @@
         Browse compositions
       </router-link>
 
-      <header class="ui-page-header">
-        <div class="flex items-start gap-3">
+      <header class="ui-page-header !mb-4 flex flex-col gap-4 sm:!mb-8 sm:flex-row sm:items-start sm:justify-between">
+        <div class="flex min-w-0 flex-1 items-start gap-3">
           <div class="rounded-lg bg-primary-100 p-2 text-primary-700 dark:bg-primary-900/50 dark:text-primary-300">
             <Layers3 class="h-6 w-6" aria-hidden="true" />
           </div>
@@ -29,6 +29,14 @@
             />
           </div>
         </div>
+        <router-link
+          v-if="composition"
+          :to="{ name: 'DeckCreate', params: { slug: titleSlug }, query: { composition: composition.code } }"
+          class="ui-btn ui-btn-md ui-btn-primary shrink-0 self-start"
+        >
+          <Plus class="h-4 w-4" aria-hidden="true" />
+          Create Deck
+        </router-link>
       </header>
 
       <div class="space-y-6">
@@ -242,7 +250,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Check, ChevronLeft, Copy, Layers3, LoaderCircle, Star } from 'lucide-vue-next'
+import { Check, ChevronLeft, Copy, Layers3, LoaderCircle, Plus, Star } from 'lucide-vue-next'
 import axios from '../config/api'
 import { useAuthStore } from '../stores/auth'
 import { useNotificationStore } from '../stores/notifications'

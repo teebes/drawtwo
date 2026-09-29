@@ -12,6 +12,15 @@
         customClass="mx-auto w-full max-w-3xl border border-white/50 bg-white/80 backdrop-blur-lg shadow-xl dark:border-gray-800/80 dark:bg-gray-900/80"
       >
         <form @submit.prevent="saveDeck" class="mx-auto flex w-full max-w-2xl flex-col gap-10">
+          <div v-if="sourceComposition" class="ui-panel-muted">
+            <h2 class="ui-panel-title">{{ compositionLabel(sourceComposition) }}</h2>
+            <p class="ui-panel-subtitle">This deck will start with all {{ sourceComposition.total_cards }} cards from this composition. Choose a name and hero below.</p>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <span v-for="card in compositionPreviewCards(sourceComposition)" :key="card.slug" class="ui-status-badge ui-status-neutral">{{ card.count }}× {{ card.name || card.slug }}</span>
+              <span v-if="(sourceComposition.cards?.length || 0) > 4" class="text-sm text-gray-500 dark:text-gray-400">+{{ sourceComposition.cards!.length - 4 }} more</span>
+            </div>
+          </div>
+          <p v-else-if="compositionCode && loading" class="ui-panel-subtitle" role="status">Loading composition…</p>
           <!-- Deck Name -->
           <div>
             <label for="deck-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -112,7 +121,7 @@
             <GameButton
               type="submit"
               variant="primary"
-              :disabled="saving"
+              :disabled="saving || !canSave"
               class="flex-1"
             >
               {{ saving ? 'Saving...' : (isEditMode ? 'Update Deck' : 'Create Deck') }}
@@ -152,6 +161,8 @@ import { useNotificationStore } from '../stores/notifications'
 import axios from '../config/api'
 import Panel from '../components/layout/Panel.vue'
 import GameButton from '../components/ui/GameButton.vue'
+import type { DeckCompositionSummary } from '../types/composition'
+import { compositionLabel, compositionPreviewCards } from '../utils/compositions'
 
 interface HeroData {
   id: number
@@ -190,11 +201,13 @@ const deckName = ref<string>('')
 const deckDescription = ref<string>('')
 const selectedHeroId = ref<number | null>(null)
 const heroes = ref<HeroData[]>([])
+const sourceComposition = ref<DeckCompositionSummary | null>(null)
 
 // Computed properties
 const titleSlug = computed(() => route.params.slug as string)
 const deckId = computed(() => route.params.id as string)
 const isEditMode = computed(() => !!deckId.value)
+const compositionCode = computed(() => !isEditMode.value && typeof route.query.composition === 'string' ? route.query.composition : '')
 
 const selectedHero = computed<HeroData | null>(() => {
   if (selectedHeroId.value === null) return null
@@ -202,10 +215,23 @@ const selectedHero = computed<HeroData | null>(() => {
 })
 
 const canSave = computed(() => {
-  return Boolean(deckName.value.trim()) && selectedHeroId.value !== null && !heroesLoading.value
+  return Boolean(deckName.value.trim()) && selectedHeroId.value !== null && !loading.value && !heroesLoading.value && !error.value && (!compositionCode.value || sourceComposition.value?.code === compositionCode.value)
 })
 
 // Methods
+const fetchComposition = async (): Promise<void> => {
+  if (!compositionCode.value) return
+  try {
+    const response = await axios.get<{ composition: DeckCompositionSummary }>(`/collection/titles/${encodeURIComponent(titleSlug.value)}/compositions/resolve/`, { params: { deck: compositionCode.value } })
+    sourceComposition.value = response.data.composition
+    if (!deckName.value) deckName.value = compositionLabel(sourceComposition.value)
+  } catch (err: unknown) {
+    error.value = isAxiosError(err) && typeof err.response?.data?.error === 'string'
+      ? err.response.data.error
+      : 'Unable to load this composition. Return to the composition and try again.'
+  }
+}
+
 const fetchHeroes = async (): Promise<void> => {
   try {
     heroesLoading.value = true
@@ -256,6 +282,7 @@ const fetchDeck = async (): Promise<void> => {
 }
 
 const saveDeck = async (): Promise<void> => {
+  if (saving.value || loading.value || error.value) return
   // Validate form inputs
   if (!deckName.value.trim()) {
     notificationStore.error('Deck name is required')
@@ -266,6 +293,7 @@ const saveDeck = async (): Promise<void> => {
     notificationStore.error('Please select a hero for your deck')
     return
   }
+  if (!canSave.value) return
 
   try {
     saving.value = true
@@ -273,7 +301,8 @@ const saveDeck = async (): Promise<void> => {
     const deckData = {
       name: deckName.value.trim(),
       description: deckDescription.value.trim(),
-      hero_id: selectedHeroId.value
+      hero_id: selectedHeroId.value,
+      ...(compositionCode.value ? { composition_code: compositionCode.value } : {})
     }
 
     let response
@@ -316,6 +345,11 @@ const cancel = (): void => {
         id: deckId.value
       }
     })
+  } else if (compositionCode.value) {
+    router.push({
+      name: 'CompositionDetail',
+      params: { slug: titleSlug.value, code: compositionCode.value }
+    })
   } else {
     // Go back to title page
     router.push({
@@ -337,13 +371,7 @@ onMounted(async () => {
   try {
     loading.value = true
 
-    // Fetch heroes first
-    await fetchHeroes()
-
-    // If editing, fetch the deck data
-    if (isEditMode.value) {
-      await fetchDeck()
-    }
+    await Promise.all([fetchHeroes(), isEditMode.value ? fetchDeck() : fetchComposition()])
   } catch (err) {
     console.error('Error initializing deck edit:', err)
   } finally {

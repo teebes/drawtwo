@@ -2,7 +2,7 @@ from django.urls import reverse
 from rest_framework.test import APITestCase
 
 from apps.authentication.models import User
-from apps.builder.models import CardTemplate, HeroTemplate, Title
+from apps.builder.models import CardTemplate, CardTrait, HeroTemplate, Title
 from apps.collection.compositions import (
     CompositionCodeError,
     encode_composition_code,
@@ -118,6 +118,123 @@ class DeckCompositionApiTests(APITestCase):
                 kwargs={"deck_id": deck.id, "card_id": card.id},
             )
         )
+
+    def _create_from_composition(self, code, **overrides):
+        return self.client.post(
+            reverse("deck-list-by-title", kwargs={"title_slug": self.title.slug}),
+            {
+                "name": "Copied composition",
+                "description": "A saved build",
+                "hero_id": self.hero_b.id,
+                "composition_code": code,
+                **overrides,
+            },
+            format="json",
+        )
+
+    def test_create_from_composition_copies_cards_and_reuses_identity(self):
+        source, _ = self._create_deck("Source")
+        self._add(source, self.card_a)
+        self._add(source, self.card_a)
+        self._add(source, self.card_b)
+        source.refresh_from_db()
+        composition = source.current_revision.composition
+
+        response = self._create_from_composition(composition.code)
+
+        self.assertEqual(response.status_code, 201)
+        deck = Deck.objects.get(pk=response.data["id"])
+        self.assertEqual(deck.user, self.user)
+        self.assertEqual(deck.hero, self.hero_b)
+        self.assertEqual(deck.description, "A saved build")
+        self.assertEqual(deck.current_revision.composition_id, composition.id)
+        self.assertEqual(deck.revisions.count(), 1)
+        self.assertEqual(deck.current_revision.source, "create")
+        self.assertEqual(
+            dict(deck.deckcard_set.values_list("card__slug", "count")),
+            {"a-card": 2, "b-card": 1},
+        )
+        self.assertEqual(response.data["composition"]["code"], composition.code)
+        self.assertEqual(response.data["total_cards"], 3)
+        self.assertEqual(
+            {card["slug"]: card["count"] for card in response.data["cards"]},
+            {"a-card": 2, "b-card": 1},
+        )
+
+    def test_create_from_composition_uses_current_card_versions(self):
+        self.card_a.is_latest = False
+        self.card_a.save(update_fields=["is_latest"])
+        latest = CardTemplate.objects.create(
+            title=self.title,
+            slug=self.card_a.slug,
+            name="Updated A",
+            version=2,
+            cost=3,
+        )
+        response = self._create_from_composition("dt1.a-card~2")
+        self.assertEqual(response.status_code, 201)
+        deck = Deck.objects.get(pk=response.data["id"])
+        self.assertEqual(deck.deckcard_set.get().card, latest)
+
+    def test_create_from_invalid_composition_does_not_leave_a_deck(self):
+        for code in (None, "", "invalid", "dt1.foreign-card~1", "dt1.a-card~5"):
+            with self.subTest(code=code):
+                response = self._create_from_composition(code)
+                self.assertEqual(response.status_code, 400)
+                self.assertFalse(Deck.objects.exists())
+                self.assertFalse(DeckCard.objects.exists())
+                self.assertFalse(DeckRevision.objects.exists())
+
+    def test_create_from_composition_rolls_back_for_incompatible_hero(self):
+        self.card_b.allowed_heroes.add(self.hero_a)
+        response = self._create_from_composition("dt1.a-card~2.b-card~1")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("specific heroes", response.data["error"])
+        self.assertFalse(Deck.objects.exists())
+        self.assertFalse(DeckCard.objects.exists())
+        self.assertFalse(DeckRevision.objects.exists())
+        # The user can correct the hero and retry with the same deck name.
+        valid = self._create_from_composition(
+            "dt1.a-card~2.b-card~1", hero_id=self.hero_a.id
+        )
+        self.assertEqual(valid.status_code, 201)
+
+    def test_create_from_composition_enforces_total_size_and_unique_cards(self):
+        self.title.config = {"deck_size_limit": 3, "deck_card_max_count": 4}
+        self.title.save(update_fields=["config"])
+        response = self._create_from_composition("dt1.a-card~2.b-card~2")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Deck size", response.data["error"])
+        self.assertFalse(Deck.objects.exists())
+        self.assertFalse(DeckCard.objects.exists())
+        CardTrait.objects.create(card=self.card_b, trait_slug="unique")
+        response = self._create_from_composition("dt1.a-card~1.b-card~2")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Unique", response.data["error"])
+        self.assertFalse(Deck.objects.exists())
+        self.assertFalse(DeckCard.objects.exists())
+
+    def test_create_from_composition_rejects_retired_and_uncollectible_cards(self):
+        for field in ("is_latest", "is_collectible"):
+            with self.subTest(field=field):
+                setattr(self.card_b, field, False)
+                self.card_b.save(update_fields=[field])
+                response = self._create_from_composition("dt1.a-card~1.b-card~1")
+                self.assertEqual(response.status_code, 400)
+                self.assertFalse(Deck.objects.exists())
+                self.assertFalse(DeckCard.objects.exists())
+                setattr(self.card_b, field, True)
+                self.card_b.save(update_fields=[field])
+
+    def test_create_from_composition_requires_authentication_and_title_access(self):
+        self.client.force_authenticate(None)
+        self.assertEqual(self._create_from_composition("dt1.a-card~1").status_code, 401)
+        other = User.objects.create_user(email="copy-other@example.com")
+        self.client.force_authenticate(other)
+        self.title.status = Title.STATUS_DRAFT
+        self.title.save(update_fields=["status"])
+        self.assertEqual(self._create_from_composition("dt1.a-card~1").status_code, 403)
+        self.assertFalse(Deck.objects.exists())
 
     def test_create_and_card_mutations_return_current_composition(self):
         deck, created = self._create_deck()
