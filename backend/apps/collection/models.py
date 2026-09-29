@@ -252,7 +252,7 @@ class DeckCard(TimestampedModel):
 
 
 class DeckComposition(TimestampedModel):
-    """A hero-independent, immutable multiset of card slugs."""
+    """An immutable card multiset with an optional public display name."""
 
     title = models.ForeignKey(
         Title,
@@ -268,6 +268,7 @@ class DeckComposition(TimestampedModel):
     # Parsed `code`, stored as slug/count entries for serialization and validation.
     manifest = models.JSONField(default=list)
     total_cards = models.PositiveIntegerField(default=0)
+    name = models.CharField(max_length=120, blank=True, default="")
 
     class Meta:
         constraints = [

@@ -158,6 +158,13 @@ class CompositionStatsTests(APITestCase):
                 "matches": 3,
                 "appearances": 6,
                 "compositions": 2,
+                "record": {
+                    "wins": 2,
+                    "losses": 2,
+                    "draws": 2,
+                    "games": 6,
+                    "win_rate": 0.3333,
+                },
             },
         )
         first = response.data["results"][0]
@@ -337,6 +344,130 @@ class CompositionStatsTests(APITestCase):
         response = self.client.get(self._matchups_url("dt1.target-card~1"))
         self.assertEqual(response.data["results"][0]["record"]["wins"], 1)
 
+        self.client.force_authenticate(self.user_a)
+        with self.assertNumQueries(6):
+            personal = self.client.get(self._browse_url(), {"scope": "mine"})
+        self.assertEqual(personal.data["count"], 1)
+        self.assertEqual(personal.data["results"][0]["record"]["wins"], 1)
+
+    def test_personal_browse_uses_captured_player_not_current_deck_owner(self):
+        for winner in ("side_a", "side_b", None):
+            self._create_game(self.deck_a, self.opponent_x, winner_side=winner)
+        # Ownership and card edits after play must not change attribution.
+        self.deck_a.deckcard_set.update(count=3)
+        Deck.objects.filter(pk=self.deck_a.pk).update(user=self.user_b)
+        for user, own_code in (
+            (self.user_a, "dt1.target-card~1"),
+            (self.user_b, "dt1.other-card~1"),
+        ):
+            self.client.force_authenticate(user)
+            response = self.client.get(self._browse_url(), {"scope": "mine"})
+            self.assertEqual(response.data["scope"], "mine")
+            self.assertEqual(response.data["count"], 1)
+            row = response.data["results"][0]
+            self.assertEqual(row["composition"]["code"], own_code)
+            self.assertEqual(
+                row["record"],
+                {"wins": 1, "losses": 1, "draws": 1, "games": 3, "win_rate": 0.3333},
+            )
+            self.assertEqual(response.data["summary"]["record"], row["record"])
+            self.assertEqual(response.data["summary"]["appearances"], 3)
+            self.assertEqual(response.data["summary"]["compositions"], 1)
+            # The public default remains community-wide, including the lobby.
+            public = self.client.get(self._browse_url())
+            self.assertEqual(public.data["scope"], "all")
+            self.assertEqual(public.data["count"], 2)
+
+    def test_personal_scope_precedes_sort_minimum_search_and_pagination(self):
+        own_other = self._make_deck(
+            self.user_a, "Own other", self.hero_a, self.other_card
+        )
+        self._create_game(self.deck_a, self.opponent_x)
+        for _ in range(2):
+            self._create_game(own_other, self.deck_b, winner_side="side_b")
+        for _ in range(4):
+            self._create_game(self.deck_b, self.opponent_x, winner_side="side_b")
+        self.client.force_authenticate(self.user_a)
+        public = self.client.get(self._browse_url(), {"scope": "all"})
+        self.assertEqual(
+            public.data["results"][0]["composition"]["code"], "dt1.other-card~1"
+        )
+        params = {"scope": "mine", "page_size": 1}
+        first = self.client.get(self._browse_url(), params)
+        self.assertEqual(first.data["count"], 2)
+        self.assertEqual(
+            first.data["results"][0]["composition"]["code"], "dt1.target-card~1"
+        )
+        self.assertEqual(first.data["results"][0]["record"]["win_rate"], 1)
+        self.assertEqual(first.data["summary"]["record"]["games"], 3)
+        self.assertEqual(first.data["summary"]["record"]["wins"], 1)
+        for extra in ({"page": 2}, {"sort": "games"}, {"sort": "win_rate_asc"}):
+            response = self.client.get(self._browse_url(), {**params, **extra})
+            self.assertEqual(
+                response.data["results"][0]["composition"]["code"], "dt1.other-card~1"
+            )
+            self.assertEqual(response.data["results"][0]["record"]["games"], 2)
+            self.assertEqual(response.data["results"][0]["record"]["wins"], 0)
+        minimum = self.client.get(self._browse_url(), {**params, "min_games": 2})
+        self.assertEqual(minimum.data["count"], 1)
+        self.assertEqual(minimum.data["results"][0]["record"]["games"], 2)
+        search = self.client.get(self._browse_url(), {**params, "q": "target-card"})
+        self.assertEqual(search.data["count"], 1)
+        self.assertEqual(search.data["results"][0]["record"]["wins"], 1)
+
+    def test_personal_scope_follows_period_ladder_and_game_type(self):
+        old = self._create_game(self.deck_a, self.opponent_x)
+        Game.objects.filter(pk=old.pk).update(
+            created_at=timezone.now() - timedelta(days=40), ladder_type="daily"
+        )
+        recent = self._create_game(self.deck_b, self.opponent_x)
+        Game.objects.filter(pk=recent.pk).update(ladder_type="rapid")
+        friendly = self._create_game(
+            self.deck_a, self.opponent_x, game_type="friendly", winner_side="side_b"
+        )
+        Game.objects.filter(pk=friendly.pk).update(ladder_type=None)
+        self.client.force_authenticate(self.user_a)
+        for filters, games, wins in (
+            ({"days": "7", "ladder": "rapid"}, 0, 0),
+            ({"ladder": "daily"}, 1, 1),
+            ({"game_type": "friendly"}, 1, 0),
+        ):
+            with self.subTest(filters=filters):
+                response = self.client.get(
+                    self._browse_url(), {"scope": "mine", **filters}
+                )
+                self.assertEqual(response.data["summary"]["record"]["games"], games)
+                self.assertEqual(response.data["summary"]["record"]["wins"], wins)
+                if games:
+                    row = response.data["results"][0]
+                    self.assertEqual(row["record"]["games"], games)
+                    self.assertEqual(row["record"]["wins"], wins)
+                else:
+                    self.assertEqual(response.data["count"], 0)
+                    self.assertEqual(response.data["results"], [])
+
+    def test_personal_scope_excludes_ongoing_pve_and_unplayed_revisions(self):
+        self._create_game(self.deck_b, self.opponent_x)
+        self._create_game(
+            self.deck_a, self.opponent_x, status=Game.GAME_STATUS_IN_PROGRESS
+        )
+        self._create_game(self.deck_a, self.opponent_x, game_type="pve")
+        self.client.force_authenticate(self.user_a)
+        response = self.client.get(self._browse_url(), {"scope": "mine"})
+        self.assertEqual(response.data["count"], 0)
+        self.assertEqual(response.data["summary"]["appearances"], 0)
+        self.assertEqual(response.data["results"], [])
+
+    def test_personal_scope_requires_sign_in_and_valid_scope(self):
+        for user in (None, self.user_a):
+            self.client.force_authenticate(user)
+            self.assertEqual(
+                self.client.get(self._browse_url(), {"scope": "unknown"}).status_code,
+                400,
+            )
+            response = self.client.get(self._browse_url(), {"scope": "mine"})
+            self.assertEqual(response.status_code, 200 if user else 403)
+
     def test_browse_and_matchups_never_expose_players_or_source_decks(self):
         game = self._create_game(self.deck_a, self.opponent_x)
         code = game.loadouts.get(side=GameLoadout.SIDE_A).composition.code
@@ -346,11 +477,13 @@ class CompositionStatsTests(APITestCase):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 200)
                 for row in response.data["results"]:
-                    self.assertEqual(set(row), {"composition", "record"})
+                    expected = {"composition", "record"}
+                    self.assertEqual(set(row), expected)
                     self.assertEqual(
                         set(row["composition"]),
                         {
                             "code",
+                            "name",
                             "digest",
                             "total_cards",
                             "cards",

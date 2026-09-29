@@ -7,6 +7,7 @@ export const compositionPreviewCards = (composition: DeckCompositionSummary) => 
 }
 
 export const compositionLabel = (composition: DeckCompositionSummary): string => {
+  if (composition.name?.trim()) return composition.name.trim()
   return compositionPreviewCards(composition)
     .slice(0, 2)
     .map(card => card.name || card.slug)

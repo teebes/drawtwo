@@ -701,7 +701,9 @@ class TitleGamesHistoryTestCase(TestCase):
                     own["cards"][0]["count"], captured[own_side].total_cards
                 )
                 self.assertEqual(result["user_hero"], own_hero)
-                self.assertEqual(set(own), {"code", "digest", "total_cards", "cards"})
+                self.assertEqual(
+                    set(own), {"code", "name", "digest", "total_cards", "cards"}
+                )
                 self.assertNotIn("Renamed private deck", str(result))
 
     def test_history_hides_opponent_composition_until_game_ends(self):

@@ -26,6 +26,7 @@ from apps.collection.models import (
 from apps.collection.validation import get_title_config, validate_deck_card_count
 from apps.core.card_assets import get_hero_art_url
 from apps.core.serializers import serialize_cards_with_traits, to_card_schema
+from apps.gameplay.composition_permissions import can_name_composition
 
 
 def _card_not_available_error(card, hero) -> str:
@@ -677,6 +678,54 @@ def composition_favorite(request, title_slug, code):
             "is_favorite": False,
         }
     )
+
+
+@api_view(["PUT"])
+@permission_classes([IsAuthenticated])
+def composition_name(request, title_slug, code):
+    """Set a public name as a title editor or a leader in ranked wins."""
+    title = get_object_or_404(Title, slug=title_slug, is_latest=True)
+    if not title.can_be_viewed_by(request.user):
+        return Response(
+            {"error": "You do not have access to this title"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    name = request.data.get("name")
+    if not isinstance(name, str):
+        return Response(
+            {"error": "name must be a string"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    name = " ".join(name.split())
+    if len(name) > 120:
+        return Response(
+            {"error": "Name must be 120 characters or fewer"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        resolved = resolve_composition_code(title, code, create=False)
+    except CompositionCodeError as exc:
+        return Response(
+            {"error": str(exc)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if not can_name_composition(title, request.user, resolved.composition):
+        return Response(
+            {
+                "error": "Only title editors and ranked win leaders for this "
+                "composition can name it. Daily wins come first; "
+                "rapid wins break ties."
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    if resolved.composition is None and name:
+        resolved = resolve_composition_code(title, code, create=True)
+    if resolved.composition is not None:
+        resolved.composition.name = name
+        resolved.composition.save(update_fields=["name", "updated_at"])
+    return Response({"composition_code": resolved.code, "name": name})
 
 
 @api_view(["POST"])

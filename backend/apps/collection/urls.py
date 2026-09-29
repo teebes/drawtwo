@@ -24,6 +24,11 @@ urlpatterns = [
         views.composition_favorite,
         name='composition-favorite',
     ),
+    path(
+        'titles/<slug:title_slug>/compositions/<str:code>/name/',
+        views.composition_name,
+        name='composition-name',
+    ),
     path('decks/<int:deck_id>/', views.deck_detail, name='deck-detail'),
 
     # Deck card endpoints

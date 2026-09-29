@@ -87,6 +87,7 @@ def composition_summaries(title, ids):
     return {
         comp.id: {
             "code": comp.code,
+            "name": comp.name,
             "digest": comp.digest,
             "total_cards": comp.total_cards,
             "cards": [
@@ -141,12 +142,27 @@ def _page(request, title, loadouts, group):
 def composition_list(request, title_slug):
     title = _title(request, title_slug)
     filters = stats_filters(request.query_params)
+    scope = request.query_params.get("scope", "all")
+    if scope not in {"all", "mine"}:
+        raise ValidationError({"error": "Invalid composition scope."})
+    if scope == "mine" and not request.user.is_authenticated:
+        raise PermissionDenied("Sign in to see your compositions.")
     loadouts = eligible_loadouts(title, filters)
-    summary = loadouts.aggregate(
+    if scope == "mine":
+        # Attribute results to the player captured when the game began, even
+        # if the source deck has since changed cards or ownership.
+        loadouts = loadouts.filter(player=request.user)
+    totals = loadouts.aggregate(
         matches=Count("game_id", distinct=True),
-        appearances=Count("id"),
         compositions=Count("composition_id", distinct=True),
+        **composition_result_counts(),
     )
+    summary = {
+        "matches": totals["matches"],
+        "appearances": totals["games"],
+        "compositions": totals["compositions"],
+        "record": composition_record(totals),
+    }
     search = request.query_params.get("q", "").strip()
     if len(search) > 200:
         raise ValidationError({"error": "Search must be 200 characters or fewer."})
@@ -159,13 +175,14 @@ def composition_list(request, title_slug):
             .values_list("slug", flat=True)
             .distinct()
         )
-        matches = Q(composition__code=search)
+        matches = Q(composition__code=search) | Q(composition__name__icontains=search)
         for slug in slugs:
             matches |= Q(composition__manifest__contains=[{"slug": slug}])
         loadouts = loadouts.filter(matches)
     return Response(
         {
             **_page(request, title, loadouts, "composition_id"),
+            "scope": scope,
             "filters": filters,
             "summary": summary,
         }

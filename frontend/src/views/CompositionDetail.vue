@@ -14,11 +14,19 @@
           <div class="rounded-lg bg-primary-100 p-2 text-primary-700 dark:bg-primary-900/50 dark:text-primary-300">
             <Layers3 class="h-6 w-6" aria-hidden="true" />
           </div>
-          <div>
-            <h1 class="ui-page-title">{{ composition ? compositionLabel(composition) : 'Deck composition' }}</h1>
+          <div class="min-w-0 flex-1">
+            <h1 class="ui-page-title break-words">{{ composition ? compositionLabel(composition) : 'Deck composition' }}</h1>
             <p class="ui-page-subtitle">
               Results for this exact card list, independent of the hero used to play it.
             </p>
+            <CompositionNameEditor
+              v-if="composition?.can_name"
+              :key="`${titleSlug}:${routeCode}`"
+              :title-slug="titleSlug"
+              :code="routeCode"
+              :name="composition.name"
+              @saved="composition.name = $event"
+            />
           </div>
         </div>
       </header>
@@ -241,6 +249,7 @@ import { useNotificationStore } from '../stores/notifications'
 import CompositionFilters from '../components/compositions/CompositionFilters.vue'
 import CompositionMatchups from '../components/compositions/CompositionMatchups.vue'
 import CompositionPlayers from '../components/compositions/CompositionPlayers.vue'
+import CompositionNameEditor from '../components/compositions/CompositionNameEditor.vue'
 import DeckEnergyCurve from '../components/decks/DeckEnergyCurve.vue'
 import { compositionLabel } from '../utils/compositions'
 import type {

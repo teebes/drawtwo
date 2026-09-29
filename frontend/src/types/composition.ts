@@ -10,6 +10,8 @@ export interface CompositionCard {
 export interface DeckCompositionSummary {
   id?: number
   code: string
+  name?: string
+  can_name?: boolean
   version?: number
   digest?: string
   manifest?: Array<{ slug: string; count: number }>
@@ -89,6 +91,7 @@ export interface CompositionBrowseResponse {
   page: number
   page_size: number
   results: CompositionBrowseRow[]
-  summary?: { matches: number; appearances: number; compositions: number }
+  scope?: 'all' | 'mine'
+  summary?: { matches: number; appearances: number; compositions: number; record: CompositionRecord }
   unattributed_appearances?: number
 }

@@ -3,7 +3,7 @@
     <router-link
       v-for="(row, index) in rows" :key="row.composition.code"
       :to="{ name: 'CompositionDetail', params: { slug: titleSlug, code: row.composition.code }, query: detailQuery }"
-      class="group grid gap-4 px-4 py-5 transition-colors hover:bg-primary-50/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:hover:bg-primary-950/20 sm:px-6 md:grid-cols-[minmax(0,1fr)_9rem_6rem] md:items-center"
+      class="group grid gap-4 px-4 py-5 transition-colors hover:bg-primary-50/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:hover:bg-primary-950/20 sm:px-6 md:grid-cols-[minmax(0,1fr)_10rem_6rem] md:items-center"
     >
       <div class="flex min-w-0 gap-4">
         <span class="hidden w-6 flex-none pt-1 text-sm tabular-nums text-gray-400 sm:block">{{ offset + index + 1 }}</span>
@@ -25,10 +25,10 @@
         </div>
       </div>
       <div class="flex items-center justify-between gap-5 sm:ml-10 md:ml-0 md:block">
-        <div class="w-36">
+        <div class="w-40">
           <p :class="['text-xl font-bold tabular-nums', row.record.win_rate! >= 0.5 ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-800 dark:text-gray-200']">
             {{ ((row.record.win_rate || 0) * 100).toFixed(1) }}<span class="text-sm">%</span>
-            <span class="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">win rate</span>
+            <span class="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">{{ personal ? 'your win rate' : 'win rate' }}</span>
           </p>
           <div class="relative mt-2 h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700" aria-hidden="true">
             <div class="h-full rounded-full bg-primary-500" :style="{ width: `${(row.record.win_rate || 0) * 100}%` }" />
@@ -38,7 +38,7 @@
         <p class="mt-2 text-xs tabular-nums text-gray-500 dark:text-gray-400">{{ row.record.wins }}W · {{ row.record.losses }}L · {{ row.record.draws }}D</p>
       </div>
       <div class="flex items-center gap-2 sm:ml-10 md:ml-0 md:block md:text-right">
-        <p class="text-sm font-semibold tabular-nums text-gray-800 dark:text-gray-200">{{ row.record.games.toLocaleString() }} <span class="font-normal text-gray-500">uses</span></p>
+        <p class="text-sm font-semibold tabular-nums text-gray-800 dark:text-gray-200">{{ row.record.games.toLocaleString() }} <span class="font-normal text-gray-500">{{ personal ? 'games' : 'uses' }}</span></p>
         <span v-if="row.record.games < 20" class="mt-1 inline-block text-xs text-amber-700 dark:text-amber-400" title="Fewer than 20 recorded uses. Results may change substantially with more games.">Small sample</span>
       </div>
     </router-link>
@@ -51,7 +51,7 @@ import { useRoute } from 'vue-router'
 import { ChevronRight } from 'lucide-vue-next'
 import type { CompositionBrowseRow } from '../../types/composition'
 import { compositionLabel, compositionPreviewCards } from '../../utils/compositions'
-defineProps<{ rows: CompositionBrowseRow[]; titleSlug: string; offset: number }>()
+defineProps<{ rows: CompositionBrowseRow[]; titleSlug: string; offset: number; personal?: boolean }>()
 const route = useRoute()
 const detailQuery = computed(() => {
   const query = { ...route.query }

@@ -14,6 +14,7 @@ from apps.collection.models import (
 )
 from apps.collection.validation import DeckValidationError, validate_deck_for_play
 from apps.gameplay.composition_browse import eligible_loadouts, stats_filters
+from apps.gameplay.composition_permissions import can_name_composition
 from apps.gameplay.composition_records import (
     _aggregate_composition_record,
     _empty_composition_record,
@@ -352,6 +353,8 @@ def composition_stats(request, title_slug, code):
         {
             "composition": {
                 "code": resolved.code,
+                "name": composition.name if composition else "",
+                "can_name": can_name_composition(title, request.user, composition),
                 "version": (composition.version if composition is not None else 1),
                 "total_cards": resolved.total_cards,
                 "cards": cards,
