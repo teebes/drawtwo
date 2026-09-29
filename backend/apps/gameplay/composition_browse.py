@@ -3,7 +3,7 @@
 from datetime import timedelta
 
 from django.db.models import Count, F, FloatField, Max, OuterRef, Q, Subquery
-from django.db.models.functions import Cast
+from django.db.models.functions import Cast, Coalesce, NullIf
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
@@ -63,13 +63,15 @@ def _title(request, title_slug):
     return title
 
 
-def _integer(params, key, default, maximum):
+def _integer(params, key, default, maximum, minimum=1):
     try:
         value = int(params.get(key, default))
     except (ValueError, TypeError):
-        raise ValidationError({"error": f"{key} must be a positive integer."})
-    if not 1 <= value <= maximum:
-        raise ValidationError({"error": f"{key} must be between 1 and {maximum}."})
+        raise ValidationError({"error": f"{key} must be an integer."})
+    if not minimum <= value <= maximum:
+        raise ValidationError(
+            {"error": f"{key} must be between {minimum} and {maximum}."}
+        )
     return value
 
 
@@ -103,24 +105,45 @@ def composition_summaries(title, ids):
     }
 
 
-def _page(request, title, loadouts, group):
-    minimum = _integer(request.query_params, "min_games", 1, 1000000)
+def _page(request, title, loadouts, group, *, compositions=None):
+    default_minimum = 0 if compositions is not None else 1
+    minimum = _integer(
+        request.query_params,
+        "min_games",
+        default_minimum,
+        1000000,
+        minimum=default_minimum,
+    )
     page = _integer(request.query_params, "page", 1, 1000000)
     page_size = _integer(request.query_params, "page_size", 20, 50)
     sort = request.query_params.get("sort", "win_rate")
     ordering = {
-        "win_rate": ("-rate", "-games", group),
-        "win_rate_asc": ("rate", "-games", group),
-        "games": ("-games", "-rate", group),
+        "win_rate": (F("rate").desc(nulls_last=True), "-games", group),
+        "win_rate_asc": (F("rate").asc(nulls_last=True), "-games", group),
+        "games": ("-games", F("rate").desc(nulls_last=True), group),
     }
     if sort not in ordering:
         raise ValidationError({"error": "Invalid sort order."})
+    if compositions is None:
+        rows = loadouts.order_by().values(group).annotate(**composition_result_counts())
+    else:
+        # Start with saved compositions so favorites without eligible matches
+        # remain visible. Use the same result attribution as the other scopes.
+        records = (
+            loadouts.filter(composition_id=OuterRef("pk"))
+            .order_by()
+            .values("composition_id")
+            .annotate(**composition_result_counts())
+        )
+        rows = compositions.annotate(
+            **{
+                field: Coalesce(Subquery(records.values(field)[:1]), 0)
+                for field in ("games", "wins", "losses")
+            }
+        ).values(group, "games", "wins", "losses")
     rows = (
-        loadouts.order_by()
-        .values(group)
-        .annotate(**composition_result_counts())
-        .filter(games__gte=minimum)
-        .annotate(rate=Cast(F("wins"), FloatField()) / F("games"))
+        rows.filter(games__gte=minimum)
+        .annotate(rate=Cast(F("wins"), FloatField()) / NullIf(F("games"), 0))
         .order_by(*ordering[sort])
     )
     count = rows.count()
@@ -143,15 +166,19 @@ def composition_list(request, title_slug):
     title = _title(request, title_slug)
     filters = stats_filters(request.query_params)
     scope = request.query_params.get("scope", "all")
-    if scope not in {"all", "mine"}:
+    if scope not in {"all", "mine", "favorites"}:
         raise ValidationError({"error": "Invalid composition scope."})
-    if scope == "mine" and not request.user.is_authenticated:
+    if scope in {"mine", "favorites"} and not request.user.is_authenticated:
         raise PermissionDenied("Sign in to see your compositions.")
     loadouts = eligible_loadouts(title, filters)
     if scope == "mine":
         # Attribute results to the player captured when the game began, even
         # if the source deck has since changed cards or ownership.
         loadouts = loadouts.filter(player=request.user)
+    compositions = DeckComposition.objects.filter(title=title)
+    if scope == "favorites":
+        compositions = compositions.filter(favorites__user=request.user)
+        loadouts = loadouts.filter(composition__in=compositions)
     totals = loadouts.aggregate(
         matches=Count("game_id", distinct=True),
         compositions=Count("composition_id", distinct=True),
@@ -160,7 +187,9 @@ def composition_list(request, title_slug):
     summary = {
         "matches": totals["matches"],
         "appearances": totals["games"],
-        "compositions": totals["compositions"],
+        "compositions": (
+            compositions.count() if scope == "favorites" else totals["compositions"]
+        ),
         "record": composition_record(totals),
     }
     search = request.query_params.get("q", "").strip()
@@ -175,13 +204,20 @@ def composition_list(request, title_slug):
             .values_list("slug", flat=True)
             .distinct()
         )
-        matches = Q(composition__code=search) | Q(composition__name__icontains=search)
+        matches = Q(code=search) | Q(name__icontains=search)
         for slug in slugs:
-            matches |= Q(composition__manifest__contains=[{"slug": slug}])
-        loadouts = loadouts.filter(matches)
+            matches |= Q(manifest__contains=[{"slug": slug}])
+        compositions = compositions.filter(matches)
+        loadouts = loadouts.filter(composition__in=compositions)
     return Response(
         {
-            **_page(request, title, loadouts, "composition_id"),
+            **_page(
+                request,
+                title,
+                loadouts,
+                "id" if scope == "favorites" else "composition_id",
+                compositions=compositions if scope == "favorites" else None,
+            ),
             "scope": scope,
             "filters": filters,
             "summary": summary,

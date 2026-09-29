@@ -7,7 +7,7 @@ from rest_framework.test import APITestCase
 from apps.authentication.models import User
 from apps.builder.models import CardTemplate, HeroTemplate, Title
 from apps.collection.compositions import ensure_deck_revision
-from apps.collection.models import Deck, DeckCard
+from apps.collection.models import Deck, DeckCard, DeckCompositionFavorite
 from apps.gameplay.models import Game, GameLoadout
 from apps.gameplay.services import GameService
 
@@ -467,6 +467,150 @@ class CompositionStatsTests(APITestCase):
             )
             response = self.client.get(self._browse_url(), {"scope": "mine"})
             self.assertEqual(response.status_code, 200 if user else 403)
+
+    def test_favorites_include_unplayed_compositions_and_are_private(self):
+        # Community play can supply records even when the saver hasn't played.
+        game = self._create_game(self.deck_b, self.opponent_x)
+        played = game.loadouts.get(side=GameLoadout.SIDE_A).composition
+        self.deck_a.deckcard_set.update(count=2)
+        unplayed = ensure_deck_revision(self.deck_a, source="edit")[0].composition
+        for composition in (played, unplayed):
+            DeckCompositionFavorite.objects.create(
+                user=self.user_a, composition=composition
+            )
+        DeckCompositionFavorite.objects.create(user=self.user_b, composition=played)
+
+        params = {"scope": "favorites"}
+        self.assertEqual(self.client.get(self._browse_url(), params).status_code, 403)
+        self.client.force_authenticate(self.user_a)
+        response = self.client.get(self._browse_url(), params)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["scope"], "favorites")
+        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(response.data["summary"]["compositions"], 2)
+        self.assertEqual(response.data["summary"]["appearances"], 1)
+        self.assertEqual(response.data["summary"]["matches"], 1)
+        self.assertEqual(
+            [row["composition"]["code"] for row in response.data["results"]],
+            [played.code, unplayed.code],
+        )
+        self.assertEqual(response.data["results"][0]["record"]["wins"], 1)
+        self.assertEqual(
+            response.data["results"][1]["record"],
+            {"wins": 0, "losses": 0, "draws": 0, "games": 0, "win_rate": 0.0},
+        )
+
+        self.client.force_authenticate(self.user_b)
+        other = self.client.get(self._browse_url(), params)
+        self.assertEqual(other.data["count"], 1)
+        self.assertEqual(other.data["results"][0]["composition"]["code"], played.code)
+        self.client.force_authenticate(self.user_a)
+        remove_url = reverse(
+            "composition-favorite",
+            kwargs={"title_slug": self.title.slug, "code": unplayed.code},
+        )
+        self.assertEqual(self.client.delete(remove_url).status_code, 200)
+        self.assertEqual(self.client.get(self._browse_url(), params).data["count"], 1)
+
+    def test_favorites_search_sort_minimum_and_paginate_before_serialization(self):
+        game = self._create_game(self.deck_a, self.opponent_x)
+        for loadout in game.loadouts.all():
+            DeckCompositionFavorite.objects.create(
+                user=self.user_a, composition=loadout.composition
+            )
+        self.deck_a.deckcard_set.update(count=2)
+        unplayed = ensure_deck_revision(self.deck_a, source="edit")[0].composition
+        unplayed.name = "Future build"
+        unplayed.save(update_fields=["name"])
+        DeckCompositionFavorite.objects.create(user=self.user_a, composition=unplayed)
+        self.client.force_authenticate(self.user_a)
+        params = {"scope": "favorites", "page_size": 1}
+        for extra, code in (
+            ({}, "dt1.target-card~1"),
+            ({"sort": "games"}, "dt1.target-card~1"),
+            ({"sort": "win_rate_asc"}, "dt1.other-card~1"),
+            ({"page": 3}, unplayed.code),
+            ({"sort": "win_rate_asc", "page": 3}, unplayed.code),
+            ({"q": "Future build"}, unplayed.code),
+            ({"q": unplayed.code}, unplayed.code),
+            ({"q": "Target Card", "page": 2}, unplayed.code),
+        ):
+            with self.subTest(extra=extra):
+                response = self.client.get(self._browse_url(), {**params, **extra})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(
+                    response.data["results"][0]["composition"]["code"], code
+                )
+                self.assertEqual(response.data["summary"]["compositions"], 3)
+        for minimum, count in ((0, 3), (1, 2), (5, 0)):
+            response = self.client.get(
+                self._browse_url(), {**params, "min_games": minimum}
+            )
+            self.assertEqual(response.data["count"], count)
+        for invalid in ({"min_games": -1}, {"sort": "unknown"}, {"page": 0}):
+            self.assertEqual(
+                self.client.get(self._browse_url(), {**params, **invalid}).status_code,
+                400,
+            )
+
+    def test_favorite_records_follow_match_filters_without_hiding_saved_builds(self):
+        old = self._create_game(self.deck_b, self.opponent_x)
+        composition = old.loadouts.get(side=GameLoadout.SIDE_A).composition
+        DeckCompositionFavorite.objects.create(
+            user=self.user_a, composition=composition
+        )
+        Game.objects.filter(pk=old.pk).update(
+            created_at=timezone.now() - timedelta(days=40), ladder_type="daily"
+        )
+        self._create_game(
+            self.deck_b, self.opponent_x, game_type="friendly", winner_side=None
+        )
+        self._create_game(
+            self.deck_b, self.opponent_x, status=Game.GAME_STATUS_IN_PROGRESS
+        )
+        self._create_game(self.deck_b, self.opponent_x, game_type="pve")
+        self.client.force_authenticate(self.user_a)
+        for filters, games, wins, draws in (
+            ({"days": "7"}, 0, 0, 0),
+            ({"ladder": "rapid"}, 0, 0, 0),
+            ({"ladder": "daily"}, 1, 1, 0),
+            ({"game_type": "friendly"}, 1, 0, 1),
+        ):
+            with self.subTest(filters=filters):
+                response = self.client.get(
+                    self._browse_url(), {"scope": "favorites", **filters}
+                )
+                self.assertEqual(response.data["count"], 1)
+                record = response.data["results"][0]["record"]
+                self.assertEqual(record["games"], games)
+                self.assertEqual(record["wins"], wins)
+                self.assertEqual(record["draws"], draws)
+                self.assertEqual(response.data["summary"]["record"], record)
+
+    def test_favorites_respect_title_boundaries_and_access(self):
+        composition = ensure_deck_revision(self.deck_a, source="create")[0].composition
+        DeckCompositionFavorite.objects.create(
+            user=self.user_b, composition=composition
+        )
+        other_title = Title.objects.create(
+            slug="other-title",
+            name="Other title",
+            author=self.user_a,
+            status=Title.STATUS_PUBLISHED,
+        )
+        self.client.force_authenticate(self.user_b)
+        response = self.client.get(
+            reverse("composition-list", kwargs={"title_slug": other_title.slug}),
+            {"scope": "favorites"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 0)
+        self.assertEqual(response.data["summary"]["compositions"], 0)
+        self.title.status = Title.STATUS_DRAFT
+        self.title.save(update_fields=["status"])
+        self.assertEqual(
+            self.client.get(self._browse_url(), {"scope": "favorites"}).status_code, 403
+        )
 
     def test_browse_and_matchups_never_expose_players_or_source_decks(self):
         game = self._create_game(self.deck_a, self.opponent_x)

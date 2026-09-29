@@ -1,4 +1,5 @@
 export type CompositionGameType = 'ranked' | 'friendly'
+export type CompositionScope = 'all' | 'mine' | 'favorites'
 
 export interface CompositionCard {
   slug: string
@@ -91,7 +92,7 @@ export interface CompositionBrowseResponse {
   page: number
   page_size: number
   results: CompositionBrowseRow[]
-  scope?: 'all' | 'mine'
+  scope?: CompositionScope
   summary?: { matches: number; appearances: number; compositions: number; record: CompositionRecord }
   unattributed_appearances?: number
 }

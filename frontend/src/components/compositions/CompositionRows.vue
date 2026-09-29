@@ -25,7 +25,7 @@
         </div>
       </div>
       <div class="flex items-center justify-between gap-5 sm:ml-10 md:ml-0 md:block">
-        <div class="w-40">
+        <div v-if="row.record.games" class="w-40">
           <p :class="['text-xl font-bold tabular-nums', row.record.win_rate! >= 0.5 ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-800 dark:text-gray-200']">
             {{ ((row.record.win_rate || 0) * 100).toFixed(1) }}<span class="text-sm">%</span>
             <span class="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">{{ personal ? 'your win rate' : 'win rate' }}</span>
@@ -35,11 +35,12 @@
             <span class="absolute inset-y-0 left-1/2 w-px bg-gray-900/40 dark:bg-white/60" />
           </div>
         </div>
-        <p class="mt-2 text-xs tabular-nums text-gray-500 dark:text-gray-400">{{ row.record.wins }}W · {{ row.record.losses }}L · {{ row.record.draws }}D</p>
+        <p v-else class="text-sm text-gray-500 dark:text-gray-400">No recorded games</p>
+        <p v-if="row.record.games" class="mt-2 text-xs tabular-nums text-gray-500 dark:text-gray-400">{{ row.record.wins }}W · {{ row.record.losses }}L · {{ row.record.draws }}D</p>
       </div>
       <div class="flex items-center gap-2 sm:ml-10 md:ml-0 md:block md:text-right">
         <p class="text-sm font-semibold tabular-nums text-gray-800 dark:text-gray-200">{{ row.record.games.toLocaleString() }} <span class="font-normal text-gray-500">{{ personal ? 'games' : 'uses' }}</span></p>
-        <span v-if="row.record.games < 20" class="mt-1 inline-block text-xs text-amber-700 dark:text-amber-400" title="Fewer than 20 recorded uses. Results may change substantially with more games.">Small sample</span>
+        <span v-if="row.record.games > 0 && row.record.games < 20" class="mt-1 inline-block text-xs text-amber-700 dark:text-amber-400" title="Fewer than 20 recorded uses. Results may change substantially with more games.">Small sample</span>
       </div>
     </router-link>
   </div>
