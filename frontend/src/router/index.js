@@ -256,7 +256,14 @@ const routes = [
 
 const router = createRouter({
   history: createWebHistory(),
-  routes
+  routes,
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition
+    if (to.hash) return { el: to.hash }
+    // Keep filters and other query-only updates at the current position.
+    if (to.path === from.path) return false
+    return { left: 0, top: 0 }
+  }
 })
 
 // Navigation guards
