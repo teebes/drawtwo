@@ -86,7 +86,7 @@ class BuffAction(ActionBase):
     attribute: Literal["attack", "health"] = "attack"
     amount: AmountValue
     target: Literal["hero", "creature", "friendly", "self"] = "creature"
-    scope: Literal["single", "cleave", "all"] = "single"
+    scope: Literal["single", "cleave", "all", "adjacent"] = "single"
 
 
 GrantableTrait = Literal["taunt"]

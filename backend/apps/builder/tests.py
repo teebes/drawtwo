@@ -817,6 +817,71 @@ class TestCardYamlValidation(APITestCase):
             },
         )
 
+    def test_update_card_accepts_adjacent_taunt_and_health_buff(self):
+        card = CardTemplate.objects.create(
+            title=self.title,
+            slug="warden",
+            name="Warden",
+            card_type=CardTemplate.CARD_TYPE_CREATURE,
+            cost=4,
+            attack=3,
+            health=4,
+        )
+        url = reverse(
+            "card-detail", kwargs={"title_slug": self.title.slug, "card_slug": "warden"}
+        )
+        response = self.client.put(
+            url,
+            {
+                "bump_version": False,
+                "yaml_definition": """
+            type: card
+            card_type: creature
+            slug: warden
+            name: Warden
+            description: "Battlecry: Give adjacent creatures Taunt and +1 health."
+            cost: 4
+            attack: 3
+            health: 4
+            traits:
+              - type: battlecry
+                actions:
+                  - action: grant_trait
+                    trait: taunt
+                    target: self
+                    scope: adjacent
+                  - action: buff
+                    attribute: health
+                    amount: 1
+                    target: self
+                    scope: adjacent
+            """,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        card.refresh_from_db()
+        self.assertEqual((card.cost, card.attack, card.health), (4, 3, 4))
+        self.assertIn("+1 health", card.description)
+        self.assertEqual(
+            card.cardtrait_set.get().data["actions"],
+            [
+                {
+                    "action": "grant_trait",
+                    "trait": "taunt",
+                    "target": "self",
+                    "scope": "adjacent",
+                },
+                {
+                    "action": "buff",
+                    "attribute": "health",
+                    "amount": 1,
+                    "target": "self",
+                    "scope": "adjacent",
+                },
+            ],
+        )
+
     def test_create_card_accepts_filtered_draw_action(self):
         url = reverse("card-create", kwargs={"title_slug": self.title.slug})
         yaml_definition = """

@@ -23,7 +23,7 @@ export type CardAction =
   | { action: 'temp_mana_boost'; amount: EventAmount; target?: 'hero' | 'creature' | 'friendly' }
   | { action: 'summon'; target: string }
   | { action: 'clear'; target?: 'both' | 'own' | 'opponent' }
-  | { action: 'buff'; attribute: 'attack' | 'health'; amount: EventAmount; target: 'hero' | 'creature' | 'friendly' | 'self'; scope?: 'single' | 'cleave' | 'all' }
+  | { action: 'buff'; attribute: 'attack' | 'health'; amount: EventAmount; target: 'hero' | 'creature' | 'friendly' | 'self'; scope?: 'single' | 'cleave' | 'all' | 'adjacent' }
 
 export interface TriggerEntityFilter {
   kind?: 'card' | 'creature' | 'hero' | 'board'

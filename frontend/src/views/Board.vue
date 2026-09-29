@@ -2055,7 +2055,7 @@ function requiresBattlecryTarget(card: CardInPlay): boolean {
             (action.action === 'damage' || action.action === 'heal' || action.action === 'remove' || action.action === 'silence' || action.action === 'buff') &&
             action.scope !== 'all'
         ) {
-            if (action.action === 'buff' && action.target === 'hero') {
+            if (action.action === 'buff' && (action.target === 'hero' || action.target === 'self')) {
                 continue
             }
             return true
@@ -2113,6 +2113,7 @@ function getBattlecryTargetScope(card: CardInPlay): 'enemy' | 'friendly' {
     if (!battlecry) return 'enemy'
 
     for (const action of battlecry.actions || []) {
+        if (action.action === 'buff' && action.target === 'self') continue
         // Heal actions target friendly units
         if (action.action === 'heal') {
             return 'friendly'
@@ -2173,7 +2174,7 @@ function requiresTarget(card: CardInPlay): boolean {
                 // Actions that require targeting (single and cleave need targets, AOE doesn't)
                 if ((action.action === 'damage' || action.action === 'heal' || action.action === 'remove' || action.action === 'silence' || action.action === 'buff') &&
                     action.scope !== 'all') {
-                    if (action.action === 'buff' && action.target === 'hero') {
+                    if (action.action === 'buff' && (action.target === 'hero' || action.target === 'self')) {
                         continue
                     }
                     return true
@@ -2235,6 +2236,7 @@ function getSpellTargetScope(card: CardInPlay): 'enemy' | 'friendly' {
     for (const trait of traits) {
         const actions = trait.actions || []
         for (const action of actions) {
+            if (action.action === 'buff' && action.target === 'self') continue
             // Heal actions target friendly units
             if (action.action === 'heal') {
                 return 'friendly'
@@ -2266,6 +2268,7 @@ function getHeroPowerTargetScope(hero: any): 'enemy' | 'friendly' {
 
     const actions = hero.hero_power.actions || []
     for (const action of actions) {
+        if (action.action === 'buff' && action.target === 'self') continue
         // Heal actions target friendly units
         if (action.action === 'heal') {
             return 'friendly'

@@ -1026,7 +1026,7 @@ class GameService:
             return False
         if isinstance(action, HealAction) and action.target == "hero":
             return False
-        if isinstance(action, BuffAction) and action.target == "hero":
+        if isinstance(action, BuffAction) and action.target in ("hero", "self"):
             return False
         return isinstance(
             action,
@@ -1343,6 +1343,16 @@ class GameService:
         return math.ceil(value * amount.multiplier)
 
     @staticmethod
+    def adjacent_creature_ids(
+        state: GameState, side: str, creature_id: str | None
+    ) -> list[str]:
+        board = state.board[side]
+        if creature_id not in board:
+            return []
+        index = board.index(creature_id)
+        return board[max(0, index - 1) : index] + board[index + 1 : index + 2]
+
+    @staticmethod
     def compile_action(
         state: GameState,
         event: ActionableEvent,
@@ -1356,6 +1366,7 @@ class GameService:
         - 'single': targets one entity
         - 'all': targets all valid entities on the target side
         - 'cleave': targets the selected entity and adjacent entities
+        - 'adjacent': grants/buffs only the anchor creature's immediate neighbors
         """
 
         # If a creature death event is triggering an action, we can safely assume
@@ -1383,9 +1394,8 @@ class GameService:
                 return []
 
             if action.scope == "adjacent":
-                index = board.index(anchor_id)
-                target_ids = (
-                    board[max(0, index - 1) : index] + board[index + 1 : index + 2]
+                target_ids = GameService.adjacent_creature_ids(
+                    state, event.side, anchor_id
                 )
             else:
                 target_ids = [anchor_id]
@@ -1707,7 +1717,10 @@ class GameService:
                 base_target_type = "hero"
                 base_target_id = state.heroes[same_side].hero_id
             elif action.target == "self":
-                if source_type in ("hero", "creature") and source_id:
+                if isinstance(event, PlayEvent):
+                    base_target_type = "creature"
+                    base_target_id = event.creature_id
+                elif source_type in ("hero", "creature") and source_id:
                     base_target_type = source_type
                     base_target_id = source_id
                 else:
@@ -1767,6 +1780,15 @@ class GameService:
                 elif base_target_id:
                     # If not a creature, just buff the single target
                     targets = [(base_target_type, base_target_id)]
+
+            elif action.scope == "adjacent":
+                if base_target_type == "creature":
+                    targets = [
+                        ("creature", creature_id)
+                        for creature_id in GameService.adjacent_creature_ids(
+                            state, same_side, base_target_id
+                        )
+                    ]
 
             # Create buff effects for each target
             effects = []

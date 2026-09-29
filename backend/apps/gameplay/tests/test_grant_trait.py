@@ -1,6 +1,6 @@
 from pydantic import TypeAdapter, ValidationError
 
-from apps.builder.schemas import Action, Battlecry, GrantTraitAction, Taunt
+from apps.builder.schemas import Action, Battlecry, BuffAction, GrantTraitAction, Taunt
 from apps.gameplay.agents.legal import list_legal_commands
 from apps.gameplay.agents.policies.smart import SmartPolicy
 from apps.gameplay.agents.simulator import apply_command, apply_effects
@@ -19,6 +19,7 @@ from apps.gameplay.schemas.engine import Rejected, Success
 from apps.gameplay.schemas.events import Event
 from apps.gameplay.schemas.game import CardInPlay, GameState
 from apps.gameplay.schemas.updates import GameUpdate
+from apps.gameplay.services import GameService
 from apps.gameplay.tests import GamePlayTestBase
 
 
@@ -290,3 +291,137 @@ class TestGrantTraitAction(GamePlayTestBase):
                         field: value,
                     }
                 )
+
+    def test_adjacent_health_buff_and_taunt_affect_the_same_neighbors(self):
+        for side in ("side_a", "side_b"):
+            for count, position in ((0, 0), (1, 0), (1, 1), (4, 0), (4, 2), (4, 4)):
+                with self.subTest(side=side, count=count, position=position):
+                    state = self.make_state(side, count)
+                    state.cards["guardian"].traits[0].actions.append(
+                        BuffAction(
+                            attribute="health",
+                            amount=1,
+                            target="self",
+                            scope="adjacent",
+                        )
+                    )
+                    # A health buff increases current and maximum health, even
+                    # when the recipient has already taken damage.
+                    for creature in state.creatures.values():
+                        creature.health = 2
+                    original_board = state.board[side][:]
+                    expected = set(original_board[max(0, position - 1) : position + 1])
+                    state = GameState.model_validate_json(state.model_dump_json())
+                    result = self.play_guardian(state, position)
+                    for cid, before in state.creatures.items():
+                        after = result.state.creatures[cid]
+                        increase = int(cid in expected)
+                        self.assertEqual(after.health, before.health + increase)
+                        self.assertEqual(after.health_max, before.health_max + increase)
+                        self.assertEqual(self.has_taunt(after), bool(increase))
+                        self.assertEqual(result.state.cards[after.card_id].health, 3)
+                    source = result.state.creatures[result.state.board[side][position]]
+                    self.assertEqual((source.health, source.health_max), (3, 3))
+                    self.assertFalse(self.has_taunt(source))
+                    buffs = [u for u in result.updates if u["type"] == "update_buff"]
+                    self.assertEqual({u["target_id"] for u in buffs}, expected)
+                    self.assertTrue(
+                        all(
+                            u["attribute"] == "health" and u["amount"] == 1
+                            for u in buffs
+                        )
+                    )
+
+    def test_adjacent_attack_buff_uses_the_same_targeting(self):
+        state = self.make_state()
+        state.cards["guardian"].traits[0].actions = [
+            BuffAction(attribute="attack", amount=1, target="self", scope="adjacent")
+        ]
+        result = self.play_guardian(state, 1)
+        self.assertEqual(
+            [
+                result.state.creatures[cid].attack
+                for cid in result.state.board["side_a"]
+            ],
+            [2, 1, 2],
+        )
+
+    def test_self_buff_battlecry_uses_played_creature_not_an_explicit_target(self):
+        state = self.make_state()
+        state.cards["guardian"].traits[0].actions = [
+            BuffAction(attribute="health", amount=1, target="self")
+        ]
+        neighbor = state.board["side_a"][0]
+        result = apply_command(
+            state,
+            "side_a",
+            PlayCardCommand(
+                card_id="guardian",
+                position=1,
+                target_type="creature",
+                target_id=neighbor,
+            ),
+        )
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.state.creatures[neighbor].health, 3)
+        source = result.state.creatures[result.state.board["side_a"][1]]
+        self.assertEqual((source.health, source.health_max), (4, 4))
+
+    def test_adjacent_buff_can_use_a_selected_friendly_creature_as_anchor(self):
+        state = self.make_state(count=4)
+        state.cards["guardian"].card_type = "spell"
+        state.cards["guardian"].traits[0].actions = [
+            BuffAction(
+                attribute="health", amount=1, target="creature", scope="adjacent"
+            )
+        ]
+        result = apply_command(
+            state,
+            "side_a",
+            PlayCardCommand(
+                card_id="guardian",
+                position=0,
+                target_type="creature",
+                target_id=state.board["side_a"][1],
+            ),
+        )
+        self.assertEqual(result.errors, [])
+        self.assertEqual(
+            [
+                result.state.creatures[cid].health
+                for cid in result.state.board["side_a"]
+            ],
+            [4, 3, 4, 3],
+        )
+
+    def test_adjacent_buff_does_nothing_without_a_creature_anchor(self):
+        state = self.make_state()
+        state.cards["guardian"].card_type = "spell"
+        for target in ("self", "hero"):
+            with self.subTest(target=target):
+                state.cards["guardian"].traits[0].actions = [
+                    BuffAction(
+                        attribute="health", amount=1, target=target, scope="adjacent"
+                    )
+                ]
+                result = self.play_guardian(state, 0)
+                self.assertEqual(result.state.creatures, state.creatures)
+                self.assertEqual(result.state.heroes, state.heroes)
+
+    def test_ai_can_play_combined_adjacent_buff_without_a_target(self):
+        for count in (0, 2):
+            state = self.make_state(count=count)
+            actions = state.cards["guardian"].traits[0].actions
+            actions.append(
+                BuffAction(
+                    attribute="health", amount=1, target="self", scope="adjacent"
+                )
+            )
+            self.assertFalse(GameService.actions_require_selected_target(actions))
+            commands = [
+                c
+                for c in list_legal_commands(state, "side_a")
+                if isinstance(c, PlayCardCommand)
+            ]
+            self.assertEqual([c.position for c in commands], list(range(count + 1)))
+            self.assertTrue(all(c.target_id is None for c in commands))

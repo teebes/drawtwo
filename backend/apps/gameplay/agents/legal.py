@@ -108,7 +108,7 @@ def _action_requires_selected_target(action: Action) -> bool:
         return False
     if isinstance(action, HealAction) and action.target == "hero":
         return False
-    if isinstance(action, BuffAction) and action.target == "hero":
+    if isinstance(action, BuffAction) and action.target in ("hero", "self"):
         return False
     return isinstance(
         action,

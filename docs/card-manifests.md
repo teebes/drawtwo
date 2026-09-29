@@ -93,6 +93,34 @@ Currently `grant_trait` supports `trait: taunt`, `target: self`, and either
 It requires a source creature on the board; spells, heroes, and creatures that
 have already left the board have no effect with these targets.
 
+### Buffing Adjacent Creatures
+
+The `buff` action also supports `scope: adjacent` for attack or health. With
+`target: self`, it uses the newly played creature as the anchor and requires no
+target selection. The same zero-, one-, or two-neighbor rules apply, excluding
+the anchor itself. Health buffs increase both current and maximum health.
+
+To grant adjacent creatures Taunt and +1 health, combine the two actions:
+
+```yaml
+traits:
+  - type: battlecry
+    actions:
+      - action: grant_trait
+        trait: taunt
+        target: self
+        scope: adjacent
+      - action: buff
+        attribute: health
+        amount: 1
+        target: self
+        scope: adjacent
+```
+
+For a buff centered on a chosen friendly creature, use `target: creature` with
+`scope: adjacent`; that requires selecting the anchor. Heroes and spells used
+as self anchors have no adjacent creatures and produce no buffs.
+
 ### Filtered Draws
 
 A draw action can include an optional `spec` that selects cards by a partial

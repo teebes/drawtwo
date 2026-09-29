@@ -1552,6 +1552,11 @@ final class GameDetailViewModel: ObservableObject {
                 let target = action["target"]?.stringValue ?? ""
                 let actionScope = action["scope"]?.stringValue ?? "single"
 
+                // Automatic self buffs must not change another action's target rules.
+                if actionName == "buff" && target == "self" {
+                    continue
+                }
+
                 if actionName == "damage", action["damage_type"]?.stringValue == "spell" {
                     bypassTaunt = true
                 }
