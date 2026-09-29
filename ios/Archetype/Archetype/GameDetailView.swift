@@ -1240,6 +1240,19 @@ final class GameDetailViewModel: ObservableObject {
                 side: update.side
             ) ?? "a creature"
             return "\(sideName)Silence \(target)"
+        case "update_clear":
+            let source = entityName(
+                type: update.value["source_type"]?.stringValue,
+                id: update.value["source_id"]?.stringValue,
+                side: update.side
+            ) ?? "a unit"
+            let target: String
+            switch update.value["target"]?.stringValue {
+            case "opponent": target = "enemy board"
+            case "own": target = "own board"
+            default: target = "all creatures"
+            }
+            return "\(sideName)\(source) clears \(target)"
         case "update_game_over":
             return gameOverUpdateText(update)
         default:

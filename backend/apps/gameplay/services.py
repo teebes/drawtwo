@@ -747,7 +747,8 @@ class GameService:
 
         # See if we need to choose an AI move
         if (
-            len(game.queue) == 0
+            game.status == Game.GAME_STATUS_IN_PROGRESS
+            and len(game.queue) == 0
             and game.state["phase"] == "main"
             and game.state["active"] in game.state["ai_sides"]
         ):

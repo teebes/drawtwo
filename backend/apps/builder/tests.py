@@ -931,6 +931,43 @@ class TestIngestion(TestCase):
             name="Test Title", slug="test-title", author=self.user
         ).title
 
+    def test_damage_order_and_clear_deathrattle_survive_import_and_export(self):
+        manifest = """
+        - type: card
+          card_type: creature
+          slug: ordered-effects
+          name: Ordered Effects
+          cost: 4
+          attack: 4
+          health: 4
+          traits:
+            - type: battlecry
+              actions:
+                - action: damage
+                  amount: 1
+                  target: enemy
+                  scope: all
+                  damage_type: spell
+                - action: damage
+                  amount: 1
+                  target: friendly
+                  scope: all
+                  damage_type: spell
+            - type: deathrattle
+              actions:
+                - action: clear
+                  target: both
+        """
+        service = IngestionService(self.title)
+        service.ingest_yaml(manifest)
+        original = service.parse_yaml_resources(manifest)[0]
+        exported = next(
+            resource
+            for resource in service.parse_yaml_resources(service.export_snapshot_yaml())
+            if resource.type == "card" and resource.slug == original.slug
+        )
+        self.assertEqual(exported.traits, original.traits)
+
     def test_ingest_new_card(self):
         card_yaml = """
         - type: card

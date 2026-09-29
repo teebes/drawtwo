@@ -64,6 +64,28 @@ Common valid trait types include `charge`, `ranged`, `taunt`, `battlecry`,
 include `draw`, `damage`, `heal`, `remove`, `buff`, `summon`, `clear`, and
 `temp_mana_boost`.
 
+### Ordered Damage To Both Sides
+
+To damage both sides, put two `damage` actions in one Battlecry: first
+`target: enemy`, then `target: friendly`, each with `scope: all` and
+`damage_type: spell`. Each action includes that side's creatures and hero.
+The played creature is already on the board, so it also takes friendly damage.
+
+Actions resolve in their listed order. Within each damage action, creatures are
+hit in board order, followed by the hero. Damage triggers and deathrattles resolve
+between hits. The game ends immediately when a hero loses; remaining effects are
+discarded. Enemy-first ordering therefore favors the caster if both heroes would
+die, unless an earlier creature's triggered effect ends the game first.
+
+Both actions select their targets when the Battlecry starts. Creatures summoned
+during resolution are not added to those targets, and creatures that have already
+left the board are skipped. The remaining damage still resolves if its source
+creature dies, unless the game has ended.
+
+The `clear` action can also run from a Deathrattle or a creature's triggered
+ability. It removes creatures without triggering their Deathrattles; `own` and
+`opponent` are relative to the source creature's controller.
+
 ### Granting Taunt To Adjacent Creatures
 
 Use a Battlecry with `grant_trait` to give Taunt to the friendly creatures

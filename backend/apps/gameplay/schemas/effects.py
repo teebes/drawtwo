@@ -156,7 +156,7 @@ class SummonEffect(EffectBase):
 
 class ClearEffect(EffectBase):
     type: Literal["effect_clear"] = "effect_clear"
-    source_type: Literal["card", "hero"] = "card"
+    source_type: Literal["card", "hero", "creature"] = "card"
     source_id: str
     target: Literal["both", "own", "opponent"] = "both"
 

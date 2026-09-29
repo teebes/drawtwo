@@ -150,7 +150,7 @@ class SummonEvent(EventBase):
 
 class ClearEvent(EventBase):
     type: Literal["event_clear"] = "event_clear"
-    source_type: Literal["card", "hero"] = "card"
+    source_type: Literal["card", "hero", "creature"] = "card"
     source_id: str
     target: Literal["both", "own", "opponent"] = "both"
 

@@ -148,7 +148,7 @@ class SilenceUpdate(UpdateBase):
 
 class ClearUpdate(UpdateBase):
     type: Literal["update_clear"] = "update_clear"
-    source_type: Literal["card", "hero"] = "card"
+    source_type: Literal["card", "hero", "creature"] = "card"
     source_id: str
     target: Literal["both", "own", "opponent"] = "both"
     cleared_creature_ids: list[str]

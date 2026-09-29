@@ -435,6 +435,7 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
         events.append(
             DamageEvent(
                 side=effect.side,
+                damage_type=effect.damage_type,
                 source_type=effect.source_type,
                 source_id=effect.source_id,
                 source_side=effect.side,
@@ -479,6 +480,7 @@ def damage(effect: DamageEffect, state: GameState) -> Result:
         events.append(
             DamageEvent(
                 side=effect.side,
+                damage_type=effect.damage_type,
                 source_type=effect.source_type,
                 source_id=effect.source_id,
                 source_side=effect.side,
