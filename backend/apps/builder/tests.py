@@ -777,6 +777,46 @@ class TestCardYamlValidation(APITestCase):
             {"actions": [{"action": "silence", "target": "enemy", "scope": "single"}]},
         )
 
+    def test_create_card_accepts_adjacent_taunt_grant(self):
+        url = reverse("card-create", kwargs={"title_slug": self.title.slug})
+        response = self.client.post(
+            url,
+            {
+                "slug": "guardian",
+                "yaml_definition": """
+                name: Guardian
+                description: Give adjacent creatures Taunt.
+                card_type: creature
+                cost: 2
+                attack: 1
+                health: 3
+                traits:
+                  - type: battlecry
+                    actions:
+                      - action: grant_trait
+                        trait: taunt
+                        target: self
+                        scope: adjacent
+                """,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        card = CardTemplate.objects.get(title=self.title, slug="guardian")
+        self.assertEqual(
+            card.cardtrait_set.get().data,
+            {
+                "actions": [
+                    {
+                        "action": "grant_trait",
+                        "trait": "taunt",
+                        "target": "self",
+                        "scope": "adjacent",
+                    }
+                ]
+            },
+        )
+
     def test_create_card_accepts_filtered_draw_action(self):
         url = reverse("card-create", kwargs={"title_slug": self.title.slug})
         yaml_definition = """

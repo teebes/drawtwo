@@ -7,6 +7,7 @@ from apps.builder.schemas import (
     Action,
     BuffAction,
     DamageAction,
+    GrantTraitAction,
     HealAction,
     RemoveAction,
     SilenceAction,
@@ -99,6 +100,8 @@ def _friendly_hero_target(state: GameState, side: str) -> list[Target]:
 
 
 def _action_requires_selected_target(action: Action) -> bool:
+    if isinstance(action, GrantTraitAction):
+        return False
     if getattr(action, "scope", "single") == "all":
         return False
     if isinstance(action, DamageAction) and action.target in ("hero", "self"):

@@ -64,6 +64,35 @@ Common valid trait types include `charge`, `ranged`, `taunt`, `battlecry`,
 include `draw`, `damage`, `heal`, `remove`, `buff`, `summon`, `clear`, and
 `temp_mana_boost`.
 
+### Granting Taunt To Adjacent Creatures
+
+Use a Battlecry with `grant_trait` to give Taunt to the friendly creatures
+immediately beside the creature being played:
+
+```yaml
+traits:
+  - type: battlecry
+    actions:
+      - action: grant_trait
+        trait: taunt
+        target: self
+        scope: adjacent
+```
+
+`self` identifies the newly played creature after placement; `adjacent` selects
+only its immediate left and right neighbors, excluding that creature. At a board
+edge only one neighbor receives Taunt. On an empty board nothing receives Taunt,
+and the card can still be played. No target selection is required.
+
+This is a one-time grant, not an aura. Recipients retain Taunt when the source
+dies, and later neighbors do not gain it. Existing Taunt is not duplicated.
+Silence removes granted Taunt, and the recipient's underlying card is unchanged.
+
+Currently `grant_trait` supports `trait: taunt`, `target: self`, and either
+`scope: adjacent` or `scope: single` (the default, granting Taunt to itself).
+It requires a source creature on the board; spells, heroes, and creatures that
+have already left the board have no effect with these targets.
+
 ### Filtered Draws
 
 A draw action can include an optional `spec` that selects cards by a partial

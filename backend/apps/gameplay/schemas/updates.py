@@ -128,6 +128,15 @@ class RemoveUpdate(UpdateBase):
     target_id: str
 
 
+class GrantTraitUpdate(UpdateBase):
+    type: Literal["update_grant_trait"] = "update_grant_trait"
+    source_type: Literal["card", "creature", "hero", "board"] = "card"
+    source_id: str
+    target_type: Literal["creature"] = "creature"
+    target_id: str
+    trait: Literal["taunt"]
+
+
 class SilenceUpdate(UpdateBase):
     type: Literal["update_silence"] = "update_silence"
     source_type: Literal["card", "hero", "creature", "board"] = "card"
@@ -153,6 +162,7 @@ GameUpdate = Annotated[
         ClearUpdate,
         DamageUpdate,
         GameAbortedUpdate,
+        GrantTraitUpdate,
         HealUpdate,
         HeroDamageUpdate,
         DrawPhaseUpdate,

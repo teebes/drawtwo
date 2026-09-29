@@ -139,6 +139,29 @@
         />
     </div>
 
+    <!-- Grant Trait -->
+    <div class="game-update flex items-center" v-else-if="props.update.type === 'update_grant_trait'">
+        <UpdateEntity
+            v-if="source && gameStore.viewer"
+            :name="source.name"
+            :art_url="'art_url' in source ? source.art_url : null"
+            :class="isViewerTurn ? 'border-green-500' : 'border-red-500'"
+        />
+        <div class="flex items-center mx-2">
+            <div class="ui-status-badge ui-status-info gap-1.5" aria-label="Grant Taunt">
+                <span aria-hidden="true">🛡️</span>
+                <span>Taunt</span>
+                <span aria-hidden="true">→</span>
+            </div>
+        </div>
+        <UpdateEntity
+            v-if="target && gameStore.viewer"
+            :name="target.name"
+            :art_url="'art_url' in target ? target.art_url : null"
+            :class="isViewerTurn ? 'border-green-500' : 'border-red-500'"
+        />
+    </div>
+
     <!-- Silence -->
     <div class="game-update flex items-center" v-else-if="props.update.type === 'update_silence'">
         <UpdateEntity
@@ -349,6 +372,11 @@ const updateText = (update: any) => {
 
         const attribute = update.attribute === 'attack' ? 'attack' : 'health';
         return `${side_name} ${source_name} > ${target_name} (+${update.amount} ${attribute})`;
+    }
+
+    if (update.type === "update_grant_trait") {
+        const target = gameStore.getCreature(update.target_id);
+        return `${side_name}${target?.name || 'A creature'} gains Taunt`;
     }
 
     if (update.type === "update_silence") {

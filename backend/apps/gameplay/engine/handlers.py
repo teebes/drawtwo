@@ -8,9 +8,11 @@ from apps.builder.schemas import (
     Action,
     BuffAction,
     DamageAction,
+    GrantTraitAction,
     HealAction,
     RemoveAction,
     SilenceAction,
+    Trait,
 )
 from apps.gameplay.engine.dispatcher import register
 from apps.gameplay.schemas.effects import (
@@ -21,6 +23,7 @@ from apps.gameplay.schemas.effects import (
     DamageEffect,
     DrawEffect,
     EndTurnEffect,
+    GrantTraitEffect,
     HealEffect,
     MarkExhaustedEffect,
     MulliganEffect,
@@ -42,6 +45,7 @@ from apps.gameplay.schemas.events import (
     DrawEvent,
     EndTurnEvent,
     GameOverEvent,
+    GrantTraitEvent,
     HealEvent,
     MulliganEvent,
     NewPhaseEvent,
@@ -219,6 +223,9 @@ def _card_play_requires_target(card: CardInPlay) -> bool:
     - actions that always resolve to a fixed hero target do not require a target
     """
     for action in _iter_validated_play_actions(card):
+        if isinstance(action, GrantTraitAction):
+            # Self and its neighbors are resolved after placement.
+            continue
         if isinstance(
             action,
             (DamageAction, HealAction, RemoveAction, SilenceAction, BuffAction),
@@ -1107,6 +1114,32 @@ def remove(effect: RemoveEffect, state: GameState) -> Result:
     )
 
     return Success(new_state=state, events=events, child_effects=[])
+
+
+@register("effect_grant_trait")
+def grant_trait(effect: GrantTraitEffect, state: GameState) -> Result:
+    """Grant a keyword to a live friendly creature without changing its card."""
+    creature = state.creatures.get(effect.target_id)
+    # Another effect may have removed the selected neighbor before this resolves.
+    if not creature or effect.target_id not in state.board[effect.side]:
+        return Success(new_state=state, events=[])
+    if any(trait.type == effect.trait for trait in creature.traits):
+        return Success(new_state=state, events=[])
+
+    granted = TypeAdapter(Trait).validate_python({"type": effect.trait})
+    creature.traits = [*creature.traits, granted]
+    return Success(
+        new_state=state,
+        events=[
+            GrantTraitEvent(
+                side=effect.side,
+                source_type=effect.source_type,
+                source_id=effect.source_id,
+                target_id=effect.target_id,
+                trait=effect.trait,
+            )
+        ],
+    )
 
 
 @register("effect_silence")

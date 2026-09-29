@@ -218,6 +218,9 @@ struct BoardCombatMarker {
         case "update_buff":
             kind = .buff
             valueText = "+\(update.value["amount"]?.intValue ?? 0)"
+        case "update_grant_trait":
+            kind = .buff
+            valueText = "Taunt"
         case "update_remove":
             kind = .remove
             valueText = nil
@@ -608,6 +611,7 @@ final class GameDetailViewModel: ObservableObject {
         "update_damage",
         "update_heal",
         "update_buff",
+        "update_grant_trait",
         "update_summon",
         "update_remove",
         "update_silence",
@@ -1208,6 +1212,13 @@ final class GameDetailViewModel: ObservableObject {
             let attribute = update.value["attribute"]?.stringValue ?? "stat"
             let amount = update.value["amount"]?.intValue ?? 0
             return "\(sideName)\(target) gains +\(amount) \(attribute)"
+        case "update_grant_trait":
+            let target = entityName(
+                type: update.value["target_type"]?.stringValue,
+                id: update.value["target_id"]?.stringValue,
+                side: update.side
+            ) ?? "a creature"
+            return "\(sideName)\(target) gains Taunt"
         case "update_summon":
             let target = entityName(
                 type: update.value["target_type"]?.stringValue,
@@ -4052,6 +4063,15 @@ private struct LatestUpdateChip: View {
                     ),
                     targetBorderColor: borderColor
                 )
+            case "update_grant_trait":
+                compactEntityAction(
+                    badge: UpdateActionBadge(
+                        text: "Taunt",
+                        glyph: "🛡️",
+                        color: ArchetypeTheme.sky
+                    ),
+                    targetBorderColor: borderColor
+                )
             case "update_remove":
                 compactEntityAction(
                     badge: UpdateActionBadge(
@@ -6613,6 +6633,15 @@ private struct UpdateLogRow: View {
                     ),
                     targetBorderColor: borderColor
                 )
+            case "update_grant_trait":
+                entityActionRow(
+                    badge: UpdateActionBadge(
+                        text: "Taunt",
+                        glyph: "🛡️",
+                        color: ArchetypeTheme.sky
+                    ),
+                    targetBorderColor: borderColor
+                )
             case "update_remove":
                 entityActionRow(
                     badge: UpdateActionBadge(
@@ -6803,6 +6832,8 @@ private struct UpdateGlyph: View {
             return "cross.fill"
         case "update_buff":
             return "arrow.up.circle.fill"
+        case "update_grant_trait":
+            return "shield.fill"
         case "update_draw_card":
             return "rectangle.stack.fill"
         case "update_play_card":
@@ -6828,7 +6859,7 @@ private struct UpdateGlyph: View {
             return ArchetypeTheme.red
         case "update_heal":
             return ArchetypeTheme.green
-        case "update_silence":
+        case "update_silence", "update_grant_trait":
             return ArchetypeTheme.sky
         case "update_buff", "update_summon":
             return ArchetypeTheme.violet

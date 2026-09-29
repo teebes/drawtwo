@@ -2,7 +2,7 @@ from typing import Annotated, Any, Literal, Optional, Union
 
 from pydantic import BaseModel, Discriminator, Field
 
-from apps.builder.schemas import DeckScript
+from apps.builder.schemas import DeckScript, GrantableTrait
 
 
 class EffectBase(BaseModel):
@@ -161,6 +161,15 @@ class ClearEffect(EffectBase):
     target: Literal["both", "own", "opponent"] = "both"
 
 
+class GrantTraitEffect(EffectBase):
+    type: Literal["effect_grant_trait"] = "effect_grant_trait"
+    source_type: Literal["card", "creature", "hero", "board"] = "card"
+    source_id: str
+    target_type: Literal["creature"] = "creature"
+    target_id: str
+    trait: GrantableTrait
+
+
 class BuffEffect(EffectBase):
     type: Literal["effect_buff"] = "effect_buff"
     source_type: Literal["card", "creature", "hero"] = "creature"
@@ -181,6 +190,7 @@ Effect = Annotated[
         DamageEffect,
         DrawEffect,
         EndTurnEffect,
+        GrantTraitEffect,
         HealEffect,
         MarkExhaustedEffect,
         MulliganEffect,

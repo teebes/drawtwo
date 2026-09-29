@@ -117,6 +117,15 @@ class RemoveEvent(EventBase):
     target_id: str
 
 
+class GrantTraitEvent(EventBase):
+    type: Literal["event_grant_trait"] = "event_grant_trait"
+    source_type: Literal["card", "creature", "hero", "board"] = "card"
+    source_id: str
+    target_type: Literal["creature"] = "creature"
+    target_id: str
+    trait: Literal["taunt"]
+
+
 class SilenceEvent(EventBase):
     type: Literal["event_silence"] = "event_silence"
     source_type: Literal["card", "hero", "creature", "board"] = "card"
@@ -165,6 +174,7 @@ Event = Annotated[
         DrawEvent,
         EndTurnEvent,
         GameOverEvent,
+        GrantTraitEvent,
         HealEvent,
         MulliganEvent,
         NewPhaseEvent,

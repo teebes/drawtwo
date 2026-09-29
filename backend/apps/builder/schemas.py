@@ -89,12 +89,23 @@ class BuffAction(ActionBase):
     scope: Literal["single", "cleave", "all"] = "single"
 
 
+GrantableTrait = Literal["taunt"]
+
+
+class GrantTraitAction(ActionBase):
+    action: Literal["grant_trait"] = "grant_trait"
+    trait: GrantableTrait
+    target: Literal["self"] = "self"
+    scope: Literal["single", "adjacent"] = "single"
+
+
 Action = Annotated[
     Union[
         BuffAction,
         ClearAction,
         DrawAction,
         DamageAction,
+        GrantTraitAction,
         HealAction,
         RemoveAction,
         SilenceAction,

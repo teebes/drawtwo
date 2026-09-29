@@ -14,6 +14,7 @@ export type EventAmount =
   | { event: 'amount' | 'damage' | 'damage_taken' | 'healing_done'; multiplier?: number }
 
 export type CardAction =
+  | { action: 'grant_trait'; trait: 'taunt'; target?: 'self'; scope?: 'single' | 'adjacent' }
   | { action: 'draw'; amount: EventAmount; spec?: Record<string, unknown> }
   | { action: 'damage'; amount: EventAmount; target: 'hero' | 'creature' | 'enemy' | 'self' | 'friendly'; scope?: 'single' | 'cleave' | 'all'; damage_type?: 'physical' | 'spell' }
   | { action: 'heal'; amount: EventAmount; target: 'hero' | 'creature' | 'friendly' | 'self'; scope?: 'single' | 'cleave' | 'all' }

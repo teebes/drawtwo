@@ -369,6 +369,7 @@ export const useGameStore = defineStore('game', {
           'update_damage',
           'update_heal',
           'update_buff',
+          'update_grant_trait',
           'update_summon',
           'update_remove',
           'update_silence',

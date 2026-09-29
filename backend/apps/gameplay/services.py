@@ -22,6 +22,7 @@ from apps.builder.schemas import (
     DamageAction,
     DrawAction,
     EventValue,
+    GrantTraitAction,
     HealAction,
     HeroPower,
     RemoveAction,
@@ -60,6 +61,7 @@ from apps.gameplay.schemas.effects import (
     DrawEffect,
     Effect,
     EndTurnEffect,
+    GrantTraitEffect,
     HealEffect,
     MulliganEffect,
     PlayEffect,
@@ -78,6 +80,7 @@ from apps.gameplay.schemas.events import (
     Event,
     GameOverEvent,
     NewPhaseEvent,
+    PlayEvent,
 )
 from apps.gameplay.schemas.game import CardInPlay, GameState, HeroInPlay
 
@@ -1367,6 +1370,37 @@ class GameService:
             source_type = event.source_type
             is_deathrattle = False
 
+        if isinstance(action, GrantTraitAction):
+            # A played card and its creature have different IDs. Battlecry runs
+            # after insertion, so the play event identifies the correct anchor.
+            anchor_id = (
+                event.creature_id
+                if isinstance(event, PlayEvent)
+                else source_id if source_type == "creature" else None
+            )
+            board = state.board[event.side]
+            if anchor_id not in board:
+                return []
+
+            if action.scope == "adjacent":
+                index = board.index(anchor_id)
+                target_ids = (
+                    board[max(0, index - 1) : index] + board[index + 1 : index + 2]
+                )
+            else:
+                target_ids = [anchor_id]
+
+            return [
+                GrantTraitEffect(
+                    side=event.side,
+                    source_type=source_type,
+                    source_id=source_id,
+                    target_id=target_id,
+                    trait=action.trait,
+                )
+                for target_id in target_ids
+            ]
+
         if isinstance(action, DrawAction):
             amount = GameService.resolve_action_amount(action.amount, trigger_event)
             return [
@@ -1862,6 +1896,7 @@ class GameService:
             DrawCardUpdate,
             EndTurnUpdate,
             GameOverUpdate,
+            GrantTraitUpdate,
             HealUpdate,
             PlayCardUpdate,
             RemoveUpdate,
@@ -1937,6 +1972,17 @@ class GameService:
                         source_id=event.source_id,
                         target_type=event.target_type,
                         target_id=event.target_id,
+                    )
+                )
+            elif event.type == "event_grant_trait":
+                updates.append(
+                    GrantTraitUpdate(
+                        side=event.side,
+                        source_type=event.source_type,
+                        source_id=event.source_id,
+                        target_type=event.target_type,
+                        target_id=event.target_id,
+                        trait=event.trait,
                     )
                 )
             elif event.type == "event_silence":
