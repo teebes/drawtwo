@@ -1,12 +1,12 @@
 services:
   db:
-    image: postgres:15
+    image: postgres:18
     environment:
       POSTGRES_DB: ${DB_NAME:-drawtwo}
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres18_data:/var/lib/postgresql
     ports:
       - "${DRAWTWO_DEV_BIND_ADDRESS:-127.0.0.1}:5433:5432"
     healthcheck:
@@ -201,7 +201,7 @@ services:
     command: npm run dev
 
 volumes:
-  postgres_data:
+  postgres18_data:
   redis_data:
   static_volume:
   media_volume:

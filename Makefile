@@ -207,7 +207,7 @@ reset-db:
 	@echo "Stopping services..."
 	docker-compose down
 	@echo "Removing database volume..."
-	docker volume rm drawtwo_postgres_data 2>/dev/null || true
+	docker volume rm drawtwo_postgres18_data 2>/dev/null || true
 	@echo "Starting database..."
 	docker-compose up -d db
 	@echo "Waiting for database to be ready..."
@@ -227,7 +227,7 @@ reset-db-with-superuser:
 	@echo "Stopping services..."
 	docker-compose down
 	@echo "Removing database volume..."
-	docker volume rm drawtwo_postgres_data 2>/dev/null || true
+	docker volume rm drawtwo_postgres18_data 2>/dev/null || true
 	@echo "Starting database..."
 	docker-compose up -d db
 	@echo "Waiting for database to be ready..."
